@@ -1,7 +1,13 @@
 //! Module 2: LCU WebSocket Event Listener
 //! Listens to OnJsonApiEvent_lol-champ-select_v1_session and OnJsonApiEvent_lol-gameflow_v1_session.
 
+use irelia::ws::LcuWebSocket;
+use irelia::ws::types::{Event, EventKind};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::time::Duration;
+use tauri::Emitter;
 
 /// Represents common League of Legends queue modes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -34,6 +40,43 @@ pub struct ChampSelectedPayload {
     pub queue_id: i32,
     pub queue_mode: QueueMode,
     pub is_locked: bool,
+}
+
+/// Evaluated transition result from an incoming WebSocket message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WsSessionTransition {
+    Active(ChampSelectedPayload),
+    NoChampionSelected,
+    Ended,
+}
+
+/// Determines whether a new champion select event should be emitted to avoid flooding.
+pub fn should_emit_champ_select(
+    prev: &Option<ChampSelectedPayload>,
+    current: &Option<ChampSelectedPayload>,
+) -> bool {
+    prev != current
+}
+
+/// Pure evaluation of incoming WebSocket payload from `OnJsonApiEvent_lol-champ-select_v1_session`.
+pub fn evaluate_ws_event(
+    event_type: &str,
+    data: &serde_json::Value,
+    current_queue_id: i32,
+) -> WsSessionTransition {
+    if event_type.eq_ignore_ascii_case("Delete") {
+        return WsSessionTransition::Ended;
+    }
+
+    match extract_selected_champion(data) {
+        Ok(Some((champ_id, is_locked))) => WsSessionTransition::Active(ChampSelectedPayload {
+            champion_id: champ_id,
+            queue_id: current_queue_id,
+            queue_mode: QueueMode::from_queue_id(current_queue_id),
+            is_locked,
+        }),
+        _ => WsSessionTransition::NoChampionSelected,
+    }
 }
 
 /// Extracts the active champion selection for the local player from a `champ-select/v1/session` JSON payload.
@@ -114,6 +157,69 @@ pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String
         .and_then(|v| v.as_i64())
         .map(|id| id as i32)
         .ok_or_else(|| "Could not find '/gameData/queue/id' in gameflow session JSON".to_string())
+}
+
+/// Starts the WebSocket listener background task to observe Champion Select events in real time.
+pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
+    let mut ws = LcuWebSocket::new();
+
+    let active_queue_id = Arc::new(AtomicI32::new(0));
+    let last_payload: Arc<tokio::sync::Mutex<Option<ChampSelectedPayload>>> =
+        Arc::new(tokio::sync::Mutex::new(None));
+
+    let app_handle_clone = app_handle.clone();
+    let queue_id_ref = Arc::clone(&active_queue_id);
+    let last_ref = Arc::clone(&last_payload);
+
+    ws.subscribe(
+        EventKind::json_api_event_callback_str("/lol-champ-select/v1/session"),
+        move |event: &Event| {
+            let handle = app_handle_clone.clone();
+            let q_ref = Arc::clone(&queue_id_ref);
+            let last_payload_ref = Arc::clone(&last_ref);
+
+            let event_type = event.2.event_type.clone();
+            let data = event.2.data.clone();
+
+            tokio::spawn(async move {
+                // If queueId is unknown, attempt to fetch it once
+                let mut current_q = q_ref.load(Ordering::Relaxed);
+                if current_q == 0 {
+                    if let Ok(conn) = crate::lcu_connector::LcuConnection::connect() {
+                        if let Ok(fetched_q) = conn.get_current_queue_id().await {
+                            q_ref.store(fetched_q, Ordering::Relaxed);
+                            current_q = fetched_q;
+                        }
+                    }
+                }
+
+                match evaluate_ws_event(&event_type, &data, current_q) {
+                    WsSessionTransition::Active(payload) => {
+                        let mut last_guard = last_payload_ref.lock().await;
+                        let current_opt = Some(payload.clone());
+                        if should_emit_champ_select(&last_guard, &current_opt) {
+                            let _ = handle.emit("champ-selected", &payload);
+                            *last_guard = current_opt;
+                        }
+                    }
+                    WsSessionTransition::Ended => {
+                        let mut last_guard = last_payload_ref.lock().await;
+                        if last_guard.is_some() {
+                            let _ = handle.emit("champ-select-ended", ());
+                            *last_guard = None;
+                        }
+                        q_ref.store(0, Ordering::Relaxed);
+                    }
+                    WsSessionTransition::NoChampionSelected => {}
+                }
+            });
+        },
+    );
+
+    // Keep the task alive in background
+    loop {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
 }
 
 #[cfg(test)]
@@ -216,5 +322,82 @@ mod tests {
 
         assert_eq!(extract_queue_id(&make_gameflow(9999)).unwrap(), 9999);
         assert_eq!(QueueMode::from_queue_id(9999), QueueMode::Other(9999));
+    }
+
+    #[test]
+    fn test_should_emit_champ_select_deduplicates_timer_ticks() {
+        let payload1 = ChampSelectedPayload {
+            champion_id: 103,
+            queue_id: 420,
+            queue_mode: QueueMode::SoloDuo,
+            is_locked: false,
+        };
+
+        let payload2_same = payload1.clone();
+
+        let payload3_locked = ChampSelectedPayload {
+            champion_id: 103,
+            queue_id: 420,
+            queue_mode: QueueMode::SoloDuo,
+            is_locked: true,
+        };
+
+        let payload4_swapped = ChampSelectedPayload {
+            champion_id: 222,
+            queue_id: 420,
+            queue_mode: QueueMode::SoloDuo,
+            is_locked: true,
+        };
+
+        // First selection: should emit
+        assert!(should_emit_champ_select(&None, &Some(payload1.clone())));
+
+        // Identical timer tick update: should NOT emit
+        assert!(!should_emit_champ_select(
+            &Some(payload1.clone()),
+            &Some(payload2_same)
+        ));
+
+        // Player locks in: should emit
+        assert!(should_emit_champ_select(
+            &Some(payload1.clone()),
+            &Some(payload3_locked.clone())
+        ));
+
+        // Player swaps champion: should emit
+        assert!(should_emit_champ_select(
+            &Some(payload3_locked.clone()),
+            &Some(payload4_swapped.clone())
+        ));
+
+        // Session reset: should emit
+        assert!(should_emit_champ_select(&Some(payload4_swapped), &None));
+    }
+
+    #[test]
+    fn test_evaluate_ws_event_create_update_and_delete() {
+        let session_data = serde_json::json!({
+            "localPlayerCellId": 0,
+            "myTeam": [
+                { "cellId": 0, "championId": 84, "championPickIntent": 0 }
+            ],
+            "actions": []
+        });
+
+        // Update event with selected champion
+        let transition = evaluate_ws_event("Update", &session_data, 450);
+        assert_eq!(
+            transition,
+            WsSessionTransition::Active(ChampSelectedPayload {
+                champion_id: 84,
+                queue_id: 450,
+                queue_mode: QueueMode::Aram,
+                is_locked: true
+            })
+        );
+
+        // Delete event indicates champ select ended
+        let end_transition = evaluate_ws_event("Delete", &serde_json::Value::Null, 450);
+        assert_eq!(end_transition, WsSessionTransition::Ended);
     }
 }

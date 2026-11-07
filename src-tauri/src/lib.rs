@@ -16,9 +16,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![greet])
         .setup(|app| {
             let app_handle = app.handle().clone();
+
+            // Background task 1: Monitor LCU process liveness
+            let lcu_handle = app_handle.clone();
             tauri::async_runtime::spawn(async move {
-                lcu_connector::start_lcu_monitor(app_handle).await;
+                lcu_connector::start_lcu_monitor(lcu_handle).await;
             });
+
+            // Background task 2: Listen for Champion Select events via WebSocket
+            let ws_handle = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                ws_listener::start_ws_listener(ws_handle).await;
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

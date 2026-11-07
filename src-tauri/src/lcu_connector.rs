@@ -7,6 +7,7 @@ use std::time::Duration;
 use tauri::Emitter;
 
 pub const CURRENT_SUMMONER_ENDPOINT: &str = "/lol-summoner/v1/current-summoner";
+pub const GAMEFLOW_SESSION_ENDPOINT: &str = "/lol-gameflow/v1/session";
 
 /// Represents basic summoner details parsed from `/lol-summoner/v1/current-summoner`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -108,6 +109,20 @@ impl LcuConnection {
         match response {
             Some(val) => parse_summoner_value(&val),
             None => Err("LCU returned an empty response for current summoner".to_string()),
+        }
+    }
+
+    /// Fetches the current queue ID via GET /lol-gameflow/v1/session.
+    pub async fn get_current_queue_id(&self) -> Result<i32, String> {
+        let response: Option<serde_json::Value> = self
+            .client
+            .get(GAMEFLOW_SESSION_ENDPOINT)
+            .await
+            .map_err(|err| format!("Error requesting gameflow session: {:?}", err))?;
+
+        match response {
+            Some(val) => crate::ws_listener::extract_queue_id(&val),
+            None => Err("LCU returned an empty response for gameflow session".to_string()),
         }
     }
 }
