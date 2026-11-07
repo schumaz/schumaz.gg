@@ -1,2 +1,2 @@
-//! Module 3: Data Fetching and Win Rate Provider
-//! Handles requests to DataDragon (names, icons, IDs) and external stats/build providers.
+//! Module 3: Data Fetching and Win Rate Provider (OP.GG + DataDragon)
+//! Handles requests to DataDragon and OP.GG champion analysis (runes, builds, spells, win rates).
