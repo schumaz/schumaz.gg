@@ -1,3 +1,8 @@
+pub mod build_provider;
+pub mod lcu_connector;
+pub mod lcu_injector;
+pub mod ws_listener;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
