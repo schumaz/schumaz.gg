@@ -169,9 +169,9 @@ describe("App Component", () => {
     expect(screen.getByLabelText("Injetar Feitiços de Invocador")).toBeChecked();
     expect(screen.getByLabelText("Injetar Conjuntos de Itens na Loja")).toBeChecked();
     expect(screen.getByRole("button", { name: /Flash no D/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("heading", { name: /Critério da Build Recomendada/i })).toBeInTheDocument();
-    expect(screen.getByTestId("priority-most-popular")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("priority-highest-winrate")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("heading", { name: /Critério da Build Recomendada/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("priority-most-popular")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("priority-highest-winrate")).not.toBeInTheDocument();
   });
 
   it("toggles preferences and persists them to localStorage", () => {
@@ -275,9 +275,9 @@ describe("App Component", () => {
       expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
     });
 
-    // Check champion name, win rate and pick rate
+    // Check champion name and pick rate (win rate badge is deprecated and removed)
     expect(screen.getByText("Ahri")).toBeInTheDocument();
-    expect(screen.getByText(/51.8% Win Rate/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Win Rate/i)).not.toBeInTheDocument();
     expect(screen.getByText(/8.4% Pick Rate/i)).toBeInTheDocument();
 
     // Manual reapply button must not exist in automatic mode
@@ -423,41 +423,31 @@ describe("App Component", () => {
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
-  it("updates build priority preference and re-fetches build when champion select is active", async () => {
+  it("does not render build priority controls or win rate badges in settings and dashboard", async () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
     });
 
-    // Enter champ select with Ahri
     act(() => {
-      eventListeners["champ-selected"]({
-        payload: {
-          champion_id: 103,
-          queue_id: 420,
-          queue_mode: "SummonersRift",
-          locked_in: true,
-        },
-      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
     });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+    });
+
+    // Win rate must strictly not be present in the dashboard
+    expect(screen.queryByText(/Win Rate/i)).not.toBeInTheDocument();
 
     // Switch to Settings tab
-    act(() => {
-      const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
-      fireEvent.click(settingsBtn);
-    });
+    const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
+    fireEvent.click(settingsBtn);
 
-    // Switch priority to highest win rate
-    const winrateBtn = screen.getByTestId("priority-highest-winrate");
-    await act(async () => {
-      fireEvent.click(winrateBtn);
-    });
-
-    expect(winrateBtn).toHaveAttribute("aria-pressed", "true");
-    expect(invoke).toHaveBeenCalledWith("get_recommended_build_for_champion", {
-      championId: 103,
-      queueId: 420,
-    });
+    // Build priority controls must strictly not exist
+    expect(screen.queryByRole("heading", { name: /Critério da Build Recomendada/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("priority-most-popular")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("priority-highest-winrate")).not.toBeInTheDocument();
   });
 });

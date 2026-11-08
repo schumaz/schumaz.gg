@@ -5,14 +5,12 @@ import "./App.css";
 
 export type ActiveTab = "runes" | "settings";
 export type FlashKeyPreference = "D" | "F";
-export type BuildPriorityPreference = "most_popular" | "highest_win_rate";
 
 export interface UserPreferences {
   autoInjectRunes: boolean;
   autoInjectSpells: boolean;
   autoInjectItems: boolean;
   flashKey: FlashKeyPreference;
-  buildPriority: BuildPriorityPreference;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -20,7 +18,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   autoInjectSpells: true,
   autoInjectItems: true,
   flashKey: "D",
-  buildPriority: "most_popular",
 };
 
 const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";
@@ -105,7 +102,6 @@ function loadInitialPreferences(): UserPreferences {
         autoInjectSpells: typeof parsed.autoInjectSpells === "boolean" ? parsed.autoInjectSpells : DEFAULT_PREFERENCES.autoInjectSpells,
         autoInjectItems: typeof parsed.autoInjectItems === "boolean" ? parsed.autoInjectItems : DEFAULT_PREFERENCES.autoInjectItems,
         flashKey: parsed.flashKey === "F" ? "F" : "D",
-        buildPriority: parsed.buildPriority === "highest_win_rate" ? "highest_win_rate" : "most_popular",
       };
     }
   } catch {
@@ -136,21 +132,6 @@ function App() {
       invoke("sync_user_preferences", { preferences: next }).catch(() => {});
       return next;
     });
-
-    if (key === "buildPriority" && (champSelect?.champion_id || build?.champion_id)) {
-      setLoading(true);
-      const championId = champSelect?.champion_id || build?.champion_id || 0;
-      const queueId = champSelect?.queue_id || 420;
-      invoke<ChampionBuild>("get_recommended_build_for_champion", {
-        championId,
-        queueId,
-      })
-        .then((newBuild) => {
-          if (newBuild) setBuild(newBuild);
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
 
     if (key === "flashKey" && build?.spells && build.spells.length >= 2) {
       const newFlashKey = value as FlashKeyPreference;
@@ -391,11 +372,6 @@ function App() {
                             ? "Modo Treino (Build Ranqueada)"
                             : "Summoner's Rift (Ranqueada / Normal)"}
                         </span>
-                        {build.win_rate > 0 && (
-                          <span className="badge badge-success badge-stat">
-                            {build.win_rate.toFixed(1)}% Win Rate
-                          </span>
-                        )}
                         {build.pick_rate > 0 && (
                           <span className="badge badge-neutral badge-stat">
                             {build.pick_rate.toFixed(1)}% Pick Rate
@@ -698,8 +674,8 @@ function App() {
                 <h2>Aguardando Seleção de Campeões</h2>
                 <p className="card-desc">
                   Entre em uma partida ou sala de draft no League of Legends. Assim que você selecionar ou travar um
-                  campeão, as runas recomendadas, feitiços e itens da build serão carregados e aplicados
-                  automaticamente com maior taxa de vitória do OP.GG.
+                  campeão, as runas recomendadas, feitiços e itens da build mais populares serão carregados e aplicados
+                  automaticamente a partir dos dados do OP.GG.
                 </p>
 
                 {!summoner && (
@@ -737,7 +713,7 @@ function App() {
                   <div className="settings-item-text">
                     <span className="settings-item-title">Injetar Runas Automaticamente</span>
                     <span className="settings-item-desc">
-                      Aplica a página de runas oficial com a melhor taxa de vitória diretamente no cliente do jogo.
+                      Aplica a página de runas oficial mais utilizada diretamente no cliente do jogo.
                     </span>
                   </div>
                   <input
@@ -813,42 +789,6 @@ function App() {
                 </div>
                 <span className="segmented-caption">
                   Tecla ativa: <strong>Flash no {preferences.flashKey}</strong> (invertendo feitiços se necessário).
-                </span>
-              </div>
-            </section>
-
-            {/* Group 3: Build Optimization Criteria */}
-            <section className="card settings-group-card">
-              <div className="settings-group-header">
-                <h2>Critério da Build Recomendada</h2>
-                <p className="card-desc">
-                  Escolha se os itens recomendados devem priorizar a build com mais jogos feitos (quantidade absoluta de partidas) ou a com maior taxa de vitória.
-                </p>
-              </div>
-
-              <div className="segmented-control-container">
-                <div className="segmented-control" role="group" aria-label="Critério da Build Recomendada">
-                  <button
-                    type="button"
-                    className={`segment-btn ${preferences.buildPriority === "most_popular" ? "active" : ""}`}
-                    onClick={() => updatePreference("buildPriority", "most_popular")}
-                    aria-pressed={preferences.buildPriority === "most_popular"}
-                    data-testid="priority-most-popular"
-                  >
-                    <span>Mais Jogos (Popular)</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`segment-btn ${preferences.buildPriority === "highest_win_rate" ? "active" : ""}`}
-                    onClick={() => updatePreference("buildPriority", "highest_win_rate")}
-                    aria-pressed={preferences.buildPriority === "highest_win_rate"}
-                    data-testid="priority-highest-winrate"
-                  >
-                    <span>Maior Win Rate</span>
-                  </button>
-                </div>
-                <span className="segmented-caption">
-                  Critério ativo: <strong>{preferences.buildPriority === "most_popular" ? "Mais Jogos (Maior Popularidade Absoluta)" : "Maior Taxa de Vitória (Win Rate)"}</strong>.
                 </span>
               </div>
             </section>

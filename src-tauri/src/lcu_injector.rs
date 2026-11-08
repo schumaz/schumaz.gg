@@ -21,15 +21,6 @@ pub enum FlashKeyPreference {
     F,
 }
 
-/// Represents the user's preferred build optimization metric (highest win rate vs most games played).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum BuildPriorityPreference {
-    #[default]
-    MostPopular,
-    HighestWinRate,
-}
-
 /// User preferences synchronized between frontend and backend.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -38,8 +29,6 @@ pub struct UserPreferences {
     pub auto_inject_spells: bool,
     pub auto_inject_items: bool,
     pub flash_key: FlashKeyPreference,
-    #[serde(default)]
-    pub build_priority: BuildPriorityPreference,
 }
 
 impl Default for UserPreferences {
@@ -49,7 +38,6 @@ impl Default for UserPreferences {
             auto_inject_spells: true,
             auto_inject_items: true,
             flash_key: FlashKeyPreference::D,
-            build_priority: BuildPriorityPreference::MostPopular,
         }
     }
 }
@@ -552,7 +540,6 @@ pub mod tests {
             auto_inject_spells: true,
             auto_inject_items: false,
             flash_key: FlashKeyPreference::F,
-            build_priority: BuildPriorityPreference::HighestWinRate,
         };
 
         set_user_preferences(prefs.clone());

@@ -1,7 +1,6 @@
 //! Module 3: Data Fetching and Win Rate Provider (OP.GG + DataDragon)
 //! Handles requests to DataDragon and OP.GG champion analysis (runes, builds, spells, win rates).
 
-use crate::lcu_injector::BuildPriorityPreference;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::OnceCell;
@@ -880,7 +879,7 @@ pub async fn load_ddragon_cache_from_base_url(
     let version = parse_latest_ddragon_version(&versions_res)?;
 
     // 2. Fetch champions
-    let champions_url = format!("{}/cdn/{}/data/en_US/champion.json", base_url, version);
+    let champions_url = format!("{}/cdn/{}/data/pt_BR/champion.json", base_url, version);
     let champions_res: serde_json::Value = client
         .get(&champions_url)
         .send()
@@ -893,7 +892,7 @@ pub async fn load_ddragon_cache_from_base_url(
     let champions = parse_all_ddragon_champions(&champions_res, &version)?;
 
     // 3. Fetch runes
-    let runes_url = format!("{}/cdn/{}/data/en_US/runesReforged.json", base_url, version);
+    let runes_url = format!("{}/cdn/{}/data/pt_BR/runesReforged.json", base_url, version);
     let runes_res: serde_json::Value = client
         .get(&runes_url)
         .send()
@@ -1067,16 +1066,15 @@ fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatEntry
 
 /// Builds the 5 item blocks conforming to the user's requirements:
 /// 1. Itens Iniciais (Starter + Potion)
-/// 2. Primeiros 3 Itens (Strictly non-boot, ordered according to BuildPriorityPreference)
+/// 2. Primeiros 3 Itens (Strictly non-boot, ordered by absolute games played)
 /// 3. 3 Botas Mais Feitas (Always strictly ordered by most absolute games played: play descending)
-/// 4. Build Final (clean_core + top 2 late-game items, ordered according to BuildPriorityPreference)
+/// 4. Build Final (clean_core + top 2 late-game items, ordered by absolute games played)
 /// 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
 pub fn build_5_item_blocks(
     starter_entry: Option<ItemStatEntry>,
     boot_entries: Vec<ItemStatEntry>,
     candidate_entries: Vec<ItemStatEntry>,
     damage_type: &str,
-    priority: BuildPriorityPreference,
 ) -> Vec<ItemBlock> {
     // 1. Itens Iniciais
     let mut starter_ids: Vec<i32> = starter_entry.map(|e| e.ids).unwrap_or_else(|| {
@@ -1145,71 +1143,45 @@ pub fn build_5_item_blocks(
     }
     boots_list.truncate(3);
 
-    // 3. Aggregate all non-boot, non-starter candidate items with play & win counts
+    // 3. Aggregate all non-boot, non-starter candidate items with play counts
     #[derive(Debug, Clone)]
     struct ItemAggregate {
         id: i32,
         play: i64,
-        win: i64,
         first_seen_index: usize,
     }
 
-    let mut item_map: HashMap<i32, (i64, i64, usize)> = HashMap::new();
+    let mut item_map: HashMap<i32, (i64, usize)> = HashMap::new();
     let mut item_seen_counter = 0;
     for entry in &candidate_entries {
         for &id in &entry.ids {
             if !is_boot_item(id) && !starter_ids.contains(&id) {
                 let entry_play = entry.play.max(1);
-                let entry_win = entry.win.max(0);
                 let slot = item_map.entry(id).or_insert_with(|| {
                     let idx = item_seen_counter;
                     item_seen_counter += 1;
-                    (0, 0, idx)
+                    (0, idx)
                 });
                 slot.0 += entry_play;
-                slot.1 += entry_win;
             }
         }
     }
 
     let mut all_candidates: Vec<ItemAggregate> = item_map
         .into_iter()
-        .map(|(id, (play, win, first_seen_index))| ItemAggregate {
+        .map(|(id, (play, first_seen_index))| ItemAggregate {
             id,
             play,
-            win,
             first_seen_index,
         })
         .collect();
 
-    // Sort according to BuildPriorityPreference:
-    match priority {
-        BuildPriorityPreference::MostPopular => {
-            all_candidates.sort_by(|a, b| {
-                b.play
-                    .cmp(&a.play)
-                    .then_with(|| a.first_seen_index.cmp(&b.first_seen_index))
-            });
-        }
-        BuildPriorityPreference::HighestWinRate => {
-            all_candidates.sort_by(|a, b| {
-                let wr_a = if a.play > 0 {
-                    a.win as f64 / a.play as f64
-                } else {
-                    0.0
-                };
-                let wr_b = if b.play > 0 {
-                    b.win as f64 / b.play as f64
-                } else {
-                    0.0
-                };
-                wr_b.partial_cmp(&wr_a)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| b.play.cmp(&a.play))
-                    .then_with(|| a.first_seen_index.cmp(&b.first_seen_index))
-            });
-        }
-    }
+    // Sort strictly by absolute games played (play count descending):
+    all_candidates.sort_by(|a, b| {
+        b.play
+            .cmp(&a.play)
+            .then_with(|| a.first_seen_index.cmp(&b.first_seen_index))
+    });
 
     // Block 2: Primeiros 3 Itens
     // The 3 core items must strictly appear in sequential order of progression:
@@ -1230,19 +1202,7 @@ pub fn build_5_item_blocks(
         .collect();
 
     if !core_combos.is_empty() {
-        match priority {
-            BuildPriorityPreference::MostPopular => {
-                core_combos.sort_by_key(|a| std::cmp::Reverse(a.play));
-            }
-            BuildPriorityPreference::HighestWinRate => {
-                core_combos.sort_by(|a, b| {
-                    b.win_rate()
-                        .partial_cmp(&a.win_rate())
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| b.play.cmp(&a.play))
-                });
-            }
-        }
+        core_combos.sort_by_key(|a| std::cmp::Reverse(a.play));
         let best_combo = core_combos[0];
         for &id in &best_combo.ids {
             if clean_core.len() < 3
@@ -1371,21 +1331,6 @@ pub fn parse_opgg_mcp_text(
     text: &str,
     champion_id: i32,
     champion_name: &str,
-) -> Result<ChampionBuild, String> {
-    parse_opgg_mcp_text_with_priority(
-        text,
-        champion_id,
-        champion_name,
-        BuildPriorityPreference::MostPopular,
-    )
-}
-
-/// Parses text format returned in OP.GG MCP with user-configured BuildPriorityPreference.
-pub fn parse_opgg_mcp_text_with_priority(
-    text: &str,
-    champion_id: i32,
-    champion_name: &str,
-    priority: BuildPriorityPreference,
 ) -> Result<ChampionBuild, String> {
     // 1. Extract win_rate and pick_rate: AverageStats(...)
     let mut win_rate = 50.0;
@@ -1612,7 +1557,6 @@ pub fn parse_opgg_mcp_text_with_priority(
         boot_entries,
         candidate_entries,
         damage_type,
-        priority,
     );
 
     Ok(ChampionBuild {
@@ -1628,20 +1572,6 @@ pub fn parse_opgg_mcp_text_with_priority(
         item_blocks,
         ..Default::default()
     })
-}
-
-/// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild`.
-pub fn parse_opgg_analysis_payload(
-    opgg_json: &serde_json::Value,
-    champion_id: i32,
-    champion_name: &str,
-) -> Result<ChampionBuild, String> {
-    parse_opgg_analysis_payload_with_priority(
-        opgg_json,
-        champion_id,
-        champion_name,
-        BuildPriorityPreference::MostPopular,
-    )
 }
 
 /// Helper to extract the most played summoner spells combination from OP.GG analysis JSON.
@@ -1711,19 +1641,18 @@ pub fn extract_most_used_summoner_spells(analysis: &serde_json::Value) -> (i32, 
     (s1, s2)
 }
 
-/// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild` with user priority preference.
-pub fn parse_opgg_analysis_payload_with_priority(
+/// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild`.
+pub fn parse_opgg_analysis_payload(
     opgg_json: &serde_json::Value,
     champion_id: i32,
     champion_name: &str,
-    priority: BuildPriorityPreference,
 ) -> Result<ChampionBuild, String> {
     // If the response is wrapped in MCP content text (e.g. result.content[0].text), use text parser!
     if let Some(text) = opgg_json
         .pointer("/result/content/0/text")
         .and_then(|v| v.as_str())
     {
-        return parse_opgg_mcp_text_with_priority(text, champion_id, champion_name, priority);
+        return parse_opgg_mcp_text(text, champion_id, champion_name);
     }
 
     let analysis = opgg_json
@@ -1895,7 +1824,6 @@ pub fn parse_opgg_analysis_payload_with_priority(
         boot_entries,
         candidate_entries,
         damage_type,
-        priority,
     );
 
     Ok(ChampionBuild {
@@ -1982,16 +1910,14 @@ pub async fn get_recommended_build_with_endpoint(
         .unwrap_or("Unknown");
 
     let queue_param = opgg_queue_param_from_id(queue_id);
-    let priority = crate::lcu_injector::get_user_preferences().build_priority;
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
             Ok(json_res) => {
-                match parse_opgg_analysis_payload_with_priority(
+                match parse_opgg_analysis_payload(
                     &json_res,
                     champion_id,
                     champ_name,
-                    priority,
                 ) {
                     Ok(build) => build,
                     Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
@@ -2081,7 +2007,6 @@ pub async fn get_recommended_build_with_filters(
     let mode = if is_aram { "aram" } else { "ranked" };
     let target_region = region.unwrap_or("global");
     let target_tier = tier.unwrap_or("emerald_plus");
-    let priority = crate::lcu_injector::get_user_preferences().build_priority;
 
     // 1. Fetch available versions for region
     let available_versions = fetch_opgg_versions(client, target_region).await;
@@ -2173,11 +2098,10 @@ pub async fn get_recommended_build_with_filters(
     .await
     {
         Ok(json_res) => {
-            match parse_opgg_analysis_payload_with_priority(
+            match parse_opgg_analysis_payload(
                 &json_res,
                 champion_id,
                 champ_name,
-                priority,
             ) {
                 Ok(b) => b,
                 Err(_) => {
@@ -2435,13 +2359,13 @@ mod tests {
             .await;
 
         Mock::given(method("GET"))
-            .and(path("/cdn/14.23.1/data/en_US/champion.json"))
+            .and(path("/cdn/14.23.1/data/pt_BR/champion.json"))
             .respond_with(ResponseTemplate::new(200).set_body_json(champion_json))
             .mount(&mock_server)
             .await;
 
         Mock::given(method("GET"))
-            .and(path("/cdn/14.23.1/data/en_US/runesReforged.json"))
+            .and(path("/cdn/14.23.1/data/pt_BR/runesReforged.json"))
             .respond_with(ResponseTemplate::new(200).set_body_json(runes_json))
             .mount(&mock_server)
             .await;
@@ -2686,7 +2610,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_priority_preference_changes_item_ordering() {
+    fn test_build_ordering_strictly_by_play_count() {
         // Item 3118 (Malignance): 10,000 games, 5,100 wins (51.0% win rate)
         // Item 3089 (Rabadon): 1,000 games, 650 wins (65.0% win rate)
         // Item 4645 (Shadowflame): 8,000 games, 4,200 wins (52.5% win rate)
@@ -2730,27 +2654,15 @@ mod tests {
             },
         ];
 
-        // 1. With MostPopular (most games played):
+        // Ordering MUST strictly follow play count descending (absolute matches played):
         let popular_blocks = build_5_item_blocks(
-            starter.clone(),
-            boots.clone(),
-            candidates.clone(),
-            "AP",
-            BuildPriorityPreference::MostPopular,
-        );
-        // Ordered by play count: 3118 (10k), 4645 (8k), 3157 (6k)
-        assert_eq!(popular_blocks[1].item_ids, vec![3118, 4645, 3157]);
-
-        // 2. With HighestWinRate:
-        let winrate_blocks = build_5_item_blocks(
             starter,
             boots,
             candidates,
             "AP",
-            BuildPriorityPreference::HighestWinRate,
         );
-        // Ordered by win rate: 3089 (65%), 3157 (55%), 4645 (52.5%)
-        assert_eq!(winrate_blocks[1].item_ids, vec![3089, 3157, 4645]);
+        // Ordered by play count: 3118 (10k), 4645 (8k), 3157 (6k)
+        assert_eq!(popular_blocks[1].item_ids, vec![3118, 4645, 3157]);
     }
 
     #[test]
@@ -2796,7 +2708,6 @@ mod tests {
             boots,
             candidates,
             "AP",
-            BuildPriorityPreference::HighestWinRate, // Even if HighestWinRate is selected!
         );
 
         // Boots MUST be sorted by play count descending: 3020 (50k) -> 3111 (10k) -> 3158 (5k)
@@ -2862,7 +2773,6 @@ mod tests {
             boots,
             candidates,
             "AP",
-            BuildPriorityPreference::MostPopular,
         );
 
         // Clean core (first 3): 3118, 4645, 3157
@@ -3119,7 +3029,6 @@ mod tests {
             boots,
             candidates,
             "AD",
-            BuildPriorityPreference::MostPopular,
         );
 
         // Core items
