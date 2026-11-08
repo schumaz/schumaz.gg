@@ -14,12 +14,14 @@ pub const QUEUE_FLEX: i32 = 440;
 pub const QUEUE_ARAM: i32 = 450;
 pub const QUEUE_NORMAL_DRAFT: i32 = 400;
 pub const QUEUE_QUICKPLAY: i32 = 490;
+pub const QUEUE_PRACTICE_TOOL: i32 = -1;
 
 /// Represents game queue classifications.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum QueueMode {
     SummonersRift,
     Aram,
+    PracticeTool,
     Other,
 }
 
@@ -27,6 +29,7 @@ impl From<i32> for QueueMode {
     fn from(queue_id: i32) -> Self {
         match queue_id {
             QUEUE_ARAM => QueueMode::Aram,
+            QUEUE_PRACTICE_TOOL => QueueMode::PracticeTool,
             QUEUE_SOLO_DUO | QUEUE_FLEX | QUEUE_NORMAL_DRAFT | QUEUE_QUICKPLAY => {
                 QueueMode::SummonersRift
             }
@@ -84,9 +87,9 @@ pub fn should_emit_champ_select(
 
 /// Pure parser function to extract the selected `championId` and `locked_in` status.
 ///
-/// Handles both:
-/// 1. ARAM / Blind Pick / Intent via `myTeam` where `cellId == localPlayerCellId`.
-/// 2. Solo/Duo / Flex Draft actions where `type == "pick"` and `actorCellId == localPlayerCellId`.
+/// Handles:
+/// 1. Draft and Practice Tool pick actions via `actions` where `type == "pick"` and `actorCellId == localPlayerCellId`.
+/// 2. ARAM / Blind Pick / Intent fallback via `myTeam` where `cellId == localPlayerCellId`.
 ///
 /// Explicitly ignores `"ban"` actions so banning a champion never triggers a build recommendation.
 pub fn extract_selected_champion(
@@ -98,35 +101,7 @@ pub fn extract_selected_champion(
         .ok_or_else(|| "Missing 'localPlayerCellId' in session JSON".to_string())?
         as i32;
 
-    // 1. Check `myTeam` (works for ARAM, Blind, and player hover/intent)
-    if let Some(my_team) = session_json.get("myTeam").and_then(|v| v.as_array()) {
-        for member in my_team {
-            let cell_id = member.get("cellId").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
-
-            if cell_id == local_player_cell_id {
-                let champ_id = member
-                    .get("championId")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0) as i32;
-
-                // In ARAM or locked pick, championId > 0
-                if champ_id > 0 {
-                    return Ok(Some((champ_id, true)));
-                }
-
-                // In draft, before lock, check championPickIntent
-                let intent_id = member
-                    .get("championPickIntent")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0) as i32;
-                if intent_id > 0 {
-                    return Ok(Some((intent_id, false)));
-                }
-            }
-        }
-    }
-
-    // 2. Check draft actions (Solo/Duo, Flex, Normal Draft)
+    // 1. Check draft actions (Solo/Duo, Flex, Normal Draft, Practice Tool)
     if let Some(actions) = session_json.get("actions").and_then(|v| v.as_array()) {
         for action_group in actions {
             if let Some(sub_actions) = action_group.as_array() {
@@ -157,16 +132,73 @@ pub fn extract_selected_champion(
         }
     }
 
+    // 2. Check `myTeam` (works for ARAM, Blind Pick, Practice Tool without actions, or draft intent)
+    if let Some(my_team) = session_json.get("myTeam").and_then(|v| v.as_array()) {
+        for member in my_team {
+            let cell_id = member.get("cellId").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
+
+            if cell_id == local_player_cell_id {
+                let champ_id = member
+                    .get("championId")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
+
+                // In ARAM or locked pick, championId > 0
+                if champ_id > 0 {
+                    return Ok(Some((champ_id, true)));
+                }
+
+                // In draft, before lock, check championPickIntent
+                let intent_id = member
+                    .get("championPickIntent")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
+                if intent_id > 0 {
+                    return Ok(Some((intent_id, false)));
+                }
+            }
+        }
+    }
+
     Ok(None)
 }
 
 /// Extracts the queue ID from a `GET /lol-gameflow/v1/session` JSON payload.
+/// Supports Standard queues, Practice Tool, and Custom games.
 pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String> {
-    gameflow_json
+    // 1. Check for Practice Tool or custom game indicators
+    let game_mode = gameflow_json
+        .pointer("/gameData/queue/gameMode")
+        .or_else(|| gameflow_json.pointer("/gameData/gameMode"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if game_mode.eq_ignore_ascii_case("PRACTICETOOL") {
+        return Ok(QUEUE_PRACTICE_TOOL);
+    }
+
+    let is_custom = gameflow_json
+        .pointer("/gameData/isCustomGame")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let id_opt = gameflow_json
         .pointer("/gameData/queue/id")
         .and_then(|v| v.as_i64())
-        .map(|id| id as i32)
-        .ok_or_else(|| "Could not find '/gameData/queue/id' in gameflow session JSON".to_string())
+        .map(|id| id as i32);
+
+    if let Some(id) = id_opt {
+        if id == -1 || (is_custom && id <= 0) {
+            return Ok(QUEUE_PRACTICE_TOOL);
+        }
+        return Ok(id);
+    }
+
+    if is_custom {
+        return Ok(QUEUE_PRACTICE_TOOL);
+    }
+
+    Err("Could not find '/gameData/queue/id' in gameflow session JSON".to_string())
 }
 
 /// Starts the WebSocket listener background task to observe Champion Select events in real time.
@@ -213,11 +245,11 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                             let _ = handle.emit("champ-selected", &payload);
                             *last_guard = current_opt;
 
-                            // Automatically fetch recommended build and inject when locked in
-                            if payload.locked_in {
+                            // Automatically fetch recommended build and inject when locked in or in Practice Tool
+                            if payload.locked_in || payload.queue_mode == QueueMode::PracticeTool {
                                 let handle_for_inject = handle.clone();
                                 let champ_id = payload.champion_id;
-                                let q_id = if payload.queue_id == 0 {
+                                let q_id = if payload.queue_id == 0 || payload.queue_id == QUEUE_PRACTICE_TOOL {
                                     QUEUE_SOLO_DUO
                                 } else {
                                     payload.queue_id
@@ -339,6 +371,41 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_champion_from_practice_tool_session() {
+        // Practice Tool session snippet where player picks a champion
+        let fixture_practice = serde_json::json!({
+            "localPlayerCellId": 0,
+            "myTeam": [
+                { "cellId": 0, "championId": 103, "championPickIntent": 0 }
+            ],
+            "actions": [
+                [
+                    { "actorCellId": 0, "type": "pick", "championId": 103, "completed": false }
+                ]
+            ]
+        });
+
+        let result = extract_selected_champion(&fixture_practice);
+        assert_eq!(result, Ok(Some((103, false))));
+
+        // When locked in
+        let fixture_locked = serde_json::json!({
+            "localPlayerCellId": 0,
+            "myTeam": [
+                { "cellId": 0, "championId": 103, "championPickIntent": 0 }
+            ],
+            "actions": [
+                [
+                    { "actorCellId": 0, "type": "pick", "championId": 103, "completed": true }
+                ]
+            ]
+        });
+
+        let result_locked = extract_selected_champion(&fixture_locked);
+        assert_eq!(result_locked, Ok(Some((103, true))));
+    }
+
+    #[test]
     fn test_extract_queue_id_and_classify_mode() {
         let fixture_aram = serde_json::json!({
             "gameData": {
@@ -362,6 +429,33 @@ mod tests {
             extract_queue_id(&fixture_ranked).expect("Ranked queue id should parse");
         assert_eq!(queue_id_ranked, 420);
         assert_eq!(QueueMode::from(queue_id_ranked), QueueMode::SummonersRift);
+
+        // Practice Tool with id: -1 and gameMode: "PRACTICETOOL"
+        let fixture_practice_tool = serde_json::json!({
+            "gameData": {
+                "isCustomGame": true,
+                "queue": {
+                    "id": -1,
+                    "gameMode": "PRACTICETOOL"
+                }
+            }
+        });
+        let queue_id_practice =
+            extract_queue_id(&fixture_practice_tool).expect("Practice tool queue id should parse");
+        assert_eq!(queue_id_practice, QUEUE_PRACTICE_TOOL);
+        assert_eq!(QueueMode::from(queue_id_practice), QueueMode::PracticeTool);
+
+        // Practice Tool with gameMode on root gameData
+        let fixture_practice_tool_root = serde_json::json!({
+            "gameData": {
+                "isCustomGame": true,
+                "gameMode": "PRACTICETOOL"
+            }
+        });
+        let queue_id_practice_root =
+            extract_queue_id(&fixture_practice_tool_root).expect("Practice tool queue id should parse");
+        assert_eq!(queue_id_practice_root, QUEUE_PRACTICE_TOOL);
+        assert_eq!(QueueMode::from(queue_id_practice_root), QueueMode::PracticeTool);
     }
 
     #[test]

@@ -299,6 +299,8 @@ function App() {
                       <span className="badge-meta">
                         {champSelect?.queue_mode === "Aram"
                           ? "ARAM (Howling Abyss)"
+                          : champSelect?.queue_mode === "PracticeTool"
+                          ? "Modo Treino (Build Ranqueada)"
                           : "Summoner's Rift (Ranqueada / Normal)"}
                       </span>
                       {build.win_rate > 0 && (

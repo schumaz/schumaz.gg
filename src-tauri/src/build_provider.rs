@@ -800,6 +800,8 @@ mod tests {
 
         assert_eq!(opgg_queue_param_from_id(440), "ranked");
         assert_eq!(opgg_queue_param_from_id(400), "ranked");
+        assert_eq!(opgg_queue_param_from_id(-1), "ranked");
+        assert_eq!(default_spells_for_queue(-1), (4, 14));
     }
 
     #[test]
@@ -818,6 +820,12 @@ mod tests {
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
         assert_eq!(ranked_fallback.spell1_id, 4);
         assert_eq!(ranked_fallback.spell2_id, 14);
+
+        let practice_fallback = build_fallback_champion_build(103, "Ahri", -1);
+        assert_eq!(practice_fallback.selected_perk_ids.len(), 9);
+        assert_eq!(practice_fallback.spell1_id, 4);
+        assert_eq!(practice_fallback.spell2_id, 14);
+        assert_eq!(practice_fallback.item_blocks[0].item_ids, vec![1055, 2003]);
     }
 
     #[test]

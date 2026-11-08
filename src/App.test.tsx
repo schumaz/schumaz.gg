@@ -261,4 +261,35 @@ describe("App Component", () => {
     expect(screen.getByText(/3. Build Final/i)).toBeInTheDocument();
     expect(screen.getByText(/4. 3 Botas Mais Feitas/i)).toBeInTheDocument();
   });
+  it("displays Practice Tool badge and ranked items when practice tool session is detected", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    // Simulate champ-selected in Practice Tool
+    act(() => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: -1,
+          queue_mode: "PracticeTool",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Modo Treino (Build Ranqueada)")).toBeInTheDocument();
+    expect(screen.getByText(/1. Itens Iniciais/i)).toBeInTheDocument();
+    expect(screen.getByText(/2. Primeiros 3 Itens/i)).toBeInTheDocument();
+    expect(screen.getByText(/3. Build Final/i)).toBeInTheDocument();
+    expect(screen.getByText(/4. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+  });
 });
