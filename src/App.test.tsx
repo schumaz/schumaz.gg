@@ -38,7 +38,7 @@ const mockAhriBuild: ChampionBuild = {
     { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
     { title: "Primeiros 3 Itens", item_ids: [3285, 3157, 3089], item_icon_urls: ["3285.png", "3157.png", "3089.png"] },
     { title: "3 Botas Mais Feitas", item_ids: [3020, 3111, 3047], item_icon_urls: ["3020.png", "3111.png", "3047.png"] },
-    { title: "Build Final", item_ids: [3285, 3157, 3089, 3135, 4645], item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png"] },
+    { title: "Build Final", item_ids: [3285, 3157, 3089, 3135, 4645, 3102], item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"] },
     { title: "Itens Situacionais / Úteis", item_ids: [4629, 3165, 3102], item_icon_urls: ["4629.png", "3165.png", "3102.png"] },
   ],
   active_position: "mid",

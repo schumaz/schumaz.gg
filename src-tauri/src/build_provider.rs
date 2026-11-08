@@ -941,12 +941,20 @@ impl ItemStatEntry {
     }
 }
 
-/// Extracts all `CoreItems(...)` entries from OP.GG MCP text.
+/// Extracts all `CoreItems(...)` or `FourthItem(...)` entries from OP.GG MCP text.
 pub fn extract_all_core_items_from_text(text: &str) -> Vec<ItemStatEntry> {
     let mut entries = Vec::new();
     let mut search_slice = text;
-    while let Some(ci_idx) = search_slice.find("CoreItems(") {
-        let after_ci = &search_slice[ci_idx + 10..];
+    let prefixes = ["CoreItems(", "FourthItem(", "FifthItem(", "SixthItem("];
+    loop {
+        let next_match = prefixes
+            .iter()
+            .filter_map(|p| search_slice.find(p).map(|idx| (idx, p.len())))
+            .min_by_key(|(idx, _)| *idx);
+        let Some((ci_idx, prefix_len)) = next_match else {
+            break;
+        };
+        let after_ci = &search_slice[ci_idx + prefix_len..];
         let maybe_brackets = after_ci
             .find('[')
             .zip(after_ci.find(']'))
@@ -993,6 +1001,83 @@ pub fn extract_all_core_items_from_text(text: &str) -> Vec<ItemStatEntry> {
         break;
     }
     entries
+}
+
+/// Extracts separate item lists (`last_items`, `fourth_items`, `fifth_items`, `sixth_items`) from OP.GG MCP text.
+pub fn extract_mcp_grouped_item_lists(text: &str) -> Vec<(String, Vec<ItemStatEntry>)> {
+    let data_fields: Vec<String> = if let Some(def_idx) = text.find("class Data:") {
+        let line_rest = &text[def_idx + 11..];
+        let end_line = line_rest.find('\n').unwrap_or(line_rest.len());
+        line_rest[..end_line]
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| {
+                matches!(
+                    s.as_str(),
+                    "last_items" | "fourth_items" | "fifth_items" | "sixth_items"
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let mut groups: Vec<Vec<ItemStatEntry>> = Vec::new();
+    let Some(data_idx) = text.find("Data(") else {
+        return Vec::new();
+    };
+    let mut slice = &text[data_idx + 5..];
+    if let Some(runes_idx) = slice.find("Runes(") {
+        slice = &slice[..runes_idx];
+    }
+
+    let bytes = slice.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'[' {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            let rem = &slice[j..];
+            if rem.starts_with("CoreItems(")
+                || rem.starts_with("FourthItem(")
+                || rem.starts_with("FifthItem(")
+                || rem.starts_with("SixthItem(")
+            {
+                let mut depth = 1;
+                let mut k = i + 1;
+                while k < bytes.len() && depth > 0 {
+                    if bytes[k] == b'[' {
+                        depth += 1;
+                    } else if bytes[k] == b']' {
+                        depth -= 1;
+                    }
+                    k += 1;
+                }
+                let list_str = &slice[i..k];
+                let items = extract_all_core_items_from_text(list_str);
+                groups.push(items);
+                i = k;
+                continue;
+            }
+        }
+        i += 1;
+    }
+
+    let mut result = Vec::new();
+    if !data_fields.is_empty() && data_fields.len() == groups.len() {
+        for (name, items) in data_fields.into_iter().zip(groups) {
+            result.push((name, items));
+        }
+    } else {
+        let default_names = ["fourth_items", "fifth_items", "sixth_items", "last_items"];
+        for (idx, items) in groups.into_iter().enumerate() {
+            let name = default_names.get(idx).copied().unwrap_or("other").to_string();
+            result.push((name, items));
+        }
+    }
+    result
 }
 
 /// Helper to parse JSON item entries (either single object, array of ids, or array of item stat objects).
@@ -1066,14 +1151,35 @@ fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatEntry
 
 /// Builds the 5 item blocks conforming to the user's requirements:
 /// 1. Itens Iniciais (Starter + Potion)
-/// 2. Primeiros 3 Itens (Strictly non-boot, ordered by absolute games played)
+/// 2. Primeiros 3 Itens (Top most played Core Build combination of 3 non-boot items)
 /// 3. 3 Botas Mais Feitas (Always strictly ordered by most absolute games played: play descending)
-/// 4. Build Final (clean_core + top 2 late-game items, ordered by absolute games played)
+/// 4. Build Final (6 items: 3 Core items + #1 most played 4th item + #1 most played 5th item + #1 most played 6th item)
 /// 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
 pub fn build_5_item_blocks(
     starter_entry: Option<ItemStatEntry>,
     boot_entries: Vec<ItemStatEntry>,
     candidate_entries: Vec<ItemStatEntry>,
+    damage_type: &str,
+) -> Vec<ItemBlock> {
+    build_5_item_blocks_with_depth_lists(
+        starter_entry,
+        boot_entries,
+        candidate_entries,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        damage_type,
+    )
+}
+
+/// Builds the 5 item blocks using explicit OP.GG Core builds and separate Fourth, Fifth, and Sixth item lists.
+pub fn build_5_item_blocks_with_depth_lists(
+    starter_entry: Option<ItemStatEntry>,
+    boot_entries: Vec<ItemStatEntry>,
+    candidate_entries: Vec<ItemStatEntry>,
+    fourth_entries: Vec<ItemStatEntry>,
+    fifth_entries: Vec<ItemStatEntry>,
+    sixth_entries: Vec<ItemStatEntry>,
     damage_type: &str,
 ) -> Vec<ItemBlock> {
     // 1. Itens Iniciais
@@ -1153,7 +1259,12 @@ pub fn build_5_item_blocks(
 
     let mut item_map: HashMap<i32, (i64, usize)> = HashMap::new();
     let mut item_seen_counter = 0;
-    for entry in &candidate_entries {
+    for entry in candidate_entries
+        .iter()
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+    {
         for &id in &entry.ids {
             if !is_boot_item(id) && !starter_ids.contains(&id) {
                 let entry_play = entry.play.max(1);
@@ -1233,12 +1344,39 @@ pub fn build_5_item_blocks(
         }
     }
 
-    // Block 4: Build Final (5 items)
+    // Block 4: Build Final (6 items: 3 Core items + most built 4th + most built 5th + most built 6th)
     // The first 3 items MUST be identical to clean_core in the EXACT SAME sequential order,
-    // followed by the top 2 late-game items.
+    // followed by the top valid non-duplicate item from fourth_items, fifth_items, and sixth_items.
     let mut final_build: Vec<i32> = clean_core.clone();
+
+    let pick_top_from_depth_list = |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
+        let mut sorted: Vec<&ItemStatEntry> = entries.iter().collect();
+        sorted.sort_by_key(|e| std::cmp::Reverse(e.play));
+        for entry in sorted {
+            for &id in &entry.ids {
+                if !current_build.contains(&id)
+                    && !is_component_item(id)
+                    && !is_starter_item(id)
+                    && !is_boot_item(id)
+                {
+                    return Some(id);
+                }
+            }
+        }
+        None
+    };
+
+    for depth_list in [&fourth_entries, &fifth_entries, &sixth_entries] {
+        if final_build.len() < 6
+            && let Some(item_id) = pick_top_from_depth_list(depth_list, &final_build)
+        {
+            final_build.push(item_id);
+        }
+    }
+
+    // Fallback: fill remaining slots up to 6 items from top candidates sorted by play count
     for cand in &all_candidates {
-        if final_build.len() < 5
+        if final_build.len() < 6
             && !final_build.contains(&cand.id)
             && !is_component_item(cand.id)
             && !is_starter_item(cand.id)
@@ -1248,12 +1386,12 @@ pub fn build_5_item_blocks(
         }
     }
     let default_final = if damage_type == "AP" {
-        vec![3157, 3135, 4629]
+        vec![3157, 3135, 4629, 3102]
     } else {
-        vec![3072, 3026, 3139]
+        vec![3072, 3026, 3139, 3033]
     };
     for d in default_final {
-        if final_build.len() < 5 && !final_build.contains(&d) {
+        if final_build.len() < 6 && !final_build.contains(&d) {
             final_build.push(d);
         }
     }
@@ -1521,6 +1659,21 @@ pub fn parse_opgg_mcp_text(
     let starter_entry = item_candidate_entries.get(2).cloned();
     let boot_entries = item_candidate_entries.get(1).cloned().into_iter().collect();
 
+    let grouped_lists = extract_mcp_grouped_item_lists(text);
+    let mut fourth_entries = Vec::new();
+    let mut fifth_entries = Vec::new();
+    let mut sixth_entries = Vec::new();
+    let mut last_entries = Vec::new();
+    for (name, items) in grouped_lists {
+        match name.as_str() {
+            "fourth_items" => fourth_entries = items,
+            "fifth_items" => fifth_entries = items,
+            "sixth_items" => sixth_entries = items,
+            "last_items" => last_entries = items,
+            _ => last_entries.extend(items),
+        }
+    }
+
     let mut candidate_entries = Vec::new();
     let core_ids = if let Some(first) = item_candidate_entries.first() {
         let mut core_entry = first.clone();
@@ -1533,7 +1686,25 @@ pub fn parse_opgg_mcp_text(
     } else {
         Vec::new()
     };
-    if item_candidate_entries.len() > 3 {
+
+    if !last_entries.is_empty() {
+        for entry in last_entries {
+            let filtered_ids: Vec<i32> = entry
+                .ids
+                .iter()
+                .filter(|id| !core_ids.contains(id))
+                .copied()
+                .collect();
+            if !filtered_ids.is_empty() {
+                candidate_entries.push(ItemStatEntry {
+                    ids: filtered_ids,
+                    play: entry.play,
+                    win: entry.win,
+                    pick_rate: entry.pick_rate,
+                });
+            }
+        }
+    } else if item_candidate_entries.len() > 3 {
         for entry in &item_candidate_entries[3..] {
             let filtered_ids: Vec<i32> = entry
                 .ids
@@ -1552,10 +1723,13 @@ pub fn parse_opgg_mcp_text(
         }
     }
 
-    let item_blocks = build_5_item_blocks(
+    let item_blocks = build_5_item_blocks_with_depth_lists(
         starter_entry,
         boot_entries,
         candidate_entries,
+        fourth_entries,
+        fifth_entries,
+        sixth_entries,
         damage_type,
     );
 
@@ -1779,14 +1953,35 @@ pub fn parse_opgg_analysis_payload(
             .pointer("/items/core")
             .or_else(|| analysis.pointer("/core_items")),
     );
+    // Select the #1 most played Core Build combination to identify core_ids
+    core_entries.sort_by_key(|e| std::cmp::Reverse(e.play));
     let mut core_ids = Vec::new();
-    for entry in &mut core_entries {
+    for (idx, entry) in core_entries.iter_mut().enumerate() {
         if entry.play == 1 {
-            entry.play = 10000;
+            entry.play = 10000 - (idx as i64);
         }
-        core_ids.extend_from_slice(&entry.ids);
+        if idx == 0 {
+            core_ids.extend_from_slice(&entry.ids);
+        }
     }
     candidate_entries.extend(core_entries);
+
+    let fourth_entries = parse_json_item_entries(
+        analysis
+            .pointer("/fourth_items")
+            .or_else(|| analysis.pointer("/items/fourth_items"))
+            .or_else(|| analysis.pointer("/items/final_build")),
+    );
+    let fifth_entries = parse_json_item_entries(
+        analysis
+            .pointer("/fifth_items")
+            .or_else(|| analysis.pointer("/items/fifth_items")),
+    );
+    let sixth_entries = parse_json_item_entries(
+        analysis
+            .pointer("/sixth_items")
+            .or_else(|| analysis.pointer("/items/sixth_items")),
+    );
 
     let mut other_entries = Vec::new();
     other_entries.extend(parse_json_item_entries(
@@ -1794,13 +1989,9 @@ pub fn parse_opgg_analysis_payload(
             .pointer("/items/situational")
             .or_else(|| analysis.pointer("/last_items")),
     ));
-    other_entries.extend(parse_json_item_entries(
-        analysis
-            .pointer("/items/final_build")
-            .or_else(|| analysis.pointer("/fourth_items")),
-    ));
-    other_entries.extend(parse_json_item_entries(analysis.pointer("/fifth_items")));
-    other_entries.extend(parse_json_item_entries(analysis.pointer("/sixth_items")));
+    other_entries.extend(fourth_entries.clone());
+    other_entries.extend(fifth_entries.clone());
+    other_entries.extend(sixth_entries.clone());
 
     for entry in other_entries {
         let filtered_ids: Vec<i32> = entry
@@ -1819,10 +2010,13 @@ pub fn parse_opgg_analysis_payload(
         }
     }
 
-    let item_blocks = build_5_item_blocks(
+    let item_blocks = build_5_item_blocks_with_depth_lists(
         starter_entry,
         boot_entries,
         candidate_entries,
+        fourth_entries,
+        fifth_entries,
+        sixth_entries,
         damage_type,
     );
 
@@ -1986,6 +2180,72 @@ pub async fn fetch_opgg_rest_champion_analysis(
     Ok(json_body)
 }
 
+/// Fetches separate `fourth_items`, `fifth_items`, and `sixth_items` lists from OP.GG MCP.
+pub async fn fetch_opgg_mcp_depth_items(
+    client: &reqwest::Client,
+    endpoint_url: &str,
+    champion_name: &str,
+    game_mode: &str,
+    position: &str,
+    tier: &str,
+) -> Result<(Vec<ItemStatEntry>, Vec<ItemStatEntry>, Vec<ItemStatEntry>), String> {
+    let formatted_champ = champion_key_to_opgg_name(champion_name);
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "lol_get_champion_analysis",
+            "arguments": {
+                "game_mode": game_mode,
+                "champion": formatted_champ,
+                "position": position,
+                "tier": tier,
+                "desired_output_fields": [
+                    "data.fourth_items[].{ids[],play,win,pick_rate}",
+                    "data.fifth_items[].{ids[],play,win,pick_rate}",
+                    "data.sixth_items[].{ids[],play,win,pick_rate}"
+                ]
+            }
+        }
+    });
+
+    let res = client
+        .post(endpoint_url)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|err| format!("MCP depth items request failed: {}", err))?;
+
+    if !res.status().is_success() {
+        return Err(format!("MCP depth items HTTP error: {}", res.status()));
+    }
+
+    let json_body: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|err| format!("Failed to parse MCP depth items JSON: {}", err))?;
+
+    let text = json_body
+        .pointer("/result/content/0/text")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Missing text in MCP depth items response".to_string())?;
+
+    let grouped = extract_mcp_grouped_item_lists(text);
+    let mut fourth = Vec::new();
+    let mut fifth = Vec::new();
+    let mut sixth = Vec::new();
+    for (name, items) in grouped {
+        match name.as_str() {
+            "fourth_items" => fourth = items,
+            "fifth_items" => fifth = items,
+            "sixth_items" => sixth = items,
+            _ => {}
+        }
+    }
+    Ok((fourth, fifth, sixth))
+}
+
 /// Fetches recommended build for a champion filtered by position, tier, region, and patch.
 pub async fn get_recommended_build_with_filters(
     client: &reqwest::Client,
@@ -2085,8 +2345,16 @@ pub async fn get_recommended_build_with_filters(
             patch_fallback_applied = fallback;
     }
 
-    // 3. Fetch build with effective patch
-    let mut build = match fetch_opgg_rest_champion_analysis(
+    // 3. Fetch build with effective patch (and enrich with MCP fourth/fifth/sixth item lists)
+    let mcp_depth_fut = fetch_opgg_mcp_depth_items(
+        client,
+        OPGG_MCP_ENDPOINT,
+        champ_name,
+        mode,
+        &target_position,
+        target_tier,
+    );
+    let rest_fut = fetch_opgg_rest_champion_analysis(
         client,
         target_region,
         mode,
@@ -2094,10 +2362,39 @@ pub async fn get_recommended_build_with_filters(
         &target_position,
         target_tier,
         Some(&effective_patch),
-    )
-    .await
-    {
-        Ok(json_res) => {
+    );
+    let (rest_res, mcp_depth_res) = tokio::join!(rest_fut, mcp_depth_fut);
+
+    let mut build = match rest_res {
+        Ok(mut json_res) => {
+            if let Ok((fourth, fifth, sixth)) = mcp_depth_res
+                && let Some(data_obj) = json_res.get_mut("data").and_then(|d| d.as_object_mut())
+            {
+                let to_json_arr = |entries: Vec<ItemStatEntry>| -> serde_json::Value {
+                    serde_json::Value::Array(
+                        entries
+                            .into_iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "ids": e.ids,
+                                    "play": e.play,
+                                    "win": e.win,
+                                    "pick_rate": e.pick_rate
+                                })
+                            })
+                            .collect(),
+                    )
+                };
+                if !fourth.is_empty() {
+                    data_obj.insert("fourth_items".to_string(), to_json_arr(fourth));
+                }
+                if !fifth.is_empty() {
+                    data_obj.insert("fifth_items".to_string(), to_json_arr(fifth));
+                }
+                if !sixth.is_empty() {
+                    data_obj.insert("sixth_items".to_string(), to_json_arr(sixth));
+                }
+            }
             match parse_opgg_analysis_payload(
                 &json_res,
                 champion_id,
@@ -2749,6 +3046,12 @@ mod tests {
                 pick_rate: 0.2,
             }, // Final build 5th
             ItemStatEntry {
+                ids: vec![3102],
+                play: 4000,
+                win: 2100,
+                pick_rate: 0.18,
+            }, // Final build 6th
+            ItemStatEntry {
                 ids: vec![4646],
                 play: 1500,
                 win: 700,
@@ -2777,8 +3080,8 @@ mod tests {
 
         // Clean core (first 3): 3118, 4645, 3157
         assert_eq!(blocks[1].item_ids, vec![3118, 4645, 3157]);
-        // Final build (5 items): 3118, 4645, 3157, 3089, 3135
-        assert_eq!(blocks[3].item_ids, vec![3118, 4645, 3157, 3089, 3135]);
+        // Final build (6 items): 3118, 4645, 3157, 3089, 3135, 3102
+        assert_eq!(blocks[3].item_ids, vec![3118, 4645, 3157, 3089, 3135, 3102]);
 
         // Situational items:
         // Must NOT contain any item from core or final build:
@@ -3015,13 +3318,14 @@ mod tests {
             ItemStatEntry { ids: vec![3032], play: 12000, win: 6000, pick_rate: 0.4 }, // Yun Tal (4th)
             ItemStatEntry { ids: vec![1038], play: 11000, win: 5500, pick_rate: 0.35 }, // B.F. Sword (component - MUST BE SKIPPED!)
             ItemStatEntry { ids: vec![3036], play: 10000, win: 5000, pick_rate: 0.3 }, // LDR (5th)
+            ItemStatEntry { ids: vec![3026], play: 9000, win: 4500, pick_rate: 0.28 }, // GA (6th)
             ItemStatEntry { ids: vec![2523], play: 8000, win: 4000, pick_rate: 0.25 }, // Situational 1
             ItemStatEntry { ids: vec![2512], play: 7000, win: 3500, pick_rate: 0.2 }, // Situational 2
             ItemStatEntry { ids: vec![3033], play: 6000, win: 3000, pick_rate: 0.18 }, // Situational 3
-            ItemStatEntry { ids: vec![3026], play: 5000, win: 2500, pick_rate: 0.15 }, // Situational 4
-            ItemStatEntry { ids: vec![6673], play: 4000, win: 2000, pick_rate: 0.12 }, // Situational 5
-            ItemStatEntry { ids: vec![3072], play: 3000, win: 1500, pick_rate: 0.1 }, // Situational 6
-            ItemStatEntry { ids: vec![3139], play: 2000, win: 1000, pick_rate: 0.08 }, // Situational 7 (should be dropped by cap)
+            ItemStatEntry { ids: vec![6673], play: 4000, win: 2000, pick_rate: 0.12 }, // Situational 4
+            ItemStatEntry { ids: vec![3072], play: 3000, win: 1500, pick_rate: 0.1 }, // Situational 5
+            ItemStatEntry { ids: vec![3139], play: 2000, win: 1000, pick_rate: 0.08 }, // Situational 6
+            ItemStatEntry { ids: vec![3046], play: 1000, win: 500, pick_rate: 0.04 }, // Situational 7 (should be dropped by cap)
         ];
 
         let blocks = build_5_item_blocks(
@@ -3034,9 +3338,9 @@ mod tests {
         // Core items
         assert_eq!(blocks[1].item_ids, vec![6672, 3085, 3031]);
 
-        // Build Final: must NEVER contain component 1038 (B.F. Sword)!
-        // Should contain core (6672, 3085, 3031) followed by 3032 and 3036
-        assert_eq!(blocks[3].item_ids, vec![6672, 3085, 3031, 3032, 3036]);
+        // Build Final: 6 items, must NEVER contain component 1038 (B.F. Sword)!
+        // Should contain core (6672, 3085, 3031) followed by 3032 (4th), 3036 (5th), and 3026 (6th)
+        assert_eq!(blocks[3].item_ids, vec![6672, 3085, 3031, 3032, 3036, 3026]);
 
         // Situational items: max 6 items, must not contain 1038 or any core/final items
         assert_eq!(blocks[4].item_ids.len(), 6);
@@ -3045,5 +3349,88 @@ mod tests {
             assert!(!blocks[1].item_ids.contains(&id));
             assert!(!blocks[3].item_ids.contains(&id));
         }
+    }
+
+    #[test]
+    fn test_core_builds_and_separate_fourth_fifth_sixth_lists_yunara() {
+        // Mirrors the exact OP.GG Yunara tables from the user's screenshot:
+        // Core builds:
+        //   1. [6672, 3085, 3031] -> 19,057 Games
+        //   2. [3032, 3085, 3031] -> 15,006 Games
+        //   3. [6672, 3085, 2523] -> 5,163 Games
+        // Fourth Item:
+        //   1. [3036] (LDR) -> 18,151 Games
+        //   2. [3031] (IE) -> 8,958 Games
+        //   3. [3033] (Mortal Reminder) -> 5,651 Games
+        // Fifth Item:
+        //   1. [3026] (Guardian Angel) -> 4,832 Games
+        //   2. [3072] (Bloodthirster) -> 2,585 Games
+        //   3. [6673] (Shieldbow) -> 2,549 Games
+        // Sixth Item:
+        //   1. [3026] (Guardian Angel) -> 2,035 Games (already picked as 5th item!)
+        //   2. [3072] (Bloodthirster) -> 1,036 Games (must be picked as 6th item!)
+        //   3. [3139] (Mercurial Scimitar) -> 638 Games
+        let json = serde_json::json!({
+            "data": {
+                "damage_type": "AD",
+                "win_rate": 50.0,
+                "pick_rate": 11.9,
+                "runes": {
+                    "primary_style_id": 8000,
+                    "sub_style_id": 8300,
+                    "primary_perk_ids": [8008, 9111, 9104, 8017],
+                    "sub_perk_ids": [8304, 8345],
+                    "stat_shards": [5005, 5008, 5011]
+                },
+                "summoner_spells": [
+                    { "ids": [4, 21], "play": 62087, "win": 30822 }
+                ],
+                "starter_items": [
+                    { "ids": [1055, 2003], "play": 76942, "win": 38123 }
+                ],
+                "boots": [
+                    { "ids": [3006], "play": 42413, "win": 22681 }
+                ],
+                "core_items": [
+                    { "ids": [3032, 3085, 3031], "play": 15006, "win": 8883 },
+                    { "ids": [6672, 3085, 3031], "play": 19057, "win": 10673 },
+                    { "ids": [6672, 3085, 2523], "play": 5163, "win": 2880 }
+                ],
+                "fourth_items": [
+                    { "ids": [3036], "play": 18151, "win": 11137 },
+                    { "ids": [3031], "play": 8958, "win": 5236 },
+                    { "ids": [3033], "play": 5651, "win": 3192 }
+                ],
+                "fifth_items": [
+                    { "ids": [3026], "play": 4832, "win": 3108 },
+                    { "ids": [3072], "play": 2585, "win": 1612 },
+                    { "ids": [6673], "play": 2549, "win": 1570 }
+                ],
+                "sixth_items": [
+                    { "ids": [3026], "play": 2035, "win": 1333 },
+                    { "ids": [3072], "play": 1036, "win": 630 },
+                    { "ids": [3139], "play": 638, "win": 401 }
+                ],
+                "last_items": [
+                    { "ids": [3085], "play": 75928, "win": 39359 },
+                    { "ids": [3031], "play": 59024, "win": 33741 },
+                    { "ids": [6672], "play": 50399, "win": 24649 },
+                    { "ids": [3032], "play": 34739, "win": 17553 },
+                    { "ids": [3036], "play": 30559, "win": 17570 }
+                ]
+            }
+        });
+
+        let build = parse_opgg_analysis_payload(&json, 804, "Yunara")
+            .expect("Parsing Yunara build with core_items and 4th/5th/6th item lists should succeed");
+
+        // Block 2 (Primeiros 3 Itens): must pick [6672, 3085, 3031] because 19,057 > 15,006
+        assert_eq!(build.item_blocks[1].item_ids, vec![6672, 3085, 3031]);
+
+        // Block 4 (Build Final): 3 Core ([6672, 3085, 3031]) + 4th (3036) + 5th (3026) + 6th (3072 since 3026 is already in 5th)
+        assert_eq!(
+            build.item_blocks[3].item_ids,
+            vec![6672, 3085, 3031, 3036, 3026, 3072]
+        );
     }
 }
