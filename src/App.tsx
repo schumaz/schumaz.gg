@@ -4,6 +4,25 @@ import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 
 export type ActiveTab = "runes" | "settings";
+export type FlashKeyPreference = "D" | "F";
+
+export interface UserPreferences {
+  autoInjectRunes: boolean;
+  autoInjectSpells: boolean;
+  autoInjectItems: boolean;
+  flashKey: FlashKeyPreference;
+  autoAcceptMatch: boolean;
+}
+
+export const DEFAULT_PREFERENCES: UserPreferences = {
+  autoInjectRunes: true,
+  autoInjectSpells: true,
+  autoInjectItems: true,
+  flashKey: "D",
+  autoAcceptMatch: false,
+};
+
+const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";
 
 export interface SummonerInfo {
   summonerId: number;
@@ -68,14 +87,47 @@ export interface ChampionBuild {
   spells?: SpellMetadata[];
 }
 
+function loadInitialPreferences(): UserPreferences {
+  try {
+    const raw = localStorage.getItem(PREFERENCES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        autoInjectRunes: typeof parsed.autoInjectRunes === "boolean" ? parsed.autoInjectRunes : DEFAULT_PREFERENCES.autoInjectRunes,
+        autoInjectSpells: typeof parsed.autoInjectSpells === "boolean" ? parsed.autoInjectSpells : DEFAULT_PREFERENCES.autoInjectSpells,
+        autoInjectItems: typeof parsed.autoInjectItems === "boolean" ? parsed.autoInjectItems : DEFAULT_PREFERENCES.autoInjectItems,
+        flashKey: parsed.flashKey === "F" ? "F" : "D",
+        autoAcceptMatch: typeof parsed.autoAcceptMatch === "boolean" ? parsed.autoAcceptMatch : DEFAULT_PREFERENCES.autoAcceptMatch,
+      };
+    }
+  } catch {
+    // Fallback to default preferences if reading localStorage fails
+  }
+  return DEFAULT_PREFERENCES;
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("runes");
+  const [preferences, setPreferences] = useState<UserPreferences>(loadInitialPreferences);
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
   const [build, setBuild] = useState<ChampionBuild | null>(null);
   const [injectionReport, setInjectionReport] = useState<InjectionReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Sync preferences state with localStorage
+  const updatePreference = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
+    setPreferences((prev) => {
+      const next = { ...prev, [key]: value };
+      try {
+        localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore localStorage quota errors
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     // Initial check for summoner status
@@ -173,6 +225,23 @@ function App() {
       setLoading(false);
     }
   };
+
+  // Helper to reorder spells according to the user's preferred Flash key (D vs F)
+  const getOrderedSpells = () => {
+    if (!build?.spells || build.spells.length < 2) return build?.spells || [];
+    const spellsCopy = [...build.spells];
+    const flashIndex = spellsCopy.findIndex((s) => s.id === 4);
+    if (flashIndex !== -1) {
+      if (preferences.flashKey === "F" && flashIndex === 0) {
+        spellsCopy.reverse();
+      } else if (preferences.flashKey === "D" && flashIndex === 1) {
+        spellsCopy.reverse();
+      }
+    }
+    return spellsCopy;
+  };
+
+  const orderedSpells = getOrderedSpells();
 
   return (
     <main className="container">
@@ -359,8 +428,8 @@ function App() {
                   <p className="card-desc">Feitiços recomendados adaptados para a fila atual.</p>
 
                   <div className="spells-list">
-                    {build.spells && build.spells.length >= 2 ? (
-                      build.spells.map((spell, index) => (
+                    {orderedSpells && orderedSpells.length >= 2 ? (
+                      orderedSpells.map((spell, index) => (
                         <div key={`spell-${index}-${spell.id}`} className="spell-item">
                           <span className="spell-key-indicator">{index === 0 ? "D" : "F"}</span>
                           {spell.icon_url && (
@@ -515,15 +584,129 @@ function App() {
       {/* View 2: "Configurações" Tab (Settings & Preferences) */}
       {activeTab === "settings" && (
         <div className="tab-content" data-testid="view-settings">
-          <section className="card">
-            <h2>Ajustes & Preferências</h2>
-            <p className="card-desc">
-              Personalize o comportamento da injeção automática, atalhos de feitiços e automações do cliente.
-            </p>
-            <p className="text-muted">
-              Central de controles em desenvolvimento (Módulos 5.4, 6 e 7).
-            </p>
-          </section>
+          <div className="settings-container">
+            {/* Group 1: Automatic Injection */}
+            <section className="card settings-group-card">
+              <div className="settings-group-header">
+                <h2>Injeção Automática</h2>
+                <p className="card-desc">
+                  Escolha quais elementos da recomendação de build devem ser aplicados automaticamente no cliente local durante o Champion Select.
+                </p>
+              </div>
+
+              <div className="settings-list">
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Injetar Runas Automaticamente</span>
+                    <span className="settings-item-desc">
+                      Substitui a página customizada por <code>%Champname% | schumaz.gg</code> com a maior taxa de vitória.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Injetar Runas Automaticamente"
+                    checked={preferences.autoInjectRunes}
+                    onChange={(e) => updatePreference("autoInjectRunes", e.target.checked)}
+                  />
+                </label>
+
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Injetar Feitiços de Invocador</span>
+                    <span className="settings-item-desc">
+                      Aplica os feitiços recomendados da fila (ex: Golpear para caçadores, Bola de Neve no ARAM).
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Injetar Feitiços de Invocador"
+                    checked={preferences.autoInjectSpells}
+                    onChange={(e) => updatePreference("autoInjectSpells", e.target.checked)}
+                  />
+                </label>
+
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
+                    <span className="settings-item-desc">
+                      Cria os 4 blocos de itens recomendados diretamente na interface de loja do jogo.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Injetar Conjuntos de Itens na Loja"
+                    checked={preferences.autoInjectItems}
+                    onChange={(e) => updatePreference("autoInjectItems", e.target.checked)}
+                  />
+                </label>
+              </div>
+            </section>
+
+            {/* Group 2: Flash Key Positioning */}
+            <section className="card settings-group-card">
+              <div className="settings-group-header">
+                <h2>Posicionamento do Flash</h2>
+                <p className="card-desc">
+                  Defina em qual tecla de invocador o Flash (ID 4) deve ser alocado prioritariamente ao injetar os feitiços recomendados.
+                </p>
+              </div>
+
+              <div className="segmented-control-container">
+                <div className="segmented-control" role="group" aria-label="Preferência de Tecla do Flash">
+                  <button
+                    type="button"
+                    className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
+                    onClick={() => updatePreference("flashKey", "D")}
+                    aria-pressed={preferences.flashKey === "D"}
+                  >
+                    <span>Flash no D</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-btn ${preferences.flashKey === "F" ? "active" : ""}`}
+                    onClick={() => updatePreference("flashKey", "F")}
+                    aria-pressed={preferences.flashKey === "F"}
+                  >
+                    <span>Flash no F</span>
+                  </button>
+                </div>
+                <span className="segmented-caption">
+                  Tecla ativa: <strong>Flash no {preferences.flashKey}</strong> (invertendo feitiços se necessário).
+                </span>
+              </div>
+            </section>
+
+            {/* Group 3: Match Automation */}
+            <section className="card settings-group-card">
+              <div className="settings-group-header">
+                <h2>Automação do Cliente</h2>
+                <p className="card-desc">
+                  Recursos opcionais de conveniência executados exclusivamente via API local do LCU.
+                </p>
+              </div>
+
+              <div className="settings-list">
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Aceitar Partida Automaticamente (Auto-Accept)</span>
+                    <span className="settings-item-desc">
+                      Responde automaticamente ao Ready Check assim que a partida for encontrada (Módulo 7).
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Aceitar Partida Automaticamente"
+                    checked={preferences.autoAcceptMatch}
+                    onChange={(e) => updatePreference("autoAcceptMatch", e.target.checked)}
+                  />
+                </label>
+              </div>
+            </section>
+          </div>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App, { ChampionBuild } from "./App";
+import App, { ChampionBuild, DEFAULT_PREFERENCES } from "./App";
 
 // Sample mock recommended build for Ahri
 const mockAhriBuild: ChampionBuild = {
@@ -86,6 +86,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 describe("App Component", () => {
   beforeEach(() => {
     eventListeners = {};
+    localStorage.clear();
   });
 
   it("renders schumaz.gg title and initial LCU disconnected status", () => {
@@ -130,26 +131,88 @@ describe("App Component", () => {
     expect(settingsBtn).not.toHaveAttribute("aria-current");
   });
 
-  it("switches to the Configurações view when the settings dock button is clicked", () => {
+  it("switches to the Configurações view and displays the settings groups", () => {
     render(<App />);
-    const runesBtn = screen.getByRole("button", { name: /^runas$/i });
     const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
-
-    // Initially in Runas tab
-    expect(screen.getByText(/Seleção de Campeões/i)).toBeInTheDocument();
 
     // Click Configurações
     fireEvent.click(settingsBtn);
 
     // Settings tab is now active
     expect(settingsBtn).toHaveAttribute("aria-current", "page");
-    expect(runesBtn).not.toHaveAttribute("aria-current");
-    expect(screen.getByText("Ajustes & Preferências")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Injeção Automática/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Posicionamento do Flash/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Automação do Cliente/i })).toBeInTheDocument();
 
-    // Click back to Runas
-    fireEvent.click(runesBtn);
-    expect(runesBtn).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText(/Seleção de Campeões/i)).toBeInTheDocument();
+    // Check individual controls
+    expect(screen.getByLabelText("Injetar Runas Automaticamente")).toBeChecked();
+    expect(screen.getByLabelText("Injetar Feitiços de Invocador")).toBeChecked();
+    expect(screen.getByLabelText("Injetar Conjuntos de Itens na Loja")).toBeChecked();
+    expect(screen.getByRole("button", { name: /Flash no D/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Aceitar Partida Automaticamente")).not.toBeChecked();
+  });
+
+  it("toggles preferences and persists them to localStorage", () => {
+    render(<App />);
+    const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
+    fireEvent.click(settingsBtn);
+
+    // Toggle runes off
+    const runesToggle = screen.getByLabelText("Injetar Runas Automaticamente");
+    fireEvent.click(runesToggle);
+    expect(runesToggle).not.toBeChecked();
+
+    // Switch Flash to F
+    const flashFBtn = screen.getByRole("button", { name: /Flash no F/i });
+    fireEvent.click(flashFBtn);
+    expect(flashFBtn).toHaveAttribute("aria-pressed", "true");
+
+    // Toggle auto-accept on
+    const autoAcceptToggle = screen.getByLabelText("Aceitar Partida Automaticamente");
+    fireEvent.click(autoAcceptToggle);
+    expect(autoAcceptToggle).toBeChecked();
+
+    // Verify localStorage contains the updated preferences
+    const stored = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
+    expect(stored.autoInjectRunes).toBe(false);
+    expect(stored.flashKey).toBe("F");
+    expect(stored.autoAcceptMatch).toBe(true);
+  });
+
+  it("reorders spells in the Runas tab based on Flash key preference", async () => {
+    // Set Flash on F in localStorage before render
+    localStorage.setItem(
+      "schumaz_user_preferences",
+      JSON.stringify({ ...DEFAULT_PREFERENCES, flashKey: "F" })
+    );
+
+    render(<App />);
+
+    // Wait until event listeners are established
+    await waitFor(() => {
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    // Simulate build event where Flash is index 0
+    act(() => {
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+    });
+
+    // With Flash on F, Flash should now be mapped to key F instead of D
+    const spellItems = screen.getAllByText(/Flash|Incendiar/);
+    expect(spellItems.length).toBeGreaterThanOrEqual(2);
+
+    // The first item should now be Ignite (key D), and second should be Flash (key F)
+    const spellsCard = screen.getByTestId("spells-card");
+    const dIndicator = spellsCard.querySelectorAll(".spell-key-indicator")[0];
+    const fIndicator = spellsCard.querySelectorAll(".spell-key-indicator")[1];
+
+    expect(dIndicator).toHaveTextContent("D");
+    expect(fIndicator).toHaveTextContent("F");
   });
 
   it("renders full match dashboard when recommended build is received", async () => {
