@@ -656,6 +656,19 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
         .map(|id| resolve_rune_metadata(&cache.runes, *id))
         .collect();
 
+    // If position is jungle, ensure Smite (11) is placed in the build's spells
+    if build.active_position.eq_ignore_ascii_case("jungle") {
+        let prefs = crate::lcu_injector::get_user_preferences();
+        let (s1, s2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
+            build.spell1_id,
+            build.spell2_id,
+            prefs.flash_key,
+            true,
+        );
+        build.spell1_id = s1;
+        build.spell2_id = s2;
+    }
+
     build.spells = vec![
         get_spell_metadata(&cache.version, build.spell1_id),
         get_spell_metadata(&cache.version, build.spell2_id),
@@ -1631,6 +1644,73 @@ pub fn parse_opgg_analysis_payload(
     )
 }
 
+/// Helper to extract the most played summoner spells combination from OP.GG analysis JSON.
+/// OP.GG REST returns `summoner_spells: [ { "ids": [4, 21], "play": 62087, "win": ... }, ... ]`
+/// Falls back to legacy/MCP pointers like `/spells` or `/summoner_spells/ids`.
+pub fn extract_most_used_summoner_spells(analysis: &serde_json::Value) -> (i32, i32) {
+    if let Some(arr) = analysis.get("summoner_spells").and_then(|v| v.as_array()) {
+        let mut entries: Vec<(i32, i32, i64, f64)> = Vec::new();
+        for item in arr {
+            if let Some(ids) = item.get("ids").and_then(|i| i.as_array())
+                && ids.len() >= 2
+            {
+                let s1 = ids[0].as_i64().unwrap_or(0) as i32;
+                let s2 = ids[1].as_i64().unwrap_or(0) as i32;
+                let play = item.get("play").and_then(|p| p.as_i64()).unwrap_or(1);
+                let win = item.get("win").and_then(|w| w.as_i64()).unwrap_or(0);
+                let win_rate = if play > 0 { win as f64 / play as f64 } else { 0.0 };
+                if s1 > 0 && s2 > 0 {
+                    entries.push((s1, s2, play, win_rate));
+                }
+            } else if let Some(ids) = item.as_array() && ids.len() >= 2 {
+                let s1 = ids[0].as_i64().unwrap_or(0) as i32;
+                let s2 = ids[1].as_i64().unwrap_or(0) as i32;
+                if s1 > 0 && s2 > 0 {
+                    return (s1, s2);
+                }
+            }
+        }
+
+        if !entries.is_empty() {
+            // Sort by most played combination
+            entries.sort_by_key(|e| std::cmp::Reverse(e.2));
+            return (entries[0].0, entries[0].1);
+        }
+    }
+
+    // Direct flat array: "spells": [4, 14] or "summoner_spells": [4, 14]
+    if let Some(arr) = analysis.get("spells").and_then(|v| v.as_array())
+        && arr.len() >= 2
+    {
+        let s1 = arr[0].as_i64().unwrap_or(4) as i32;
+        let s2 = arr[1].as_i64().unwrap_or(14) as i32;
+        return (s1, s2);
+    }
+
+    if let Some(arr) = analysis.pointer("/summoner_spells/ids").and_then(|v| v.as_array())
+        && arr.len() >= 2
+    {
+        let s1 = arr[0].as_i64().unwrap_or(4) as i32;
+        let s2 = arr[1].as_i64().unwrap_or(14) as i32;
+        return (s1, s2);
+    }
+
+    // Single object or pointer
+    let s1 = analysis
+        .pointer("/summoner_spells/0/ids/0")
+        .or_else(|| analysis.pointer("/spells/0"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(4) as i32;
+
+    let s2 = analysis
+        .pointer("/summoner_spells/0/ids/1")
+        .or_else(|| analysis.pointer("/spells/1"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(14) as i32;
+
+    (s1, s2)
+}
+
 /// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild` with user priority preference.
 pub fn parse_opgg_analysis_payload_with_priority(
     opgg_json: &serde_json::Value,
@@ -1741,22 +1821,8 @@ pub fn parse_opgg_analysis_payload_with_priority(
         ));
     }
 
-    // Extract summoner spells
-    let spell1_id = analysis
-        .pointer("/spells/0")
-        .or_else(|| analysis.pointer("/summoner_spells/0"))
-        .or_else(|| analysis.pointer("/summoner_spells/ids/0"))
-        .or_else(|| analysis.pointer("/summoner_spells/0/ids/0"))
-        .and_then(|v| v.as_i64())
-        .unwrap_or(4) as i32;
-
-    let spell2_id = analysis
-        .pointer("/spells/1")
-        .or_else(|| analysis.pointer("/summoner_spells/1"))
-        .or_else(|| analysis.pointer("/summoner_spells/ids/1"))
-        .or_else(|| analysis.pointer("/summoner_spells/0/ids/1"))
-        .and_then(|v| v.as_i64())
-        .unwrap_or(14) as i32;
+    // Extract summoner spells: selects the most played combination from OP.GG
+    let (spell1_id, spell2_id) = extract_most_used_summoner_spells(analysis);
 
     let damage_type = analysis
         .get("damage_type")
@@ -2970,6 +3036,54 @@ mod tests {
         );
         assert_eq!(patch, "16.22");
         assert!(!fallback);
+    }
+
+    #[test]
+    fn test_extract_most_used_summoner_spells_from_opgg_rest_structure() {
+        let json = serde_json::json!({
+            "data": {
+                "win_rate": 49.5,
+                "pick_rate": 12.1,
+                "runes": {
+                    "primary_style_id": 8000,
+                    "sub_style_id": 8300,
+                    "primary_perk_ids": [8008, 9111, 9104, 8017],
+                    "sub_perk_ids": [8304, 8345],
+                    "stat_shards": [5005, 5008, 5011]
+                },
+                "summoner_spells": [
+                    {
+                        "ids": [4, 21], // Flash + Barrier (most played: 62087 games)
+                        "win": 30822,
+                        "play": 62087,
+                        "pick_rate": 0.7006
+                    },
+                    {
+                        "ids": [3, 4], // Exhaust + Flash (second: 17529 games)
+                        "win": 8894,
+                        "play": 17529,
+                        "pick_rate": 0.1978
+                    },
+                    {
+                        "ids": [4, 14], // Flash + Ignite (minority: 500 games)
+                        "win": 250,
+                        "play": 500,
+                        "pick_rate": 0.005
+                    }
+                ],
+                "items": {
+                    "starters": [1055, 2003],
+                    "core": [3031, 3094, 3036]
+                }
+            }
+        });
+
+        let build = parse_opgg_analysis_payload(&json, 804, "Yunara")
+            .expect("Parsing Yunara with OP.GG summoner_spells array should succeed");
+
+        // The most played combination is Flash (4) + Barrier (21), NOT Ignite (14)!
+        assert_eq!(build.spell1_id, 4);
+        assert_eq!(build.spell2_id, 21);
     }
 
     #[test]
