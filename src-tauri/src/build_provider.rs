@@ -125,6 +125,8 @@ pub struct ChampionBuild {
     #[serde(default)]
     pub spells: Vec<SpellMetadata>,
     #[serde(default)]
+    pub spell_choices: Vec<SpellMetadata>,
+    #[serde(default)]
     pub active_position: String,
     #[serde(default)]
     pub active_tier: String,
@@ -718,6 +720,30 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
         get_spell_metadata(&cache.version, build.spell1_id),
         get_spell_metadata(&cache.version, build.spell2_id),
     ];
+
+    if build.spell_choices.is_empty() {
+        let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
+        let non_primary = if is_jungle {
+            if build.spell1_id == 11 { build.spell2_id } else { build.spell1_id }
+        } else {
+            if build.spell1_id == 4 { build.spell2_id } else { build.spell1_id }
+        };
+        let second_alt = if is_jungle {
+            if non_primary == 4 { 6 } else { 4 }
+        } else {
+            if non_primary == 21 { 3 } else if non_primary == 14 { 12 } else { 14 }
+        };
+        build.spell_choices = vec![
+            get_spell_metadata(&cache.version, non_primary),
+            get_spell_metadata(&cache.version, second_alt),
+        ];
+    } else {
+        build.spell_choices = build
+            .spell_choices
+            .iter()
+            .map(|s| get_spell_metadata(&cache.version, s.id))
+            .collect();
+    }
 
     for block in &mut build.item_blocks {
         block.item_icon_urls = block
@@ -1940,6 +1966,10 @@ pub fn parse_opgg_mcp_text(
         position,
     );
 
+    let spell_choices = vec![
+        SpellMetadata { id: spell2_id, name: String::new(), icon_url: String::new() },
+    ];
+
     Ok(ChampionBuild {
         champion_id,
         champion_name: champion_name.to_string(),
@@ -1951,8 +1981,127 @@ pub fn parse_opgg_mcp_text(
         spell1_id,
         spell2_id,
         item_blocks,
+        spell_choices,
         ..Default::default()
     })
+}
+
+/// Extracts the top summoner spells and the 2 most popular choices for the secondary spell slot
+/// (Option 1 = most used, Option 2 = second most used).
+/// For Jungle, Smite (11) is guaranteed and spell_choices provides the top 2 companion spells (e.g. Flash vs Ghost, or Ignite vs Flash).
+/// For Laners, Flash (4) is anchor and spell_choices provides the top 2 secondary spells (e.g. Barrier vs Exhaust).
+pub fn extract_summoner_spell_choices(analysis: &serde_json::Value, is_jungle: bool) -> ((i32, i32), Vec<i32>) {
+    let mut combo_entries: Vec<(i32, i32, i64)> = Vec::new();
+
+    if let Some(arr) = analysis.get("summoner_spells").and_then(|v| v.as_array()) {
+        for item in arr {
+            if let Some(ids) = item.get("ids").and_then(|i| i.as_array())
+                && ids.len() >= 2
+            {
+                let s1 = ids[0].as_i64().unwrap_or(0) as i32;
+                let s2 = ids[1].as_i64().unwrap_or(0) as i32;
+                let play = item.get("play").and_then(|p| p.as_i64()).unwrap_or(1);
+                if s1 > 0 && s2 > 0 {
+                    combo_entries.push((s1, s2, play));
+                }
+            } else if let Some(ids) = item.as_array() && ids.len() >= 2 {
+                let s1 = ids[0].as_i64().unwrap_or(0) as i32;
+                let s2 = ids[1].as_i64().unwrap_or(0) as i32;
+                if s1 > 0 && s2 > 0 {
+                    combo_entries.push((s1, s2, 1));
+                }
+            }
+        }
+    }
+
+    combo_entries.sort_by_key(|e| std::cmp::Reverse(e.2));
+
+    let top_combo = if !combo_entries.is_empty() {
+        (combo_entries[0].0, combo_entries[0].1)
+    } else {
+        extract_most_used_summoner_spells(analysis)
+    };
+
+    let mut secondary_choices: Vec<i32> = Vec::new();
+
+    if is_jungle {
+        // Smite (11) is mandatory; collect top 2 unique non-Smite companion spells ordered by play count
+        let mut companion_counts: HashMap<i32, i64> = HashMap::new();
+        for (s1, s2, play) in &combo_entries {
+            let companion = if *s1 == 11 {
+                Some(*s2)
+            } else if *s2 == 11 {
+                Some(*s1)
+            } else {
+                None
+            };
+            if let Some(comp) = companion
+                && comp > 0
+                && comp != 11
+            {
+                *companion_counts.entry(comp).or_insert(0) += *play;
+            }
+        }
+        let mut sorted_companions: Vec<(i32, i64)> = companion_counts.into_iter().collect();
+        sorted_companions.sort_by_key(|e| std::cmp::Reverse(e.1));
+        for (comp, _) in sorted_companions {
+            if !secondary_choices.contains(&comp) {
+                secondary_choices.push(comp);
+            }
+        }
+        if secondary_choices.is_empty() {
+            let other = if top_combo.0 == 11 { top_combo.1 } else { top_combo.0 };
+            if other != 11 && other > 0 {
+                secondary_choices.push(other);
+            }
+        }
+        for fallback in [4, 6, 14] {
+            if secondary_choices.len() < 2 && !secondary_choices.contains(&fallback) {
+                secondary_choices.push(fallback);
+            }
+        }
+    } else {
+        // Standard laners: find primary anchor spell (Flash 4 if present in top combo, else top_combo.0)
+        let primary_spell = if top_combo.0 == 4 || top_combo.1 == 4 {
+            4
+        } else {
+            top_combo.0
+        };
+
+        // Determine secondary spell from top combo
+        let top_secondary = if top_combo.0 == primary_spell {
+            top_combo.1
+        } else {
+            top_combo.0
+        };
+        secondary_choices.push(top_secondary);
+
+        // Find alternative secondary spell from remaining combos
+        for (s1, s2, _) in &combo_entries {
+            let alt = if *s1 == primary_spell {
+                *s2
+            } else if *s2 == primary_spell {
+                *s1
+            } else {
+                continue;
+            };
+            if alt > 0 && !secondary_choices.contains(&alt) {
+                secondary_choices.push(alt);
+                break;
+            }
+        }
+
+        // Fallbacks if only 1 combo was played in data
+        let default_alts = [21, 3, 14, 12, 7, 6, 1]; // Barrier, Exhaust, Ignite, Teleport, Heal, Ghost, Cleanse
+        for fallback in default_alts {
+            if secondary_choices.len() < 2 && !secondary_choices.contains(&fallback) && fallback != primary_spell {
+                secondary_choices.push(fallback);
+            }
+        }
+    }
+
+    secondary_choices.truncate(2);
+    (top_combo, secondary_choices)
 }
 
 /// Helper to extract the most played summoner spells combination from OP.GG analysis JSON.
@@ -2131,8 +2280,17 @@ pub fn parse_opgg_analysis_payload(
         ));
     }
 
-    // Extract summoner spells: selects the most played combination from OP.GG
-    let (spell1_id, spell2_id) = extract_most_used_summoner_spells(analysis);
+    let is_jungle = analysis
+        .get("position")
+        .or_else(|| analysis.pointer("/meta/position"))
+        .or_else(|| analysis.pointer("/summary/position"))
+        .and_then(|v| v.as_str())
+        .map(|p| p.eq_ignore_ascii_case("jungle"))
+        .unwrap_or(false);
+
+    // Extract summoner spells: selects the most played combination and top 2 choices for secondary spell slot
+    let ((spell1_id, spell2_id), spell_choice_ids) =
+        extract_summoner_spell_choices(analysis, is_jungle);
 
     let damage_type = analysis
         .get("damage_type")
@@ -2233,6 +2391,15 @@ pub fn parse_opgg_analysis_payload(
         position,
     );
 
+    let spell_choices = spell_choice_ids
+        .into_iter()
+        .map(|id| SpellMetadata {
+            id,
+            name: String::new(),
+            icon_url: String::new(),
+        })
+        .collect();
+
     Ok(ChampionBuild {
         champion_id,
         champion_name: champion_name.to_string(),
@@ -2244,6 +2411,7 @@ pub fn parse_opgg_analysis_payload(
         spell1_id,
         spell2_id,
         item_blocks,
+        spell_choices,
         ..Default::default()
     })
 }
@@ -3870,5 +4038,39 @@ mod tests {
         // 3. New Legendary 9903 must be correctly integrated in Core and Final Build
         assert!(blocks[1].item_ids.contains(&9903));
         assert!(blocks[3].item_ids.contains(&9903));
+    }
+    #[test]
+    fn test_extract_summoner_spell_choices_yunara_and_jungle() {
+        // Yunara: Flash (4) + Barrier (21) (61,208) vs Exhaust (3) + Flash (4) (17,302)
+        let yunara_json = serde_json::json!({
+            "summoner_spells": [
+                { "ids": [4, 21], "play": 61208, "win": 30365 },
+                { "ids": [3, 4], "play": 17302, "win": 8780 }
+            ]
+        });
+        let (top_spells, choices) = extract_summoner_spell_choices(&yunara_json, false);
+        assert_eq!(top_spells, (4, 21));
+        assert_eq!(choices, vec![21, 3]); // Option 1: Barrier (21), Option 2: Exhaust (3)
+
+        // Jungle (Hecarim): Ghost (6) + Smite (11) (45,000) vs Flash (4) + Smite (11) (12,000)
+        let hecarim_json = serde_json::json!({
+            "summoner_spells": [
+                { "ids": [6, 11], "play": 45000, "win": 23000 },
+                { "ids": [4, 11], "play": 12000, "win": 6000 }
+            ]
+        });
+        let (jng_spells, jng_choices) = extract_summoner_spell_choices(&hecarim_json, true);
+        assert_eq!(jng_spells, (6, 11));
+        assert_eq!(jng_choices, vec![6, 4]); // Option 1: Ghost (6), Option 2: Flash (4)
+
+        // Jungle (Shaco): Ignite (14) + Smite (11) (38,000) vs Flash (4) + Smite (11) (5,000)
+        let shaco_json = serde_json::json!({
+            "summoner_spells": [
+                { "ids": [14, 11], "play": 38000, "win": 20000 },
+                { "ids": [4, 11], "play": 5000, "win": 2500 }
+            ]
+        });
+        let (_, shaco_choices) = extract_summoner_spell_choices(&shaco_json, true);
+        assert_eq!(shaco_choices, vec![14, 4]); // Option 1: Ignite (14), Option 2: Flash (4)
     }
 }

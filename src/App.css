@@ -1020,3 +1020,63 @@ body {
   transform: scale(1.08);
   color: var(--accent-primary);
 }
+
+/* Secondary Spell Choices Selector */
+.secondary-spell-selector {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.secondary-spell-title {
+  margin: 0 0 10px 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+
+.secondary-spell-options {
+  display: flex;
+  gap: 12px;
+}
+
+.secondary-spell-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  flex: 1;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.secondary-spell-btn:hover {
+  border-color: var(--border-highlight);
+  background-color: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.secondary-spell-btn.active {
+  background-color: rgba(10, 132, 255, 0.12);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 10px rgba(10, 132, 255, 0.2);
+}
+
+.secondary-spell-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+.secondary-spell-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+}

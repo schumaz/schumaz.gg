@@ -30,6 +30,10 @@ const mockAhriBuild: ChampionBuild = {
     { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
     { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "health.png" },
   ],
+  spell_choices: [
+    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
+    { id: 12, name: "Teleporte", icon_url: "teleport.png" },
+  ],
   spells: [
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },
@@ -291,7 +295,7 @@ describe("App Component", () => {
 
     // Check summoner spells
     expect(screen.getByText("Flash")).toBeInTheDocument();
-    expect(screen.getByText("Incendiar")).toBeInTheDocument();
+    expect(screen.getAllByText("Incendiar")[0]).toBeInTheDocument();
 
     // Check shop item blocks
     expect(screen.getByText(/1. Itens Iniciais/i)).toBeInTheDocument();
@@ -449,5 +453,51 @@ describe("App Component", () => {
     expect(screen.queryByRole("heading", { name: /Critério da Build Recomendada/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId("priority-most-popular")).not.toBeInTheDocument();
     expect(screen.queryByTestId("priority-highest-winrate")).not.toBeInTheDocument();
+  });
+
+  it("renders secondary spell choices and allows toggling to the alternative spell", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    act(() => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("secondary-spell-selector")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Escolha de Segundo Feitiço")).toBeInTheDocument();
+    const igniteBtn = screen.getByTestId("sec-spell-btn-14");
+    const tpBtn = screen.getByTestId("sec-spell-btn-12");
+    expect(igniteBtn).toBeInTheDocument();
+    expect(tpBtn).toBeInTheDocument();
+
+    expect(igniteBtn).toHaveClass("active");
+    expect(tpBtn).not.toHaveClass("active");
+
+    act(() => {
+      fireEvent.click(tpBtn);
+    });
+
+    expect(tpBtn).toHaveClass("active");
+    expect(igniteBtn).not.toHaveClass("active");
+
+    expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
+      spell1Id: 4,
+      spell2Id: 12,
+    });
   });
 });

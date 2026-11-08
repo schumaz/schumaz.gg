@@ -84,6 +84,7 @@ export interface ChampionBuild {
   sub_style_icon_url?: string;
   perks?: RuneMetadata[];
   spells?: SpellMetadata[];
+  spell_choices?: SpellMetadata[];
   active_position?: string;
   active_tier?: string;
   active_region?: string;
@@ -117,8 +118,53 @@ function App() {
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
   const [build, setBuild] = useState<ChampionBuild | null>(null);
   const [spellsInverted, setSpellsInverted] = useState(false);
+  const [selectedSecondarySpellId, setSelectedSecondarySpellId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const computeOrderedSpells = (
+    baseSpells: SpellMetadata[] | undefined,
+    secondarySpellId: number | null,
+    spellChoices: SpellMetadata[] | undefined,
+    flashKey: FlashKeyPreference,
+    inverted: boolean
+  ): SpellMetadata[] => {
+    if (!baseSpells || baseSpells.length < 2) return baseSpells || [];
+    let spellsCopy = [...baseSpells];
+
+    if (secondarySpellId && spellChoices && spellChoices.length > 0) {
+      const chosen = spellChoices.find((c) => c.id === secondarySpellId);
+      if (chosen) {
+        const secondaryIds = new Set(spellChoices.map((c) => c.id));
+        const idxToReplace = spellsCopy.findIndex((s) => secondaryIds.has(s.id));
+        if (idxToReplace !== -1) {
+          spellsCopy[idxToReplace] = chosen;
+        } else {
+          const nonAnchorIdx = spellsCopy.findIndex((s) => s.id !== 4 && s.id !== 11);
+          if (nonAnchorIdx !== -1) {
+            spellsCopy[nonAnchorIdx] = chosen;
+          } else {
+            spellsCopy[1] = chosen;
+          }
+        }
+      }
+    }
+
+    const flashIndex = spellsCopy.findIndex((s) => s.id === 4);
+    if (flashIndex !== -1) {
+      if (flashKey === "F" && flashIndex === 0) {
+        spellsCopy.reverse();
+      } else if (flashKey === "D" && flashIndex === 1) {
+        spellsCopy.reverse();
+      }
+    }
+
+    if (inverted) {
+      spellsCopy.reverse();
+    }
+
+    return spellsCopy;
+  };
 
   // Sync preferences state with localStorage and Tauri backend
   const updatePreference = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
@@ -133,21 +179,21 @@ function App() {
       return next;
     });
 
-    if (key === "flashKey" && build?.spells && build.spells.length >= 2) {
+    if (key === "flashKey") {
       const newFlashKey = value as FlashKeyPreference;
-      const spellsCopy = [...build.spells];
-      const flashIndex = spellsCopy.findIndex((s) => s.id === 4);
-      if (flashIndex !== -1) {
-        if (newFlashKey === "F" && flashIndex === 0) {
-          spellsCopy.reverse();
-        } else if (newFlashKey === "D" && flashIndex === 1) {
-          spellsCopy.reverse();
-        }
+      const reordered = computeOrderedSpells(
+        build?.spells,
+        selectedSecondarySpellId,
+        build?.spell_choices,
+        newFlashKey,
+        spellsInverted
+      );
+      if (reordered.length >= 2) {
+        invoke("inject_summoner_spells", {
+          spell1Id: reordered[0].id,
+          spell2Id: reordered[1].id,
+        }).catch(() => {});
       }
-      invoke("inject_summoner_spells", {
-        spell1Id: spellsCopy[0].id,
-        spell2Id: spellsCopy[1].id,
-      }).catch(() => {});
     }
   };
 
@@ -219,6 +265,7 @@ function App() {
         unlistenChampSelected = await listen<ChampSelectedPayload>("champ-selected", async (event) => {
           setChampSelect(event.payload);
           setSpellsInverted(false);
+          setSelectedSecondarySpellId(null);
 
           // Fetch recommended build for selected champion if not already received
           try {
@@ -252,10 +299,12 @@ function App() {
           setChampSelect(null);
           setBuild(null);
           setSpellsInverted(false);
+          setSelectedSecondarySpellId(null);
         });
 
         unlistenBuild = await listen<ChampionBuild>("recommended-build", (event) => {
           setBuild(event.payload);
+          setSelectedSecondarySpellId(null);
         });
 
         // Injection report is not displayed in the UI
@@ -276,29 +325,38 @@ function App() {
     };
   }, []);
 
-  // Helper to reorder spells according to the user's preferred Flash key (D vs F) and match-specific inversion
-  const getOrderedSpells = () => {
-    if (!build?.spells || build.spells.length < 2) return build?.spells || [];
-    const spellsCopy = [...build.spells];
-    const flashIndex = spellsCopy.findIndex((s) => s.id === 4);
-    if (flashIndex !== -1) {
-      if (preferences.flashKey === "F" && flashIndex === 0) {
-        spellsCopy.reverse();
-      } else if (preferences.flashKey === "D" && flashIndex === 1) {
-        spellsCopy.reverse();
-      }
-    }
-    if (spellsInverted) {
-      spellsCopy.reverse();
-    }
-    return spellsCopy;
-  };
-
-  const orderedSpells = getOrderedSpells();
+  const orderedSpells = computeOrderedSpells(
+    build?.spells,
+    selectedSecondarySpellId,
+    build?.spell_choices,
+    preferences.flashKey,
+    spellsInverted
+  );
 
   const handleInvertSpells = async () => {
     const nextFlashKey: FlashKeyPreference = preferences.flashKey === "D" ? "F" : "D";
     updatePreference("flashKey", nextFlashKey);
+  };
+
+  const handleSelectSecondarySpell = async (spellId: number) => {
+    setSelectedSecondarySpellId(spellId);
+    const reordered = computeOrderedSpells(
+      build?.spells,
+      spellId,
+      build?.spell_choices,
+      preferences.flashKey,
+      spellsInverted
+    );
+    if (reordered.length >= 2) {
+      try {
+        await invoke("inject_summoner_spells", {
+          spell1Id: reordered[0].id,
+          spell2Id: reordered[1].id,
+        });
+      } catch (e) {
+        console.warn("Failed to inject secondary spell change:", e);
+      }
+    }
   };
 
   const patchOptions =
@@ -622,6 +680,38 @@ function App() {
                       </div>
                     )}
                   </div>
+
+                  {build.spell_choices && build.spell_choices.length > 0 && (
+                    <div className="secondary-spell-selector" data-testid="secondary-spell-selector">
+                      <h4 className="secondary-spell-title">Escolha de Segundo Feitiço</h4>
+                      <div className="secondary-spell-options">
+                        {build.spell_choices.map((choice, idx) => {
+                          const currentSecondaryId =
+                            selectedSecondarySpellId ?? build.spell_choices?.[0]?.id;
+                          const isSelected = currentSecondaryId === choice.id;
+                          return (
+                            <button
+                              key={`sec-spell-${choice.id}-${idx}`}
+                              type="button"
+                              className={`secondary-spell-btn ${isSelected ? "active" : ""}`}
+                              data-testid={`sec-spell-btn-${choice.id}`}
+                              onClick={() => handleSelectSecondarySpell(choice.id)}
+                              title={idx === 0 ? "Mais Usado" : "Segundo Mais Usado"}
+                            >
+                              {choice.icon_url && (
+                                <img
+                                  src={choice.icon_url}
+                                  alt={choice.name}
+                                  className="secondary-spell-icon"
+                                />
+                              )}
+                              <span className="secondary-spell-name">{choice.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </section>
               </div>
 
@@ -772,7 +862,7 @@ function App() {
                 <div className="segmented-control" role="group" aria-label="Preferência de Tecla do Flash">
                   <button
                     type="button"
-                    className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}` }
+                    className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
                     onClick={() => updatePreference("flashKey", "D")}
                     aria-pressed={preferences.flashKey === "D"}
                   >
