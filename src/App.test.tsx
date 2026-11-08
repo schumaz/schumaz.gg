@@ -142,14 +142,16 @@ describe("App Component", () => {
     expect(settingsBtn).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("heading", { name: /Injeção Automática/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Posicionamento do Flash/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Automação do Cliente/i })).toBeInTheDocument();
+
+    // Ensure Match Automation / Auto-Accept is strictly not rendered
+    expect(screen.queryByRole("heading", { name: /Automação do Cliente/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Aceitar Partida Automaticamente/i)).not.toBeInTheDocument();
 
     // Check individual controls
     expect(screen.getByLabelText("Injetar Runas Automaticamente")).toBeChecked();
     expect(screen.getByLabelText("Injetar Feitiços de Invocador")).toBeChecked();
     expect(screen.getByLabelText("Injetar Conjuntos de Itens na Loja")).toBeChecked();
     expect(screen.getByRole("button", { name: /Flash no D/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByLabelText("Aceitar Partida Automaticamente")).not.toBeChecked();
   });
 
   it("toggles preferences and persists them to localStorage", () => {
@@ -167,16 +169,17 @@ describe("App Component", () => {
     fireEvent.click(flashFBtn);
     expect(flashFBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Toggle auto-accept on
-    const autoAcceptToggle = screen.getByLabelText("Aceitar Partida Automaticamente");
-    fireEvent.click(autoAcceptToggle);
-    expect(autoAcceptToggle).toBeChecked();
+    // Toggle items off
+    const itemsToggle = screen.getByLabelText("Injetar Conjuntos de Itens na Loja");
+    fireEvent.click(itemsToggle);
+    expect(itemsToggle).not.toBeChecked();
 
-    // Verify localStorage contains the updated preferences
+    // Verify localStorage contains the updated preferences without autoAcceptMatch
     const stored = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
     expect(stored.autoInjectRunes).toBe(false);
+    expect(stored.autoInjectItems).toBe(false);
     expect(stored.flashKey).toBe("F");
-    expect(stored.autoAcceptMatch).toBe(true);
+    expect(stored.autoAcceptMatch).toBeUndefined();
   });
 
   it("reorders spells in the Runas tab based on Flash key preference", async () => {

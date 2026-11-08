@@ -11,7 +11,6 @@ export interface UserPreferences {
   autoInjectSpells: boolean;
   autoInjectItems: boolean;
   flashKey: FlashKeyPreference;
-  autoAcceptMatch: boolean;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -19,7 +18,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   autoInjectSpells: true,
   autoInjectItems: true,
   flashKey: "D",
-  autoAcceptMatch: false,
 };
 
 const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";
@@ -97,7 +95,6 @@ function loadInitialPreferences(): UserPreferences {
         autoInjectSpells: typeof parsed.autoInjectSpells === "boolean" ? parsed.autoInjectSpells : DEFAULT_PREFERENCES.autoInjectSpells,
         autoInjectItems: typeof parsed.autoInjectItems === "boolean" ? parsed.autoInjectItems : DEFAULT_PREFERENCES.autoInjectItems,
         flashKey: parsed.flashKey === "F" ? "F" : "D",
-        autoAcceptMatch: typeof parsed.autoAcceptMatch === "boolean" ? parsed.autoAcceptMatch : DEFAULT_PREFERENCES.autoAcceptMatch,
       };
     }
   } catch {
@@ -676,34 +673,6 @@ function App() {
                 <span className="segmented-caption">
                   Tecla ativa: <strong>Flash no {preferences.flashKey}</strong> (invertendo feitiços se necessário).
                 </span>
-              </div>
-            </section>
-
-            {/* Group 3: Match Automation */}
-            <section className="card settings-group-card">
-              <div className="settings-group-header">
-                <h2>Automação do Cliente</h2>
-                <p className="card-desc">
-                  Recursos opcionais de conveniência executados exclusivamente via API local do LCU.
-                </p>
-              </div>
-
-              <div className="settings-list">
-                <label className="settings-item">
-                  <div className="settings-item-text">
-                    <span className="settings-item-title">Aceitar Partida Automaticamente (Auto-Accept)</span>
-                    <span className="settings-item-desc">
-                      Responde automaticamente ao Ready Check assim que a partida for encontrada (Módulo 7).
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="toggle-switch"
-                    aria-label="Aceitar Partida Automaticamente"
-                    checked={preferences.autoAcceptMatch}
-                    onChange={(e) => updatePreference("autoAcceptMatch", e.target.checked)}
-                  />
-                </label>
               </div>
             </section>
           </div>
