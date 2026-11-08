@@ -36,7 +36,7 @@ pub struct DataDragonCache {
     pub runes: HashMap<i32, RuneMetadata>,
 }
 
-/// An individual item group for the shop (e.g. Starter, Core, Situational).
+/// An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ItemBlock {
     pub title: String,
@@ -93,6 +93,12 @@ pub fn build_fallback_champion_build(
         5001, // Health Scaling
     ];
 
+    let starter_items = if queue_id == 450 {
+        vec![2051, 2003] // Guardian's Horn/Blade + Potion
+    } else {
+        vec![1055, 2003] // Doran's Blade + Health Potion
+    };
+
     ChampionBuild {
         champion_id,
         champion_name: champion_name.to_string(),
@@ -105,16 +111,20 @@ pub fn build_fallback_champion_build(
         spell2_id,
         item_blocks: vec![
             ItemBlock {
-                title: "Starter Items".to_string(),
-                item_ids: if queue_id == 450 {
-                    vec![2051, 1001]
-                } else {
-                    vec![1055, 2003]
-                },
+                title: "Itens Iniciais".to_string(),
+                item_ids: starter_items,
             },
             ItemBlock {
-                title: "Core Build".to_string(),
+                title: "Primeiros 3 Itens".to_string(),
                 item_ids: vec![3031, 3006, 3094],
+            },
+            ItemBlock {
+                title: "Build Final".to_string(),
+                item_ids: vec![3031, 3006, 3094, 3036, 3026],
+            },
+            ItemBlock {
+                title: "3 Botas Mais Feitas".to_string(),
+                item_ids: vec![3006, 3047, 3111],
             },
         ],
     }
@@ -422,53 +432,105 @@ pub fn parse_opgg_analysis_payload(
         .and_then(|v| v.as_i64())
         .unwrap_or(14) as i32; // Default 14 = Ignite
 
-    // Extract item blocks
+    // Extract item blocks:
+    // 1. Itens Iniciais (Starter + Potion)
+    // 2. Primeiros 3 Itens (Core Build)
+    // 3. Build Final (Full/Late-game build)
+    // 4. 3 Botas Mais Feitas (Top 3 boots)
     let mut item_blocks = Vec::new();
 
-    if let Some(starters) = analysis
+    // 1. Starters
+    let mut starter_ids: Vec<i32> = analysis
         .pointer("/items/starters")
         .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if starter_ids.is_empty() {
+        starter_ids = vec![1056, 2003]; // Default Doran's Ring + Potion
+    } else if !starter_ids.contains(&2003)
+        && !starter_ids.contains(&2031)
+        && !starter_ids.contains(&2033)
     {
-        let ids: Vec<i32> = starters
-            .iter()
-            .filter_map(|v| v.as_i64().map(|id| id as i32))
-            .collect();
-        if !ids.is_empty() {
-            item_blocks.push(ItemBlock {
-                title: "Starter Items".to_string(),
-                item_ids: ids,
-            });
-        }
+        starter_ids.push(2003); // Ensure Health Potion is present
     }
+    item_blocks.push(ItemBlock {
+        title: "Itens Iniciais".to_string(),
+        item_ids: starter_ids,
+    });
 
-    if let Some(core) = analysis.pointer("/items/core").and_then(|v| v.as_array()) {
-        let ids: Vec<i32> = core
-            .iter()
-            .filter_map(|v| v.as_i64().map(|id| id as i32))
-            .collect();
-        if !ids.is_empty() {
-            item_blocks.push(ItemBlock {
-                title: "Core Build".to_string(),
-                item_ids: ids,
-            });
-        }
-    }
-
-    if let Some(situational) = analysis
-        .pointer("/items/situational")
+    // 2. Primeiros 3 Itens (Core)
+    let core_ids: Vec<i32> = analysis
+        .pointer("/items/core")
         .and_then(|v| v.as_array())
-    {
-        let ids: Vec<i32> = situational
-            .iter()
-            .filter_map(|v| v.as_i64().map(|id| id as i32))
-            .collect();
-        if !ids.is_empty() {
-            item_blocks.push(ItemBlock {
-                title: "Situational Items".to_string(),
-                item_ids: ids,
-            });
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .take(3)
+                .collect()
+        })
+        .unwrap_or_else(|| vec![3285, 3020, 3089]);
+    item_blocks.push(ItemBlock {
+        title: "Primeiros 3 Itens".to_string(),
+        item_ids: core_ids.clone(),
+    });
+
+    // 3. Build Final
+    let mut final_build_ids: Vec<i32> = analysis
+        .pointer("/items/final_build")
+        .or_else(|| analysis.pointer("/items/full_build"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if final_build_ids.is_empty() {
+        final_build_ids = core_ids.clone();
+        if let Some(situational) = analysis
+            .pointer("/items/situational")
+            .and_then(|v| v.as_array())
+        {
+            for id_val in situational
+                .iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+            {
+                if !final_build_ids.contains(&id_val) && final_build_ids.len() < 6 {
+                    final_build_ids.push(id_val);
+                }
+            }
         }
     }
+    item_blocks.push(ItemBlock {
+        title: "Build Final".to_string(),
+        item_ids: final_build_ids,
+    });
+
+    // 4. 3 Botas Mais Feitas
+    let mut boots_ids: Vec<i32> = analysis
+        .pointer("/items/boots")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .take(3)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if boots_ids.is_empty() {
+        boots_ids = vec![3020, 3111, 3047]; // Sorcerer's Shoes, Mercury's, Plated Steelcaps
+    }
+    item_blocks.push(ItemBlock {
+        title: "3 Botas Mais Feitas".to_string(),
+        item_ids: boots_ids,
+    });
 
     Ok(ChampionBuild {
         champion_id,
@@ -592,6 +654,11 @@ mod tests {
         assert_eq!(aram_fallback.selected_perk_ids.len(), 9);
         assert_eq!(aram_fallback.spell1_id, 4);
         assert_eq!(aram_fallback.spell2_id, 32);
+        assert_eq!(aram_fallback.item_blocks.len(), 4);
+        assert_eq!(aram_fallback.item_blocks[0].title, "Itens Iniciais");
+        assert_eq!(aram_fallback.item_blocks[1].title, "Primeiros 3 Itens");
+        assert_eq!(aram_fallback.item_blocks[2].title, "Build Final");
+        assert_eq!(aram_fallback.item_blocks[3].title, "3 Botas Mais Feitas");
 
         let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
@@ -754,9 +821,10 @@ mod tests {
                 },
                 "spells": [4, 14],
                 "items": {
-                    "starters": [1056, 2003, 2003],
+                    "starters": [1056, 2003],
                     "core": [3285, 3020, 3089],
-                    "situational": [3157, 3135]
+                    "situational": [3157, 3135],
+                    "boots": [3020, 3111, 3047]
                 }
             }
         });
@@ -776,11 +844,13 @@ mod tests {
         );
         assert_eq!(build.spell1_id, 4);
         assert_eq!(build.spell2_id, 14);
-        assert_eq!(build.item_blocks.len(), 3);
-        assert_eq!(build.item_blocks[0].title, "Starter Items");
-        assert_eq!(build.item_blocks[0].item_ids, vec![1056, 2003, 2003]);
-        assert_eq!(build.item_blocks[1].title, "Core Build");
+        assert_eq!(build.item_blocks.len(), 4);
+        assert_eq!(build.item_blocks[0].title, "Itens Iniciais");
+        assert_eq!(build.item_blocks[1].title, "Primeiros 3 Itens");
         assert_eq!(build.item_blocks[1].item_ids, vec![3285, 3020, 3089]);
+        assert_eq!(build.item_blocks[2].title, "Build Final");
+        assert_eq!(build.item_blocks[3].title, "3 Botas Mais Feitas");
+        assert_eq!(build.item_blocks[3].item_ids, vec![3020, 3111, 3047]);
     }
 
     #[tokio::test]
