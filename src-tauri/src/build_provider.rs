@@ -2074,10 +2074,19 @@ pub async fn get_recommended_build_with_filters(
             let created_at_iso = probe_json
                 .pointer("/data/trends/win/0/created_at")
                 .and_then(|v| v.as_str());
+            let prev_patch_created_at_iso = probe_json
+                .pointer("/data/trends/win/1/created_at")
+                .and_then(|v| v.as_str());
+            let play_count = probe_json
+                .pointer("/data/summary/average_stats/play")
+                .or_else(|| probe_json.pointer("/data/average_stats/play"))
+                .and_then(|v| v.as_u64());
 
-            let (chosen_patch, fallback) = select_effective_patch(
+            let (chosen_patch, fallback) = select_effective_patch_with_volume(
                 &available_versions,
                 created_at_iso,
+                prev_patch_created_at_iso,
+                play_count,
                 now_unix,
                 None,
             );

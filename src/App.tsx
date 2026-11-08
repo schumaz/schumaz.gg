@@ -405,12 +405,12 @@ function App() {
                       disabled={loading}
                       onChange={(e) => handleFilterChange("tier", e.target.value)}
                     >
-                      <option value="emerald_plus">Esmeralda +</option>
                       <option value="all">Todos os Elos</option>
-                      <option value="diamond_plus">Diamante +</option>
-                      <option value="master_plus">Mestre +</option>
-                      <option value="grandmaster">Grão-Mestre</option>
                       <option value="challenger">Desafiante</option>
+                      <option value="grandmaster">Grão-Mestre</option>
+                      <option value="master_plus">Mestre +</option>
+                      <option value="diamond_plus">Diamante +</option>
+                      <option value="emerald_plus">Esmeralda +</option>
                       <option value="platinum_plus">Platina +</option>
                       <option value="gold_plus">Ouro +</option>
                       <option value="silver">Prata</option>

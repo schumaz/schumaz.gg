@@ -278,6 +278,20 @@ describe("App Component", () => {
     const patchSelect = screen.getByTestId("filter-patch") as HTMLSelectElement;
 
     expect(tierSelect.value).toBe("emerald_plus");
+    const tierOptionValues = Array.from(tierSelect.options).map((opt) => opt.value);
+    expect(tierOptionValues).toEqual([
+      "all",
+      "challenger",
+      "grandmaster",
+      "master_plus",
+      "diamond_plus",
+      "emerald_plus",
+      "platinum_plus",
+      "gold_plus",
+      "silver",
+      "bronze",
+      "iron",
+    ]);
     expect(posSelect.value).toBe("mid");
     expect(regionSelect.value).toBe("global");
     expect(patchSelect.value).toBe("16.22");
