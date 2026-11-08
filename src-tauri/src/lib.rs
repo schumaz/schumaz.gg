@@ -72,6 +72,18 @@ async fn get_summoner_status() -> Result<Option<lcu_connector::SummonerInfo>, St
     }
 }
 
+/// Tauri command to immediately inject only summoner spells into an active Champ Select session.
+#[tauri::command]
+async fn inject_summoner_spells(spell1_id: i32, spell2_id: i32) -> Result<(), String> {
+    let conn = lcu_connector::LcuConnection::connect()
+        .map_err(|e| format!("Não foi possível conectar ao cliente do LoL: {}", e))?;
+    let payload = lcu_injector::build_spells_payload(spell1_id, spell2_id)?;
+    conn.patch_summoner_spells(&payload)
+        .await
+        .map_err(|e| format!("Falha ao injetar feitiços no Champ Select: {}", e))?;
+    Ok(())
+}
+
 /// Tauri command to sync user preferences from the frontend to the backend engine.
 #[tauri::command]
 fn sync_user_preferences(preferences: lcu_injector::UserPreferences) {
@@ -87,7 +99,8 @@ pub fn run() {
             get_recommended_build_for_champion,
             update_build_filters,
             get_summoner_status,
-            sync_user_preferences
+            sync_user_preferences,
+            inject_summoner_spells
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();

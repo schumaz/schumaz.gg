@@ -120,7 +120,7 @@ function App() {
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
   const [build, setBuild] = useState<ChampionBuild | null>(null);
-  const [injectionReport, setInjectionReport] = useState<InjectionReport | null>(null);
+  const [spellsInverted, setSpellsInverted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -150,6 +150,23 @@ function App() {
         })
         .catch(() => {})
         .finally(() => setLoading(false));
+    }
+
+    if (key === "flashKey" && build?.spells && build.spells.length >= 2) {
+      const newFlashKey = value as FlashKeyPreference;
+      const spellsCopy = [...build.spells];
+      const flashIndex = spellsCopy.findIndex((s) => s.id === 4);
+      if (flashIndex !== -1) {
+        if (newFlashKey === "F" && flashIndex === 0) {
+          spellsCopy.reverse();
+        } else if (newFlashKey === "D" && flashIndex === 1) {
+          spellsCopy.reverse();
+        }
+      }
+      invoke("inject_summoner_spells", {
+        spell1Id: spellsCopy[0].id,
+        spell2Id: spellsCopy[1].id,
+      }).catch(() => {});
     }
   };
 
@@ -204,7 +221,6 @@ function App() {
     let unlistenChampSelected: (() => void) | undefined;
     let unlistenChampSelectEnded: (() => void) | undefined;
     let unlistenBuild: (() => void) | undefined;
-    let unlistenInjected: (() => void) | undefined;
 
     const setupListeners = async () => {
       try {
@@ -221,6 +237,7 @@ function App() {
 
         unlistenChampSelected = await listen<ChampSelectedPayload>("champ-selected", async (event) => {
           setChampSelect(event.payload);
+          setSpellsInverted(false);
 
           // Fetch recommended build for selected champion if not already received
           try {
@@ -253,15 +270,14 @@ function App() {
         unlistenChampSelectEnded = await listen("champ-select-ended", () => {
           setChampSelect(null);
           setBuild(null);
+          setSpellsInverted(false);
         });
 
         unlistenBuild = await listen<ChampionBuild>("recommended-build", (event) => {
           setBuild(event.payload);
         });
 
-        unlistenInjected = await listen<InjectionReport>("build-injected", (event) => {
-          setInjectionReport(event.payload);
-        });
+        // Injection report is not displayed in the UI
       } catch (e) {
         console.warn("Tauri event listener setup skipped or running in test mode:", e);
       }
@@ -275,11 +291,11 @@ function App() {
       if (unlistenChampSelected) unlistenChampSelected();
       if (unlistenChampSelectEnded) unlistenChampSelectEnded();
       if (unlistenBuild) unlistenBuild();
-      if (unlistenInjected) unlistenInjected();
+      // unlistenInjected removed
     };
   }, []);
 
-  // Helper to reorder spells according to the user's preferred Flash key (D vs F)
+  // Helper to reorder spells according to the user's preferred Flash key (D vs F) and match-specific inversion
   const getOrderedSpells = () => {
     if (!build?.spells || build.spells.length < 2) return build?.spells || [];
     const spellsCopy = [...build.spells];
@@ -291,10 +307,18 @@ function App() {
         spellsCopy.reverse();
       }
     }
+    if (spellsInverted) {
+      spellsCopy.reverse();
+    }
     return spellsCopy;
   };
 
   const orderedSpells = getOrderedSpells();
+
+  const handleInvertSpells = async () => {
+    const nextFlashKey: FlashKeyPreference = preferences.flashKey === "D" ? "F" : "D";
+    updatePreference("flashKey", nextFlashKey);
+  };
 
   const patchOptions =
     build?.available_patches && build.available_patches.length > 0
@@ -582,7 +606,18 @@ function App() {
 
                 {/* Summoner Spells Card */}
                 <section className="card spells-card" data-testid="spells-card">
-                  <h2>Feitiços de Invocador</h2>
+                  <div className="spells-card-header">
+                    <h2>Feitiços de Invocador</h2>
+                    <button
+                      type="button"
+                      className="invert-spells-btn"
+                      data-testid="invert-spells-btn"
+                      onClick={handleInvertSpells}
+                      title="Inverter a posição dos feitiços entre as teclas D e F"
+                    >
+                      <span className="invert-spells-icon">⇄</span> Inverter Feitiços
+                    </button>
+                  </div>
                   <p className="card-desc">Feitiços recomendados adaptados para a fila atual.</p>
 
                   <div className="spells-list">
@@ -595,7 +630,6 @@ function App() {
                           )}
                           <div className="spell-info">
                             <span className="spell-name">{spell.name}</span>
-                            <span className="spell-id">ID {spell.id}</span>
                           </div>
                         </div>
                       ))
@@ -603,42 +637,21 @@ function App() {
                       <div className="spells-fallback">
                         <div className="spell-item">
                           <span className="spell-key-indicator">D</span>
-                          <span className="spell-name">Feitiço 1 (ID {build.spell1_id})</span>
+                          <span className="spell-name">Feitiço 1</span>
                         </div>
                         <div className="spell-item">
                           <span className="spell-key-indicator">F</span>
-                          <span className="spell-name">Feitiço 2 (ID {build.spell2_id})</span>
+                          <span className="spell-name">Feitiço 2</span>
                         </div>
                       </div>
                     )}
                   </div>
-
-                  {/* Injection Report if available */}
-                  {injectionReport && (
-                    <div className="report-box" data-testid="injection-report">
-                      <h3>Relatório de Injeção: {injectionReport.champion_name} | schumaz.gg</h3>
-                      <div className="report-items">
-                        <span className={`badge ${injectionReport.runes_injected ? "badge-success" : "badge-fail"}`}>
-                          Runas: {injectionReport.runes_injected ? "Aplicadas" : "Ignoradas"}
-                        </span>
-                        <span className={`badge ${injectionReport.spells_injected ? "badge-success" : "badge-fail"}`}>
-                          Feitiços: {injectionReport.spells_injected ? "Aplicados" : "Ignorados"}
-                        </span>
-                        <span className={`badge ${injectionReport.items_injected ? "badge-success" : "badge-fail"}`}>
-                          Itens: {injectionReport.items_injected ? "Aplicados" : "Ignorados"}
-                        </span>
-                      </div>
-                      <p className="report-msg">
-                        <strong>Detalhes:</strong> {injectionReport.message}
-                      </p>
-                    </div>
-                  )}
                 </section>
               </div>
 
-              {/* 5 Shop Item Blocks with DataDragon Icons */}
+              {/* Conjuntos de Itens na Loja */}
               <section className="card item-blocks-preview" data-testid="item-blocks">
-                <h2>Conjuntos de Itens na Loja (5 Blocos Oficiais)</h2>
+                <h2>Build Recomendada na Loja</h2>
                 <div className="grid-blocks">
                   {build.item_blocks.map((block, bIndex) => (
                     <div key={block.title || bIndex} className="block-item">
@@ -649,7 +662,7 @@ function App() {
                         {block.item_ids.map((itemId, iIndex) => {
                           const iconUrl = block.item_icon_urls?.[iIndex];
                           return (
-                            <div key={`${itemId}-${iIndex}`} className="item-icon-box" title={`Item ID ${itemId}`}>
+                            <div key={`${itemId}-${iIndex}`} className="item-icon-box" title={block.title}>
                               {iconUrl ? (
                                 <img
                                   src={iconUrl}
@@ -685,7 +698,7 @@ function App() {
                 <h2>Aguardando Seleção de Campeões</h2>
                 <p className="card-desc">
                   Entre em uma partida ou sala de draft no League of Legends. Assim que você selecionar ou travar um
-                  campeão, as runas recomendadas, feitiços e os 5 blocos de itens serão carregados e aplicados
+                  campeão, as runas recomendadas, feitiços e itens da build serão carregados e aplicados
                   automaticamente com maior taxa de vitória do OP.GG.
                 </p>
 
@@ -700,32 +713,6 @@ function App() {
                     <strong>Erro: </strong> {errorMsg}
                   </div>
                 )}
-              </section>
-
-              <section className="card item-blocks-preview">
-                <h2>Estrutura dos Conjuntos de Itens na Loja</h2>
-                <div className="grid-blocks">
-                  <div className="block-item">
-                    <h4>1. Itens Iniciais</h4>
-                    <p>Primeiro item mais feito + poção</p>
-                  </div>
-                  <div className="block-item">
-                    <h4>2. Primeiros 3 Itens</h4>
-                    <p>Os 3 itens principais com maior win rate</p>
-                  </div>
-                  <div className="block-item">
-                    <h4>3. 3 Botas Mais Feitas</h4>
-                    <p>As 3 opções de botas mais populares</p>
-                  </div>
-                  <div className="block-item">
-                    <h4>4. Build Final</h4>
-                    <p>Build final completa de late-game</p>
-                  </div>
-                  <div className="block-item">
-                    <h4>5. Itens Situacionais / Úteis</h4>
-                    <p>Itens alternativos de alto pick rate para a partida</p>
-                  </div>
-                </div>
               </section>
             </div>
           )}
@@ -750,7 +737,7 @@ function App() {
                   <div className="settings-item-text">
                     <span className="settings-item-title">Injetar Runas Automaticamente</span>
                     <span className="settings-item-desc">
-                      Substitui a página customizada por <code>%Champname% | schumaz.gg</code> com a maior taxa de vitória.
+                      Aplica a página de runas oficial com a melhor taxa de vitória diretamente no cliente do jogo.
                     </span>
                   </div>
                   <input
@@ -766,7 +753,7 @@ function App() {
                   <div className="settings-item-text">
                     <span className="settings-item-title">Injetar Feitiços de Invocador</span>
                     <span className="settings-item-desc">
-                      Aplica os feitiços recomendados da fila (ex: Golpear para caçadores, Bola de Neve no ARAM).
+                      Aplica os feitiços recomendados para a rota e fila atual (ex: Golpear na Selva, Bola de Neve no ARAM).
                     </span>
                   </div>
                   <input
@@ -782,7 +769,7 @@ function App() {
                   <div className="settings-item-text">
                     <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
                     <span className="settings-item-desc">
-                      Cria os 5 blocos de itens recomendados diretamente na interface de loja do jogo.
+                      Organiza a build recomendada em blocos prontos na loja da sua partida.
                     </span>
                   </div>
                   <input
@@ -801,7 +788,7 @@ function App() {
               <div className="settings-group-header">
                 <h2>Posicionamento do Flash</h2>
                 <p className="card-desc">
-                  Defina em qual tecla de invocador o Flash (ID 4) deve ser alocado prioritariamente ao injetar os feitiços recomendados.
+                  Escolha se prefere posicionar o Flash na tecla D ou F por padrão ao aplicar os feitiços recomendados.
                 </p>
               </div>
 

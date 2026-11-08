@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App, { ChampionBuild, DEFAULT_PREFERENCES } from "./App";
+import App, { ChampionBuild } from "./App";
 import { invoke } from "@tauri-apps/api/core";
 
 // Sample mock recommended build for Ahri
@@ -105,8 +105,26 @@ describe("App Component", () => {
     expect(screen.queryByRole("button", { name: /Reaplicar Build/i })).not.toBeInTheDocument();
   });
 
-  it("renders all 5 requested shop item block categories in the Runas tab", () => {
+  it("renders only waiting state initially, and renders all 5 shop item blocks once build is received", async () => {
     render(<App />);
+    // Initial idle screen displays only waiting for champion select
+    expect(screen.getByText(/Aguardando Seleção de Campeões/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Estrutura dos Conjuntos de Itens na Loja/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("item-blocks")).not.toBeInTheDocument();
+
+    // When build is delivered, all 5 blocks appear
+    await waitFor(() => {
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    act(() => {
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("item-blocks")).toBeInTheDocument();
+    });
+
     expect(screen.getByText(/1. Itens Iniciais/i)).toBeInTheDocument();
     expect(screen.getByText(/2. Primeiros 3 Itens/i)).toBeInTheDocument();
     expect(screen.getByText(/3. 3 Botas Mais Feitas/i)).toBeInTheDocument();
@@ -177,21 +195,13 @@ describe("App Component", () => {
     expect(saved.flashKey).toBe("F");
   });
 
-  it("swaps summoner spell slots according to flashKey preference in Runas view", async () => {
-    // Set Flash preference to F in localStorage
-    localStorage.setItem(
-      "schumaz_user_preferences",
-      JSON.stringify({ ...DEFAULT_PREFERENCES, flashKey: "F" })
-    );
-
+  it("swaps summoner spell slots and supports inverting spells with immediate injection in champion select", async () => {
     render(<App />);
 
-    // Wait until event listeners are established
     await waitFor(() => {
       expect(eventListeners["recommended-build"]).toBeDefined();
     });
 
-    // Simulate build delivery from backend
     act(() => {
       eventListeners["recommended-build"]({ payload: mockAhriBuild });
     });
@@ -200,17 +210,52 @@ describe("App Component", () => {
       expect(screen.getByTestId("spells-card")).toBeInTheDocument();
     });
 
-    // With Flash on F, Flash should now be mapped to key F instead of D
-    const spellItems = screen.getAllByText(/Flash|Incendiar/);
-    expect(spellItems.length).toBeGreaterThanOrEqual(2);
+    // Ensure injection report is strictly not rendered in spells-card
+    expect(screen.queryByTestId("injection-report")).not.toBeInTheDocument();
 
-    // The first item should now be Ignite (key D), and second should be Flash (key F)
-    const spellsCard = screen.getByTestId("spells-card");
-    const dIndicator = spellsCard.querySelectorAll(".spell-key-indicator")[0];
-    const fIndicator = spellsCard.querySelectorAll(".spell-key-indicator")[1];
+    // Default: Flash on D (spell index 0), Ignite on F (spell index 1)
+    const spellItemsBefore = screen.getAllByText(/Flash|Incendiar/);
+    expect(spellItemsBefore[0]).toHaveTextContent("Flash");
+    expect(spellItemsBefore[1]).toHaveTextContent("Incendiar");
 
-    expect(dIndicator).toHaveTextContent("D");
-    expect(fIndicator).toHaveTextContent("F");
+    // Click "Inverter Feitiços" button
+    const invertBtn = screen.getByTestId("invert-spells-btn");
+    expect(invertBtn).toBeInTheDocument();
+    expect(invertBtn).toHaveTextContent(/Inverter Feitiços/i);
+
+    await act(async () => {
+      fireEvent.click(invertBtn);
+    });
+
+    // Now Ignite is in slot D and Flash is in slot F
+    const spellItemsAfter = screen.getAllByText(/Flash|Incendiar/);
+    expect(spellItemsAfter[0]).toHaveTextContent("Incendiar");
+    expect(spellItemsAfter[1]).toHaveTextContent("Flash");
+
+    // Verify invoke was called for inject_summoner_spells with the inverted pair (Ignite 14, Flash 4)
+    expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
+      spell1Id: 14,
+      spell2Id: 4,
+    });
+
+    // Check localStorage reflects the unified preference (F)
+    const saved = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
+    expect(saved.flashKey).toBe("F");
+
+    // Test changing flashKey from Settings also immediately injects spells if in active draft
+    const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
+    fireEvent.click(settingsBtn);
+
+    const flashDBtn = screen.getByRole("button", { name: /Flash no D/i });
+    await act(async () => {
+      fireEvent.click(flashDBtn);
+    });
+
+    // Switching to Flash on D immediately injects Flash (4) on D and Ignite (14) on F
+    expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
+      spell1Id: 4,
+      spell2Id: 14,
+    });
   });
 
   it("renders full match dashboard when recommended build is received", async () => {

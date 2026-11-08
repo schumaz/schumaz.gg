@@ -567,10 +567,52 @@ body {
 }
 
 /* Summoner Spells Card */
+.spells-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.spells-card-header h2 {
+  margin: 0;
+}
+
+.invert-spells-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  color: var(--accent-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.invert-spells-btn:hover {
+  background-color: rgba(10, 132, 255, 0.12);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+.invert-spells-btn:active {
+  transform: translateY(0);
+}
+
+.invert-spells-icon {
+  font-size: 0.95rem;
+}
+
 .spells-list {
   display: flex;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 .spell-item {
