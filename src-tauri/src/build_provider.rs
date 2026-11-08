@@ -20,10 +20,18 @@ pub struct ChampionMetadata {
 }
 
 /// Metadata for a rune or style from DataDragon's `runesReforged.json`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct RuneMetadata {
     pub id: i32,
     pub key: String,
+    pub name: String,
+    pub icon_url: String,
+}
+
+/// Metadata for a summoner spell.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SpellMetadata {
+    pub id: i32,
     pub name: String,
     pub icon_url: String,
 }
@@ -37,14 +45,16 @@ pub struct DataDragonCache {
 }
 
 /// An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ItemBlock {
     pub title: String,
     pub item_ids: Vec<i32>,
+    #[serde(default)]
+    pub item_icon_urls: Vec<String>,
 }
 
-/// Complete build recommendations fetched and parsed from OP.GG.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Complete build recommendations fetched and parsed from OP.GG enriched with DataDragon visual assets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ChampionBuild {
     pub champion_id: i32,
     pub champion_name: String,
@@ -56,6 +66,20 @@ pub struct ChampionBuild {
     pub spell1_id: i32,
     pub spell2_id: i32,
     pub item_blocks: Vec<ItemBlock>,
+    #[serde(default)]
+    pub champion_icon_url: String,
+    #[serde(default)]
+    pub primary_style_name: String,
+    #[serde(default)]
+    pub primary_style_icon_url: String,
+    #[serde(default)]
+    pub sub_style_name: String,
+    #[serde(default)]
+    pub sub_style_icon_url: String,
+    #[serde(default)]
+    pub perks: Vec<RuneMetadata>,
+    #[serde(default)]
+    pub spells: Vec<SpellMetadata>,
 }
 
 /// Maps a queue ID into an OP.GG queue argument string ("aram" or "ranked").
@@ -113,20 +137,142 @@ pub fn build_fallback_champion_build(
             ItemBlock {
                 title: "Itens Iniciais".to_string(),
                 item_ids: starter_items,
+                item_icon_urls: vec![],
             },
             ItemBlock {
                 title: "Primeiros 3 Itens".to_string(),
                 item_ids: vec![3031, 3006, 3094],
+                item_icon_urls: vec![],
             },
             ItemBlock {
                 title: "Build Final".to_string(),
                 item_ids: vec![3031, 3006, 3094, 3036, 3026],
+                item_icon_urls: vec![],
             },
             ItemBlock {
                 title: "3 Botas Mais Feitas".to_string(),
                 item_ids: vec![3006, 3047, 3111],
+                item_icon_urls: vec![],
             },
         ],
+        champion_icon_url: String::new(),
+        primary_style_name: String::new(),
+        primary_style_icon_url: String::new(),
+        sub_style_name: String::new(),
+        sub_style_icon_url: String::new(),
+        perks: vec![],
+        spells: vec![],
+    }
+}
+
+/// Returns metadata for a known stat shard ID if valid.
+pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
+    let (name, icon) = match id {
+        5008 => ("Força Adaptativa", "perk-images/StatMods/StatModsAdaptiveForceIcon.png"),
+        5005 => ("Velocidade de Ataque", "perk-images/StatMods/StatModsAttackSpeedIcon.png"),
+        5007 => ("Aceleração de Habilidade", "perk-images/StatMods/StatModsCDRIcon.png"),
+        5002 => ("Armadura", "perk-images/StatMods/StatModsArmorIcon.png"),
+        5003 => ("Resistência Mágica", "perk-images/StatMods/StatModsMagicResIcon.png"),
+        5001 | 5013 => ("Vida Escalonável", "perk-images/StatMods/StatModsHealthScalingIcon.png"),
+        5010 => ("Velocidade de Movimento", "perk-images/StatMods/StatModsMovementSpeedIcon.png"),
+        5011 => ("Vida", "perk-images/StatMods/StatModsHealthPlusIcon.png"),
+        5012 => ("Tenacidade", "perk-images/StatMods/StatModsTenacityIcon.png"),
+        _ => return None,
+    };
+    Some(RuneMetadata {
+        id,
+        key: format!("StatShard_{}", id),
+        name: name.to_string(),
+        icon_url: format!("https://ddragon.leagueoflegends.com/cdn/img/{}", icon),
+    })
+}
+
+/// Resolves rune or shard metadata from the DataDragon runes cache or shard catalog.
+pub fn resolve_rune_metadata(runes_map: &HashMap<i32, RuneMetadata>, perk_id: i32) -> RuneMetadata {
+    if let Some(meta) = runes_map.get(&perk_id) {
+        return meta.clone();
+    }
+    if let Some(shard) = get_stat_shard_metadata(perk_id) {
+        return shard;
+    }
+    RuneMetadata {
+        id: perk_id,
+        key: format!("perk_{}", perk_id),
+        name: format!("Runa {}", perk_id),
+        icon_url: String::new(),
+    }
+}
+
+/// Resolves summoner spell metadata and official Riot CDN icon.
+pub fn get_spell_metadata(version: &str, spell_id: i32) -> SpellMetadata {
+    let (name, icon_name) = match spell_id {
+        4 => ("Flash", "SummonerFlash"),
+        14 => ("Incendiar", "SummonerDot"),
+        12 => ("Teletransporte", "SummonerTeleport"),
+        11 => ("Golpear", "SummonerSmite"),
+        7 => ("Curar", "SummonerHeal"),
+        21 => ("Barreira", "SummonerBarrier"),
+        3 => ("Exaustão", "SummonerExhaust"),
+        6 => ("Fantasma", "SummonerHaste"),
+        1 => ("Purificar", "SummonerBoost"),
+        32 => ("Marca", "SummonerSnowball"),
+        _ => ("Feitiço", "SummonerFlash"),
+    };
+    SpellMetadata {
+        id: spell_id,
+        name: name.to_string(),
+        icon_url: format!(
+            "https://ddragon.leagueoflegends.com/cdn/{}/img/spell/{}.png",
+            version, icon_name
+        ),
+    }
+}
+
+/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items).
+pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCache) {
+    if let Some(champ) = cache.champions.get(&build.champion_id) {
+        build.champion_icon_url = champ.icon_url.clone();
+        if build.champion_name.is_empty() || build.champion_name == "Unknown" {
+            build.champion_name = champ.display_name.clone();
+        }
+    } else if !build.champion_name.is_empty() {
+        build.champion_icon_url = format!(
+            "https://ddragon.leagueoflegends.com/cdn/{}/img/champion/{}.png",
+            cache.version, build.champion_name
+        );
+    }
+
+    if let Some(primary) = cache.runes.get(&build.primary_style_id) {
+        build.primary_style_name = primary.name.clone();
+        build.primary_style_icon_url = primary.icon_url.clone();
+    }
+    if let Some(sub) = cache.runes.get(&build.sub_style_id) {
+        build.sub_style_name = sub.name.clone();
+        build.sub_style_icon_url = sub.icon_url.clone();
+    }
+
+    build.perks = build
+        .selected_perk_ids
+        .iter()
+        .map(|id| resolve_rune_metadata(&cache.runes, *id))
+        .collect();
+
+    build.spells = vec![
+        get_spell_metadata(&cache.version, build.spell1_id),
+        get_spell_metadata(&cache.version, build.spell2_id),
+    ];
+
+    for block in &mut build.item_blocks {
+        block.item_icon_urls = block
+            .item_ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "https://ddragon.leagueoflegends.com/cdn/{}/img/item/{}.png",
+                    cache.version, id
+                )
+            })
+            .collect();
     }
 }
 
@@ -461,6 +607,7 @@ pub fn parse_opgg_analysis_payload(
     item_blocks.push(ItemBlock {
         title: "Itens Iniciais".to_string(),
         item_ids: starter_ids,
+        item_icon_urls: vec![],
     });
 
     // 2. Primeiros 3 Itens (Core)
@@ -477,6 +624,7 @@ pub fn parse_opgg_analysis_payload(
     item_blocks.push(ItemBlock {
         title: "Primeiros 3 Itens".to_string(),
         item_ids: core_ids.clone(),
+        item_icon_urls: vec![],
     });
 
     // 3. Build Final
@@ -510,6 +658,7 @@ pub fn parse_opgg_analysis_payload(
     item_blocks.push(ItemBlock {
         title: "Build Final".to_string(),
         item_ids: final_build_ids,
+        item_icon_urls: vec![],
     });
 
     // 4. 3 Botas Mais Feitas
@@ -530,6 +679,7 @@ pub fn parse_opgg_analysis_payload(
     item_blocks.push(ItemBlock {
         title: "3 Botas Mais Feitas".to_string(),
         item_ids: boots_ids,
+        item_icon_urls: vec![],
     });
 
     Ok(ChampionBuild {
@@ -543,6 +693,7 @@ pub fn parse_opgg_analysis_payload(
         spell1_id,
         spell2_id,
         item_blocks,
+        ..Default::default()
     })
 }
 
@@ -602,13 +753,16 @@ pub async fn get_recommended_build_with_endpoint(
 
     let queue_param = opgg_queue_param_from_id(queue_id);
 
-    match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
+    let mut build = match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
         Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
             Ok(build) => build,
             Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
         },
         Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
-    }
+    };
+
+    enrich_build_with_ddragon(&mut build, ddragon_cache);
+    build
 }
 
 /// Production entry point to obtain recommended build for champion.
@@ -664,6 +818,50 @@ mod tests {
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
         assert_eq!(ranked_fallback.spell1_id, 4);
         assert_eq!(ranked_fallback.spell2_id, 14);
+    }
+
+    #[test]
+    fn test_enrich_build_with_ddragon_populates_urls_spells_and_shards() {
+        let mut ddragon_cache = DataDragonCache {
+            version: "14.23.1".to_string(),
+            champions: HashMap::new(),
+            runes: HashMap::new(),
+        };
+
+        ddragon_cache.champions.insert(
+            103,
+            ChampionMetadata {
+                champion_id: 103,
+                key_name: "Ahri".to_string(),
+                display_name: "Ahri".to_string(),
+                icon_url: "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png".to_string(),
+            },
+        );
+
+        ddragon_cache.runes.insert(
+            8100,
+            RuneMetadata {
+                id: 8100,
+                key: "Domination".to_string(),
+                name: "Dominação".to_string(),
+                icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png".to_string(),
+            },
+        );
+
+        let mut build = build_fallback_champion_build(103, "Ahri", 420);
+        enrich_build_with_ddragon(&mut build, &ddragon_cache);
+
+        assert_eq!(
+            build.champion_icon_url,
+            "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png"
+        );
+        assert_eq!(build.spells.len(), 2);
+        assert_eq!(build.spells[0].name, "Flash");
+        assert!(build.spells[0].icon_url.contains("SummonerFlash.png"));
+        assert_eq!(build.perks.len(), 9);
+        assert_eq!(build.item_blocks.len(), 4);
+        assert!(!build.item_blocks[0].item_icon_urls.is_empty());
+        assert!(build.item_blocks[0].item_icon_urls[0].contains("/img/item/"));
     }
 
     #[test]

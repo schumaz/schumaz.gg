@@ -285,6 +285,7 @@ mod tests {
             spell1_id: 4,
             spell2_id: 14,
             item_blocks: vec![],
+            ..Default::default()
         };
 
         let payload =
@@ -344,12 +345,12 @@ mod tests {
         let pages = json!([
             {
                 "id": 1,
-                "name": "The Precision",
+                "name": "The Domination",
                 "isDeletable": false
             },
             {
-                "id": 300,
-                "name": "ADC Custom",
+                "id": 2,
+                "name": "Custom 1",
                 "isDeletable": true
             }
         ]);
@@ -371,39 +372,36 @@ mod tests {
                 "isDeletable": false
             },
             {
-                "id": 789,
-                "name": "Old Custom Page",
+                "id": 105,
+                "name": "My Old Page",
                 "isDeletable": true
             }
         ]);
 
-        assert_eq!(find_first_deletable_page_id(&pages), Some(789));
+        assert_eq!(find_first_deletable_page_id(&pages), Some(105));
     }
 
     #[test]
     fn test_extract_deletable_rune_page_id_respects_riot_preset_pages() {
-        // Player created page (deletable)
-        let player_page = json!({
-            "id": 123456,
-            "name": "Custom Ahri",
-            "isDeletable": true
-        });
-        assert_eq!(extract_deletable_rune_page_id(&player_page), Some(123456));
-
-        // Riot locked preset page (not deletable)
-        let riot_preset = json!({
+        let preset_page = json!({
             "id": 1,
             "name": "The Domination",
             "isDeletable": false
         });
-        assert_eq!(extract_deletable_rune_page_id(&riot_preset), None);
+        assert_eq!(extract_deletable_rune_page_id(&preset_page), None);
+
+        let custom_page = json!({
+            "id": 42,
+            "name": "My Custom Page",
+            "isDeletable": true
+        });
+        assert_eq!(extract_deletable_rune_page_id(&custom_page), Some(42));
     }
 
     #[test]
     fn test_build_spells_payload_formats_and_prevents_duplicate_spells() {
-        // Valid spells
         let payload =
-            build_spells_payload(4, 14).expect("Spells payload should build successfully");
+            build_spells_payload(4, 14).expect("Flash (4) and Ignite (14) must be accepted");
         assert_eq!(payload.get("spell1Id").unwrap().as_i64().unwrap(), 4);
         assert_eq!(payload.get("spell2Id").unwrap().as_i64().unwrap(), 14);
 
@@ -430,20 +428,25 @@ mod tests {
                 ItemBlock {
                     title: "Itens Iniciais".to_string(),
                     item_ids: vec![1055, 2003],
+                    item_icon_urls: vec![],
                 },
                 ItemBlock {
                     title: "Primeiros 3 Itens".to_string(),
                     item_ids: vec![3031, 3006, 3094],
+                    item_icon_urls: vec![],
                 },
                 ItemBlock {
                     title: "Build Final".to_string(),
                     item_ids: vec![3031, 3006, 3094, 3036, 3026],
+                    item_icon_urls: vec![],
                 },
                 ItemBlock {
                     title: "3 Botas Mais Feitas".to_string(),
                     item_ids: vec![3006, 3047, 3111],
+                    item_icon_urls: vec![],
                 },
             ],
+            ..Default::default()
         };
 
         let sets = build_item_sets_payload(987654321, &build);

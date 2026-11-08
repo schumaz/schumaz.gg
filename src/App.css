@@ -52,31 +52,32 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 3px;
+  background: var(--border-subtle);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333333;
+  background: var(--border-highlight);
 }
 
+/* App Container */
 .container {
-  max-width: 820px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 24px 20px 110px 20px; /* Space for the floating bottom dock */
+  padding: 24px 20px 100px 20px;
 }
 
-/* Header */
+/* Header & Status Section */
 .header {
   text-align: center;
   margin-bottom: 24px;
 }
 
 .title {
-  font-size: 2.2rem;
   margin: 0 0 4px 0;
-  color: var(--text-primary);
+  font-size: 1.85rem;
   font-weight: 700;
+  color: var(--text-primary);
   letter-spacing: -0.5px;
 }
 
@@ -207,6 +208,10 @@ body {
 
 /* Action Buttons */
 .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background-color: var(--accent-primary);
   color: #ffffff;
   border: 1px solid transparent;
@@ -256,10 +261,394 @@ body {
   color: var(--accent-danger);
 }
 
+/* Champion Hero Overview Card */
+.champ-hero-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(10, 10, 10, 0.9));
+  border: 1px solid var(--border-highlight);
+}
+
+.champ-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.champ-avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 2px solid var(--border-highlight);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+.champ-avatar-placeholder {
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.champ-hero-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.champ-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.champ-name {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+
+.champ-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 10px;
+  border-radius: 9999px;
+}
+
+.badge-stat {
+  font-size: 0.8rem;
+}
+
+.btn-reapply {
+  white-space: nowrap;
+}
+
+/* Runes and Spells Grid */
+.runes-spells-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .runes-spells-grid {
+    grid-template-columns: 1fr;
+  }
+  .champ-hero-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Visual Rune Tree Layout */
+.runes-tree-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.rune-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tree-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tree-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.tree-header h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Keystone Slot */
+.keystone-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background-color: rgba(10, 132, 255, 0.08);
+  border: 1px solid rgba(10, 132, 255, 0.3);
+  border-radius: 12px;
+}
+
+.keystone-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-primary);
+  background-color: var(--bg-surface);
+}
+
+.keystone-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+/* Minor Perks List */
+.minor-perks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  transition: border-color 0.2s ease;
+}
+
+.perk-item:hover {
+  border-color: var(--border-highlight);
+}
+
+.perk-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--bg-card);
+}
+
+.perk-name {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+/* Stat Shards Section */
+.stat-shards-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.stat-shards-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-shards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shard-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.shard-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.shard-name {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* Summoner Spells Card */
+.spells-list {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.spell-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  flex: 1;
+}
+
+.spell-key-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.spell-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border-highlight);
+}
+
+.spell-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.spell-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.spell-id {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Shop Item Blocks with Official DataDragon Icons */
+.item-blocks-preview {
+  margin-top: 6px;
+}
+
+.grid-blocks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.block-item {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.block-item:hover {
+  border-color: var(--border-highlight);
+}
+
+.block-item h4 {
+  margin: 0 0 10px 0;
+  font-size: 0.88rem;
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.block-items-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.item-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.item-icon-box:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-primary);
+}
+
+.shop-item-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.item-id-fallback {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+/* Idle / Waiting State Card */
+.idle-state-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.idle-card {
+  text-align: center;
+  padding: 36px 20px;
+}
+
+.idle-icon-box {
+  margin-bottom: 16px;
+  color: var(--accent-primary);
+  display: inline-flex;
+  padding: 14px;
+  background-color: rgba(10, 132, 255, 0.1);
+  border-radius: 20px;
+  border: 1px solid rgba(10, 132, 255, 0.2);
+}
+
+.idle-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
 /* Injection Report Box */
 .report-box {
-  margin-top: 18px;
-  padding: 16px;
+  margin-top: 14px;
+  padding: 14px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
@@ -267,8 +656,8 @@ body {
 
 .report-box h3 {
   margin-top: 0;
-  margin-bottom: 12px;
-  font-size: 0.98rem;
+  margin-bottom: 10px;
+  font-size: 0.92rem;
   color: var(--accent-primary);
 }
 
@@ -276,7 +665,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .badge {
@@ -305,41 +694,9 @@ body {
 }
 
 .report-msg {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-secondary);
   margin: 0;
-}
-
-/* Shop Item Blocks Grid */
-.grid-blocks {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-}
-
-.block-item {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 14px;
-  transition: border-color 0.2s ease;
-}
-
-.block-item:hover {
-  border-color: var(--border-highlight);
-}
-
-.block-item h4 {
-  margin: 0 0 6px 0;
-  font-size: 0.88rem;
-  color: var(--accent-primary);
-  font-weight: 600;
-}
-
-.block-item p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
 }
 
 /* Floating Bottom Dock (iOS / Telegram Style Pill) */

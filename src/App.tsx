@@ -29,10 +29,50 @@ export interface ChampSelectedPayload {
   locked_in: boolean;
 }
 
+export interface RuneMetadata {
+  id: number;
+  key: string;
+  name: string;
+  icon_url: string;
+}
+
+export interface SpellMetadata {
+  id: number;
+  name: string;
+  icon_url: string;
+}
+
+export interface ItemBlock {
+  title: string;
+  item_ids: number[];
+  item_icon_urls?: string[];
+}
+
+export interface ChampionBuild {
+  champion_id: number;
+  champion_name: string;
+  win_rate: number;
+  pick_rate: number;
+  primary_style_id: number;
+  sub_style_id: number;
+  selected_perk_ids: number[];
+  spell1_id: number;
+  spell2_id: number;
+  item_blocks: ItemBlock[];
+  champion_icon_url?: string;
+  primary_style_name?: string;
+  primary_style_icon_url?: string;
+  sub_style_name?: string;
+  sub_style_icon_url?: string;
+  perks?: RuneMetadata[];
+  spells?: SpellMetadata[];
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("runes");
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
+  const [build, setBuild] = useState<ChampionBuild | null>(null);
   const [injectionReport, setInjectionReport] = useState<InjectionReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -50,6 +90,7 @@ function App() {
     let unlistenDisconnected: (() => void) | undefined;
     let unlistenChampSelected: (() => void) | undefined;
     let unlistenChampSelectEnded: (() => void) | undefined;
+    let unlistenBuild: (() => void) | undefined;
     let unlistenInjected: (() => void) | undefined;
 
     const setupListeners = async () => {
@@ -62,21 +103,40 @@ function App() {
         unlistenDisconnected = await listen("lcu-disconnected", () => {
           setSummoner(null);
           setChampSelect(null);
+          setBuild(null);
         });
 
-        unlistenChampSelected = await listen<ChampSelectedPayload>("champ-selected", (event) => {
+        unlistenChampSelected = await listen<ChampSelectedPayload>("champ-selected", async (event) => {
           setChampSelect(event.payload);
+
+          // Fetch recommended build for selected champion if not already received
+          try {
+            const recommended = await invoke<ChampionBuild>("get_recommended_build_for_champion", {
+              championId: event.payload.champion_id,
+              queueId: event.payload.queue_id || 420,
+            });
+            if (recommended) {
+              setBuild(recommended);
+            }
+          } catch {
+            // Ignore background fetch error, ws_listener will emit recommended-build
+          }
         });
 
         unlistenChampSelectEnded = await listen("champ-select-ended", () => {
           setChampSelect(null);
+          setBuild(null);
+        });
+
+        unlistenBuild = await listen<ChampionBuild>("recommended-build", (event) => {
+          setBuild(event.payload);
         });
 
         unlistenInjected = await listen<InjectionReport>("build-injected", (event) => {
           setInjectionReport(event.payload);
         });
       } catch (e) {
-        console.warn("Tauri event listener setup skipped or running in browser/test mode:", e);
+        console.warn("Tauri event listener setup skipped or running in test mode:", e);
       }
     };
 
@@ -87,15 +147,25 @@ function App() {
       if (unlistenDisconnected) unlistenDisconnected();
       if (unlistenChampSelected) unlistenChampSelected();
       if (unlistenChampSelectEnded) unlistenChampSelectEnded();
+      if (unlistenBuild) unlistenBuild();
       if (unlistenInjected) unlistenInjected();
     };
   }, []);
 
-  const handleManualInject = async () => {
+  // Quick action: Force reapplying or testing build injection immediately
+  const handleReapplyBuild = async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const report = await invoke<InjectionReport>("test_inject_runes");
+      let report: InjectionReport;
+      if (champSelect?.champion_id) {
+        report = await invoke<InjectionReport>("inject_build_for_champion", {
+          championId: champSelect.champion_id,
+          queueId: champSelect.queue_id,
+        });
+      } else {
+        report = await invoke<InjectionReport>("test_inject_runes");
+      }
       setInjectionReport(report);
     } catch (err: unknown) {
       setErrorMsg(typeof err === "string" ? err : JSON.stringify(err));
@@ -109,7 +179,7 @@ function App() {
       <header className="header">
         <h1 className="title">schumaz.gg</h1>
         <p className="subtitle">Assistente de Alto Desempenho para League of Legends</p>
-        
+
         <div className="status-badge-container">
           {summoner ? (
             <div className="status-badge connected" data-testid="status-connected">
@@ -131,97 +201,314 @@ function App() {
       {/* View 1: "Runas" Tab (Match Dashboard) */}
       {activeTab === "runes" && (
         <div className="tab-content" data-testid="view-runes">
-          <section className="card champ-card">
-            <h2>Seleção de Campeões</h2>
-            {champSelect ? (
-              <div className="champ-info">
-                <p>
-                  Campeão Selecionado: <strong>ID {champSelect.champion_id}</strong>
-                </p>
-                <p>
-                  Modo de Jogo: <strong>{champSelect.queue_mode}</strong> (Fila {champSelect.queue_id})
-                </p>
-                <p>
-                  Status:{" "}
-                  <span className={champSelect.locked_in ? "tag locked" : "tag hovering"}>
-                    {champSelect.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
-                  </span>
-                </p>
-              </div>
-            ) : (
-              <p className="text-muted">Nenhuma seleção de campeões ativa no momento.</p>
-            )}
-          </section>
+          {build ? (
+            <>
+              {/* Champion Hero Overview Card */}
+              <section className="card champ-hero-card" data-testid="champ-hero">
+                <div className="champ-hero-left">
+                  {build.champion_icon_url ? (
+                    <img
+                      src={build.champion_icon_url}
+                      alt={build.champion_name}
+                      className="champ-avatar"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="champ-avatar-placeholder">
+                      {build.champion_name.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
 
-          <section className="card injection-card">
-            <h2>Teste de Injeção no Cliente</h2>
-            <p className="card-desc">
-              Injeta uma página de runas e conjuntos de itens recomendados com a nomenclatura obrigatória{" "}
-              <code>"%Champname% | schumaz.gg"</code> e blocos personalizados na loja.
-            </p>
+                  <div className="champ-hero-details">
+                    <div className="champ-hero-title-row">
+                      <h2 className="champ-name">{build.champion_name}</h2>
+                      <span className={`tag ${champSelect?.locked_in ? "locked" : "hovering"}`}>
+                        {champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
+                      </span>
+                    </div>
 
-            <button
-              className="btn-primary"
-              onClick={handleManualInject}
-              disabled={loading || !summoner}
-            >
-              {loading ? "Injetando..." : "Testar Injeção de Runas no LoL"}
-            </button>
-
-            {!summoner && (
-              <p className="hint-text">
-                * Abra o cliente do LoL para habilitar a injeção direta no cliente.
-              </p>
-            )}
-
-            {errorMsg && (
-              <div className="alert alert-error" role="alert">
-                <strong>Erro: </strong> {errorMsg}
-              </div>
-            )}
-
-            {injectionReport && (
-              <div className="report-box" data-testid="injection-report">
-                <h3>Relatório de Injeção: {injectionReport.champion_name} | schumaz.gg</h3>
-                <div className="report-items">
-                  <span className={`badge ${injectionReport.runes_injected ? "badge-success" : "badge-fail"}`}>
-                    Runas: {injectionReport.runes_injected ? "Injetadas com Sucesso" : "Falha"}
-                  </span>
-                  <span className={`badge ${injectionReport.items_injected ? "badge-success" : "badge-fail"}`}>
-                    Itens na Loja: {injectionReport.items_injected ? "Injetados (4 Blocos)" : "Falha"}
-                  </span>
-                  <span className={`badge ${injectionReport.spells_injected ? "badge-success" : "badge-neutral"}`}>
-                    Feitiços: {injectionReport.spells_injected ? "Injetados" : "Indisponíveis fora do Champ Select"}
-                  </span>
+                    <div className="champ-meta-row">
+                      <span className="badge-meta">
+                        {champSelect?.queue_mode === "Aram"
+                          ? "ARAM (Howling Abyss)"
+                          : "Summoner's Rift (Ranqueada / Normal)"}
+                      </span>
+                      {build.win_rate > 0 && (
+                        <span className="badge badge-success badge-stat">
+                          {build.win_rate.toFixed(1)}% Win Rate
+                        </span>
+                      )}
+                      {build.pick_rate > 0 && (
+                        <span className="badge badge-neutral badge-stat">
+                          {build.pick_rate.toFixed(1)}% Pick Rate
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <p className="report-msg">
-                  <strong>Detalhes:</strong> {injectionReport.message}
-                </p>
-              </div>
-            )}
-          </section>
 
-          <section className="card item-blocks-preview">
-            <h2>Estrutura dos Conjuntos de Itens na Loja</h2>
-            <div className="grid-blocks">
-              <div className="block-item">
-                <h4>1. Itens Iniciais</h4>
-                <p>Primeiro item mais feito + poção</p>
+                <div className="champ-hero-actions">
+                  <button
+                    type="button"
+                    className="btn-primary btn-reapply"
+                    onClick={handleReapplyBuild}
+                    disabled={loading || !summoner}
+                    data-testid="reapply-build-btn"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                    <span>{loading ? "Reaplicando..." : "Reaplicar Build Agora"}</span>
+                  </button>
+                </div>
+              </section>
+
+              {/* Runes Tree & Spells Layout */}
+              <div className="runes-spells-grid">
+                {/* Visual Rune Tree Card */}
+                <section className="card runes-tree-card" data-testid="runes-tree">
+                  <div className="runes-tree-columns">
+                    {/* Primary Rune Tree */}
+                    <div className="rune-column primary-column">
+                      <div className="tree-header">
+                        {build.primary_style_icon_url && (
+                          <img
+                            src={build.primary_style_icon_url}
+                            alt={build.primary_style_name || "Primária"}
+                            className="tree-icon"
+                          />
+                        )}
+                        <h3>{build.primary_style_name || "Árvore Primária"}</h3>
+                      </div>
+
+                      {/* Primary Keystone */}
+                      {build.perks && build.perks.length > 0 && (
+                        <div className="keystone-item" title={build.perks[0].name}>
+                          {build.perks[0].icon_url && (
+                            <img
+                              src={build.perks[0].icon_url}
+                              alt={build.perks[0].name}
+                              className="keystone-icon"
+                            />
+                          )}
+                          <span className="keystone-name">{build.perks[0].name}</span>
+                        </div>
+                      )}
+
+                      {/* Primary Minor Perks (Slots 1, 2, 3) */}
+                      <div className="minor-perks-list">
+                        {build.perks?.slice(1, 4).map((perk, index) => (
+                          <div key={`primary-${index}-${perk.id}`} className="perk-item" title={perk.name}>
+                            {perk.icon_url && (
+                              <img src={perk.icon_url} alt={perk.name} className="perk-icon" />
+                            )}
+                            <span className="perk-name">{perk.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Secondary Rune Tree & Stat Shards */}
+                    <div className="rune-column secondary-column">
+                      <div className="tree-header">
+                        {build.sub_style_icon_url && (
+                          <img
+                            src={build.sub_style_icon_url}
+                            alt={build.sub_style_name || "Secundária"}
+                            className="tree-icon"
+                          />
+                        )}
+                        <h3>{build.sub_style_name || "Árvore Secundária"}</h3>
+                      </div>
+
+                      {/* Secondary Minor Perks (Slots 4, 5) */}
+                      <div className="minor-perks-list">
+                        {build.perks?.slice(4, 6).map((perk, index) => (
+                          <div key={`sub-${index}-${perk.id}`} className="perk-item" title={perk.name}>
+                            {perk.icon_url && (
+                              <img src={perk.icon_url} alt={perk.name} className="perk-icon" />
+                            )}
+                            <span className="perk-name">{perk.name}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Stat Shards (Slots 6, 7, 8) */}
+                      <div className="stat-shards-section">
+                        <h4>Fragmentos de Atributo</h4>
+                        <div className="stat-shards-list">
+                          {build.perks?.slice(6, 9).map((shard, index) => (
+                            <div key={`shard-${index}-${shard.id}`} className="shard-item" title={shard.name}>
+                              {shard.icon_url && (
+                                <img src={shard.icon_url} alt={shard.name} className="shard-icon" />
+                              )}
+                              <span className="shard-name">{shard.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Summoner Spells Card */}
+                <section className="card spells-card" data-testid="spells-card">
+                  <h2>Feitiços de Invocador</h2>
+                  <p className="card-desc">Feitiços recomendados adaptados para a fila atual.</p>
+
+                  <div className="spells-list">
+                    {build.spells && build.spells.length >= 2 ? (
+                      build.spells.map((spell, index) => (
+                        <div key={`spell-${index}-${spell.id}`} className="spell-item">
+                          <span className="spell-key-indicator">{index === 0 ? "D" : "F"}</span>
+                          {spell.icon_url && (
+                            <img src={spell.icon_url} alt={spell.name} className="spell-icon" />
+                          )}
+                          <div className="spell-info">
+                            <span className="spell-name">{spell.name}</span>
+                            <span className="spell-id">ID {spell.id}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="spells-fallback">
+                        <div className="spell-item">
+                          <span className="spell-key-indicator">D</span>
+                          <span className="spell-name">Feitiço 1 (ID {build.spell1_id})</span>
+                        </div>
+                        <div className="spell-item">
+                          <span className="spell-key-indicator">F</span>
+                          <span className="spell-name">Feitiço 2 (ID {build.spell2_id})</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Injection Report if available */}
+                  {injectionReport && (
+                    <div className="report-box" data-testid="injection-report">
+                      <h3>Relatório de Injeção: {injectionReport.champion_name} | schumaz.gg</h3>
+                      <div className="report-items">
+                        <span className={`badge ${injectionReport.runes_injected ? "badge-success" : "badge-fail"}`}>
+                          Runas: {injectionReport.runes_injected ? "Injetadas com Sucesso" : "Falha"}
+                        </span>
+                        <span className={`badge ${injectionReport.items_injected ? "badge-success" : "badge-fail"}`}>
+                          Itens na Loja: {injectionReport.items_injected ? "Injetados (4 Blocos)" : "Falha"}
+                        </span>
+                        <span className={`badge ${injectionReport.spells_injected ? "badge-success" : "badge-neutral"}`}>
+                          Feitiços: {injectionReport.spells_injected ? "Injetados" : "Indisponíveis fora do Champ Select"}
+                        </span>
+                      </div>
+                      <p className="report-msg">
+                        <strong>Detalhes:</strong> {injectionReport.message}
+                      </p>
+                    </div>
+                  )}
+                </section>
               </div>
-              <div className="block-item">
-                <h4>2. Primeiros 3 Itens</h4>
-                <p>Os 3 itens principais com maior win rate</p>
-              </div>
-              <div className="block-item">
-                <h4>3. Build Final</h4>
-                <p>Build final completa de late-game</p>
-              </div>
-              <div className="block-item">
-                <h4>4. 3 Botas Mais Feitas</h4>
-                <p>As 3 opções de botas mais populares</p>
-              </div>
+
+              {/* 4 Shop Item Blocks with DataDragon Icons */}
+              <section className="card item-blocks-preview" data-testid="item-blocks">
+                <h2>Conjuntos de Itens na Loja (4 Blocos Oficiais)</h2>
+                <div className="grid-blocks">
+                  {build.item_blocks.map((block, bIndex) => (
+                    <div key={block.title || bIndex} className="block-item">
+                      <h4>
+                        {bIndex + 1}. {block.title}
+                      </h4>
+                      <div className="block-items-row">
+                        {block.item_ids.map((itemId, iIndex) => {
+                          const iconUrl = block.item_icon_urls?.[iIndex];
+                          return (
+                            <div key={`${itemId}-${iIndex}`} className="item-icon-box" title={`Item ID ${itemId}`}>
+                              {iconUrl ? (
+                                <img
+                                  src={iconUrl}
+                                  alt={`Item ${itemId}`}
+                                  className="shop-item-icon"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <span className="item-id-fallback">{itemId}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            /* Idle / Waiting for Champion Select State */
+            <div className="idle-state-container">
+              <section className="card idle-card">
+                <div className="idle-icon-box">
+                  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                    <polyline points="2 17 12 22 22 17" />
+                    <polyline points="2 12 12 17 22 12" />
+                  </svg>
+                </div>
+                <h2>Aguardando Seleção de Campeões</h2>
+                <p className="card-desc">
+                  Entre em uma partida ou sala de draft no League of Legends. Assim que você selecionar ou travar um
+                  campeão, as runas recomendadas, feitiços e os 4 blocos de itens serão carregados e aplicados
+                  automaticamente com maior taxa de vitória do OP.GG.
+                </p>
+
+                <div className="idle-actions">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleReapplyBuild}
+                    disabled={loading || !summoner}
+                  >
+                    {loading ? "Injetando..." : "Testar Injeção de Demonstração (Ahri)"}
+                  </button>
+                </div>
+
+                {!summoner && (
+                  <p className="hint-text">
+                    * Abra o cliente do LoL (LeagueClientUx.exe) para habilitar a conexão e injeção direta.
+                  </p>
+                )}
+
+                {errorMsg && (
+                  <div className="alert alert-error" role="alert">
+                    <strong>Erro: </strong> {errorMsg}
+                  </div>
+                )}
+              </section>
+
+              <section className="card item-blocks-preview">
+                <h2>Estrutura dos Conjuntos de Itens na Loja</h2>
+                <div className="grid-blocks">
+                  <div className="block-item">
+                    <h4>1. Itens Iniciais</h4>
+                    <p>Primeiro item mais feito + poção</p>
+                  </div>
+                  <div className="block-item">
+                    <h4>2. Primeiros 3 Itens</h4>
+                    <p>Os 3 itens principais com maior win rate</p>
+                  </div>
+                  <div className="block-item">
+                    <h4>3. Build Final</h4>
+                    <p>Build final completa de late-game</p>
+                  </div>
+                  <div className="block-item">
+                    <h4>4. 3 Botas Mais Feitas</h4>
+                    <p>As 3 opções de botas mais populares</p>
+                  </div>
+                </div>
+              </section>
             </div>
-          </section>
+          )}
         </div>
       )}
 

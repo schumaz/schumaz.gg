@@ -35,6 +35,7 @@ async fn test_inject_runes(app: tauri::AppHandle) -> Result<lcu_injector::Inject
             .map_err(|e| format!("Erro ao obter build recomendada: {}", e))?;
 
     let report = lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
+    let _ = app.emit("recommended-build", &build);
     let _ = app.emit("build-injected", &report);
 
     Ok(report)
@@ -66,9 +67,21 @@ async fn inject_build_for_champion(
         .map_err(|e| format!("Erro ao obter build recomendada: {}", e))?;
 
     let report = lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
+    let _ = app.emit("recommended-build", &build);
     let _ = app.emit("build-injected", &report);
 
     Ok(report)
+}
+
+/// Tauri command to fetch the recommended build (with visual metadata) for a champion.
+#[tauri::command]
+async fn get_recommended_build_for_champion(
+    champion_id: i32,
+    queue_id: Option<i32>,
+) -> Result<build_provider::ChampionBuild, String> {
+    let http_client = reqwest::Client::new();
+    let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
+    build_provider::get_recommended_build(&http_client, champion_id, q_id).await
 }
 
 /// Tauri command to fetch the current summoner status if the client is connected.
@@ -91,6 +104,7 @@ pub fn run() {
             greet,
             test_inject_runes,
             inject_build_for_champion,
+            get_recommended_build_for_champion,
             get_summoner_status
         ])
         .setup(|app| {
