@@ -3,7 +3,7 @@
   --bg-surface: #0a0a0a;
   --bg-card: #141414;
   --bg-card-hover: #1a1a1a;
-  --bg-glass: rgba(20, 20, 20, 0.78);
+  --bg-glass: rgba(18, 18, 18, 0.78);
   
   --border-subtle: #222222;
   --border-highlight: #2e2e2e;
@@ -184,7 +184,7 @@ body {
   margin: 0;
 }
 
-/* Tags */
+/* Status Tags */
 .tag {
   display: inline-block;
   padding: 3px 10px;
@@ -205,7 +205,7 @@ body {
   border: 1px solid rgba(10, 132, 255, 0.3);
 }
 
-/* Buttons */
+/* Action Buttons */
 .btn-primary {
   background-color: var(--accent-primary);
   color: #ffffff;
@@ -241,7 +241,7 @@ body {
   margin-bottom: 0;
 }
 
-/* Alerts */
+/* Notification Alerts */
 .alert {
   padding: 12px 16px;
   border-radius: 12px;
@@ -256,7 +256,7 @@ body {
   color: var(--accent-danger);
 }
 
-/* Report Box */
+/* Injection Report Box */
 .report-box {
   margin-top: 18px;
   padding: 16px;
@@ -340,4 +340,61 @@ body {
   margin: 0;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+/* Floating Bottom Dock (iOS / Telegram Style Pill) */
+.floating-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+.dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dock-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dock-btn.active {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.dock-icon {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.dock-btn.active .dock-icon {
+  transform: scale(1.08);
+  color: var(--accent-primary);
 }
