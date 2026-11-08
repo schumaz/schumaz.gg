@@ -45,6 +45,8 @@ pub struct ChampSelectedPayload {
     pub queue_id: i32,
     pub queue_mode: QueueMode,
     pub locked_in: bool,
+    #[serde(default)]
+    pub assigned_position: Option<String>,
 }
 
 /// Represents state transitions evaluated from raw WebSocket events.
@@ -80,12 +82,15 @@ pub fn evaluate_ws_event(
         current_queue_id
     };
 
+    let assigned_pos = extract_assigned_position(data);
+
     match extract_selected_champion(data) {
         Ok(Some((champ_id, locked_in))) => WsSessionTransition::Active(ChampSelectedPayload {
             champion_id: champ_id,
             queue_id: effective_queue_id,
             queue_mode: QueueMode::from(effective_queue_id),
             locked_in,
+            assigned_position: assigned_pos,
         }),
         Ok(None) => WsSessionTransition::NoChampionSelected,
         Err(_) => WsSessionTransition::NoChampionSelected,
@@ -178,6 +183,38 @@ pub fn extract_selected_champion(
     Ok(None)
 }
 
+/// Normalizes draft `assignedPosition` strings ("top", "jungle", "middle", "bottom", "utility")
+/// to standard OP.GG positions ("top", "jungle", "mid", "adc", "support").
+pub fn normalize_position(pos: &str) -> Option<String> {
+    let lower = pos.trim().to_lowercase();
+    match lower.as_str() {
+        "top" => Some("top".to_string()),
+        "jungle" | "jng" => Some("jungle".to_string()),
+        "middle" | "mid" => Some("mid".to_string()),
+        "bottom" | "bot" | "adc" => Some("adc".to_string()),
+        "utility" | "support" | "supp" => Some("support".to_string()),
+        _ => None,
+    }
+}
+
+/// Extracts the local player's `assignedPosition` from the draft `myTeam` payload.
+pub fn extract_assigned_position(session_json: &serde_json::Value) -> Option<String> {
+    let local_player_cell_id = session_json
+        .get("localPlayerCellId")
+        .and_then(|v| v.as_i64())? as i32;
+
+    let my_team = session_json.get("myTeam").and_then(|v| v.as_array())?;
+    for member in my_team {
+        let cell_id = member.get("cellId").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
+        if cell_id == local_player_cell_id
+            && let Some(pos) = member.get("assignedPosition").and_then(|v| v.as_str())
+        {
+            return normalize_position(pos);
+        }
+    }
+    None
+}
+
 /// Extracts the queue ID from a `GET /lol-gameflow/v1/session` JSON payload.
 /// Supports Standard queues, Practice Tool, and Custom games.
 pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String> {
@@ -253,6 +290,7 @@ async fn handle_session_transition(
                     } else {
                         payload.queue_id
                     };
+                    let assigned_pos = payload.assigned_position.clone();
 
                     tokio::spawn(async move {
                         let Ok(conn) = crate::lcu_connector::LcuConnection::connect() else {
@@ -262,10 +300,14 @@ async fn handle_session_transition(
                             return;
                         };
                         let http_client = reqwest::Client::new();
-                        let Ok(build) = crate::build_provider::get_recommended_build(
+                        let Ok(build) = crate::build_provider::get_recommended_build_with_filters(
                             &http_client,
                             champ_id,
                             q_id,
+                            assigned_pos.as_deref(),
+                            None,
+                            None,
+                            None,
                         )
                         .await
                         else {
@@ -390,7 +432,7 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     #[test]
@@ -489,6 +531,36 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_assigned_position_and_normalization() {
+        assert_eq!(normalize_position("top"), Some("top".to_string()));
+        assert_eq!(normalize_position("jungle"), Some("jungle".to_string()));
+        assert_eq!(normalize_position("JNG"), Some("jungle".to_string()));
+        assert_eq!(normalize_position("middle"), Some("mid".to_string()));
+        assert_eq!(normalize_position("mid"), Some("mid".to_string()));
+        assert_eq!(normalize_position("bottom"), Some("adc".to_string()));
+        assert_eq!(normalize_position("bot"), Some("adc".to_string()));
+        assert_eq!(normalize_position("utility"), Some("support".to_string()));
+        assert_eq!(normalize_position("supp"), Some("support".to_string()));
+        assert_eq!(normalize_position(""), None);
+
+        let fixture_draft = serde_json::json!({
+            "localPlayerCellId": 3,
+            "myTeam": [
+                { "cellId": 0, "assignedPosition": "top" },
+                { "cellId": 1, "assignedPosition": "jungle" },
+                { "cellId": 2, "assignedPosition": "middle" },
+                { "cellId": 3, "assignedPosition": "bottom" },
+                { "cellId": 4, "assignedPosition": "utility" }
+            ]
+        });
+
+        assert_eq!(
+            extract_assigned_position(&fixture_draft),
+            Some("adc".to_string())
+        );
+    }
+
+    #[test]
     fn test_extract_queue_id_and_classify_mode() {
         let fixture_aram = serde_json::json!({
             "gameData": {
@@ -551,6 +623,7 @@ mod tests {
             queue_id: 420,
             queue_mode: QueueMode::SummonersRift,
             locked_in: false,
+            assigned_position: None,
         });
 
         // Same payload received in a subsequent timer tick
@@ -559,6 +632,7 @@ mod tests {
             queue_id: 420,
             queue_mode: QueueMode::SummonersRift,
             locked_in: false,
+            assigned_position: None,
         });
 
         assert!(!should_emit_champ_select(&payload1, &payload1_tick));
@@ -569,6 +643,7 @@ mod tests {
             queue_id: 420,
             queue_mode: QueueMode::SummonersRift,
             locked_in: true,
+            assigned_position: None,
         });
 
         assert!(should_emit_champ_select(&payload1, &payload2));
@@ -592,6 +667,7 @@ mod tests {
                 queue_id: 450,
                 queue_mode: QueueMode::Aram,
                 locked_in: true,
+                assigned_position: None,
             })
         );
 
@@ -625,6 +701,7 @@ mod tests {
                 queue_id: QUEUE_PRACTICE_TOOL,
                 queue_mode: QueueMode::PracticeTool,
                 locked_in: false,
+                assigned_position: None,
             })
         );
     }

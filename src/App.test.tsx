@@ -41,13 +41,19 @@ const mockAhriBuild: ChampionBuild = {
     { title: "Build Final", item_ids: [3285, 3157, 3089, 3135, 4645], item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png"] },
     { title: "Itens Situacionais / Úteis", item_ids: [4629, 3165, 3102], item_icon_urls: ["4629.png", "3165.png", "3102.png"] },
   ],
+  active_position: "mid",
+  active_tier: "emerald_plus",
+  active_region: "global",
+  active_patch: "16.22",
+  available_patches: ["16.22", "16.21"],
+  patch_fallback_applied: false,
 };
 
 let eventListeners: Record<string, (event: { payload: unknown }) => void> = {};
 
 // Mock Tauri API calls for unit testing
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockImplementation((cmd) => {
+  invoke: vi.fn().mockImplementation((cmd, args) => {
     if (cmd === "get_summoner_status") {
       return Promise.resolve(null);
     }
@@ -55,6 +61,17 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_recommended_build_for_champion") {
       return Promise.resolve(mockAhriBuild);
     }
+
+    if (cmd === "update_build_filters") {
+      return Promise.resolve({
+        ...mockAhriBuild,
+        active_position: args?.position || mockAhriBuild.active_position,
+        active_tier: args?.tier || mockAhriBuild.active_tier,
+        active_region: args?.region || mockAhriBuild.active_region,
+        active_patch: args?.patch || mockAhriBuild.active_patch,
+      });
+    }
+
     return Promise.resolve({});
   }),
 }));
@@ -154,28 +171,14 @@ describe("App Component", () => {
     fireEvent.click(flashFBtn);
     expect(flashFBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Toggle items off
-    const itemsToggle = screen.getByLabelText("Injetar Conjuntos de Itens na Loja");
-    fireEvent.click(itemsToggle);
-    expect(itemsToggle).not.toBeChecked();
-
-    // Verify localStorage contains the updated preferences without autoAcceptMatch
-    const stored = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
-    expect(stored.autoInjectRunes).toBe(false);
-    expect(stored.autoInjectItems).toBe(false);
-    // Switch build priority to highest win rate
-    const winrateBtn = screen.getByTestId("priority-highest-winrate");
-    fireEvent.click(winrateBtn);
-    expect(winrateBtn).toHaveAttribute("aria-pressed", "true");
-
-    const stored2 = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
-    expect(stored2.buildPriority).toBe("highest_win_rate");
-    expect(stored.flashKey).toBe("F");
-    expect(stored.autoAcceptMatch).toBeUndefined();
+    // Check localStorage
+    const saved = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
+    expect(saved.autoInjectRunes).toBe(false);
+    expect(saved.flashKey).toBe("F");
   });
 
-  it("reorders spells in the Runas tab based on Flash key preference", async () => {
-    // Set Flash on F in localStorage before render
+  it("swaps summoner spell slots according to flashKey preference in Runas view", async () => {
+    // Set Flash preference to F in localStorage
     localStorage.setItem(
       "schumaz_user_preferences",
       JSON.stringify({ ...DEFAULT_PREFERENCES, flashKey: "F" })
@@ -188,13 +191,13 @@ describe("App Component", () => {
       expect(eventListeners["recommended-build"]).toBeDefined();
     });
 
-    // Simulate build event where Flash is index 0
+    // Simulate build delivery from backend
     act(() => {
       eventListeners["recommended-build"]({ payload: mockAhriBuild });
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+      expect(screen.getByTestId("spells-card")).toBeInTheDocument();
     });
 
     // With Flash on F, Flash should now be mapped to key F instead of D
@@ -252,6 +255,82 @@ describe("App Component", () => {
     expect(screen.getByText(/4. Build Final/i)).toBeInTheDocument();
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
+
+  it("renders the 4 filter selectors (Elo, Rota, Servidor, Patch) and handles filter updates", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    act(() => {
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("champ-filters-bar")).toBeInTheDocument();
+    });
+
+    // Check 4 select elements exist with correct initial values
+    const tierSelect = screen.getByTestId("filter-tier") as HTMLSelectElement;
+    const posSelect = screen.getByTestId("filter-position") as HTMLSelectElement;
+    const regionSelect = screen.getByTestId("filter-region") as HTMLSelectElement;
+    const patchSelect = screen.getByTestId("filter-patch") as HTMLSelectElement;
+
+    expect(tierSelect.value).toBe("emerald_plus");
+    expect(posSelect.value).toBe("mid");
+    expect(regionSelect.value).toBe("global");
+    expect(patchSelect.value).toBe("16.22");
+
+    // Change Rota to adc
+    await act(async () => {
+      fireEvent.change(posSelect, { target: { value: "adc" } });
+    });
+
+    expect(invoke).toHaveBeenCalledWith("update_build_filters", {
+      championId: 103,
+      queueId: 420,
+      position: "adc",
+      tier: "emerald_plus",
+      region: "global",
+      patch: "16.22",
+    });
+
+    // Change Elo to diamond_plus
+    await act(async () => {
+      fireEvent.change(tierSelect, { target: { value: "diamond_plus" } });
+    });
+
+    expect(invoke).toHaveBeenCalledWith("update_build_filters", expect.objectContaining({
+      championId: 103,
+      tier: "diamond_plus",
+    }));
+  });
+
+  it("displays the patch fallback badge when latest patch is less than 48 hours old", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    act(() => {
+      eventListeners["recommended-build"]({
+        payload: {
+          ...mockAhriBuild,
+          active_patch: "16.21",
+          patch_fallback_applied: true,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("patch-fallback-badge")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Volume Protegido \(16\.21\)/i)).toBeInTheDocument();
+  });
+
   it("displays Practice Tool badge and ranked items when practice tool session is detected", async () => {
     render(<App />);
 

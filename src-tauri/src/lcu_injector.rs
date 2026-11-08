@@ -11,6 +11,7 @@ pub const PERKS_PAGES_ENDPOINT: &str = "/lol-perks/v1/pages";
 pub const CHAMP_SELECT_MY_SELECTION_ENDPOINT: &str = "/lol-champ-select/v1/session/my-selection";
 pub const SCHUMAZ_PAGE_SUFFIX: &str = " | schumaz.gg";
 pub const SPELL_FLASH_ID: i32 = 4;
+pub const SPELL_SMITE_ID: i32 = 11;
 
 /// Represents the user's preferred key for Flash (D vs F).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -91,6 +92,46 @@ pub fn apply_flash_key_preference(
     }
 }
 
+/// Applies mandatory Jungle Smite rule (ID 11) and positions Flash (ID 4)
+/// according to the user's preferred slot (D vs F).
+pub fn apply_jungle_smite_and_flash_preference(
+    mut spell1_id: i32,
+    mut spell2_id: i32,
+    flash_key: FlashKeyPreference,
+    is_jungle: bool,
+) -> (i32, i32) {
+    if !is_jungle {
+        return apply_flash_key_preference(spell1_id, spell2_id, flash_key);
+    }
+
+    // 1. Ensure Smite (11) is present
+    if spell1_id != SPELL_SMITE_ID && spell2_id != SPELL_SMITE_ID {
+        if spell1_id == SPELL_FLASH_ID {
+            spell2_id = SPELL_SMITE_ID;
+        } else if spell2_id == SPELL_FLASH_ID {
+            spell1_id = SPELL_SMITE_ID;
+        } else {
+            spell2_id = SPELL_SMITE_ID;
+        }
+    }
+
+    // 2. Position Flash and Smite respecting flash_key
+    if spell1_id == SPELL_FLASH_ID || spell2_id == SPELL_FLASH_ID {
+        let other_spell = if spell1_id == SPELL_FLASH_ID {
+            spell2_id
+        } else {
+            spell1_id
+        };
+        match flash_key {
+            FlashKeyPreference::D => (SPELL_FLASH_ID, other_spell),
+            FlashKeyPreference::F => (other_spell, SPELL_FLASH_ID),
+        }
+    } else {
+        // Champion doesn't use Flash (e.g. Ghost 6 + Smite 11 or Ignite 14 + Smite 11)
+        (spell1_id, spell2_id)
+    }
+}
+
 /// Summary report returned after attempting an injection into the LCU.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InjectionReport {
@@ -115,38 +156,55 @@ pub fn build_rune_page_payload(build: &ChampionBuild) -> Result<serde_json::Valu
         return Err("Primary style and sub style cannot be identical".to_string());
     }
 
-    let page_name = format!("{}{}", build.champion_name, SCHUMAZ_PAGE_SUFFIX);
-
-    Ok(json!({
-        "name": page_name,
+    let payload = json!({
+        "name": format!("{}{}", build.champion_name, SCHUMAZ_PAGE_SUFFIX),
         "primaryStyleId": build.primary_style_id,
         "subStyleId": build.sub_style_id,
         "selectedPerkIds": build.selected_perk_ids,
         "current": true
-    }))
+    });
+
+    Ok(payload)
 }
 
-/// Finds the ID of an existing schumaz.gg rune page (named "%Champ% | schumaz.gg") from the pages array.
-/// Returns Some(page_id) if found and deletable, ensuring the app reuses its single rune page.
-pub fn find_schumaz_page_id(pages_json: &serde_json::Value) -> Option<i64> {
+/// Checks an array of rune pages and finds the first deletable custom page ID (if any).
+/// Explicitly ignores Riot preset pages where `isDeletable == false`.
+pub fn find_first_deletable_page_id(pages_json: &serde_json::Value) -> Option<i64> {
     let pages = pages_json.as_array()?;
     for page in pages {
-        let name = page.get("name").and_then(|n| n.as_str()).unwrap_or("");
         let is_deletable = page
             .get("isDeletable")
             .and_then(|d| d.as_bool())
             .unwrap_or(false);
 
-        if name.ends_with(SCHUMAZ_PAGE_SUFFIX) && is_deletable {
+        if is_deletable {
             return page.get("id").and_then(|id| id.as_i64());
         }
     }
     None
 }
 
-/// Finds the first deletable custom rune page if no schumaz.gg page exists yet.
-/// Useful for replacing a slot when the player has reached their maximum page cap.
-pub fn find_first_deletable_page_id(pages_json: &serde_json::Value) -> Option<i64> {
+/// Checks all rune pages and finds the ID of an existing "schumaz.gg" page if already present.
+/// Reusing and modifying the existing page in-place avoids creating multiple pages and hitting page limits.
+pub fn find_schumaz_page_id(pages_json: &serde_json::Value) -> Option<i64> {
+    let pages = pages_json.as_array()?;
+    for page in pages {
+        let is_deletable = page
+            .get("isDeletable")
+            .and_then(|d| d.as_bool())
+            .unwrap_or(false);
+        let name = page.get("name").and_then(|n| n.as_str()).unwrap_or("");
+
+        if is_deletable && name.contains(SCHUMAZ_PAGE_SUFFIX) {
+            return page.get("id").and_then(|id| id.as_i64());
+        }
+    }
+    None
+}
+
+/// Checks an array of rune pages and finds any custom page ID that is deletable.
+/// Explicitly ignores Riot presets (`isDeletable: false`).
+pub fn extract_deletable_page_id_from_pages(pages_json: &serde_json::Value) -> Option<i64> {
     let pages = pages_json.as_array()?;
     for page in pages {
         let is_deletable = page
@@ -199,6 +257,18 @@ pub fn build_spells_payload_with_preference(
     flash_key: FlashKeyPreference,
 ) -> Result<serde_json::Value, String> {
     let (s1, s2) = apply_flash_key_preference(spell1_id, spell2_id, flash_key);
+    build_spells_payload(s1, s2)
+}
+
+/// Builds the spells payload applying mandatory Jungle Smite and Flash key preference.
+pub fn build_spells_payload_with_jungle_and_preference(
+    spell1_id: i32,
+    spell2_id: i32,
+    flash_key: FlashKeyPreference,
+    is_jungle: bool,
+) -> Result<serde_json::Value, String> {
+    let (s1, s2) =
+        apply_jungle_smite_and_flash_preference(spell1_id, spell2_id, flash_key, is_jungle);
     build_spells_payload(s1, s2)
 }
 
@@ -286,14 +356,20 @@ pub async fn inject_runes(
     Ok(())
 }
 
-/// Injects summoner spells into the active Champion Select session adapting to the Flash key preference.
+/// Injects summoner spells into the active Champion Select session adapting to the Flash key preference
+/// and mandatory Jungle Smite rules.
 pub async fn inject_spells(
     conn: &crate::lcu_connector::LcuConnection,
     build: &ChampionBuild,
     flash_key: FlashKeyPreference,
 ) -> Result<(), String> {
-    let payload =
-        build_spells_payload_with_preference(build.spell1_id, build.spell2_id, flash_key)?;
+    let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
+    let payload = build_spells_payload_with_jungle_and_preference(
+        build.spell1_id,
+        build.spell2_id,
+        flash_key,
+        is_jungle,
+    )?;
     conn.patch_summoner_spells(&payload).await?;
     Ok(())
 }
@@ -341,48 +417,42 @@ pub async fn inject_champion_build(
     let items_ok = items_res.as_ref().is_some_and(|r| r.is_ok());
 
     let mut parts = Vec::new();
-
-    if let Some(res) = runes_res {
-        if res.is_ok() {
-            parts.push("Runas injetadas".to_string());
-        } else if let Err(e) = res {
-            parts.push(format!("Runas: {}", e));
+    if let Some(r) = runes_res {
+        match r {
+            Ok(_) => parts.push("Runas injetadas".to_string()),
+            Err(e) => parts.push(format!("Falha nas Runas: {}", e)),
         }
-    } else {
-        parts.push("Runas ignoradas (desativado nas preferências)".to_string());
+    }
+    if let Some(s) = spells_res {
+        match s {
+            Ok(_) => parts.push("Feitiços injetados".to_string()),
+            Err(e) => parts.push(format!("Falha nos Feitiços: {}", e)),
+        }
+    }
+    if let Some(i) = items_res {
+        match i {
+            Ok(_) => parts.push("Itens injetados".to_string()),
+            Err(e) => parts.push(format!("Falha nos Itens: {}", e)),
+        }
     }
 
-    if let Some(res) = spells_res {
-        if res.is_ok() {
-            parts.push("Feitiços injetados".to_string());
-        } else if let Err(e) = res {
-            parts.push(format!("Feitiços: {}", e));
-        }
+    let message = if parts.is_empty() {
+        "Nenhuma injeção configurada nas preferências".to_string()
     } else {
-        parts.push("Feitiços ignorados (desativado nas preferências)".to_string());
-    }
-
-    if let Some(res) = items_res {
-        if res.is_ok() {
-            parts.push("Itens injetados".to_string());
-        } else if let Err(e) = res {
-            parts.push(format!("Itens: {}", e));
-        }
-    } else {
-        parts.push("Itens ignorados (desativado nas preferências)".to_string());
-    }
+        parts.join(" | ")
+    };
 
     InjectionReport {
         champion_name: build.champion_name.clone(),
         runes_injected: runes_ok,
         spells_injected: spells_ok,
         items_injected: items_ok,
-        message: parts.join(" | "),
+        message,
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::build_provider::ItemBlock;
 
@@ -426,6 +496,43 @@ mod tests {
         assert_eq!(
             apply_flash_key_preference(12, 14, FlashKeyPreference::F),
             (12, 14)
+        );
+    }
+
+    #[test]
+    fn test_jungle_smite_rule_and_flash_preference() {
+        // Scenario 1: Jungle with Flash on D -> Flash (4) on D, Smite (11) on F
+        assert_eq!(
+            apply_jungle_smite_and_flash_preference(4, 14, FlashKeyPreference::D, true),
+            (4, 11)
+        );
+
+        // Scenario 2: Jungle with Flash on F -> Smite (11) on D, Flash (4) on F
+        assert_eq!(
+            apply_jungle_smite_and_flash_preference(4, 14, FlashKeyPreference::F, true),
+            (11, 4)
+        );
+
+        // Scenario 3: Jungle with already Smite + Flash
+        assert_eq!(
+            apply_jungle_smite_and_flash_preference(11, 4, FlashKeyPreference::D, true),
+            (4, 11)
+        );
+        assert_eq!(
+            apply_jungle_smite_and_flash_preference(11, 4, FlashKeyPreference::F, true),
+            (11, 4)
+        );
+
+        // Scenario 4: Jungle without Flash (Ghost 6 + Ignite 14) -> Ghost 6 + Smite 11
+        assert_eq!(
+            apply_jungle_smite_and_flash_preference(6, 14, FlashKeyPreference::D, true),
+            (6, 11)
+        );
+
+        // Scenario 5: Non-jungle ignores jungle rule and only applies standard flash preference
+        assert_eq!(
+            apply_jungle_smite_and_flash_preference(4, 14, FlashKeyPreference::F, false),
+            (14, 4)
         );
     }
 
@@ -519,8 +626,8 @@ mod tests {
     #[test]
     fn test_find_schumaz_page_id_returns_none_when_no_schumaz_page_exists() {
         let pages_json = serde_json::json!([
-            { "id": 1, "name": "Riot Preset: Precision", "isDeletable": false },
-            { "id": 2, "name": "My Old Page", "isDeletable": true }
+            { "id": 1, "name": "Riot Preset: Domination", "isDeletable": false },
+            { "id": 2, "name": "Custom Runes", "isDeletable": true }
         ]);
 
         assert_eq!(find_schumaz_page_id(&pages_json), None);
@@ -539,18 +646,14 @@ mod tests {
 
     #[test]
     fn test_extract_deletable_rune_page_id_respects_riot_preset_pages() {
-        let riot_preset = serde_json::json!({
-            "id": 10,
-            "name": "Preset: Inspiration",
-            "isDeletable": false
-        });
+        let riot_preset = serde_json::json!(
+            { "id": 10, "name": "Preset: Inspiration", "isDeletable": false }
+        );
         assert_eq!(extract_deletable_rune_page_id(&riot_preset), None);
 
-        let custom_page = serde_json::json!({
-            "id": 88,
-            "name": "My Custom Runes",
-            "isDeletable": true
-        });
+        let custom_page = serde_json::json!(
+            { "id": 88, "name": "My Custom Runes", "isDeletable": true }
+        );
         assert_eq!(extract_deletable_rune_page_id(&custom_page), Some(88));
     }
 

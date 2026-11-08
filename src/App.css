@@ -264,11 +264,18 @@ body {
 /* Champion Hero Overview Card */
 .champ-hero-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  flex-direction: column;
+  gap: 16px;
   background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(10, 10, 10, 0.9));
   border: 1px solid var(--border-highlight);
+}
+
+.champ-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
 }
 
 .champ-hero-left {
@@ -341,8 +348,64 @@ body {
   font-size: 0.8rem;
 }
 
-.btn-reapply {
-  white-space: nowrap;
+/* 4 Champion Filter Controls */
+.champ-filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  width: 100%;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.filter-select {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.filter-select:hover:not(:disabled) {
+  border-color: var(--border-highlight);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.filter-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.2);
+}
+
+.filter-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.patch-fallback-badge {
+  background-color: rgba(255, 159, 10, 0.15);
+  border: 1px solid rgba(255, 159, 10, 0.4);
+  color: var(--accent-warning);
+  font-weight: 600;
 }
 
 /* Runes and Spells Grid */
@@ -356,9 +419,8 @@ body {
   .runes-spells-grid {
     grid-template-columns: 1fr;
   }
-  .champ-hero-card {
-    flex-direction: column;
-    align-items: flex-start;
+  .champ-filters-bar {
+    gap: 10px;
   }
 }
 

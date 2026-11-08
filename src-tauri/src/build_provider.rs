@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use tokio::sync::OnceCell;
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
+pub const OPGG_REST_API_BASE: &str = "https://lol-api-champion.op.gg/api";
 pub const DDRAGON_BASE_URL: &str = "https://ddragon.leagueoflegends.com";
 
 static DDRAGON_CACHE: OnceCell<DataDragonCache> = OnceCell::const_new();
@@ -81,6 +82,18 @@ pub struct ChampionBuild {
     pub perks: Vec<RuneMetadata>,
     #[serde(default)]
     pub spells: Vec<SpellMetadata>,
+    #[serde(default)]
+    pub active_position: String,
+    #[serde(default)]
+    pub active_tier: String,
+    #[serde(default)]
+    pub active_region: String,
+    #[serde(default)]
+    pub active_patch: String,
+    #[serde(default)]
+    pub available_patches: Vec<String>,
+    #[serde(default)]
+    pub patch_fallback_applied: bool,
 }
 
 /// Maps a queue ID into an OP.GG queue argument string ("aram" or "ranked").
@@ -95,6 +108,239 @@ pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
 /// ARAM: Flash (4) + Snowball/Mark (32); Summoner's Rift: Flash (4) + Ignite (14).
 pub fn default_spells_for_queue(queue_id: i32) -> (i32, i32) {
     if queue_id == 450 { (4, 32) } else { (4, 14) }
+}
+
+/// Fallback default lane when offline or when OP.GG ranking is unavailable.
+pub fn champion_default_lane(_champion_name: &str) -> &'static str {
+    "mid"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpggPositionInfo {
+    pub name: String,
+    pub play: u64,
+    pub role_rate: f64,
+}
+
+pub type ChampionPositionsMap = HashMap<i32, Vec<OpggPositionInfo>>;
+pub type PositionsCache = HashMap<String, ChampionPositionsMap>;
+
+// In-memory cache for OP.GG champion rankings by (region, tier, version)
+static CHAMPION_POSITIONS_CACHE: std::sync::LazyLock<std::sync::RwLock<PositionsCache>> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(HashMap::new()));
+
+/// Normalizes an OP.GG position name ("TOP", "JUNGLE", "MID", "ADC", "SUPPORT") into standard lowercase lane.
+pub fn normalize_opgg_lane_name(raw: &str) -> Option<&'static str> {
+    match raw.to_uppercase().as_str() {
+        "TOP" => Some("top"),
+        "JUNGLE" | "JNG" => Some("jungle"),
+        "MID" | "MIDDLE" => Some("mid"),
+        "ADC" | "BOTTOM" | "BOT" => Some("adc"),
+        "SUPPORT" | "SUPP" | "UTILITY" => Some("support"),
+        _ => None,
+    }
+}
+
+/// Given a list of OP.GG positions for a champion, returns the lane with the highest game count (`stats.play`).
+pub fn select_most_played_lane(positions: &[OpggPositionInfo]) -> Option<&'static str> {
+    positions
+        .iter()
+        .filter_map(|p| {
+            let lane = normalize_opgg_lane_name(&p.name)?;
+            Some((lane, p.play))
+        })
+        .max_by_key(|&(_, play)| play)
+        .map(|(lane, _)| lane)
+}
+
+/// Extracts champion position statistics from the OP.GG champions/ranked JSON payload.
+pub fn parse_opgg_champion_positions_ranking(
+    json: &serde_json::Value,
+) -> HashMap<i32, Vec<OpggPositionInfo>> {
+    let mut map = HashMap::new();
+    if let Some(data_arr) = json.get("data").and_then(|d| d.as_array()) {
+        for champ in data_arr {
+            if let Some(champ_id) = champ.get("id").and_then(|v| v.as_i64()).map(|id| id as i32) {
+                let mut positions = Vec::new();
+                if let Some(pos_arr) = champ.get("positions").and_then(|v| v.as_array()) {
+                    for pos in pos_arr {
+                        if let Some(name) = pos.get("name").and_then(|v| v.as_str()) {
+                            let play = pos
+                                .pointer("/stats/play")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let role_rate = pos
+                                .pointer("/stats/role_rate")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            positions.push(OpggPositionInfo {
+                                name: name.to_string(),
+                                play,
+                                role_rate,
+                            });
+                        }
+                    }
+                }
+                map.insert(champ_id, positions);
+            }
+        }
+    }
+    map
+}
+
+/// Resolves the champion's primary lane dynamically by querying OP.GG's ranking data
+/// and picking the position with the highest game count (play count).
+pub async fn resolve_champion_most_played_lane(
+    client: &reqwest::Client,
+    champion_id: i32,
+    region: &str,
+    tier: &str,
+    version: Option<&str>,
+) -> Result<String, String> {
+    let cache_key = format!("{}:{}:{}", region, tier, version.unwrap_or("latest"));
+
+    // 1. Check cache first
+    if let Ok(guard) = CHAMPION_POSITIONS_CACHE.read()
+        && let Some(champ_map) = guard.get(&cache_key)
+        && let Some(positions) = champ_map.get(&champion_id)
+        && let Some(lane) = select_most_played_lane(positions)
+    {
+        return Ok(lane.to_string());
+    }
+
+    // 2. Fetch from OP.GG
+    let mut url = format!("{}/{}/champions/ranked?tier={}", OPGG_REST_API_BASE, region, tier);
+    if let Some(v) = version
+        && !v.trim().is_empty()
+    {
+        url.push_str(&format!("&version={}", v.trim()));
+    }
+
+    let res = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to request champions/ranked from OP.GG: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("OP.GG champions/ranked returned status: {}", res.status()));
+    }
+
+    let json_body: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse OP.GG champions/ranked JSON: {}", e))?;
+
+    let parsed_map = parse_opgg_champion_positions_ranking(&json_body);
+
+    // 3. Find lane for requested champion
+    let chosen_lane = parsed_map
+        .get(&champion_id)
+        .and_then(|positions| select_most_played_lane(positions))
+        .map(|s| s.to_string());
+
+    // 4. Update cache
+    if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
+        guard.insert(cache_key, parsed_map);
+    }
+
+    chosen_lane.ok_or_else(|| {
+        format!(
+            "Champion ID {} has no active positions in OP.GG ranked stats",
+            champion_id
+        )
+    })
+}
+
+/// Parses an ISO 8601 timestamp string (e.g. "2026-11-07T22:59:29+09:00" or "2026-11-07T22:59:29Z")
+/// into a Unix epoch timestamp (seconds).
+pub fn parse_iso8601_to_unix(iso_str: &str) -> Option<u64> {
+    if iso_str.len() < 19 {
+        return None;
+    }
+    let year: i32 = iso_str[0..4].parse().ok()?;
+    let month: u32 = iso_str[5..7].parse().ok()?;
+    let day: u32 = iso_str[8..10].parse().ok()?;
+    let hour: u32 = iso_str[11..13].parse().ok()?;
+    let min: u32 = iso_str[14..16].parse().ok()?;
+    let sec: u32 = iso_str[17..19].parse().ok()?;
+
+    let mut offset_secs: i64 = 0;
+    if iso_str.len() > 19 {
+        let rest = &iso_str[19..];
+        if rest.starts_with('+') || rest.starts_with('-') {
+            let sign = if rest.starts_with('-') { -1 } else { 1 };
+            let off_str = &rest[1..];
+            let parts: Vec<&str> = off_str.split(':').collect();
+            if !parts.is_empty() {
+                let off_h: i64 = parts[0].parse().unwrap_or(0);
+                let off_m: i64 = parts.get(1).and_then(|m| m.parse().ok()).unwrap_or(0);
+                offset_secs = sign * (off_h * 3600 + off_m * 60);
+            }
+        }
+    }
+
+    let days_before_month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+
+    let is_leap = |y: i32| (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+
+    let mut total_days: i64 = 0;
+    for y in 1970..year {
+        total_days += if is_leap(y) { 366 } else { 365 };
+    }
+    total_days += days_before_month[(month - 1) as usize] as i64;
+    if month > 2 && is_leap(year) {
+        total_days += 1;
+    }
+    total_days += (day - 1) as i64;
+
+    let total_secs_utc = total_days * 86400 + (hour as i64) * 3600 + (min as i64) * 60 + (sec as i64) - offset_secs;
+    if total_secs_utc >= 0 {
+        Some(total_secs_utc as u64)
+    } else {
+        None
+    }
+}
+
+/// Selects the effective patch respecting the 2-day maturity rule:
+/// If the latest patch was released in the last 2 days (< 48h) and user has not set an override,
+/// automatically select previous patch to guarantee high sample volume.
+/// Returns (effective_patch, patch_fallback_applied).
+pub fn select_effective_patch(
+    versions: &[String],
+    latest_created_at_iso: Option<&str>,
+    now_unix: u64,
+    user_override: Option<&str>,
+) -> (String, bool) {
+    if let Some(user_patch) = user_override
+        && !user_patch.trim().is_empty()
+    {
+        return (user_patch.trim().to_string(), false);
+    }
+
+    if versions.is_empty() {
+        return ("".to_string(), false);
+    }
+
+    let latest = &versions[0];
+    if versions.len() < 2 {
+        return (latest.clone(), false);
+    }
+
+    if let Some(created_at) = latest_created_at_iso
+        && let Some(created_unix) = parse_iso8601_to_unix(created_at)
+    {
+        let age_secs = now_unix.saturating_sub(created_unix);
+        let two_days_secs = 2 * 86_400; // 172,800s
+        if age_secs < two_days_secs {
+            return (versions[1].clone(), true);
+        }
+    }
+
+    (latest.clone(), false)
 }
 
 /// Known League of Legends boot item IDs (basic, upgraded, and tier-3 boots).
@@ -201,6 +447,7 @@ pub fn build_fallback_champion_build(
         sub_style_icon_url: String::new(),
         perks: vec![],
         spells: vec![],
+        ..Default::default()
     }
 }
 
@@ -1306,6 +1553,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
     let primary_style_id = analysis
         .pointer("/runes/primary_style_id")
         .or_else(|| analysis.pointer("/runes/primary_page_id"))
+        .or_else(|| analysis.pointer("/runes/0/primary_page_id"))
         .and_then(|v| v.as_i64())
         .ok_or_else(|| "Missing primary_style_id in OP.GG runes".to_string())?
         as i32;
@@ -1313,6 +1561,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
     let sub_style_id = analysis
         .pointer("/runes/sub_style_id")
         .or_else(|| analysis.pointer("/runes/secondary_page_id"))
+        .or_else(|| analysis.pointer("/runes/0/secondary_page_id"))
         .and_then(|v| v.as_i64())
         .ok_or_else(|| "Missing sub_style_id in OP.GG runes".to_string())?
         as i32;
@@ -1321,6 +1570,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
 
     if let Some(primary_perks) = analysis
         .pointer("/runes/primary_perk_ids")
+        .or_else(|| analysis.pointer("/runes/0/primary_rune_ids"))
         .and_then(|v| v.as_array())
     {
         for perk in primary_perks {
@@ -1332,6 +1582,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
 
     if let Some(sub_perks) = analysis
         .pointer("/runes/sub_perk_ids")
+        .or_else(|| analysis.pointer("/runes/0/secondary_rune_ids"))
         .and_then(|v| v.as_array())
     {
         for perk in sub_perks {
@@ -1343,6 +1594,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
 
     if let Some(stat_shards) = analysis
         .pointer("/runes/stat_shards")
+        .or_else(|| analysis.pointer("/runes/0/stat_mod_ids"))
         .and_then(|v| v.as_array())
     {
         for shard in stat_shards {
@@ -1364,6 +1616,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
         .pointer("/spells/0")
         .or_else(|| analysis.pointer("/summoner_spells/0"))
         .or_else(|| analysis.pointer("/summoner_spells/ids/0"))
+        .or_else(|| analysis.pointer("/summoner_spells/0/ids/0"))
         .and_then(|v| v.as_i64())
         .unwrap_or(4) as i32;
 
@@ -1371,6 +1624,7 @@ pub fn parse_opgg_analysis_payload_with_priority(
         .pointer("/spells/1")
         .or_else(|| analysis.pointer("/summoner_spells/1"))
         .or_else(|| analysis.pointer("/summoner_spells/ids/1"))
+        .or_else(|| analysis.pointer("/summoner_spells/0/ids/1"))
         .and_then(|v| v.as_i64())
         .unwrap_or(14) as i32;
 
@@ -1554,23 +1808,215 @@ pub async fn get_recommended_build_with_endpoint(
     build
 }
 
+/// Fetches available patch versions from the OP.GG REST API.
+pub async fn fetch_opgg_versions(client: &reqwest::Client, region: &str) -> Vec<String> {
+    let url = format!("{}/{}/champions/ranked/versions", OPGG_REST_API_BASE, region);
+    if let Ok(res) = client.get(&url).send().await
+        && let Ok(json) = res.json::<serde_json::Value>().await
+        && let Some(arr) = json.get("data").and_then(|d| d.as_array())
+    {
+        let vers: Vec<String> = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+        if !vers.is_empty() {
+            return vers;
+        }
+    }
+    vec!["16.22".to_string(), "16.21".to_string()]
+}
+
+/// Fetches champion build analysis from the OP.GG REST API with full filter parameters.
+pub async fn fetch_opgg_rest_champion_analysis(
+    client: &reqwest::Client,
+    region: &str,
+    mode: &str,
+    champion_id: i32,
+    position: &str,
+    tier: &str,
+    version: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let mut url = format!(
+        "{}/{}/champions/{}/{}/{}?tier={}",
+        OPGG_REST_API_BASE, region, mode, champion_id, position, tier
+    );
+    if let Some(v) = version
+        && !v.trim().is_empty()
+    {
+        url.push_str(&format!("&version={}", v.trim()));
+    }
+
+    let res = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("REST request to OP.GG failed: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("OP.GG REST responded with HTTP error: {}", res.status()));
+    }
+
+    let json_body: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse JSON response from OP.GG REST: {}", e))?;
+
+    Ok(json_body)
+}
+
+/// Fetches recommended build for a champion filtered by position, tier, region, and patch.
+pub async fn get_recommended_build_with_filters(
+    client: &reqwest::Client,
+    champion_id: i32,
+    queue_id: i32,
+    position: Option<&str>,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+) -> Result<ChampionBuild, String> {
+    let ddragon_cache = get_or_init_ddragon_cache(client).await?;
+    let champ_name = ddragon_cache
+        .champions
+        .get(&champion_id)
+        .map(|c| c.key_name.as_str())
+        .unwrap_or("Unknown");
+
+    let is_aram = queue_id == 450;
+    let mode = if is_aram { "aram" } else { "ranked" };
+    let target_region = region.unwrap_or("global");
+    let target_tier = tier.unwrap_or("emerald_plus");
+    let priority = crate::lcu_injector::get_user_preferences().build_priority;
+
+    // 1. Fetch available versions for region
+    let available_versions = fetch_opgg_versions(client, target_region).await;
+
+    // 2. Determine effective patch (2-day volume protection rule)
+    let (mut effective_patch, mut patch_fallback_applied) = if let Some(p) = patch {
+        if !p.trim().is_empty() {
+            (p.to_string(), false)
+        } else {
+            (available_versions.first().cloned().unwrap_or_default(), false)
+        }
+    } else {
+        (available_versions.first().cloned().unwrap_or_default(), false)
+    };
+
+    let target_position = if is_aram {
+        "mid".to_string()
+    } else if let Some(p) = position
+        && !p.trim().is_empty()
+        && p != "auto"
+    {
+        p.to_lowercase()
+    } else {
+        match resolve_champion_most_played_lane(
+            client,
+            champion_id,
+            target_region,
+            target_tier,
+            Some(&effective_patch),
+        )
+        .await
+        {
+            Ok(lane) => lane,
+            Err(_) => champion_default_lane(champ_name).to_string(),
+        }
+    };
+
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    // If user did not manually specify a patch, inspect the latest patch's created_at
+    if (patch.is_none() || patch.unwrap_or("").is_empty())
+        && let Ok(probe_json) = fetch_opgg_rest_champion_analysis(
+            client,
+            target_region,
+            mode,
+            champion_id,
+            &target_position,
+            target_tier,
+            Some(&effective_patch),
+        )
+        .await
+    {
+            let created_at_iso = probe_json
+                .pointer("/data/trends/win/0/created_at")
+                .and_then(|v| v.as_str());
+
+            let (chosen_patch, fallback) = select_effective_patch(
+                &available_versions,
+                created_at_iso,
+                now_unix,
+                None,
+            );
+            effective_patch = chosen_patch;
+            patch_fallback_applied = fallback;
+    }
+
+    // 3. Fetch build with effective patch
+    let mut build = match fetch_opgg_rest_champion_analysis(
+        client,
+        target_region,
+        mode,
+        champion_id,
+        &target_position,
+        target_tier,
+        Some(&effective_patch),
+    )
+    .await
+    {
+        Ok(json_res) => {
+            match parse_opgg_analysis_payload_with_priority(
+                &json_res,
+                champion_id,
+                champ_name,
+                priority,
+            ) {
+                Ok(b) => b,
+                Err(_) => {
+                    get_recommended_build_with_endpoint(
+                        client,
+                        OPGG_MCP_ENDPOINT,
+                        champion_id,
+                        queue_id,
+                        ddragon_cache,
+                    )
+                    .await
+                }
+            }
+        }
+        Err(_) => {
+            get_recommended_build_with_endpoint(
+                client,
+                OPGG_MCP_ENDPOINT,
+                champion_id,
+                queue_id,
+                ddragon_cache,
+            )
+            .await
+        }
+    };
+
+    build.active_position = target_position;
+    build.active_tier = target_tier.to_string();
+    build.active_region = target_region.to_string();
+    build.active_patch = effective_patch;
+    build.available_patches = available_versions;
+    build.patch_fallback_applied = patch_fallback_applied;
+
+    enrich_build_with_ddragon(&mut build, ddragon_cache);
+    Ok(build)
+}
+
 /// Production entry point to obtain recommended build for champion.
 pub async fn get_recommended_build(
     client: &reqwest::Client,
     champion_id: i32,
     queue_id: i32,
 ) -> Result<ChampionBuild, String> {
-    let cache = get_or_init_ddragon_cache(client).await?;
-    Ok(
-        get_recommended_build_with_endpoint(
-            client,
-            OPGG_MCP_ENDPOINT,
-            champion_id,
-            queue_id,
-            cache,
-        )
-        .await,
-    )
+    get_recommended_build_with_filters(client, champion_id, queue_id, None, None, None, None).await
 }
 
 #[cfg(test)]
@@ -2245,5 +2691,124 @@ mod tests {
         assert_eq!(build.item_blocks[1].item_ids, vec![3118, 4645, 3157]);
         // Build final first 3 items must be identical to clean_core in exact sequential order
         assert_eq!(&build.item_blocks[3].item_ids[..3], &[3118, 4645, 3157]);
+    }
+    #[test]
+    fn test_parse_iso8601_to_unix() {
+        let ts = parse_iso8601_to_unix("2026-11-07T22:59:29+09:00");
+        assert!(ts.is_some());
+        let unix_secs = ts.unwrap();
+        assert!(unix_secs > 1_700_000_000);
+    }
+
+    #[test]
+    fn test_select_effective_patch_under_48h_falls_back() {
+        let versions = vec!["16.22".to_string(), "16.21".to_string()];
+        let created_at = "2026-11-07T22:59:29+09:00";
+        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
+        let now_unix = created_unix + 36000; // 10h later
+
+        let (patch, fallback) =
+            select_effective_patch(&versions, Some(created_at), now_unix, None);
+        assert_eq!(patch, "16.21");
+        assert!(fallback);
+    }
+
+    #[test]
+    fn test_select_effective_patch_over_48h_keeps_latest() {
+        let versions = vec!["16.22".to_string(), "16.21".to_string()];
+        let created_at = "2026-11-05T12:00:00Z";
+        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
+        let now_unix = created_unix + (3 * 86400); // 3 days later
+
+        let (patch, fallback) =
+            select_effective_patch(&versions, Some(created_at), now_unix, None);
+        assert_eq!(patch, "16.22");
+        assert!(!fallback);
+    }
+
+    #[test]
+    fn test_select_effective_patch_respects_user_override() {
+        let versions = vec!["16.22".to_string(), "16.21".to_string()];
+        let created_at = "2026-11-07T22:59:29+09:00";
+        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
+        let now_unix = created_unix + 1000;
+
+        let (patch, fallback) =
+            select_effective_patch(&versions, Some(created_at), now_unix, Some("16.22"));
+        assert_eq!(patch, "16.22");
+        assert!(!fallback);
+    }
+
+    #[test]
+    fn test_parse_opgg_champion_positions_ranking_and_select_most_played_lane() {
+        let json = serde_json::json!({
+            "data": [
+                {
+                    "id": 157, // Yasuo
+                    "positions": [
+                        { "name": "MID", "stats": { "play": 57307, "role_rate": 0.60 } },
+                        { "name": "TOP", "stats": { "play": 22898, "role_rate": 0.24 } },
+                        { "name": "ADC", "stats": { "play": 14609, "role_rate": 0.15 } }
+                    ]
+                },
+                {
+                    "id": 79, // Gragas
+                    "positions": [
+                        { "name": "MID", "stats": { "play": 3491, "role_rate": 0.12 } },
+                        { "name": "TOP", "stats": { "play": 16785, "role_rate": 0.60 } },
+                        { "name": "JUNGLE", "stats": { "play": 5731, "role_rate": 0.20 } }
+                    ]
+                },
+                {
+                    "id": 147, // Seraphine
+                    "positions": [
+                        { "name": "SUPPORT", "stats": { "play": 44180, "role_rate": 0.91 } }
+                    ]
+                }
+            ]
+        });
+
+        let map = parse_opgg_champion_positions_ranking(&json);
+        assert_eq!(map.len(), 3);
+
+        // Yasuo should pick Mid (57k > 22k > 14k)
+        let yasuo_pos = map.get(&157).unwrap();
+        assert_eq!(select_most_played_lane(yasuo_pos), Some("mid"));
+
+        // Gragas should pick Top (16k > 5k > 3k)
+        let gragas_pos = map.get(&79).unwrap();
+        assert_eq!(select_most_played_lane(gragas_pos), Some("top"));
+
+        // Seraphine should pick Support
+        let sera_pos = map.get(&147).unwrap();
+        assert_eq!(select_most_played_lane(sera_pos), Some("support"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_champion_most_played_lane_cached() {
+        let champ_id = 99999;
+        let positions = vec![
+            OpggPositionInfo { name: "TOP".to_string(), play: 100, role_rate: 0.1 },
+            OpggPositionInfo { name: "ADC".to_string(), play: 9500, role_rate: 0.9 },
+        ];
+
+        let mut inner_map = HashMap::new();
+        inner_map.insert(champ_id, positions);
+
+        let cache_key = "global:emerald_plus:test_v1".to_string();
+        if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
+            guard.insert(cache_key, inner_map);
+        }
+
+        let dummy_client = reqwest::Client::new();
+        let resolved = resolve_champion_most_played_lane(
+            &dummy_client,
+            champ_id,
+            "global",
+            "emerald_plus",
+            Some("test_v1"),
+        ).await;
+
+        assert_eq!(resolved, Ok("adc".to_string()));
     }
 }

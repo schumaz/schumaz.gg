@@ -3,6 +3,8 @@ pub mod lcu_connector;
 pub mod lcu_injector;
 pub mod ws_listener;
 
+use tauri::Emitter;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -18,6 +20,44 @@ async fn get_recommended_build_for_champion(
     let http_client = reqwest::Client::new();
     let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
     build_provider::get_recommended_build(&http_client, champion_id, q_id).await
+}
+
+/// Tauri command to update build filters (position, tier, region, patch) and re-inject if connected.
+#[tauri::command]
+async fn update_build_filters(
+    champion_id: i32,
+    queue_id: Option<i32>,
+    position: Option<String>,
+    tier: Option<String>,
+    region: Option<String>,
+    patch: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<build_provider::ChampionBuild, String> {
+    let http_client = reqwest::Client::new();
+    let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
+
+    let build = build_provider::get_recommended_build_with_filters(
+        &http_client,
+        champion_id,
+        q_id,
+        position.as_deref(),
+        tier.as_deref(),
+        region.as_deref(),
+        patch.as_deref(),
+    )
+    .await?;
+
+    let _ = app_handle.emit("recommended-build", &build);
+
+    // If client is connected and summoner is present, inject the updated build
+    if let Ok(conn) = lcu_connector::LcuConnection::connect()
+        && let Ok(summoner) = conn.get_current_summoner().await
+    {
+        let report = lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
+        let _ = app_handle.emit("build-injected", &report);
+    }
+
+    Ok(build)
 }
 
 /// Tauri command to fetch the current summoner status if the client is connected.
@@ -45,6 +85,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             get_recommended_build_for_champion,
+            update_build_filters,
             get_summoner_status,
             sync_user_preferences
         ])

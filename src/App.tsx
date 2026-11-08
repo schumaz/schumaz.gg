@@ -47,6 +47,7 @@ export interface ChampSelectedPayload {
   queue_id: number;
   queue_mode: string;
   locked_in: boolean;
+  assigned_position?: string;
 }
 
 export interface RuneMetadata {
@@ -86,6 +87,12 @@ export interface ChampionBuild {
   sub_style_icon_url?: string;
   perks?: RuneMetadata[];
   spells?: SpellMetadata[];
+  active_position?: string;
+  active_tier?: string;
+  active_region?: string;
+  active_patch?: string;
+  available_patches?: string[];
+  patch_fallback_applied?: boolean;
 }
 
 function loadInitialPreferences(): UserPreferences {
@@ -130,17 +137,53 @@ function App() {
       return next;
     });
 
-    if (key === "buildPriority" && champSelect?.champion_id) {
+    if (key === "buildPriority" && (champSelect?.champion_id || build?.champion_id)) {
       setLoading(true);
+      const championId = champSelect?.champion_id || build?.champion_id || 0;
+      const queueId = champSelect?.queue_id || 420;
       invoke<ChampionBuild>("get_recommended_build_for_champion", {
-        championId: champSelect.champion_id,
-        queueId: champSelect.queue_id,
+        championId,
+        queueId,
       })
         .then((newBuild) => {
           if (newBuild) setBuild(newBuild);
         })
         .catch(() => {})
         .finally(() => setLoading(false));
+    }
+  };
+
+  const handleFilterChange = async (
+    filterType: "position" | "tier" | "region" | "patch",
+    value: string
+  ) => {
+    if (!build) return;
+    const champId = champSelect?.champion_id || build.champion_id;
+    const qId = champSelect?.queue_id || 420;
+
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const updatedBuild = await invoke<ChampionBuild>("update_build_filters", {
+        championId: champId,
+        queueId: qId,
+        position: filterType === "position" ? value : (build.active_position || null),
+        tier: filterType === "tier" ? value : (build.active_tier || null),
+        region: filterType === "region" ? value : (build.active_region || null),
+        patch: filterType === "patch" ? value : (build.active_patch || null),
+      });
+      if (updatedBuild) {
+        setBuild(updatedBuild);
+      }
+    } catch (err: unknown) {
+      console.error("Falha ao atualizar filtros da build:", err);
+      setErrorMsg(
+        typeof err === "string"
+          ? err
+          : "Erro ao carregar build com os filtros selecionados."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -181,12 +224,26 @@ function App() {
 
           // Fetch recommended build for selected champion if not already received
           try {
-            const recommended = await invoke<ChampionBuild>("get_recommended_build_for_champion", {
-              championId: event.payload.champion_id,
-              queueId: event.payload.queue_id || 420,
-            });
-            if (recommended) {
-              setBuild(recommended);
+            if (event.payload.assigned_position) {
+              const recommended = await invoke<ChampionBuild>("update_build_filters", {
+                championId: event.payload.champion_id,
+                queueId: event.payload.queue_id || 420,
+                position: event.payload.assigned_position,
+                tier: null,
+                region: null,
+                patch: null,
+              });
+              if (recommended) {
+                setBuild(recommended);
+              }
+            } else {
+              const recommended = await invoke<ChampionBuild>("get_recommended_build_for_champion", {
+                championId: event.payload.champion_id,
+                queueId: event.payload.queue_id || 420,
+              });
+              if (recommended) {
+                setBuild(recommended);
+              }
             }
           } catch {
             // Ignore background fetch error, ws_listener will emit recommended-build
@@ -222,8 +279,6 @@ function App() {
     };
   }, []);
 
-
-
   // Helper to reorder spells according to the user's preferred Flash key (D vs F)
   const getOrderedSpells = () => {
     if (!build?.spells || build.spells.length < 2) return build?.spells || [];
@@ -240,6 +295,13 @@ function App() {
   };
 
   const orderedSpells = getOrderedSpells();
+
+  const patchOptions =
+    build?.available_patches && build.available_patches.length > 0
+      ? build.available_patches
+      : build?.active_patch
+      ? [build.active_patch]
+      : ["16.22", "16.21"];
 
   return (
     <main className="container">
@@ -272,53 +334,162 @@ function App() {
             <>
               {/* Champion Hero Overview Card */}
               <section className="card champ-hero-card" data-testid="champ-hero">
-                <div className="champ-hero-left">
-                  {build.champion_icon_url ? (
-                    <img
-                      src={build.champion_icon_url}
-                      alt={build.champion_name}
-                      className="champ-avatar"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="champ-avatar-placeholder">
-                      {build.champion_name.slice(0, 2).toUpperCase()}
-                    </div>
-                  )}
+                <div className="champ-hero-top">
+                  <div className="champ-hero-left">
+                    {build.champion_icon_url ? (
+                      <img
+                        src={build.champion_icon_url}
+                        alt={build.champion_name}
+                        className="champ-avatar"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div className="champ-avatar-placeholder">
+                        {build.champion_name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
 
-                  <div className="champ-hero-details">
-                    <div className="champ-hero-title-row">
-                      <h2 className="champ-name">{build.champion_name}</h2>
-                      <span className={`tag ${champSelect?.locked_in ? "locked" : "hovering"}`}>
-                        {champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
-                      </span>
-                    </div>
+                    <div className="champ-hero-details">
+                      <div className="champ-hero-title-row">
+                        <h2 className="champ-name">{build.champion_name}</h2>
+                        <span className={`tag ${champSelect?.locked_in ? "locked" : "hovering"}`}>
+                          {champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
+                        </span>
+                      </div>
 
-                    <div className="champ-meta-row">
-                      <span className="badge-meta">
-                        {champSelect?.queue_mode === "Aram"
-                          ? "ARAM (Howling Abyss)"
-                          : champSelect?.queue_mode === "PracticeTool"
-                          ? "Modo Treino (Build Ranqueada)"
-                          : "Summoner's Rift (Ranqueada / Normal)"}
-                      </span>
-                      {build.win_rate > 0 && (
-                        <span className="badge badge-success badge-stat">
-                          {build.win_rate.toFixed(1)}% Win Rate
+                      <div className="champ-meta-row">
+                        <span className="badge-meta">
+                          {champSelect?.queue_mode === "Aram"
+                            ? "ARAM (Howling Abyss)"
+                            : champSelect?.queue_mode === "PracticeTool"
+                            ? "Modo Treino (Build Ranqueada)"
+                            : "Summoner's Rift (Ranqueada / Normal)"}
                         </span>
-                      )}
-                      {build.pick_rate > 0 && (
-                        <span className="badge badge-neutral badge-stat">
-                          {build.pick_rate.toFixed(1)}% Pick Rate
-                        </span>
-                      )}
+                        {build.win_rate > 0 && (
+                          <span className="badge badge-success badge-stat">
+                            {build.win_rate.toFixed(1)}% Win Rate
+                          </span>
+                        )}
+                        {build.pick_rate > 0 && (
+                          <span className="badge badge-neutral badge-stat">
+                            {build.pick_rate.toFixed(1)}% Pick Rate
+                          </span>
+                        )}
+                        {build.patch_fallback_applied && (
+                          <span
+                            className="badge badge-warning badge-stat patch-fallback-badge"
+                            title="Patch recente (<48h). Usando dados consolidados do patch anterior."
+                            data-testid="patch-fallback-badge"
+                          >
+                            🛡️ Volume Protegido ({build.active_patch})
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
 
+                {/* 4 Filters: Elo Base, Rota, Servidor, Patch */}
+                <div className="champ-filters-bar" data-testid="champ-filters-bar">
+                  <div className="filter-group">
+                    <label htmlFor="filter-tier" className="filter-label">
+                      Elo:
+                    </label>
+                    <select
+                      id="filter-tier"
+                      data-testid="filter-tier"
+                      className="filter-select"
+                      value={build.active_tier || "emerald_plus"}
+                      disabled={loading}
+                      onChange={(e) => handleFilterChange("tier", e.target.value)}
+                    >
+                      <option value="emerald_plus">Esmeralda +</option>
+                      <option value="all">Todos os Elos</option>
+                      <option value="diamond_plus">Diamante +</option>
+                      <option value="master_plus">Mestre +</option>
+                      <option value="grandmaster">Grão-Mestre</option>
+                      <option value="challenger">Desafiante</option>
+                      <option value="platinum_plus">Platina +</option>
+                      <option value="gold_plus">Ouro +</option>
+                      <option value="silver">Prata</option>
+                      <option value="bronze">Bronze</option>
+                      <option value="iron">Ferro</option>
+                    </select>
+                  </div>
 
+                  <div className="filter-group">
+                    <label htmlFor="filter-position" className="filter-label">
+                      Rota:
+                    </label>
+                    <select
+                      id="filter-position"
+                      data-testid="filter-position"
+                      className="filter-select"
+                      value={build.active_position || "mid"}
+                      disabled={loading}
+                      onChange={(e) => handleFilterChange("position", e.target.value)}
+                    >
+                      <option value="top">Topo</option>
+                      <option value="jungle">Selva</option>
+                      <option value="mid">Meio</option>
+                      <option value="adc">Atirador (Bot)</option>
+                      <option value="support">Suporte</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-group">
+                    <label htmlFor="filter-region" className="filter-label">
+                      Servidor:
+                    </label>
+                    <select
+                      id="filter-region"
+                      data-testid="filter-region"
+                      className="filter-select"
+                      value={build.active_region || "global"}
+                      disabled={loading}
+                      onChange={(e) => handleFilterChange("region", e.target.value)}
+                    >
+                      <option value="global">Mundial (Global)</option>
+                      <option value="br">Brasil (BR)</option>
+                      <option value="kr">Coreia (KR)</option>
+                      <option value="na">América do Norte (NA)</option>
+                      <option value="euw">Europa Ocidental (EUW)</option>
+                      <option value="eune">Europa Nórdica e Oriental (EUNE)</option>
+                      <option value="lan">América Latina Norte (LAN)</option>
+                      <option value="las">América Latina Sul (LAS)</option>
+                      <option value="oce">Oceania (OCE)</option>
+                      <option value="tr">Turquia (TR)</option>
+                      <option value="ru">Rússia (RU)</option>
+                      <option value="jp">Japão (JP)</option>
+                      <option value="me">Oriente Médio (ME)</option>
+                      <option value="sg">Singapura (SG)</option>
+                      <option value="tw">Taiwan (TW)</option>
+                      <option value="vn">Vietnã (VN)</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-group">
+                    <label htmlFor="filter-patch" className="filter-label">
+                      Patch:
+                    </label>
+                    <select
+                      id="filter-patch"
+                      data-testid="filter-patch"
+                      className="filter-select"
+                      value={build.active_patch || ""}
+                      disabled={loading}
+                      onChange={(e) => handleFilterChange("patch", e.target.value)}
+                    >
+                      {patchOptions.map((p) => (
+                        <option key={p} value={p}>
+                          Patch {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </section>
 
               {/* Runes Tree & Spells Layout */}
@@ -448,13 +619,13 @@ function App() {
                       <h3>Relatório de Injeção: {injectionReport.champion_name} | schumaz.gg</h3>
                       <div className="report-items">
                         <span className={`badge ${injectionReport.runes_injected ? "badge-success" : "badge-fail"}`}>
-                          Runas: {injectionReport.runes_injected ? "Injetadas com Sucesso" : "Falha"}
+                          Runas: {injectionReport.runes_injected ? "Aplicadas" : "Ignoradas"}
+                        </span>
+                        <span className={`badge ${injectionReport.spells_injected ? "badge-success" : "badge-fail"}`}>
+                          Feitiços: {injectionReport.spells_injected ? "Aplicados" : "Ignorados"}
                         </span>
                         <span className={`badge ${injectionReport.items_injected ? "badge-success" : "badge-fail"}`}>
-                          Itens na Loja: {injectionReport.items_injected ? "Injetados (5 Blocos)" : "Falha"}
-                        </span>
-                        <span className={`badge ${injectionReport.spells_injected ? "badge-success" : "badge-neutral"}`}>
-                          Feitiços: {injectionReport.spells_injected ? "Injetados" : "Indisponíveis fora do Champ Select"}
+                          Itens: {injectionReport.items_injected ? "Aplicados" : "Ignorados"}
                         </span>
                       </div>
                       <p className="report-msg">
@@ -517,8 +688,6 @@ function App() {
                   campeão, as runas recomendadas, feitiços e os 5 blocos de itens serão carregados e aplicados
                   automaticamente com maior taxa de vitória do OP.GG.
                 </p>
-
-
 
                 {!summoner && (
                   <p className="hint-text">
@@ -640,7 +809,7 @@ function App() {
                 <div className="segmented-control" role="group" aria-label="Preferência de Tecla do Flash">
                   <button
                     type="button"
-                    className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
+                    className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}` }
                     onClick={() => updatePreference("flashKey", "D")}
                     aria-pressed={preferences.flashKey === "D"}
                   >
