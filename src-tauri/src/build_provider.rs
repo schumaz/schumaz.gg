@@ -306,12 +306,13 @@ pub fn parse_iso8601_to_unix(iso_str: &str) -> Option<u64> {
 }
 
 /// Selects the effective patch respecting the 2-day maturity rule:
-/// If the latest patch was released in the last 2 days (< 48h) and user has not set an override,
+/// If the latest patch was released in the last 2 days (< 48h) with low sample volume,
 /// automatically select previous patch to guarantee high sample volume.
-/// Returns (effective_patch, patch_fallback_applied).
-pub fn select_effective_patch(
+pub fn select_effective_patch_with_volume(
     versions: &[String],
     latest_created_at_iso: Option<&str>,
+    prev_patch_last_created_at_iso: Option<&str>,
+    play_count: Option<u64>,
     now_unix: u64,
     user_override: Option<&str>,
 ) -> (String, bool) {
@@ -330,6 +331,25 @@ pub fn select_effective_patch(
         return (latest.clone(), false);
     }
 
+    // High sample volume: if latest patch already has >= 1000 recorded games, it is mature
+    if let Some(play) = play_count
+        && play >= 1000
+    {
+        return (latest.clone(), false);
+    }
+
+    // If previous patch ended more than 48 hours ago, current patch has been active > 48h
+    if let Some(prev_iso) = prev_patch_last_created_at_iso
+        && let Some(prev_unix) = parse_iso8601_to_unix(prev_iso)
+    {
+        let age_secs = now_unix.saturating_sub(prev_unix);
+        let two_days_secs = 2 * 86_400;
+        if age_secs >= two_days_secs {
+            return (latest.clone(), false);
+        }
+    }
+
+    // If latest_created_at_iso indicates < 48h age and sample volume is low, fall back
     if let Some(created_at) = latest_created_at_iso
         && let Some(created_unix) = parse_iso8601_to_unix(created_at)
     {
@@ -343,7 +363,79 @@ pub fn select_effective_patch(
     (latest.clone(), false)
 }
 
+pub fn select_effective_patch(
+    versions: &[String],
+    latest_created_at_iso: Option<&str>,
+    now_unix: u64,
+    user_override: Option<&str>,
+) -> (String, bool) {
+    select_effective_patch_with_volume(
+        versions,
+        latest_created_at_iso,
+        None,
+        None,
+        now_unix,
+        user_override,
+    )
+}
+
 /// Known League of Legends boot item IDs (basic, upgraded, and tier-3 boots).
+pub fn is_component_item(id: i32) -> bool {
+    matches!(
+        id,
+        1001 // Boots of Speed
+        | 1018 // Cloak of Agility
+        | 1026 // Blasting Wand
+        | 1027 // Sapphire Crystal
+        | 1028 // Ruby Crystal
+        | 1029 // Cloth Armor
+        | 1031 // Chain Vest
+        | 1033 // Null-Magic Mantle
+        | 1036 // Long Sword
+        | 1037 // Pickaxe
+        | 1038 // B. F. Sword
+        | 1042 // Dagger
+        | 1043 // Recurve Bow
+        | 1052 // Amplifying Tome
+        | 1057 // Negatron Cloak
+        | 1058 // Needlessly Large Rod
+        | 2015 // Kircheis Shard
+        | 2420 // Seeker's Armguard
+        | 3024 // Glacial Buckler
+        | 3035 // Last Whisper
+        | 3044 // Phage
+        | 3051 // Hearthbound Axe
+        | 3057 // Sheen
+        | 3067 // Kindlegem
+        | 3076 // Bramble Vest
+        | 3077 // Tiamat
+        | 3082 // Warden's Mail
+        | 3086 // Zeal
+        | 3105 // Aegis of the Legion
+        | 3108 // Fiendish Codex
+        | 3113 // Aether Wisp
+        | 3114 // Forbidden Idol
+        | 3123 // Executioner's Calling
+        | 3133 // Caulfield's Warhammer
+        | 3134 // Serrated Dirk
+        | 3140 // Quicksilver Sash
+        | 3145 // Hextech Alternator
+        | 3155 // Hexdrinker
+        | 3211 // Spectre's Cowl
+        | 3801 // Crystalline Bracer
+        | 3802 // Lost Chapter
+        | 3803 // Catalyst of Aeons
+        | 3916 // Oblivion Orb
+    )
+}
+
+pub fn is_starter_item(id: i32) -> bool {
+    matches!(
+        id,
+        1054 | 1055 | 1056 | 1082 | 1083 | 2003 | 2031 | 2033 | 2055 | 2138 | 2139 | 2140 | 3865 | 3866 | 3867 | 3869 | 3870 | 3871 | 3876 | 3877
+    )
+}
+
 pub fn is_boot_item(item_id: i32) -> bool {
     matches!(
         item_id,
@@ -638,7 +730,33 @@ pub fn parse_all_ddragon_champions(
     Ok(map)
 }
 
-/// Parses rune styles and individual perks from `runesReforged.json` into an O(1) lookup map.
+/// Parses DataDragon `item.json` to identify completed legendary/mythic items (gold >= 1600, no 'into' recipes).
+pub fn parse_ddragon_completed_items(
+    items_json: &serde_json::Value,
+) -> std::collections::HashSet<i32> {
+    let mut completed = std::collections::HashSet::new();
+    if let Some(data) = items_json.get("data").and_then(|d| d.as_object()) {
+        for (id_str, item_val) in data {
+            if let Ok(id) = id_str.parse::<i32>() {
+                let has_into = item_val
+                    .get("into")
+                    .and_then(|into_arr| into_arr.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false);
+                let gold = item_val
+                    .pointer("/gold/total")
+                    .and_then(|g| g.as_i64())
+                    .unwrap_or(0);
+                // Completed non-boot items cost >= 1600 gold and do not build into other items
+                if !has_into && gold >= 1600 && !is_boot_item(id) {
+                    completed.insert(id);
+                }
+            }
+        }
+    }
+    completed
+}
+
 pub fn parse_ddragon_runes(
     runes_json: &serde_json::Value,
 ) -> Result<HashMap<i32, RuneMetadata>, String> {
@@ -1147,7 +1265,12 @@ pub fn build_5_item_blocks(
     // followed by the top 2 late-game items.
     let mut final_build: Vec<i32> = clean_core.clone();
     for cand in &all_candidates {
-        if final_build.len() < 5 && !final_build.contains(&cand.id) {
+        if final_build.len() < 5
+            && !final_build.contains(&cand.id)
+            && !is_component_item(cand.id)
+            && !is_starter_item(cand.id)
+            && !is_boot_item(cand.id)
+        {
             final_build.push(cand.id);
         }
     }
@@ -1167,7 +1290,13 @@ pub fn build_5_item_blocks(
     // sorted strictly in descending order of absolute games played (play count)!
     let mut situational_candidates: Vec<&ItemAggregate> = all_candidates
         .iter()
-        .filter(|cand| !clean_core.contains(&cand.id) && !final_build.contains(&cand.id))
+        .filter(|cand| {
+            !clean_core.contains(&cand.id)
+                && !final_build.contains(&cand.id)
+                && !is_component_item(cand.id)
+                && !is_starter_item(cand.id)
+                && !is_boot_item(cand.id)
+        })
         .collect();
     situational_candidates.sort_by(|a, b| {
         b.play
@@ -1176,7 +1305,7 @@ pub fn build_5_item_blocks(
     });
 
     let mut situational_items: Vec<i32> =
-        situational_candidates.into_iter().map(|c| c.id).collect();
+        situational_candidates.into_iter().map(|c| c.id).take(6).collect();
 
     // If candidate pool had few items, supplement with safe high-utility situational items (without duplicates)
     let archetype_situational = if damage_type == "AP" {
@@ -1193,6 +1322,7 @@ pub fn build_5_item_blocks(
             situational_items.push(item);
         }
     }
+    situational_items.truncate(6);
 
     vec![
         ItemBlock {
@@ -2810,5 +2940,78 @@ mod tests {
         ).await;
 
         assert_eq!(resolved, Ok("adc".to_string()));
+    }
+
+    #[test]
+    fn test_select_effective_patch_with_volume_keeps_latest_when_play_count_is_high() {
+        let versions = vec!["16.22".to_string(), "16.21".to_string()];
+        // Even if snapshot created_at was today (under 48h):
+        let created_at = "2026-11-07T22:59:29+09:00";
+        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
+        let now_unix = created_unix + 10000;
+
+        // When play count is >= 1000, 16.22 is kept with fallback = false
+        let (patch, fallback) = select_effective_patch_with_volume(
+            &versions,
+            Some(created_at),
+            None,
+            Some(84510),
+            now_unix,
+            None,
+        );
+        assert_eq!(patch, "16.22");
+        assert!(!fallback);
+    }
+
+    #[test]
+    fn test_build_final_and_situational_exclude_components_and_cap_at_6() {
+        let starter = Some(ItemStatEntry {
+            ids: vec![1055, 2003],
+            play: 10000,
+            win: 5000,
+            pick_rate: 0.9,
+        });
+        let boots = vec![ItemStatEntry {
+            ids: vec![3006],
+            play: 10000,
+            win: 5000,
+            pick_rate: 0.8,
+        }];
+        let candidates = vec![
+            ItemStatEntry { ids: vec![6672, 3085, 3031], play: 16000, win: 8000, pick_rate: 0.5 }, // Core
+            ItemStatEntry { ids: vec![3032], play: 12000, win: 6000, pick_rate: 0.4 }, // Yun Tal (4th)
+            ItemStatEntry { ids: vec![1038], play: 11000, win: 5500, pick_rate: 0.35 }, // B.F. Sword (component - MUST BE SKIPPED!)
+            ItemStatEntry { ids: vec![3036], play: 10000, win: 5000, pick_rate: 0.3 }, // LDR (5th)
+            ItemStatEntry { ids: vec![2523], play: 8000, win: 4000, pick_rate: 0.25 }, // Situational 1
+            ItemStatEntry { ids: vec![2512], play: 7000, win: 3500, pick_rate: 0.2 }, // Situational 2
+            ItemStatEntry { ids: vec![3033], play: 6000, win: 3000, pick_rate: 0.18 }, // Situational 3
+            ItemStatEntry { ids: vec![3026], play: 5000, win: 2500, pick_rate: 0.15 }, // Situational 4
+            ItemStatEntry { ids: vec![6673], play: 4000, win: 2000, pick_rate: 0.12 }, // Situational 5
+            ItemStatEntry { ids: vec![3072], play: 3000, win: 1500, pick_rate: 0.1 }, // Situational 6
+            ItemStatEntry { ids: vec![3139], play: 2000, win: 1000, pick_rate: 0.08 }, // Situational 7 (should be dropped by cap)
+        ];
+
+        let blocks = build_5_item_blocks(
+            starter,
+            boots,
+            candidates,
+            "AD",
+            BuildPriorityPreference::MostPopular,
+        );
+
+        // Core items
+        assert_eq!(blocks[1].item_ids, vec![6672, 3085, 3031]);
+
+        // Build Final: must NEVER contain component 1038 (B.F. Sword)!
+        // Should contain core (6672, 3085, 3031) followed by 3032 and 3036
+        assert_eq!(blocks[3].item_ids, vec![6672, 3085, 3031, 3032, 3036]);
+
+        // Situational items: max 6 items, must not contain 1038 or any core/final items
+        assert_eq!(blocks[4].item_ids.len(), 6);
+        assert!(!blocks[4].item_ids.contains(&1038));
+        for &id in &blocks[4].item_ids {
+            assert!(!blocks[1].item_ids.contains(&id));
+            assert!(!blocks[3].item_ids.contains(&id));
+        }
     }
 }

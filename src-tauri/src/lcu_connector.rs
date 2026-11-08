@@ -211,29 +211,38 @@ impl LcuConnection {
     }
 
     /// Updates summoner spells via PATCH /lol-champ-select/v1/session/my-selection.
+    /// Retries up to 3 times if champ select session is transitioning (e.g. Practice Tool initialization).
     pub async fn patch_summoner_spells(&self, payload: &serde_json::Value) -> Result<(), String> {
-        match self
-            .client
-            .patch::<&serde_json::Value, Option<serde_json::Value>>(
-                crate::lcu_injector::CHAMP_SELECT_MY_SELECTION_ENDPOINT,
-                payload,
-            )
-            .await
-        {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                let err_str = format!("{:?}", err);
-                if err_str.contains("unexpected end of file")
-                    || err_str.contains("Unexpected end of file")
-                    || err_str.contains("Eof")
-                    || err_str.contains("EOF")
-                {
-                    Ok(())
-                } else {
-                    Err(format!("Error patching summoner spells: {}", err_str))
+        let mut last_err = String::new();
+        for attempt in 1..=5 {
+            match self
+                .client
+                .patch::<&serde_json::Value, Option<serde_json::Value>>(
+                    crate::lcu_injector::CHAMP_SELECT_MY_SELECTION_ENDPOINT,
+                    payload,
+                )
+                .await
+            {
+                Ok(_) => return Ok(()),
+                Err(err) => {
+                    let err_str = format!("{:?}", err);
+                    if err_str.contains("unexpected end of file")
+                        || err_str.contains("Unexpected end of file")
+                        || err_str.contains("Eof")
+                        || err_str.contains("EOF")
+                    {
+                        return Ok(());
+                    }
+                    last_err = format!("Error patching summoner spells: {}", err_str);
+                    if attempt < 5 && (err_str.contains("404") || err_str.contains("NotFound")) {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                    break;
                 }
             }
         }
+        Err(last_err)
     }
 
     /// Updates custom item sets via PUT /lol-item-sets/v1/item-sets/{summoner_id}/sets.
