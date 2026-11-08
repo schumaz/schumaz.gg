@@ -431,7 +431,7 @@ pub fn is_component_item(id: i32) -> bool {
 pub fn is_starter_item(id: i32) -> bool {
     matches!(
         id,
-        1054 | 1055 | 1056 | 1082 | 1083 | 2003 | 2031 | 2033 | 2055 | 2138 | 2139 | 2140 | 3865 | 3866 | 3867 | 3869 | 3870 | 3871 | 3876 | 3877
+        1054 | 1055 | 1056 | 1082 | 1083 | 1101..=1103 | 2003 | 2031 | 2033 | 2051 | 2055 | 2138 | 2139 | 2140 | 3112 | 3184 | 3865..=3877
     )
 }
 
@@ -1167,46 +1167,106 @@ pub fn build_5_item_blocks(
     damage_type: &str,
 ) -> Vec<ItemBlock> {
     build_5_item_blocks_with_depth_lists(
-        starter_entry,
+        starter_entry.into_iter().collect(),
         boot_entries,
         candidate_entries,
         Vec::new(),
         Vec::new(),
         Vec::new(),
         damage_type,
+        "",
     )
 }
 
 /// Builds the 5 item blocks using explicit OP.GG Core builds and separate Fourth, Fifth, and Sixth item lists.
+#[allow(clippy::too_many_arguments)]
 pub fn build_5_item_blocks_with_depth_lists(
-    starter_entry: Option<ItemStatEntry>,
+    starter_entries: Vec<ItemStatEntry>,
     boot_entries: Vec<ItemStatEntry>,
     candidate_entries: Vec<ItemStatEntry>,
     fourth_entries: Vec<ItemStatEntry>,
     fifth_entries: Vec<ItemStatEntry>,
     sixth_entries: Vec<ItemStatEntry>,
     damage_type: &str,
+    position: &str,
 ) -> Vec<ItemBlock> {
-    // 1. Itens Iniciais
-    let mut starter_ids: Vec<i32> = starter_entry.map(|e| e.ids).unwrap_or_else(|| {
-        if damage_type == "AP" {
-            vec![1056, 2003]
-        } else {
-            vec![1055, 2003]
+    // 1. Itens Iniciais:
+    // - Default (ADC, TOP, MID): #1 most played starter item from OP.GG list + Potion (2003 / 2031)
+    // - Jungle: #1 most played Jungle Pet (1101, 1102, 1103) + Potion (2003)
+    // - Support: Only Potion (2003 / 2031) since support quest item is pre-granted/bought
+    let norm_pos = position.to_lowercase();
+    let is_support = norm_pos == "support" || norm_pos == "supp" || norm_pos == "utility";
+    let is_jungle = norm_pos == "jungle" || norm_pos == "jng";
+
+    let starter_ids: Vec<i32> = if is_support {
+        let mut potion_id = 2003;
+        for entry in &starter_entries {
+            for &id in &entry.ids {
+                if id == 2003 || id == 2031 || id == 2033 {
+                    potion_id = id;
+                    break;
+                }
+            }
+            if potion_id != 2003 {
+                break;
+            }
         }
-    });
-    if starter_ids.is_empty() {
-        starter_ids = if damage_type == "AP" {
-            vec![1056, 2003]
+        vec![potion_id]
+    } else if is_jungle {
+        let mut pet_counts: HashMap<i32, i64> = HashMap::new();
+        let mut potion_id = 2003;
+        for entry in &starter_entries {
+            for &id in &entry.ids {
+                if matches!(id, 1101..=1103) {
+                    *pet_counts.entry(id).or_insert(0) += entry.play.max(1);
+                } else if id == 2003 || id == 2031 || id == 2033 {
+                    potion_id = id;
+                }
+            }
+        }
+        let best_pet = pet_counts
+            .into_iter()
+            .max_by_key(|&(_, play)| play)
+            .map(|(id, _)| id)
+            .unwrap_or(1103);
+        vec![best_pet, potion_id]
+    } else {
+        // Standard lanes (ADC, TOP, MID, or fallback):
+        let mut starter_counts: HashMap<i32, (i64, usize)> = HashMap::new();
+        let mut seen_idx = 0;
+        let mut potion_id = 2003;
+        for entry in &starter_entries {
+            for &id in &entry.ids {
+                if id == 2003 || id == 2031 || id == 2033 {
+                    potion_id = id;
+                } else if !matches!(id, 1101..=1103) && !matches!(id, 3865..=3877) {
+                    let slot = starter_counts.entry(id).or_insert_with(|| {
+                        let i = seen_idx;
+                        seen_idx += 1;
+                        (0, i)
+                    });
+                    slot.0 += entry.play.max(1);
+                }
+            }
+        }
+        let mut sorted_starters: Vec<(i32, i64, usize)> = starter_counts
+            .into_iter()
+            .map(|(id, (p, idx))| (id, p, idx))
+            .collect();
+        sorted_starters.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+        let best_starter = sorted_starters.first().map(|(id, _, _)| *id).unwrap_or_else(|| {
+            if damage_type == "AP" {
+                1056
+            } else {
+                1055
+            }
+        });
+        if best_starter == 2033 {
+            vec![2033]
         } else {
-            vec![1055, 2003]
-        };
-    } else if !starter_ids.contains(&2003)
-        && !starter_ids.contains(&2031)
-        && !starter_ids.contains(&2033)
-    {
-        starter_ids.push(2003);
-    }
+            vec![best_starter, potion_id]
+        }
+    };
 
     // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
     let mut boot_map: HashMap<i32, (i64, usize)> = HashMap::new();
@@ -1664,7 +1724,11 @@ pub fn parse_opgg_mcp_text(
                 || champion_name.to_lowercase().contains("veigar")));
     let damage_type = if is_ap { "AP" } else { "AD" };
 
-    let starter_entry = item_candidate_entries.get(2).cloned();
+    let starter_entries = if let Some(e) = item_candidate_entries.get(2) {
+        vec![e.clone()]
+    } else {
+        Vec::new()
+    };
 
     let grouped_lists = extract_mcp_grouped_item_lists(text);
     let mut fourth_entries = Vec::new();
@@ -1738,14 +1802,23 @@ pub fn parse_opgg_mcp_text(
         }
     }
 
+    let position = if text.contains("\"position\": \"jungle\"") || text.contains("\"jungle\"") {
+        "jungle"
+    } else if text.contains("\"position\": \"support\"") || text.contains("\"support\"") {
+        "support"
+    } else {
+        ""
+    };
+
     let item_blocks = build_5_item_blocks_with_depth_lists(
-        starter_entry,
+        starter_entries,
         boot_entries,
         candidate_entries,
         fourth_entries,
         fifth_entries,
         sixth_entries,
         damage_type,
+        position,
     );
 
     Ok(ChampionBuild {
@@ -1948,13 +2021,11 @@ pub fn parse_opgg_analysis_payload(
         .unwrap_or("AP");
 
     // Extract item entries from JSON
-    let starter_entry = parse_json_item_entries(
+    let starter_entries = parse_json_item_entries(
         analysis
             .pointer("/items/starters")
             .or_else(|| analysis.pointer("/starter_items")),
-    )
-    .into_iter()
-    .next();
+    );
 
     let boot_entries = parse_json_item_entries(
         analysis
@@ -2025,14 +2096,22 @@ pub fn parse_opgg_analysis_payload(
         }
     }
 
+    let position = analysis
+        .get("position")
+        .or_else(|| analysis.pointer("/meta/position"))
+        .or_else(|| analysis.pointer("/summary/position"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
     let item_blocks = build_5_item_blocks_with_depth_lists(
-        starter_entry,
+        starter_entries,
         boot_entries,
         candidate_entries,
         fourth_entries,
         fifth_entries,
         sixth_entries,
         damage_type,
+        position,
     );
 
     Ok(ChampionBuild {
@@ -2382,6 +2461,9 @@ pub async fn get_recommended_build_with_filters(
 
     let mut build = match rest_res {
         Ok(mut json_res) => {
+            if let Some(data_obj) = json_res.get_mut("data").and_then(|d| d.as_object_mut()) {
+                data_obj.insert("position".to_string(), serde_json::json!(target_position));
+            }
             if let Ok((fourth, fifth, sixth)) = mcp_depth_res
                 && let Some(data_obj) = json_res.get_mut("data").and_then(|d| d.as_object_mut())
             {
@@ -3515,5 +3597,93 @@ mod tests {
         assert!(is_boot_item(3008));
         assert!(is_boot_item(3010));
         assert!(is_boot_item(3013));
+    }
+    #[test]
+    fn test_starter_items_by_position_adc_top_mid_jungle_support() {
+        // Standard ADC (Yunara): Doran's Blade (1055, 76k) > Doran's Shield (1054, 12k) + Potion (2003)
+        let adc_starters = vec![
+            ItemStatEntry { ids: vec![1055, 2003], play: 76942, win: 38123, pick_rate: 0.8 },
+            ItemStatEntry { ids: vec![1054, 2003], play: 12000, win: 6000, pick_rate: 0.15 },
+        ];
+        let adc_blocks = build_5_item_blocks_with_depth_lists(
+            adc_starters,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            "AD",
+            "adc",
+        );
+        assert_eq!(adc_blocks[0].title, "Itens Iniciais");
+        assert_eq!(adc_blocks[0].item_ids, vec![1055, 2003]);
+
+        // Standard Top (Tank): Doran's Shield (1054, 40k) > Doran's Blade (1055, 5k) + Potion (2003)
+        let top_starters = vec![
+            ItemStatEntry { ids: vec![1054, 2003], play: 40000, win: 20000, pick_rate: 0.7 },
+            ItemStatEntry { ids: vec![1055, 2003], play: 5000, win: 2500, pick_rate: 0.1 },
+        ];
+        let top_blocks = build_5_item_blocks_with_depth_lists(
+            top_starters,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            "AD",
+            "top",
+        );
+        assert_eq!(top_blocks[0].item_ids, vec![1054, 2003]);
+
+        // Standard Mid (Mage): Doran's Ring (1056, 30k) > Dark Seal (1082, 5k) + Potion (2003)
+        let mid_starters = vec![
+            ItemStatEntry { ids: vec![1056, 2003], play: 30000, win: 15000, pick_rate: 0.8 },
+            ItemStatEntry { ids: vec![1082, 2003], play: 5000, win: 2500, pick_rate: 0.1 },
+        ];
+        let mid_blocks = build_5_item_blocks_with_depth_lists(
+            mid_starters,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            "AP",
+            "mid",
+        );
+        assert_eq!(mid_blocks[0].item_ids, vec![1056, 2003]);
+
+        // Jungle: Mosstomper (1102, 50k) > Gustwalker (1103, 20k) > Scorchclaw (1101, 10k) + Potion (2003)
+        let jng_starters = vec![
+            ItemStatEntry { ids: vec![1102, 2003], play: 50000, win: 25000, pick_rate: 0.6 },
+            ItemStatEntry { ids: vec![1103, 2003], play: 20000, win: 10000, pick_rate: 0.25 },
+            ItemStatEntry { ids: vec![1101, 2003], play: 10000, win: 5000, pick_rate: 0.15 },
+        ];
+        let jng_blocks = build_5_item_blocks_with_depth_lists(
+            jng_starters,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            "AD",
+            "jungle",
+        );
+        assert_eq!(jng_blocks[0].item_ids, vec![1102, 2003]);
+
+        // Support: Quest item is pre-granted/bought, must ONLY contain Potion!
+        let supp_starters = vec![
+            ItemStatEntry { ids: vec![3865, 2003, 2003], play: 60000, win: 30000, pick_rate: 0.95 },
+        ];
+        let supp_blocks = build_5_item_blocks_with_depth_lists(
+            supp_starters,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            "AP",
+            "support",
+        );
+        assert_eq!(supp_blocks[0].item_ids, vec![2003]);
     }
 }
