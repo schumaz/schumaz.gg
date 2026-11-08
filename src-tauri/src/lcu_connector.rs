@@ -125,7 +125,137 @@ impl LcuConnection {
             None => Err("LCU returned an empty response for gameflow session".to_string()),
         }
     }
+    /// Fetches the current rune page via GET /lol-perks/v1/currentpage.
+    pub async fn get_current_rune_page(&self) -> Result<serde_json::Value, String> {
+        let response: Option<serde_json::Value> = self
+            .client
+            .get(crate::lcu_injector::PERKS_CURRENT_PAGE_ENDPOINT)
+            .await
+            .map_err(|err| format!("Error requesting current rune page: {:?}", err))?;
+
+        response.ok_or_else(|| "LCU returned an empty response for current rune page".to_string())
+    }
+
+    /// Fetches all rune pages via GET /lol-perks/v1/pages.
+    pub async fn get_all_rune_pages(&self) -> Result<serde_json::Value, String> {
+        let response: Option<serde_json::Value> = self
+            .client
+            .get(crate::lcu_injector::PERKS_PAGES_ENDPOINT)
+            .await
+            .map_err(|err| format!("Error requesting rune pages: {:?}", err))?;
+
+        response.ok_or_else(|| "LCU returned an empty response for rune pages".to_string())
+    }
+
+    /// Updates an existing rune page in-place via PUT /lol-perks/v1/pages/{id}.
+    pub async fn put_rune_page(
+        &self,
+        page_id: i64,
+        payload: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let endpoint = format!("{}/{}", crate::lcu_injector::PERKS_PAGES_ENDPOINT, page_id);
+        let response: Option<serde_json::Value> = self
+            .client
+            .put(&endpoint, payload)
+            .await
+            .map_err(|err| format!("Error updating rune page {}: {:?}", page_id, err))?;
+
+        response.ok_or_else(|| "LCU returned an empty response when updating rune page".to_string())
+    }
+
+    /// Deletes a rune page by ID via DELETE /lol-perks/v1/pages/{id}.
+    pub async fn delete_rune_page(&self, page_id: i64) -> Result<(), String> {
+        let endpoint = format!("{}/{}", crate::lcu_injector::PERKS_PAGES_ENDPOINT, page_id);
+        match self
+            .client
+            .delete::<Option<serde_json::Value>>(&endpoint)
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let err_str = format!("{:?}", err);
+                if err_str.contains("unexpected end of file")
+                    || err_str.contains("Unexpected end of file")
+                    || err_str.contains("Eof")
+                    || err_str.contains("EOF")
+                {
+                    Ok(())
+                } else {
+                    Err(format!("Error deleting rune page {}: {}", page_id, err_str))
+                }
+            }
+        }
+    }
+
+    /// Creates a new rune page via POST /lol-perks/v1/pages.
+    pub async fn create_rune_page(
+        &self,
+        payload: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let response: Option<serde_json::Value> = self
+            .client
+            .post(crate::lcu_injector::PERKS_PAGES_ENDPOINT, payload)
+            .await
+            .map_err(|err| format!("Error creating rune page: {:?}", err))?;
+
+        response.ok_or_else(|| "LCU returned an empty response when creating rune page".to_string())
+    }
+
+    /// Updates summoner spells via PATCH /lol-champ-select/v1/session/my-selection.
+    pub async fn patch_summoner_spells(&self, payload: &serde_json::Value) -> Result<(), String> {
+        match self
+            .client
+            .patch::<&serde_json::Value, Option<serde_json::Value>>(
+                crate::lcu_injector::CHAMP_SELECT_MY_SELECTION_ENDPOINT,
+                payload,
+            )
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let err_str = format!("{:?}", err);
+                if err_str.contains("unexpected end of file")
+                    || err_str.contains("Unexpected end of file")
+                    || err_str.contains("Eof")
+                    || err_str.contains("EOF")
+                {
+                    Ok(())
+                } else {
+                    Err(format!("Error patching summoner spells: {}", err_str))
+                }
+            }
+        }
+    }
+
+    /// Updates custom item sets via PUT /lol-item-sets/v1/item-sets/{summoner_id}/sets.
+    pub async fn put_item_sets(
+        &self,
+        summoner_id: u64,
+        payload: &serde_json::Value,
+    ) -> Result<(), String> {
+        let endpoint = format!("/lol-item-sets/v1/item-sets/{}/sets", summoner_id);
+        match self
+            .client
+            .put::<&serde_json::Value, Option<serde_json::Value>>(&endpoint, payload)
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let err_str = format!("{:?}", err);
+                if err_str.contains("unexpected end of file")
+                    || err_str.contains("Unexpected end of file")
+                    || err_str.contains("Eof")
+                    || err_str.contains("EOF")
+                {
+                    Ok(())
+                } else {
+                    Err(format!("Error putting item sets: {}", err_str))
+                }
+            }
+        }
+    }
 }
+
 
 /// Background task that continuously monitors LCU availability and notifies the UI.
 pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
