@@ -2,8 +2,13 @@
 //! Handles requests to DataDragon and OP.GG champion analysis (runes, builds, spells, win rates).
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tokio::sync::OnceCell;
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
+pub const DDRAGON_BASE_URL: &str = "https://ddragon.leagueoflegends.com";
+
+static DDRAGON_CACHE: OnceCell<DataDragonCache> = OnceCell::const_new();
 
 /// Champion metadata translated from Riot's DataDragon.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -12,6 +17,23 @@ pub struct ChampionMetadata {
     pub key_name: String,
     pub display_name: String,
     pub icon_url: String,
+}
+
+/// Metadata for a rune or style from DataDragon's `runesReforged.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuneMetadata {
+    pub id: i32,
+    pub key: String,
+    pub name: String,
+    pub icon_url: String,
+}
+
+/// In-memory cache holding champion and rune metadata from DataDragon.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DataDragonCache {
+    pub version: String,
+    pub champions: HashMap<i32, ChampionMetadata>,
+    pub runes: HashMap<i32, RuneMetadata>,
 }
 
 /// An individual item group for the shop (e.g. Starter, Core, Situational).
@@ -36,22 +58,31 @@ pub struct ChampionBuild {
     pub item_blocks: Vec<ItemBlock>,
 }
 
-/// Parses DataDragon `champion.json` to find champion metadata by numeric ID.
-pub fn parse_ddragon_champion_by_id(
+/// Parses the latest DataDragon version string from `/api/versions.json`.
+pub fn parse_latest_ddragon_version(versions_json: &serde_json::Value) -> Result<String, String> {
+    versions_json
+        .as_array()
+        .and_then(|arr| arr.first())
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Failed to extract latest version from versions array".to_string())
+}
+
+/// Parses all champions from `champion.json` into an O(1) lookup map.
+pub fn parse_all_ddragon_champions(
     ddragon_json: &serde_json::Value,
     version: &str,
-    target_champ_id: i32,
-) -> Result<ChampionMetadata, String> {
+) -> Result<HashMap<i32, ChampionMetadata>, String> {
     let data_map = ddragon_json
         .get("data")
         .and_then(|v| v.as_object())
         .ok_or_else(|| "Missing 'data' object in DataDragon payload".to_string())?;
 
-    let target_key_str = target_champ_id.to_string();
+    let mut map = HashMap::with_capacity(data_map.len());
 
     for (_name_key, champ_data) in data_map {
-        let key = champ_data.get("key").and_then(|k| k.as_str()).unwrap_or("");
-        if key == target_key_str {
+        let key_str = champ_data.get("key").and_then(|k| k.as_str()).unwrap_or("");
+        if let Ok(champ_id) = key_str.parse::<i32>() {
             let id_str = champ_data.get("id").and_then(|v| v.as_str()).unwrap_or("");
             let display_name = champ_data
                 .get("name")
@@ -67,19 +98,173 @@ pub fn parse_ddragon_champion_by_id(
                 version, image_full
             );
 
-            return Ok(ChampionMetadata {
-                champion_id: target_champ_id,
-                key_name: id_str.to_string(),
-                display_name: display_name.to_string(),
-                icon_url,
-            });
+            map.insert(
+                champ_id,
+                ChampionMetadata {
+                    champion_id: champ_id,
+                    key_name: id_str.to_string(),
+                    display_name: display_name.to_string(),
+                    icon_url,
+                },
+            );
         }
     }
 
-    Err(format!(
-        "Champion ID {} not found in DataDragon data",
-        target_champ_id
-    ))
+    Ok(map)
+}
+
+/// Parses rune styles and individual perks from `runesReforged.json` into an O(1) lookup map.
+pub fn parse_ddragon_runes(
+    runes_json: &serde_json::Value,
+) -> Result<HashMap<i32, RuneMetadata>, String> {
+    let rune_trees = runes_json
+        .as_array()
+        .ok_or_else(|| "Expected array for runesReforged.json".to_string())?;
+
+    let mut map = HashMap::new();
+
+    for tree in rune_trees {
+        if let Some(tree_id) = tree.get("id").and_then(|v| v.as_i64()).map(|id| id as i32) {
+            let key = tree
+                .get("key")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let name = tree
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&key)
+                .to_string();
+            let icon = tree.get("icon").and_then(|v| v.as_str()).unwrap_or("");
+            let icon_url = format!("https://ddragon.leagueoflegends.com/cdn/img/{}", icon);
+
+            map.insert(
+                tree_id,
+                RuneMetadata {
+                    id: tree_id,
+                    key,
+                    name,
+                    icon_url,
+                },
+            );
+        }
+
+        // Parse individual rune slots
+        if let Some(slots) = tree.get("slots").and_then(|v| v.as_array()) {
+            for slot in slots {
+                if let Some(runes) = slot.get("runes").and_then(|v| v.as_array()) {
+                    for rune in runes {
+                        if let Some(rune_id) =
+                            rune.get("id").and_then(|v| v.as_i64()).map(|id| id as i32)
+                        {
+                            let key = rune
+                                .get("key")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let name = rune
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(&key)
+                                .to_string();
+                            let icon = rune.get("icon").and_then(|v| v.as_str()).unwrap_or("");
+                            let icon_url =
+                                format!("https://ddragon.leagueoflegends.com/cdn/img/{}", icon);
+
+                            map.insert(
+                                rune_id,
+                                RuneMetadata {
+                                    id: rune_id,
+                                    key,
+                                    name,
+                                    icon_url,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(map)
+}
+
+/// Parses DataDragon `champion.json` to find champion metadata by numeric ID.
+pub fn parse_ddragon_champion_by_id(
+    ddragon_json: &serde_json::Value,
+    version: &str,
+    target_champ_id: i32,
+) -> Result<ChampionMetadata, String> {
+    let champions = parse_all_ddragon_champions(ddragon_json, version)?;
+    champions.get(&target_champ_id).cloned().ok_or_else(|| {
+        format!(
+            "Champion ID {} not found in DataDragon data",
+            target_champ_id
+        )
+    })
+}
+
+/// Loads the DataDragonCache from a specific base URL (mockable in tests).
+pub async fn load_ddragon_cache_from_base_url(
+    client: &reqwest::Client,
+    base_url: &str,
+) -> Result<DataDragonCache, String> {
+    // 1. Fetch latest version
+    let versions_url = format!("{}/api/versions.json", base_url);
+    let versions_res: serde_json::Value = client
+        .get(&versions_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch versions.json: {}", e))?
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse versions.json: {}", e))?;
+
+    let version = parse_latest_ddragon_version(&versions_res)?;
+
+    // 2. Fetch champions
+    let champions_url = format!("{}/cdn/{}/data/en_US/champion.json", base_url, version);
+    let champions_res: serde_json::Value = client
+        .get(&champions_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch champion.json: {}", e))?
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse champion.json: {}", e))?;
+
+    let champions = parse_all_ddragon_champions(&champions_res, &version)?;
+
+    // 3. Fetch runes
+    let runes_url = format!("{}/cdn/{}/data/en_US/runesReforged.json", base_url, version);
+    let runes_res: serde_json::Value = client
+        .get(&runes_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch runesReforged.json: {}", e))?
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse runesReforged.json: {}", e))?;
+
+    let runes = parse_ddragon_runes(&runes_res)?;
+
+    Ok(DataDragonCache {
+        version,
+        champions,
+        runes,
+    })
+}
+
+/// Gets the cached DataDragon data or initializes it if not yet loaded.
+pub async fn get_or_init_ddragon_cache(
+    client: &reqwest::Client,
+) -> Result<&'static DataDragonCache, String> {
+    DDRAGON_CACHE
+        .get_or_try_init(|| async {
+            load_ddragon_cache_from_base_url(client, DDRAGON_BASE_URL).await
+        })
+        .await
 }
 
 /// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild`.
@@ -284,6 +469,55 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
+    fn test_parse_latest_ddragon_version() {
+        let versions = serde_json::json!(["14.23.1", "14.22.1", "14.21.1"]);
+        assert_eq!(parse_latest_ddragon_version(&versions).unwrap(), "14.23.1");
+
+        let empty = serde_json::json!([]);
+        assert!(parse_latest_ddragon_version(&empty).is_err());
+    }
+
+    #[test]
+    fn test_parse_ddragon_runes_extracts_trees_and_perks() {
+        let runes_fixture = serde_json::json!([
+            {
+                "id": 8100,
+                "key": "Domination",
+                "icon": "perk-images/Styles/7200_Domination.png",
+                "name": "Domination",
+                "slots": [
+                    {
+                        "runes": [
+                            {
+                                "id": 8112,
+                                "key": "Electrocute",
+                                "icon": "perk-images/Styles/Domination/Electrocute/Electrocute.png",
+                                "name": "Electrocute"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]);
+
+        let result = parse_ddragon_runes(&runes_fixture);
+        assert!(result.is_ok());
+
+        let map = result.unwrap();
+        assert_eq!(map.len(), 2);
+
+        // Check primary tree
+        let dom = map.get(&8100).expect("Domination tree should exist");
+        assert_eq!(dom.name, "Domination");
+        assert!(dom.icon_url.contains("7200_Domination.png"));
+
+        // Check keystone
+        let elec = map.get(&8112).expect("Electrocute should exist");
+        assert_eq!(elec.name, "Electrocute");
+        assert!(elec.icon_url.contains("Electrocute.png"));
+    }
+
+    #[test]
     fn test_parse_ddragon_champion_by_id_finds_ahri() {
         let ddragon_fixture = serde_json::json!({
             "type": "champion",
@@ -318,6 +552,60 @@ mod tests {
             meta.icon_url,
             "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png"
         );
+    }
+
+    #[tokio::test]
+    async fn test_load_ddragon_cache_with_wiremock() {
+        let mock_server = MockServer::start().await;
+
+        let versions_json = serde_json::json!(["14.23.1"]);
+        let champion_json = serde_json::json!({
+            "data": {
+                "Ahri": {
+                    "id": "Ahri",
+                    "key": "103",
+                    "name": "Ahri",
+                    "image": { "full": "Ahri.png" }
+                }
+            }
+        });
+        let runes_json = serde_json::json!([
+            {
+                "id": 8100,
+                "key": "Domination",
+                "icon": "Dom.png",
+                "name": "Domination",
+                "slots": []
+            }
+        ]);
+
+        Mock::given(method("GET"))
+            .and(path("/api/versions.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(versions_json))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/cdn/14.23.1/data/en_US/champion.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(champion_json))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/cdn/14.23.1/data/en_US/runesReforged.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(runes_json))
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let cache = load_ddragon_cache_from_base_url(&client, &mock_server.uri())
+            .await
+            .expect("Loading ddragon cache should succeed");
+
+        assert_eq!(cache.version, "14.23.1");
+        assert!(cache.champions.contains_key(&103));
+        assert_eq!(cache.champions.get(&103).unwrap().display_name, "Ahri");
+        assert!(cache.runes.contains_key(&8100));
     }
 
     #[test]
