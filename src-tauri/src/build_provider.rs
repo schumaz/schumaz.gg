@@ -168,15 +168,36 @@ pub fn build_fallback_champion_build(
 /// Returns metadata for a known stat shard ID if valid.
 pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
     let (name, icon) = match id {
-        5008 => ("Força Adaptativa", "perk-images/StatMods/StatModsAdaptiveForceIcon.png"),
-        5005 => ("Velocidade de Ataque", "perk-images/StatMods/StatModsAttackSpeedIcon.png"),
-        5007 => ("Aceleração de Habilidade", "perk-images/StatMods/StatModsCDRIcon.png"),
+        5008 => (
+            "Força Adaptativa",
+            "perk-images/StatMods/StatModsAdaptiveForceIcon.png",
+        ),
+        5005 => (
+            "Velocidade de Ataque",
+            "perk-images/StatMods/StatModsAttackSpeedIcon.png",
+        ),
+        5007 => (
+            "Aceleração de Habilidade",
+            "perk-images/StatMods/StatModsCDRIcon.png",
+        ),
         5002 => ("Armadura", "perk-images/StatMods/StatModsArmorIcon.png"),
-        5003 => ("Resistência Mágica", "perk-images/StatMods/StatModsMagicResIcon.png"),
-        5001 | 5013 => ("Vida Escalonável", "perk-images/StatMods/StatModsHealthScalingIcon.png"),
-        5010 => ("Velocidade de Movimento", "perk-images/StatMods/StatModsMovementSpeedIcon.png"),
+        5003 => (
+            "Resistência Mágica",
+            "perk-images/StatMods/StatModsMagicResIcon.png",
+        ),
+        5001 | 5013 => (
+            "Vida Escalonável",
+            "perk-images/StatMods/StatModsHealthScalingIcon.png",
+        ),
+        5010 => (
+            "Velocidade de Movimento",
+            "perk-images/StatMods/StatModsMovementSpeedIcon.png",
+        ),
         5011 => ("Vida", "perk-images/StatMods/StatModsHealthPlusIcon.png"),
-        5012 => ("Tenacidade", "perk-images/StatMods/StatModsTenacityIcon.png"),
+        5012 => (
+            "Tenacidade",
+            "perk-images/StatMods/StatModsTenacityIcon.png",
+        ),
         _ => return None,
     };
     Some(RuneMetadata {
@@ -753,13 +774,14 @@ pub async fn get_recommended_build_with_endpoint(
 
     let queue_param = opgg_queue_param_from_id(queue_id);
 
-    let mut build = match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-        Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
-            Ok(build) => build,
+    let mut build =
+        match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
+            Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
+                Ok(build) => build,
+                Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+            },
             Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
-        },
-        Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
-    };
+        };
 
     enrich_build_with_ddragon(&mut build, ddragon_cache);
     build
@@ -842,7 +864,8 @@ mod tests {
                 champion_id: 103,
                 key_name: "Ahri".to_string(),
                 display_name: "Ahri".to_string(),
-                icon_url: "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png".to_string(),
+                icon_url: "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png"
+                    .to_string(),
             },
         );
 

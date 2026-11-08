@@ -8,6 +8,7 @@ use tauri::Emitter;
 
 pub const CURRENT_SUMMONER_ENDPOINT: &str = "/lol-summoner/v1/current-summoner";
 pub const GAMEFLOW_SESSION_ENDPOINT: &str = "/lol-gameflow/v1/session";
+pub const CHAMP_SELECT_SESSION_ENDPOINT: &str = "/lol-champ-select/v1/session";
 
 /// Represents basic summoner details parsed from `/lol-summoner/v1/current-summoner`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -124,6 +125,14 @@ impl LcuConnection {
             Some(val) => crate::ws_listener::extract_queue_id(&val),
             None => Err("LCU returned an empty response for gameflow session".to_string()),
         }
+    }
+
+    /// Fetches the active champion select session via GET /lol-champ-select/v1/session.
+    pub async fn get_champ_select_session(&self) -> Result<Option<serde_json::Value>, String> {
+        self.client
+            .get(CHAMP_SELECT_SESSION_ENDPOINT)
+            .await
+            .map_err(|err| format!("Error requesting champ select session: {:?}", err))
     }
     /// Fetches the current rune page via GET /lol-perks/v1/currentpage.
     pub async fn get_current_rune_page(&self) -> Result<serde_json::Value, String> {
@@ -255,7 +264,6 @@ impl LcuConnection {
         }
     }
 }
-
 
 /// Background task that continuously monitors LCU availability and notifies the UI.
 pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
