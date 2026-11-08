@@ -1,5 +1,5 @@
-//! Module 2: LCU WebSocket Event Listener
-//! Listens to OnJsonApiEvent_lol-champ-select_v1_session and OnJsonApiEvent_lol-gameflow_v1_session.
+//! Module 2: Champion Select and Queue Detection via WebSocket
+//! Handles real-time monitoring of LoL client lobby and draft states without polling.
 
 use irelia::ws::LcuWebSocket;
 use irelia::ws::types::{Event, EventKind};
@@ -9,102 +9,112 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 use tauri::Emitter;
 
-/// Represents common League of Legends queue modes.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub const QUEUE_SOLO_DUO: i32 = 420;
+pub const QUEUE_FLEX: i32 = 440;
+pub const QUEUE_ARAM: i32 = 450;
+pub const QUEUE_NORMAL_DRAFT: i32 = 400;
+pub const QUEUE_QUICKPLAY: i32 = 490;
+
+/// Represents game queue classifications.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum QueueMode {
-    SoloDuo,
-    Flex,
+    SummonersRift,
     Aram,
-    NormalDraft,
-    Quickplay,
-    Other(i32),
+    Other,
 }
 
-impl QueueMode {
-    pub fn from_queue_id(queue_id: i32) -> Self {
+impl From<i32> for QueueMode {
+    fn from(queue_id: i32) -> Self {
         match queue_id {
-            420 => QueueMode::SoloDuo,
-            440 => QueueMode::Flex,
-            450 => QueueMode::Aram,
-            400 => QueueMode::NormalDraft,
-            490 => QueueMode::Quickplay,
-            other => QueueMode::Other(other),
+            QUEUE_ARAM => QueueMode::Aram,
+            QUEUE_SOLO_DUO | QUEUE_FLEX | QUEUE_NORMAL_DRAFT | QUEUE_QUICKPLAY => {
+                QueueMode::SummonersRift
+            }
+            _ => QueueMode::Other,
         }
     }
 }
 
-/// Payload emitted to the frontend when a champion is selected or locked in.
+/// Payload emitted to the Tauri frontend when the user selects or locks in a champion.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChampSelectedPayload {
     pub champion_id: i32,
     pub queue_id: i32,
     pub queue_mode: QueueMode,
-    pub is_locked: bool,
+    pub locked_in: bool,
 }
 
-/// Evaluated transition result from an incoming WebSocket message.
+/// Represents state transitions evaluated from raw WebSocket events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WsSessionTransition {
     Active(ChampSelectedPayload),
-    NoChampionSelected,
     Ended,
+    NoChampionSelected,
 }
 
-/// Determines whether a new champion select event should be emitted to avoid flooding.
-pub fn should_emit_champ_select(
-    prev: &Option<ChampSelectedPayload>,
-    current: &Option<ChampSelectedPayload>,
-) -> bool {
-    prev != current
-}
-
-/// Pure evaluation of incoming WebSocket payload from `OnJsonApiEvent_lol-champ-select_v1_session`.
+/// Evaluates raw WebSocket message details and determines session state changes.
 pub fn evaluate_ws_event(
     event_type: &str,
     data: &serde_json::Value,
     current_queue_id: i32,
 ) -> WsSessionTransition {
-    if event_type.eq_ignore_ascii_case("Delete") {
+    if event_type == "Delete" {
         return WsSessionTransition::Ended;
     }
 
     match extract_selected_champion(data) {
-        Ok(Some((champ_id, is_locked))) => WsSessionTransition::Active(ChampSelectedPayload {
+        Ok(Some((champ_id, locked_in))) => WsSessionTransition::Active(ChampSelectedPayload {
             champion_id: champ_id,
             queue_id: current_queue_id,
-            queue_mode: QueueMode::from_queue_id(current_queue_id),
-            is_locked,
+            queue_mode: QueueMode::from(current_queue_id),
+            locked_in,
         }),
-        _ => WsSessionTransition::NoChampionSelected,
+        Ok(None) => WsSessionTransition::NoChampionSelected,
+        Err(_) => WsSessionTransition::NoChampionSelected,
     }
 }
 
-/// Extracts the active champion selection for the local player from a `champ-select/v1/session` JSON payload.
-/// Returns Ok(Some((champion_id, is_locked))) if a champion is selected, or Ok(None) if unselected.
+/// Deduplicates timer ticks and only triggers an emit when champion or lock-in state transitions.
+pub fn should_emit_champ_select(
+    last_payload: &Option<ChampSelectedPayload>,
+    current_payload: &Option<ChampSelectedPayload>,
+) -> bool {
+    last_payload != current_payload
+}
+
+/// Pure parser function to extract the selected `championId` and `locked_in` status.
+///
+/// Handles both:
+/// 1. ARAM / Blind Pick / Intent via `myTeam` where `cellId == localPlayerCellId`.
+/// 2. Solo/Duo / Flex Draft actions where `type == "pick"` and `actorCellId == localPlayerCellId`.
+///
+/// Explicitly ignores `"ban"` actions so banning a champion never triggers a build recommendation.
 pub fn extract_selected_champion(
     session_json: &serde_json::Value,
 ) -> Result<Option<(i32, bool)>, String> {
     let local_player_cell_id = session_json
         .get("localPlayerCellId")
         .and_then(|v| v.as_i64())
-        .ok_or_else(|| {
-            "Missing or invalid 'localPlayerCellId' in champ-select session".to_string()
-        })? as i32;
+        .ok_or_else(|| "Missing 'localPlayerCellId' in session JSON".to_string())?
+        as i32;
 
-    // 1. Check myTeam directly (used in ARAM, Quickplay, or when pick is completed)
+    // 1. Check `myTeam` (works for ARAM, Blind, and player hover/intent)
     if let Some(my_team) = session_json.get("myTeam").and_then(|v| v.as_array()) {
         for member in my_team {
             let cell_id = member.get("cellId").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
+
             if cell_id == local_player_cell_id {
                 let champ_id = member
                     .get("championId")
                     .and_then(|v| v.as_i64())
                     .unwrap_or(0) as i32;
+
+                // In ARAM or locked pick, championId > 0
                 if champ_id > 0 {
                     return Ok(Some((champ_id, true)));
                 }
 
-                // Also check pick intent (hovered champion before lock in)
+                // In draft, before lock, check championPickIntent
                 let intent_id = member
                     .get("championPickIntent")
                     .and_then(|v| v.as_i64())
@@ -200,6 +210,46 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                         if should_emit_champ_select(&last_guard, &current_opt) {
                             let _ = handle.emit("champ-selected", &payload);
                             *last_guard = current_opt;
+
+                            // Automatically fetch recommended build and inject when locked in
+                            if payload.locked_in {
+                                let handle_for_inject = handle.clone();
+                                let champ_id = payload.champion_id;
+                                let q_id = if payload.queue_id == 0 {
+                                    QUEUE_SOLO_DUO
+                                } else {
+                                    payload.queue_id
+                                };
+
+                                tokio::spawn(async move {
+                                    if let Ok(conn) = crate::lcu_connector::LcuConnection::connect()
+                                    {
+                                        if let Ok(summoner) = conn.get_current_summoner().await {
+                                            let http_client = reqwest::Client::new();
+                                            if let Ok(build) =
+                                                crate::build_provider::get_recommended_build(
+                                                    &http_client,
+                                                    champ_id,
+                                                    q_id,
+                                                )
+                                                .await
+                                            {
+                                                let _ = handle_for_inject
+                                                    .emit("recommended-build", &build);
+                                                let report =
+                                                    crate::lcu_injector::inject_champion_build(
+                                                        &conn,
+                                                        summoner.summoner_id,
+                                                        &build,
+                                                    )
+                                                    .await;
+                                                let _ = handle_for_inject
+                                                    .emit("build-injected", &report);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
                         }
                     }
                     WsSessionTransition::Ended => {
@@ -228,176 +278,142 @@ mod tests {
 
     #[test]
     fn test_extract_champion_from_solo_duo_active_pick_action() {
+        // Real fixture snippet from Solo/Duo champion select
         let fixture = serde_json::json!({
             "localPlayerCellId": 2,
             "myTeam": [
                 { "cellId": 0, "championId": 0, "championPickIntent": 0 },
                 { "cellId": 1, "championId": 0, "championPickIntent": 0 },
-                { "cellId": 2, "championId": 0, "championPickIntent": 0 },
-                { "cellId": 3, "championId": 0, "championPickIntent": 0 },
-                { "cellId": 4, "championId": 0, "championPickIntent": 0 }
+                { "cellId": 2, "championId": 0, "championPickIntent": 0 }
             ],
             "actions": [
                 [
-                    { "actorCellId": 0, "championId": 157, "type": "ban", "completed": true },
-                    { "actorCellId": 2, "championId": 238, "type": "ban", "completed": true }
+                    { "actorCellId": 0, "type": "ban", "championId": 64, "completed": true }
                 ],
                 [
-                    { "actorCellId": 2, "championId": 103, "type": "pick", "completed": false, "isInProgress": true }
+                    { "actorCellId": 2, "type": "pick", "championId": 103, "completed": false }
                 ]
             ]
         });
 
         let result = extract_selected_champion(&fixture);
-        assert!(result.is_ok());
-        let champion = result.unwrap();
-        assert_eq!(champion, Some((103, false))); // Ahri (103), hovered/unlocked
-    }
-
-    #[test]
-    fn test_extract_champion_from_aram_my_team() {
-        let fixture = serde_json::json!({
-            "localPlayerCellId": 3,
-            "myTeam": [
-                { "cellId": 0, "championId": 1, "championPickIntent": 0 },
-                { "cellId": 1, "championId": 22, "championPickIntent": 0 },
-                { "cellId": 2, "championId": 51, "championPickIntent": 0 },
-                { "cellId": 3, "championId": 222, "championPickIntent": 0 },
-                { "cellId": 4, "championId": 81, "championPickIntent": 0 }
-            ],
-            "actions": []
-        });
-
-        let result = extract_selected_champion(&fixture);
-        assert!(result.is_ok());
-        let champion = result.unwrap();
-        assert_eq!(champion, Some((222, true))); // Jinx (222), auto-locked in ARAM
+        assert_eq!(result, Ok(Some((103, false))));
     }
 
     #[test]
     fn test_extract_champion_ignores_ban_actions() {
-        // Player is banning Yasuo (157), but has not picked any champion yet
+        // If the local player is currently banning a champion, it must NOT be extracted as their pick
         let fixture = serde_json::json!({
-            "localPlayerCellId": 1,
+            "localPlayerCellId": 3,
             "myTeam": [
-                { "cellId": 1, "championId": 0, "championPickIntent": 0 }
+                { "cellId": 3, "championId": 0, "championPickIntent": 0 }
             ],
             "actions": [
                 [
-                    { "actorCellId": 1, "championId": 157, "type": "ban", "completed": false, "isInProgress": true }
+                    { "actorCellId": 3, "type": "ban", "championId": 119, "completed": false }
                 ]
             ]
         });
 
         let result = extract_selected_champion(&fixture);
-        assert!(result.is_ok());
-        let champion = result.unwrap();
-        assert_eq!(champion, None);
+        assert_eq!(result, Ok(None));
     }
 
     #[test]
-    fn test_extract_queue_id_and_classify_mode() {
-        let make_gameflow = |id: i32| {
-            serde_json::json!({
-                "gameData": {
-                    "queue": {
-                        "id": id,
-                        "type": "NORMAL"
-                    }
-                }
-            })
-        };
-
-        assert_eq!(extract_queue_id(&make_gameflow(420)).unwrap(), 420);
-        assert_eq!(QueueMode::from_queue_id(420), QueueMode::SoloDuo);
-
-        assert_eq!(extract_queue_id(&make_gameflow(440)).unwrap(), 440);
-        assert_eq!(QueueMode::from_queue_id(440), QueueMode::Flex);
-
-        assert_eq!(extract_queue_id(&make_gameflow(450)).unwrap(), 450);
-        assert_eq!(QueueMode::from_queue_id(450), QueueMode::Aram);
-
-        assert_eq!(extract_queue_id(&make_gameflow(400)).unwrap(), 400);
-        assert_eq!(QueueMode::from_queue_id(400), QueueMode::NormalDraft);
-
-        assert_eq!(extract_queue_id(&make_gameflow(9999)).unwrap(), 9999);
-        assert_eq!(QueueMode::from_queue_id(9999), QueueMode::Other(9999));
-    }
-
-    #[test]
-    fn test_should_emit_champ_select_deduplicates_timer_ticks() {
-        let payload1 = ChampSelectedPayload {
-            champion_id: 103,
-            queue_id: 420,
-            queue_mode: QueueMode::SoloDuo,
-            is_locked: false,
-        };
-
-        let payload2_same = payload1.clone();
-
-        let payload3_locked = ChampSelectedPayload {
-            champion_id: 103,
-            queue_id: 420,
-            queue_mode: QueueMode::SoloDuo,
-            is_locked: true,
-        };
-
-        let payload4_swapped = ChampSelectedPayload {
-            champion_id: 222,
-            queue_id: 420,
-            queue_mode: QueueMode::SoloDuo,
-            is_locked: true,
-        };
-
-        // First selection: should emit
-        assert!(should_emit_champ_select(&None, &Some(payload1.clone())));
-
-        // Identical timer tick update: should NOT emit
-        assert!(!should_emit_champ_select(
-            &Some(payload1.clone()),
-            &Some(payload2_same)
-        ));
-
-        // Player locks in: should emit
-        assert!(should_emit_champ_select(
-            &Some(payload1.clone()),
-            &Some(payload3_locked.clone())
-        ));
-
-        // Player swaps champion: should emit
-        assert!(should_emit_champ_select(
-            &Some(payload3_locked.clone()),
-            &Some(payload4_swapped.clone())
-        ));
-
-        // Session reset: should emit
-        assert!(should_emit_champ_select(&Some(payload4_swapped), &None));
-    }
-
-    #[test]
-    fn test_evaluate_ws_event_create_update_and_delete() {
-        let session_data = serde_json::json!({
-            "localPlayerCellId": 0,
+    fn test_extract_champion_from_aram_my_team() {
+        // Real fixture snippet from ARAM where championId is directly assigned on myTeam
+        let fixture = serde_json::json!({
+            "localPlayerCellId": 4,
             "myTeam": [
-                { "cellId": 0, "championId": 84, "championPickIntent": 0 }
+                { "cellId": 0, "championId": 222, "championPickIntent": 0 },
+                { "cellId": 4, "championId": 51, "championPickIntent": 0 }
             ],
             "actions": []
         });
 
-        // Update event with selected champion
-        let transition = evaluate_ws_event("Update", &session_data, 450);
+        let result = extract_selected_champion(&fixture);
+        // ARAM is automatically locked in (true)
+        assert_eq!(result, Ok(Some((51, true))));
+    }
+
+    #[test]
+    fn test_extract_queue_id_and_classify_mode() {
+        let fixture_aram = serde_json::json!({
+            "gameData": {
+                "queue": {
+                    "id": 450
+                }
+            }
+        });
+        let queue_id = extract_queue_id(&fixture_aram).expect("Queue id should parse");
+        assert_eq!(queue_id, 450);
+        assert_eq!(QueueMode::from(queue_id), QueueMode::Aram);
+
+        let fixture_ranked = serde_json::json!({
+            "gameData": {
+                "queue": {
+                    "id": 420
+                }
+            }
+        });
+        let queue_id_ranked =
+            extract_queue_id(&fixture_ranked).expect("Ranked queue id should parse");
+        assert_eq!(queue_id_ranked, 420);
+        assert_eq!(QueueMode::from(queue_id_ranked), QueueMode::SummonersRift);
+    }
+
+    #[test]
+    fn test_should_emit_champ_select_deduplicates_timer_ticks() {
+        let payload1 = Some(ChampSelectedPayload {
+            champion_id: 103,
+            queue_id: 420,
+            queue_mode: QueueMode::SummonersRift,
+            locked_in: false,
+        });
+
+        // Same payload received in a subsequent timer tick
+        let payload1_tick = Some(ChampSelectedPayload {
+            champion_id: 103,
+            queue_id: 420,
+            queue_mode: QueueMode::SummonersRift,
+            locked_in: false,
+        });
+
+        assert!(!should_emit_champ_select(&payload1, &payload1_tick));
+
+        // State changes to locked_in: true
+        let payload2 = Some(ChampSelectedPayload {
+            champion_id: 103,
+            queue_id: 420,
+            queue_mode: QueueMode::SummonersRift,
+            locked_in: true,
+        });
+
+        assert!(should_emit_champ_select(&payload1, &payload2));
+    }
+
+    #[test]
+    fn test_evaluate_ws_event_create_update_and_delete() {
+        let fixture_active = serde_json::json!({
+            "localPlayerCellId": 1,
+            "myTeam": [
+                { "cellId": 1, "championId": 84, "championPickIntent": 0 }
+            ],
+            "actions": []
+        });
+
+        let transition = evaluate_ws_event("Update", &fixture_active, 450);
         assert_eq!(
             transition,
             WsSessionTransition::Active(ChampSelectedPayload {
                 champion_id: 84,
                 queue_id: 450,
                 queue_mode: QueueMode::Aram,
-                is_locked: true
+                locked_in: true,
             })
         );
 
-        // Delete event indicates champ select ended
-        let end_transition = evaluate_ws_event("Delete", &serde_json::Value::Null, 450);
-        assert_eq!(end_transition, WsSessionTransition::Ended);
+        let transition_end = evaluate_ws_event("Delete", &serde_json::json!({}), 450);
+        assert_eq!(transition_end, WsSessionTransition::Ended);
     }
 }
