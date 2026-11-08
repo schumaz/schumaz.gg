@@ -439,15 +439,18 @@ pub fn is_boot_item(item_id: i32) -> bool {
     matches!(
         item_id,
         1001 // Boots
+        | 2422 // Slightly Magical Footwear
         | 3006 // Berserker's Greaves
+        | 3008 // Symbiotic Soles / Synchronized Souls
         | 3009 // Boots of Swiftness
+        | 3010 // Symbiotic Soles
+        | 3013 // Synchronized Souls (empowered)
         | 3020 // Sorcerer's Shoes
         | 3047 // Plated Steelcaps
         | 3111 // Mercury's Treads
         | 3117 // Boots of Mobility
         | 3158 // Ionian Boots of Lucidity
-        | 2422 // Slightly Magical Footwear
-        | 3170 | 3171 | 3172 | 3173 | 3174 | 3175 // Tier 3 / Wild Rift / Arena boots
+        | 3170..=3177 // Tier 3 / Wild Rift / Arena boots / Zephyr
     )
 }
 
@@ -945,7 +948,7 @@ impl ItemStatEntry {
 pub fn extract_all_core_items_from_text(text: &str) -> Vec<ItemStatEntry> {
     let mut entries = Vec::new();
     let mut search_slice = text;
-    let prefixes = ["CoreItems(", "FourthItem(", "FifthItem(", "SixthItem("];
+    let prefixes = ["CoreItems(", "FourthItem(", "FifthItem(", "SixthItem(", "Boots(", "Boot("];
     loop {
         let next_match = prefixes
             .iter()
@@ -1014,7 +1017,7 @@ pub fn extract_mcp_grouped_item_lists(text: &str) -> Vec<(String, Vec<ItemStatEn
             .filter(|s| {
                 matches!(
                     s.as_str(),
-                    "last_items" | "fourth_items" | "fifth_items" | "sixth_items"
+                    "boots" | "last_items" | "fourth_items" | "fifth_items" | "sixth_items"
                 )
             })
             .collect()
@@ -1044,6 +1047,8 @@ pub fn extract_mcp_grouped_item_lists(text: &str) -> Vec<(String, Vec<ItemStatEn
                 || rem.starts_with("FourthItem(")
                 || rem.starts_with("FifthItem(")
                 || rem.starts_with("SixthItem(")
+                || rem.starts_with("Boots(")
+                || rem.starts_with("Boot(")
             {
                 let mut depth = 1;
                 let mut k = i + 1;
@@ -1208,7 +1213,7 @@ pub fn build_5_item_blocks_with_depth_lists(
     let mut boot_seen_counter = 0;
     for entry in &boot_entries {
         for &id in &entry.ids {
-            if is_boot_item(id) {
+            if is_boot_item(id) || (!is_starter_item(id) && !is_component_item(id)) {
                 let slot = boot_map.entry(id).or_insert_with(|| {
                     let idx = boot_seen_counter;
                     boot_seen_counter += 1;
@@ -1218,15 +1223,18 @@ pub fn build_5_item_blocks_with_depth_lists(
             }
         }
     }
-    for entry in &candidate_entries {
-        for &id in &entry.ids {
-            if is_boot_item(id) {
-                let slot = boot_map.entry(id).or_insert_with(|| {
-                    let idx = boot_seen_counter;
-                    boot_seen_counter += 1;
-                    (0, idx)
-                });
-                slot.0 += entry.play.max(1);
+    // Only supplement with candidate_entries if boot_entries provided fewer than 3 boots
+    if boot_map.len() < 3 {
+        for entry in &candidate_entries {
+            for &id in &entry.ids {
+                if is_boot_item(id) {
+                    let slot = boot_map.entry(id).or_insert_with(|| {
+                        let idx = boot_seen_counter;
+                        boot_seen_counter += 1;
+                        (0, idx)
+                    });
+                    slot.0 += entry.play.max(1);
+                }
             }
         }
     }
@@ -1657,15 +1665,16 @@ pub fn parse_opgg_mcp_text(
     let damage_type = if is_ap { "AP" } else { "AD" };
 
     let starter_entry = item_candidate_entries.get(2).cloned();
-    let boot_entries = item_candidate_entries.get(1).cloned().into_iter().collect();
 
     let grouped_lists = extract_mcp_grouped_item_lists(text);
     let mut fourth_entries = Vec::new();
     let mut fifth_entries = Vec::new();
     let mut sixth_entries = Vec::new();
     let mut last_entries = Vec::new();
+    let mut boots_from_mcp = Vec::new();
     for (name, items) in grouped_lists {
         match name.as_str() {
+            "boots" => boots_from_mcp = items,
             "fourth_items" => fourth_entries = items,
             "fifth_items" => fifth_entries = items,
             "sixth_items" => sixth_entries = items,
@@ -1673,6 +1682,12 @@ pub fn parse_opgg_mcp_text(
             _ => last_entries.extend(items),
         }
     }
+
+    let boot_entries = if !boots_from_mcp.is_empty() {
+        boots_from_mcp
+    } else {
+        item_candidate_entries.get(1).cloned().into_iter().collect()
+    };
 
     let mut candidate_entries = Vec::new();
     let core_ids = if let Some(first) = item_candidate_entries.first() {
@@ -2060,7 +2075,7 @@ pub async fn fetch_opgg_champion_analysis(
                     "data.summoner_spells.{ids[],play,win}",
                     "data.starter_items.{ids[],play,win,pick_rate}",
                     "data.core_items.{ids[],play,win,pick_rate}",
-                    "data.boots.{ids[],play,win,pick_rate}",
+                    "data.boots[].{ids[],play,win,pick_rate}",
                     "data.last_items[].{ids[],play,win,pick_rate}",
                     "data.fourth_items[].{ids[],play,win,pick_rate}",
                     "data.fifth_items[].{ids[],play,win,pick_rate}",
@@ -3432,5 +3447,73 @@ mod tests {
             build.item_blocks[3].item_ids,
             vec![6672, 3085, 3031, 3036, 3026, 3072]
         );
+    }
+    #[test]
+    fn test_boots_ranking_yunara_with_synchronized_souls() {
+        // Mirrors OP.GG boots table for Yunara:
+        // 1. 3008 (Synchronized Souls) -> 41,774 Games (53.06%)
+        // 2. 3006 (Berserker's Greaves) -> 33,119 Games (42.07%)
+        // 3. 3047 (Plated Steelcaps) -> 572 Games (0.73%)
+        // 4. 3009 (Boots of Swiftness) -> 257 Games (0.33%)
+        // 5. 3111 (Mercury's Treads) -> 252 Games (0.32%)
+        let json = serde_json::json!({
+            "data": {
+                "damage_type": "AD",
+                "win_rate": 50.0,
+                "pick_rate": 11.9,
+                "runes": {
+                    "primary_style_id": 8000,
+                    "sub_style_id": 8300,
+                    "primary_perk_ids": [8008, 9111, 9104, 8017],
+                    "sub_perk_ids": [8304, 8345],
+                    "stat_shards": [5005, 5008, 5011]
+                },
+                "summoner_spells": [
+                    { "ids": [4, 21], "play": 62087, "win": 30822 }
+                ],
+                "starter_items": [
+                    { "ids": [1055, 2003], "play": 76942, "win": 38123 }
+                ],
+                "boots": [
+                    { "ids": [3008], "play": 41774, "win": 22345, "pick_rate": 0.5306 },
+                    { "ids": [3006], "play": 33119, "win": 15735, "pick_rate": 0.4207 },
+                    { "ids": [3047], "play": 572, "win": 286, "pick_rate": 0.0073 },
+                    { "ids": [3009], "play": 257, "win": 128, "pick_rate": 0.0033 },
+                    { "ids": [3111], "play": 252, "win": 126, "pick_rate": 0.0032 }
+                ],
+                "core_items": [
+                    { "ids": [6672, 3085, 3031], "play": 19057, "win": 10673 }
+                ],
+                "fourth_items": [
+                    { "ids": [3036], "play": 18151, "win": 11137 }
+                ],
+                "fifth_items": [
+                    { "ids": [3026], "play": 4832, "win": 3108 }
+                ],
+                "sixth_items": [
+                    { "ids": [3072], "play": 1036, "win": 630 }
+                ]
+            }
+        });
+
+        let build = parse_opgg_analysis_payload(&json, 804, "Yunara")
+            .expect("Parsing Yunara build with boots list should succeed");
+
+        // Verify Block 3 (3 Botas Mais Feitas):
+        assert_eq!(build.item_blocks[2].title, "3 Botas Mais Feitas");
+        // Must be in strict order of play count descending: 3008 (41,774) -> 3006 (33,119) -> 3047 (572)
+        assert_eq!(build.item_blocks[2].item_ids, vec![3008, 3006, 3047]);
+
+        // Verify boots never leak into Core (Block 1), Final Build (Block 3), or Situational (Block 4)
+        for &boot_id in &[3008, 3006, 3047, 3009, 3111] {
+            assert!(!build.item_blocks[1].item_ids.contains(&boot_id), "Boot {boot_id} leaked into core");
+            assert!(!build.item_blocks[3].item_ids.contains(&boot_id), "Boot {boot_id} leaked into final build");
+            assert!(!build.item_blocks[4].item_ids.contains(&boot_id), "Boot {boot_id} leaked into situational");
+        }
+
+        // Verify is_boot_item recognizes 3008, 3010, and 3013
+        assert!(is_boot_item(3008));
+        assert!(is_boot_item(3010));
+        assert!(is_boot_item(3013));
     }
 }
