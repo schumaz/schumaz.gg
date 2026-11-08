@@ -58,6 +58,68 @@ pub struct ChampionBuild {
     pub item_blocks: Vec<ItemBlock>,
 }
 
+/// Maps a queue ID into an OP.GG queue argument string ("aram" or "ranked").
+pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
+    match queue_id {
+        450 => "aram",
+        _ => "ranked",
+    }
+}
+
+/// Returns sensible default summoner spells adapted to the queue type.
+/// ARAM: Flash (4) + Snowball/Mark (32); Summoner's Rift: Flash (4) + Ignite (14).
+pub fn default_spells_for_queue(queue_id: i32) -> (i32, i32) {
+    if queue_id == 450 { (4, 32) } else { (4, 14) }
+}
+
+/// Constructs a safe, universal fallback build in case OP.GG API is down or times out.
+pub fn build_fallback_champion_build(
+    champion_id: i32,
+    champion_name: &str,
+    queue_id: i32,
+) -> ChampionBuild {
+    let (spell1_id, spell2_id) = default_spells_for_queue(queue_id);
+
+    // Universal standard rune page: Precision (8000) + Domination (8100)
+    let selected_perk_ids = vec![
+        8005, // Press the Attack
+        9111, // Triumph
+        9104, // Legend: Alacrity
+        8014, // Coup de Grace
+        8139, // Taste of Blood
+        8135, // Treasure Hunter
+        5008, // Adaptive Force
+        5008, // Adaptive Force
+        5001, // Health Scaling
+    ];
+
+    ChampionBuild {
+        champion_id,
+        champion_name: champion_name.to_string(),
+        win_rate: 50.0,
+        pick_rate: 5.0,
+        primary_style_id: 8000,
+        sub_style_id: 8100,
+        selected_perk_ids,
+        spell1_id,
+        spell2_id,
+        item_blocks: vec![
+            ItemBlock {
+                title: "Starter Items".to_string(),
+                item_ids: if queue_id == 450 {
+                    vec![2051, 1001]
+                } else {
+                    vec![1055, 2003]
+                },
+            },
+            ItemBlock {
+                title: "Core Build".to_string(),
+                item_ids: vec![3031, 3006, 3094],
+            },
+        ],
+    }
+}
+
 /// Parses the latest DataDragon version string from `/api/versions.json`.
 pub fn parse_latest_ddragon_version(versions_json: &serde_json::Value) -> Result<String, String> {
     versions_json
@@ -462,11 +524,80 @@ pub async fn fetch_opgg_champion_analysis(
     Ok(json_body)
 }
 
+/// High-level function that fetches the recommended build for a champion with automatic resilient fallback.
+pub async fn get_recommended_build_with_endpoint(
+    client: &reqwest::Client,
+    endpoint_url: &str,
+    champion_id: i32,
+    queue_id: i32,
+    ddragon_cache: &DataDragonCache,
+) -> ChampionBuild {
+    let champ_name = ddragon_cache
+        .champions
+        .get(&champion_id)
+        .map(|c| c.key_name.as_str())
+        .unwrap_or("Unknown");
+
+    let queue_param = opgg_queue_param_from_id(queue_id);
+
+    match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
+        Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
+            Ok(build) => build,
+            Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+        },
+        Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+    }
+}
+
+/// Production entry point to obtain recommended build for champion.
+pub async fn get_recommended_build(
+    client: &reqwest::Client,
+    champion_id: i32,
+    queue_id: i32,
+) -> Result<ChampionBuild, String> {
+    let cache = get_or_init_ddragon_cache(client).await?;
+    Ok(
+        get_recommended_build_with_endpoint(
+            client,
+            OPGG_MCP_ENDPOINT,
+            champion_id,
+            queue_id,
+            cache,
+        )
+        .await,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[test]
+    fn test_opgg_queue_param_and_default_spells_adaptation() {
+        assert_eq!(opgg_queue_param_from_id(450), "aram");
+        assert_eq!(default_spells_for_queue(450), (4, 32)); // Flash + Snowball
+
+        assert_eq!(opgg_queue_param_from_id(420), "ranked");
+        assert_eq!(default_spells_for_queue(420), (4, 14)); // Flash + Ignite
+
+        assert_eq!(opgg_queue_param_from_id(440), "ranked");
+        assert_eq!(opgg_queue_param_from_id(400), "ranked");
+    }
+
+    #[test]
+    fn test_fallback_build_has_valid_9_perks_and_queue_spells() {
+        let aram_fallback = build_fallback_champion_build(103, "Ahri", 450);
+        assert_eq!(aram_fallback.selected_perk_ids.len(), 9);
+        assert_eq!(aram_fallback.spell1_id, 4);
+        assert_eq!(aram_fallback.spell2_id, 32);
+
+        let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
+        assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
+        assert_eq!(ranked_fallback.spell1_id, 4);
+        assert_eq!(ranked_fallback.spell2_id, 14);
+    }
 
     #[test]
     fn test_parse_latest_ddragon_version() {
@@ -702,5 +833,46 @@ mod tests {
         assert_eq!(build.selected_perk_ids.len(), 9);
         assert_eq!(build.spell1_id, 4);
         assert_eq!(build.spell2_id, 7);
+    }
+
+    #[tokio::test]
+    async fn test_get_recommended_build_uses_fallback_when_opgg_returns_500() {
+        let mock_server = MockServer::start().await;
+
+        // Simulate 500 Internal Server Error from OP.GG
+        Mock::given(method("POST"))
+            .and(path("/mcp"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let mcp_url = format!("{}/mcp", mock_server.uri());
+
+        let mut champions_map = HashMap::new();
+        champions_map.insert(
+            103,
+            ChampionMetadata {
+                champion_id: 103,
+                key_name: "Ahri".to_string(),
+                display_name: "Ahri".to_string(),
+                icon_url: "https://example.com/ahri.png".to_string(),
+            },
+        );
+
+        let cache = DataDragonCache {
+            version: "14.23.1".to_string(),
+            champions: champions_map,
+            runes: HashMap::new(),
+        };
+
+        // Even though OP.GG fails with 500, this function must not fail, returning a resilient fallback!
+        let build = get_recommended_build_with_endpoint(&client, &mcp_url, 103, 450, &cache).await;
+
+        assert_eq!(build.champion_id, 103);
+        assert_eq!(build.champion_name, "Ahri");
+        assert_eq!(build.selected_perk_ids.len(), 9);
+        assert_eq!(build.spell1_id, 4);
+        assert_eq!(build.spell2_id, 32); // ARAM snowball
     }
 }
