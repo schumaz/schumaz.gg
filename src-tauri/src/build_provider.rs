@@ -1,6 +1,7 @@
 //! Module 3: Data Fetching and Win Rate Provider (OP.GG + DataDragon)
 //! Handles requests to DataDragon and OP.GG champion analysis (runes, builds, spells, win rates).
 
+use crate::lcu_injector::BuildPriorityPreference;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::OnceCell;
@@ -544,11 +545,411 @@ pub async fn get_or_init_ddragon_cache(
         .await
 }
 
+/// Detailed stats for an item or item set from OP.GG.
+#[derive(Debug, Clone, Default)]
+pub struct ItemStatEntry {
+    pub ids: Vec<i32>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+}
+
+impl ItemStatEntry {
+    pub fn win_rate(&self) -> f64 {
+        if self.play > 0 {
+            (self.win as f64) / (self.play as f64)
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Extracts all `CoreItems(...)` entries from OP.GG MCP text.
+pub fn extract_all_core_items_from_text(text: &str) -> Vec<ItemStatEntry> {
+    let mut entries = Vec::new();
+    let mut search_slice = text;
+    while let Some(ci_idx) = search_slice.find("CoreItems(") {
+        let after_ci = &search_slice[ci_idx + 10..];
+        let maybe_brackets = after_ci
+            .find('[')
+            .zip(after_ci.find(']'))
+            .filter(|(open, close)| open < close);
+        if let Some((open_bracket, close_bracket)) = maybe_brackets {
+            let inside = &after_ci[open_bracket + 1..close_bracket];
+            let ids: Vec<i32> = inside
+                .split(',')
+                .filter_map(|s| s.trim().parse::<i32>().ok())
+                .collect();
+            if !ids.is_empty() {
+                let rest_after_bracket = &after_ci[close_bracket + 1..];
+                let mut play = 1;
+                let mut win = 0;
+                let mut pick_rate = 0.0;
+                if let Some(close_paren) = rest_after_bracket.find(')') {
+                    let stats_str = &rest_after_bracket[..close_paren];
+                    let parts: Vec<&str> = stats_str
+                        .trim_start_matches(',')
+                        .split(',')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if let Some(Ok(p)) = parts.first().map(|s| s.parse::<i64>()) {
+                        play = p;
+                    }
+                    if let Some(Ok(w)) = parts.get(1).map(|s| s.parse::<i64>()) {
+                        win = w;
+                    }
+                    if let Some(Ok(pr)) = parts.get(2).map(|s| s.parse::<f64>()) {
+                        pick_rate = pr;
+                    }
+                }
+                entries.push(ItemStatEntry {
+                    ids,
+                    play,
+                    win,
+                    pick_rate,
+                });
+            }
+            search_slice = &after_ci[close_bracket + 1..];
+            continue;
+        }
+        break;
+    }
+    entries
+}
+
+/// Helper to parse JSON item entries (either single object, array of ids, or array of item stat objects).
+fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatEntry> {
+    let mut entries = Vec::new();
+    let Some(v) = val else {
+        return entries;
+    };
+    if let Some(arr) = v.as_array() {
+        for elem in arr {
+            if let Some(num) = elem.as_i64() {
+                entries.push(ItemStatEntry {
+                    ids: vec![num as i32],
+                    play: 1,
+                    win: 0,
+                    pick_rate: 0.0,
+                });
+            } else if let Some(obj) = elem.as_object() {
+                let ids: Vec<i32> = obj
+                    .get("ids")
+                    .and_then(|ids_val| ids_val.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_i64().map(|n| n as i32))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let play = obj.get("play").and_then(|p| p.as_i64()).unwrap_or(1);
+                let win = obj.get("win").and_then(|w| w.as_i64()).unwrap_or(0);
+                let pick_rate = obj
+                    .get("pick_rate")
+                    .and_then(|pr| pr.as_f64())
+                    .unwrap_or(0.0);
+                if !ids.is_empty() {
+                    entries.push(ItemStatEntry {
+                        ids,
+                        play,
+                        win,
+                        pick_rate,
+                    });
+                }
+            }
+        }
+    } else if let Some(obj) = v.as_object() {
+        let ids: Vec<i32> = obj
+            .get("ids")
+            .and_then(|ids_val| ids_val.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_i64().map(|n| n as i32))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let play = obj.get("play").and_then(|p| p.as_i64()).unwrap_or(1);
+        let win = obj.get("win").and_then(|w| w.as_i64()).unwrap_or(0);
+        let pick_rate = obj
+            .get("pick_rate")
+            .and_then(|pr| pr.as_f64())
+            .unwrap_or(0.0);
+        if !ids.is_empty() {
+            entries.push(ItemStatEntry {
+                ids,
+                play,
+                win,
+                pick_rate,
+            });
+        }
+    }
+    entries
+}
+
+/// Builds the 5 item blocks conforming to the user's requirements:
+/// 1. Itens Iniciais (Starter + Potion)
+/// 2. Primeiros 3 Itens (Strictly non-boot, ordered according to BuildPriorityPreference)
+/// 3. 3 Botas Mais Feitas (Always strictly ordered by most absolute games played: play descending)
+/// 4. Build Final (clean_core + top 2 late-game items, ordered according to BuildPriorityPreference)
+/// 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
+pub fn build_5_item_blocks(
+    starter_entry: Option<ItemStatEntry>,
+    boot_entries: Vec<ItemStatEntry>,
+    candidate_entries: Vec<ItemStatEntry>,
+    damage_type: &str,
+    priority: BuildPriorityPreference,
+) -> Vec<ItemBlock> {
+    // 1. Itens Iniciais
+    let mut starter_ids: Vec<i32> = starter_entry.map(|e| e.ids).unwrap_or_else(|| {
+        if damage_type == "AP" {
+            vec![1056, 2003]
+        } else {
+            vec![1055, 2003]
+        }
+    });
+    if starter_ids.is_empty() {
+        starter_ids = if damage_type == "AP" {
+            vec![1056, 2003]
+        } else {
+            vec![1055, 2003]
+        };
+    } else if !starter_ids.contains(&2003)
+        && !starter_ids.contains(&2031)
+        && !starter_ids.contains(&2033)
+    {
+        starter_ids.push(2003);
+    }
+
+    // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
+    let mut boot_map: HashMap<i32, (i64, usize)> = HashMap::new();
+    let mut boot_seen_counter = 0;
+    for entry in &boot_entries {
+        for &id in &entry.ids {
+            if is_boot_item(id) {
+                let slot = boot_map.entry(id).or_insert_with(|| {
+                    let idx = boot_seen_counter;
+                    boot_seen_counter += 1;
+                    (0, idx)
+                });
+                slot.0 += entry.play.max(1);
+            }
+        }
+    }
+    for entry in &candidate_entries {
+        for &id in &entry.ids {
+            if is_boot_item(id) {
+                let slot = boot_map.entry(id).or_insert_with(|| {
+                    let idx = boot_seen_counter;
+                    boot_seen_counter += 1;
+                    (0, idx)
+                });
+                slot.0 += entry.play.max(1);
+            }
+        }
+    }
+    let mut boot_pairs: Vec<(i32, i64, usize)> = boot_map
+        .into_iter()
+        .map(|(id, (play, idx))| (id, play, idx))
+        .collect();
+    boot_pairs.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+    let mut boots_list: Vec<i32> = boot_pairs.into_iter().map(|(id, _, _)| id).collect();
+
+    let archetype_boots = if damage_type == "AP" {
+        vec![3020, 3158, 3111, 3047]
+    } else {
+        vec![3006, 3047, 3111, 3009]
+    };
+    for b in archetype_boots {
+        if boots_list.len() < 3 && !boots_list.contains(&b) {
+            boots_list.push(b);
+        }
+    }
+    boots_list.truncate(3);
+
+    // 3. Aggregate all non-boot, non-starter candidate items with play & win counts
+    #[derive(Debug, Clone)]
+    struct ItemAggregate {
+        id: i32,
+        play: i64,
+        win: i64,
+        first_seen_index: usize,
+    }
+
+    let mut item_map: HashMap<i32, (i64, i64, usize)> = HashMap::new();
+    let mut item_seen_counter = 0;
+    for entry in &candidate_entries {
+        for &id in &entry.ids {
+            if !is_boot_item(id) && !starter_ids.contains(&id) {
+                let entry_play = entry.play.max(1);
+                let entry_win = entry.win.max(0);
+                let slot = item_map.entry(id).or_insert_with(|| {
+                    let idx = item_seen_counter;
+                    item_seen_counter += 1;
+                    (0, 0, idx)
+                });
+                slot.0 += entry_play;
+                slot.1 += entry_win;
+            }
+        }
+    }
+
+    let mut all_candidates: Vec<ItemAggregate> = item_map
+        .into_iter()
+        .map(|(id, (play, win, first_seen_index))| ItemAggregate {
+            id,
+            play,
+            win,
+            first_seen_index,
+        })
+        .collect();
+
+    // Sort according to BuildPriorityPreference:
+    match priority {
+        BuildPriorityPreference::MostPopular => {
+            all_candidates.sort_by(|a, b| {
+                b.play
+                    .cmp(&a.play)
+                    .then_with(|| a.first_seen_index.cmp(&b.first_seen_index))
+            });
+        }
+        BuildPriorityPreference::HighestWinRate => {
+            all_candidates.sort_by(|a, b| {
+                let wr_a = if a.play > 0 {
+                    a.win as f64 / a.play as f64
+                } else {
+                    0.0
+                };
+                let wr_b = if b.play > 0 {
+                    b.win as f64 / b.play as f64
+                } else {
+                    0.0
+                };
+                wr_b.partial_cmp(&wr_a)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| b.play.cmp(&a.play))
+                    .then_with(|| a.first_seen_index.cmp(&b.first_seen_index))
+            });
+        }
+    }
+
+    // Block 2: Primeiros 3 Itens (Strictly top 3 non-boot items)
+    let mut clean_core: Vec<i32> = Vec::new();
+    for cand in &all_candidates {
+        if clean_core.len() < 3 && !clean_core.contains(&cand.id) {
+            clean_core.push(cand.id);
+        }
+    }
+    let default_core = if damage_type == "AP" {
+        vec![3118, 4645, 3089]
+    } else {
+        vec![3031, 3094, 3036]
+    };
+    for d in default_core {
+        if clean_core.len() < 3 && !clean_core.contains(&d) {
+            clean_core.push(d);
+        }
+    }
+
+    // Block 4: Build Final (5 items: clean_core + top 2 late-game items)
+    let mut final_build: Vec<i32> = clean_core.clone();
+    for cand in &all_candidates {
+        if final_build.len() < 5 && !final_build.contains(&cand.id) {
+            final_build.push(cand.id);
+        }
+    }
+    let default_final = if damage_type == "AP" {
+        vec![3157, 3135, 4629]
+    } else {
+        vec![3072, 3026, 3139]
+    };
+    for d in default_final {
+        if final_build.len() < 5 && !final_build.contains(&d) {
+            final_build.push(d);
+        }
+    }
+
+    // Block 5: Itens Situacionais / Úteis
+    // Strictly non-boot items that are NOT in clean_core and NOT in final_build,
+    // sorted strictly in descending order of absolute games played (play count)!
+    let mut situational_candidates: Vec<&ItemAggregate> = all_candidates
+        .iter()
+        .filter(|cand| !clean_core.contains(&cand.id) && !final_build.contains(&cand.id))
+        .collect();
+    situational_candidates.sort_by(|a, b| {
+        b.play
+            .cmp(&a.play)
+            .then_with(|| a.first_seen_index.cmp(&b.first_seen_index))
+    });
+
+    let mut situational_items: Vec<i32> =
+        situational_candidates.into_iter().map(|c| c.id).collect();
+
+    // If candidate pool had few items, supplement with safe high-utility situational items (without duplicates)
+    let archetype_situational = if damage_type == "AP" {
+        vec![4629, 4646, 3102, 3165, 6653]
+    } else {
+        vec![3026, 3139, 3072, 3046, 3091]
+    };
+    for item in archetype_situational {
+        if situational_items.len() < 4
+            && !clean_core.contains(&item)
+            && !final_build.contains(&item)
+            && !situational_items.contains(&item)
+        {
+            situational_items.push(item);
+        }
+    }
+
+    vec![
+        ItemBlock {
+            title: "Itens Iniciais".to_string(),
+            item_ids: starter_ids,
+            item_icon_urls: vec![],
+        },
+        ItemBlock {
+            title: "Primeiros 3 Itens".to_string(),
+            item_ids: clean_core,
+            item_icon_urls: vec![],
+        },
+        ItemBlock {
+            title: "3 Botas Mais Feitas".to_string(),
+            item_ids: boots_list,
+            item_icon_urls: vec![],
+        },
+        ItemBlock {
+            title: "Build Final".to_string(),
+            item_ids: final_build,
+            item_icon_urls: vec![],
+        },
+        ItemBlock {
+            title: "Itens Situacionais / Úteis".to_string(),
+            item_ids: situational_items,
+            item_icon_urls: vec![],
+        },
+    ]
+}
+
 /// Parses text format returned in OP.GG MCP `result.content[0].text`.
 pub fn parse_opgg_mcp_text(
     text: &str,
     champion_id: i32,
     champion_name: &str,
+) -> Result<ChampionBuild, String> {
+    parse_opgg_mcp_text_with_priority(
+        text,
+        champion_id,
+        champion_name,
+        BuildPriorityPreference::MostPopular,
+    )
+}
+
+/// Parses text format returned in OP.GG MCP with user-configured BuildPriorityPreference.
+pub fn parse_opgg_mcp_text_with_priority(
+    text: &str,
+    champion_id: i32,
+    champion_name: &str,
+    priority: BuildPriorityPreference,
 ) -> Result<ChampionBuild, String> {
     // 1. Extract win_rate and pick_rate: AverageStats(0.51, 0.12)
     let mut win_rate = 50.0;
@@ -653,129 +1054,98 @@ pub fn parse_opgg_mcp_text(
         ));
     }
 
-    // 3. Extract all CoreItems arrays
-    let mut all_item_arrays: Vec<Vec<i32>> = Vec::new();
-    let mut search_slice = text;
-    while let Some(ci_idx) = search_slice.find("CoreItems(") {
-        let after_ci = &search_slice[ci_idx + 10..];
-        let maybe_brackets = after_ci
+    // 3. Extract all CoreItems entries with stats
+    let all_entries = extract_all_core_items_from_text(text);
+
+    // 4. Extract summoner spells
+    let mut spell1_id = 4;
+    let mut spell2_id = 14;
+    if let Some(ss_idx) = text.find("SummonerSpells(") {
+        let after_ss = &text[ss_idx + 15..];
+        let maybe_brackets = after_ss
             .find('[')
-            .zip(after_ci.find(']'))
+            .zip(after_ss.find(']'))
             .filter(|(open, close)| open < close);
-        if let Some((open_bracket, close_bracket)) = maybe_brackets {
-            let inside = &after_ci[open_bracket + 1..close_bracket];
-            let ids: Vec<i32> = inside
+        if let Some((o, c)) = maybe_brackets {
+            let ids: Vec<i32> = after_ss[o + 1..c]
                 .split(',')
                 .filter_map(|s| s.trim().parse::<i32>().ok())
                 .collect();
-            if !ids.is_empty() {
-                all_item_arrays.push(ids);
+            if ids.len() >= 2 {
+                spell1_id = ids[0];
+                spell2_id = ids[1];
             }
-            search_slice = &after_ci[close_bracket + 1..];
-            continue;
         }
-        break;
-    }
-
-    // 4. Extract summoner spells (two spells from CoreItems or default)
-    let mut spell1_id = 4;
-    let mut spell2_id = 14;
-    for arr in &all_item_arrays {
-        if arr.len() == 2 && matches!(arr[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32) {
-            spell1_id = arr[0];
-            spell2_id = arr[1];
-            break;
+    } else {
+        for entry in &all_entries {
+            if entry.ids.len() == 2
+                && matches!(entry.ids[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32)
+            {
+                spell1_id = entry.ids[0];
+                spell2_id = entry.ids[1];
+                break;
+            }
         }
     }
 
-    // Filter out spell arrays from items list
-    let item_candidate_arrays: Vec<Vec<i32>> = all_item_arrays
+    // Filter out spell arrays from items entries
+    let item_candidate_entries: Vec<ItemStatEntry> = all_entries
         .into_iter()
-        .filter(|arr| {
-            !(arr.len() == 2 && matches!(arr[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32))
+        .filter(|entry| {
+            !(entry.ids.len() == 2
+                && matches!(entry.ids[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32))
         })
         .collect();
 
-    // 1st array: core items, 2nd array: boots, 3rd array: starters, rest: situational/final
-    let raw_core = item_candidate_arrays
-        .first()
-        .cloned()
-        .unwrap_or_else(|| vec![3118, 4645, 3157]);
-    let raw_boots = item_candidate_arrays
-        .get(1)
-        .cloned()
-        .unwrap_or_else(|| vec![3020]);
-    let raw_starters = item_candidate_arrays
-        .get(2)
-        .cloned()
-        .unwrap_or_else(|| vec![1056, 2003, 2003]);
+    let is_ap = text.contains("\"AP\"")
+        || (!text.contains("\"AD\"")
+            && (champion_name.to_lowercase().contains("ahri")
+                || champion_name.to_lowercase().contains("lux")
+                || champion_name.to_lowercase().contains("syndra")
+                || champion_name.to_lowercase().contains("veigar")));
+    let damage_type = if is_ap { "AP" } else { "AD" };
 
-    // Clean core items: strictly filter out any boots!
-    let mut clean_core: Vec<i32> = raw_core
-        .into_iter()
-        .filter(|id| !is_boot_item(*id))
-        .collect();
+    let starter_entry = item_candidate_entries.get(2).cloned();
+    let boot_entries = item_candidate_entries.get(1).cloned().into_iter().collect();
 
-    // Collect all candidate items from subsequent arrays (excluding boots and starters)
-    let mut candidate_pool: Vec<i32> = Vec::new();
-    for arr in item_candidate_arrays.iter().skip(3) {
-        for &id in arr {
-            if !is_boot_item(id)
-                && !raw_starters.contains(&id)
-                && !clean_core.contains(&id)
-                && !candidate_pool.contains(&id)
-            {
-                candidate_pool.push(id);
+    let mut candidate_entries = Vec::new();
+    let core_ids = if let Some(first) = item_candidate_entries.first() {
+        let mut core_entry = first.clone();
+        if core_entry.play == 1 {
+            core_entry.play = 10000;
+        }
+        let ids = core_entry.ids.clone();
+        candidate_entries.push(core_entry);
+        ids
+    } else {
+        Vec::new()
+    };
+    if item_candidate_entries.len() > 3 {
+        for entry in &item_candidate_entries[3..] {
+            let filtered_ids: Vec<i32> = entry
+                .ids
+                .iter()
+                .filter(|id| !core_ids.contains(id))
+                .copied()
+                .collect();
+            if !filtered_ids.is_empty() {
+                candidate_entries.push(ItemStatEntry {
+                    ids: filtered_ids,
+                    play: entry.play,
+                    win: entry.win,
+                    pick_rate: entry.pick_rate,
+                });
             }
         }
     }
 
-    while clean_core.len() < 3 && !candidate_pool.is_empty() {
-        clean_core.push(candidate_pool.remove(0));
-    }
-
-    // 4. Build Final: clean_core (3 items) + top 2-3 late-game completion items
-    let mut final_build: Vec<i32> = clean_core.clone();
-    let mut remaining_pool: Vec<i32> = Vec::new();
-
-    for &id in &candidate_pool {
-        if final_build.len() < 5 && !final_build.contains(&id) {
-            final_build.push(id);
-        } else if !final_build.contains(&id) && !remaining_pool.contains(&id) {
-            remaining_pool.push(id);
-        }
-    }
-
-    // 3. 3 Botas Mais Feitas
-    let mut boots_list: Vec<i32> = raw_boots
-        .into_iter()
-        .filter(|id| is_boot_item(*id))
-        .collect();
-    let default_boots = [3020, 3158, 3111, 3047];
-    for b in default_boots {
-        if !boots_list.contains(&b) && boots_list.len() < 3 {
-            boots_list.push(b);
-        }
-    }
-
-    // 5. (NOVO) Itens Situacionais / Úteis:
-    // Itens de alto pickrate/utilidade que NÃO estão nos primeiros 3 itens nem na build final!
-    let mut situational_items: Vec<i32> = remaining_pool
-        .into_iter()
-        .filter(|id| !clean_core.contains(id) && !final_build.contains(id) && !is_boot_item(*id))
-        .collect();
-
-    // If candidate pool had few items, supplement with safe high-utility situational items (without duplicates)
-    let fallback_situational = [4629, 4646, 3102, 3165, 6653, 3046, 3091, 3139, 3026];
-    for &item in &fallback_situational {
-        if situational_items.len() < 4
-            && !clean_core.contains(&item)
-            && !final_build.contains(&item)
-            && !situational_items.contains(&item)
-        {
-            situational_items.push(item);
-        }
-    }
+    let item_blocks = build_5_item_blocks(
+        starter_entry,
+        boot_entries,
+        candidate_entries,
+        damage_type,
+        priority,
+    );
 
     Ok(ChampionBuild {
         champion_id,
@@ -787,33 +1157,7 @@ pub fn parse_opgg_mcp_text(
         selected_perk_ids,
         spell1_id,
         spell2_id,
-        item_blocks: vec![
-            ItemBlock {
-                title: "Itens Iniciais".to_string(),
-                item_ids: raw_starters,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                title: "Primeiros 3 Itens".to_string(),
-                item_ids: clean_core,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                title: "3 Botas Mais Feitas".to_string(),
-                item_ids: boots_list,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                title: "Build Final".to_string(),
-                item_ids: final_build,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                title: "Itens Situacionais / Úteis".to_string(),
-                item_ids: situational_items,
-                item_icon_urls: vec![],
-            },
-        ],
+        item_blocks,
         ..Default::default()
     })
 }
@@ -824,12 +1168,27 @@ pub fn parse_opgg_analysis_payload(
     champion_id: i32,
     champion_name: &str,
 ) -> Result<ChampionBuild, String> {
+    parse_opgg_analysis_payload_with_priority(
+        opgg_json,
+        champion_id,
+        champion_name,
+        BuildPriorityPreference::MostPopular,
+    )
+}
+
+/// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild` with user priority preference.
+pub fn parse_opgg_analysis_payload_with_priority(
+    opgg_json: &serde_json::Value,
+    champion_id: i32,
+    champion_name: &str,
+    priority: BuildPriorityPreference,
+) -> Result<ChampionBuild, String> {
     // If the response is wrapped in MCP content text (e.g. result.content[0].text), use text parser!
     if let Some(text) = opgg_json
         .pointer("/result/content/0/text")
         .and_then(|v| v.as_str())
     {
-        return parse_opgg_mcp_text(text, champion_id, champion_name);
+        return parse_opgg_mcp_text_with_priority(text, champion_id, champion_name, priority);
     }
 
     let analysis = opgg_json
@@ -922,162 +1281,90 @@ pub fn parse_opgg_analysis_payload(
     let spell1_id = analysis
         .pointer("/spells/0")
         .or_else(|| analysis.pointer("/summoner_spells/0"))
+        .or_else(|| analysis.pointer("/summoner_spells/ids/0"))
         .and_then(|v| v.as_i64())
-        .unwrap_or(4) as i32; // Default 4 = Flash
+        .unwrap_or(4) as i32;
 
     let spell2_id = analysis
         .pointer("/spells/1")
         .or_else(|| analysis.pointer("/summoner_spells/1"))
+        .or_else(|| analysis.pointer("/summoner_spells/ids/1"))
         .and_then(|v| v.as_i64())
-        .unwrap_or(14) as i32; // Default 14 = Ignite
+        .unwrap_or(14) as i32;
 
-    // Extract item blocks:
-    // 1. Itens Iniciais (Starter + Potion)
-    // 2. Primeiros 3 Itens (Core Build)
-    // 3. Build Final (Full/Late-game build)
-    // 4. 3 Botas Mais Feitas (Top 3 boots)
-    let mut item_blocks = Vec::new();
+    let damage_type = analysis
+        .get("damage_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("AP");
 
-    // 1. Starters
-    let mut starter_ids: Vec<i32> = analysis
-        .pointer("/items/starters")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .collect()
-        })
-        .unwrap_or_default();
+    // Extract item entries from JSON
+    let starter_entry = parse_json_item_entries(
+        analysis
+            .pointer("/items/starters")
+            .or_else(|| analysis.pointer("/starter_items")),
+    )
+    .into_iter()
+    .next();
 
-    if starter_ids.is_empty() {
-        starter_ids = vec![1056, 2003]; // Default Doran's Ring + Potion
-    } else if !starter_ids.contains(&2003)
-        && !starter_ids.contains(&2031)
-        && !starter_ids.contains(&2033)
-    {
-        starter_ids.push(2003); // Ensure Health Potion is present
+    let boot_entries = parse_json_item_entries(
+        analysis
+            .pointer("/items/boots")
+            .or_else(|| analysis.pointer("/boots")),
+    );
+
+    let mut candidate_entries = Vec::new();
+    let mut core_entries = parse_json_item_entries(
+        analysis
+            .pointer("/items/core")
+            .or_else(|| analysis.pointer("/core_items")),
+    );
+    let mut core_ids = Vec::new();
+    for entry in &mut core_entries {
+        if entry.play == 1 {
+            entry.play = 10000;
+        }
+        core_ids.extend_from_slice(&entry.ids);
     }
-    item_blocks.push(ItemBlock {
-        title: "Itens Iniciais".to_string(),
-        item_ids: starter_ids,
-        item_icon_urls: vec![],
-    });
+    candidate_entries.extend(core_entries);
 
-    // 2. Primeiros 3 Itens (Core) - Strictly exclude any boots
-    let raw_core: Vec<i32> = analysis
-        .pointer("/items/core")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .collect()
-        })
-        .unwrap_or_else(|| vec![3285, 4645, 3089]);
+    let mut other_entries = Vec::new();
+    other_entries.extend(parse_json_item_entries(
+        analysis
+            .pointer("/items/situational")
+            .or_else(|| analysis.pointer("/last_items")),
+    ));
+    other_entries.extend(parse_json_item_entries(
+        analysis
+            .pointer("/items/final_build")
+            .or_else(|| analysis.pointer("/fourth_items")),
+    ));
+    other_entries.extend(parse_json_item_entries(analysis.pointer("/fifth_items")));
+    other_entries.extend(parse_json_item_entries(analysis.pointer("/sixth_items")));
 
-    let mut clean_core: Vec<i32> = raw_core
-        .into_iter()
-        .filter(|id| !is_boot_item(*id))
-        .collect();
-
-    // Pull situational/extra items to fill clean_core to 3 if needed
-    let situational_items: Vec<i32> = analysis
-        .pointer("/items/situational")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .filter(|id| !is_boot_item(*id))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    for sit in &situational_items {
-        if clean_core.len() < 3 && !clean_core.contains(sit) {
-            clean_core.push(*sit);
+    for entry in other_entries {
+        let filtered_ids: Vec<i32> = entry
+            .ids
+            .iter()
+            .filter(|id| !core_ids.contains(id))
+            .copied()
+            .collect();
+        if !filtered_ids.is_empty() {
+            candidate_entries.push(ItemStatEntry {
+                ids: filtered_ids,
+                play: entry.play,
+                win: entry.win,
+                pick_rate: entry.pick_rate,
+            });
         }
     }
 
-    if clean_core.is_empty() {
-        clean_core = vec![3031, 3094, 3036];
-    }
-
-    item_blocks.push(ItemBlock {
-        title: "Primeiros 3 Itens".to_string(),
-        item_ids: clean_core.clone(),
-        item_icon_urls: vec![],
-    });
-
-    // 3. 3 Botas Mais Feitas (Position 3)
-    let mut boots_ids: Vec<i32> = analysis
-        .pointer("/items/boots")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .filter(|id| is_boot_item(*id))
-                .take(3)
-                .collect()
-        })
-        .unwrap_or_default();
-
-    if boots_ids.is_empty() {
-        boots_ids = vec![3020, 3111, 3047];
-    }
-    item_blocks.push(ItemBlock {
-        title: "3 Botas Mais Feitas".to_string(),
-        item_ids: boots_ids,
-        item_icon_urls: vec![],
-    });
-
-    // 4. Build Final (Position 4)
-    let mut final_build_ids: Vec<i32> = analysis
-        .pointer("/items/final_build")
-        .or_else(|| analysis.pointer("/items/full_build"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .filter(|id| !is_boot_item(*id))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    if final_build_ids.is_empty() {
-        final_build_ids = clean_core.clone();
-        for id_val in &situational_items {
-            if !final_build_ids.contains(id_val) && final_build_ids.len() < 5 {
-                final_build_ids.push(*id_val);
-            }
-        }
-    }
-    item_blocks.push(ItemBlock {
-        title: "Build Final".to_string(),
-        item_ids: final_build_ids.clone(),
-        item_icon_urls: vec![],
-    });
-
-    // 5. Itens Situacionais / Úteis (Position 5)
-    // High pick rate items that are NOT in clean_core AND NOT in final_build_ids!
-    let mut extra_situational: Vec<i32> = situational_items
-        .into_iter()
-        .filter(|id| !clean_core.contains(id) && !final_build_ids.contains(id) && !is_boot_item(*id))
-        .collect();
-
-    let default_extras = [4629, 4646, 3102, 3165, 6653, 3046, 3091, 3139];
-    for &d in &default_extras {
-        if extra_situational.len() < 3
-            && !clean_core.contains(&d)
-            && !final_build_ids.contains(&d)
-            && !extra_situational.contains(&d)
-        {
-            extra_situational.push(d);
-        }
-    }
-    item_blocks.push(ItemBlock {
-        title: "Itens Situacionais / Úteis".to_string(),
-        item_ids: extra_situational,
-        item_icon_urls: vec![],
-    });
+    let item_blocks = build_5_item_blocks(
+        starter_entry,
+        boot_entries,
+        candidate_entries,
+        damage_type,
+        priority,
+    );
 
     Ok(ChampionBuild {
         champion_id,
@@ -1113,16 +1400,17 @@ pub async fn fetch_opgg_champion_analysis(
                 "champion": formatted_champ,
                 "position": "mid",
                 "desired_output_fields": [
-                    "data.summary.average_stats.{win_rate,pick_rate}",
-                    "data.runes.{primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[]}",
-                    "data.summoner_spells.{ids[]}",
-                    "data.starter_items.{ids[]}",
-                    "data.core_items.{ids[]}",
-                    "data.boots.{ids[]}",
-                    "data.fourth_items[].{ids[]}",
-                    "data.fifth_items[].{ids[]}",
-                    "data.sixth_items[].{ids[]}",
-                    "data.last_items[].{ids[]}"
+                    "data.damage_type",
+                    "data.summary.average_stats.{win_rate,pick_rate,play}",
+                    "data.runes.{primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[],play,win}",
+                    "data.summoner_spells.{ids[],play,win}",
+                    "data.starter_items.{ids[],play,win,pick_rate}",
+                    "data.core_items.{ids[],play,win,pick_rate}",
+                    "data.boots.{ids[],play,win,pick_rate}",
+                    "data.last_items[].{ids[],play,win,pick_rate}",
+                    "data.fourth_items[].{ids[],play,win,pick_rate}",
+                    "data.fifth_items[].{ids[],play,win,pick_rate}",
+                    "data.sixth_items[].{ids[],play,win,pick_rate}"
                 ]
             }
         }
@@ -1162,13 +1450,21 @@ pub async fn get_recommended_build_with_endpoint(
         .unwrap_or("Unknown");
 
     let queue_param = opgg_queue_param_from_id(queue_id);
+    let priority = crate::lcu_injector::get_user_preferences().build_priority;
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-            Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
-                Ok(build) => build,
-                Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
-            },
+            Ok(json_res) => {
+                match parse_opgg_analysis_payload_with_priority(
+                    &json_res,
+                    champion_id,
+                    champ_name,
+                    priority,
+                ) {
+                    Ok(build) => build,
+                    Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+                }
+            }
             Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
         };
 
@@ -1226,7 +1522,10 @@ mod tests {
         assert_eq!(aram_fallback.item_blocks[1].title, "Primeiros 3 Itens");
         assert_eq!(aram_fallback.item_blocks[2].title, "3 Botas Mais Feitas");
         assert_eq!(aram_fallback.item_blocks[3].title, "Build Final");
-        assert_eq!(aram_fallback.item_blocks[4].title, "Itens Situacionais / Úteis");
+        assert_eq!(
+            aram_fallback.item_blocks[4].title,
+            "Itens Situacionais / Úteis"
+        );
 
         let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
@@ -1582,7 +1881,7 @@ mod tests {
                 "content": [
                     {
                         "type": "text",
-                        "text": "class LolGetChampionAnalysis: data\nclass Data: summary,core_items,boots,starter_items,fourth_items,fifth_items,sixth_items,summoner_spells,runes\nclass Summary: average_stats\nclass AverageStats: win_rate,pick_rate\nclass CoreItems: ids\nclass Runes: primary_page_id,primary_rune_ids,secondary_page_id,secondary_rune_ids,stat_mod_ids\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(0.51,0.12)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003,2003]),[CoreItems([3089]),CoreItems([3157]),CoreItems([3135])],[CoreItems([3089]),CoreItems([3135]),CoreItems([3157])],[CoreItems([4629]),CoreItems([3135]),CoreItems([4646])],CoreItems([4,14]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])))"
+                        "text": "class LolGetChampionAnalysis: data\nclass Data: summary,core_items,boots,starter_items,fourth_items,fifth_items,sixth_items,summoner_spells,runes\nclass Summary: average_stats\nclass AverageStats: win_rate,pick_rate\nclass CoreItems: ids\nclass Runes: primary_page_id,primary_rune_ids,secondary_page_id,secondary_rune_ids,stat_mod_ids\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(0.51,0.12)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003,2003]),[CoreItems([3089]),CoreItems([3157]),CoreItems([3135])],[CoreItems([3089]),CoreItems([3135]),CoreItems([3157])],[CoreItems([4629]),CoreItems([3135]),CoreItems([4646])],CoreItems([4,14]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])))\""
                     }
                 ]
             }
@@ -1635,9 +1934,223 @@ mod tests {
         assert_eq!(build.item_blocks[4].title, "Itens Situacionais / Úteis");
         assert!(!build.item_blocks[4].item_ids.is_empty());
         for &item in &build.item_blocks[4].item_ids {
-            assert!(!build.item_blocks[1].item_ids.contains(&item), "Situational item {} cannot be in Core 3", item);
-            assert!(!build.item_blocks[3].item_ids.contains(&item), "Situational item {} cannot be in Final Build", item);
-            assert!(!is_boot_item(item), "Situational item {} cannot be a boot", item);
+            assert!(
+                !build.item_blocks[1].item_ids.contains(&item),
+                "Situational item {} cannot be in Core 3",
+                item
+            );
+            assert!(
+                !build.item_blocks[3].item_ids.contains(&item),
+                "Situational item {} cannot be in Final Build",
+                item
+            );
+            assert!(
+                !is_boot_item(item),
+                "Situational item {} cannot be a boot",
+                item
+            );
         }
+    }
+
+    #[test]
+    fn test_build_priority_preference_changes_item_ordering() {
+        // Item 3118 (Malignance): 10,000 games, 5,100 wins (51.0% win rate)
+        // Item 3089 (Rabadon): 1,000 games, 650 wins (65.0% win rate)
+        // Item 4645 (Shadowflame): 8,000 games, 4,200 wins (52.5% win rate)
+        // Item 3157 (Zhonya): 6,000 games, 3,300 wins (55.0% win rate)
+        let starter = Some(ItemStatEntry {
+            ids: vec![1056, 2003],
+            play: 10000,
+            win: 5000,
+            pick_rate: 0.9,
+        });
+        let boots = vec![ItemStatEntry {
+            ids: vec![3020],
+            play: 8000,
+            win: 4000,
+            pick_rate: 0.8,
+        }];
+        let candidates = vec![
+            ItemStatEntry {
+                ids: vec![3118],
+                play: 10000,
+                win: 5100,
+                pick_rate: 0.7,
+            },
+            ItemStatEntry {
+                ids: vec![3089],
+                play: 1000,
+                win: 650,
+                pick_rate: 0.2,
+            },
+            ItemStatEntry {
+                ids: vec![4645],
+                play: 8000,
+                win: 4200,
+                pick_rate: 0.5,
+            },
+            ItemStatEntry {
+                ids: vec![3157],
+                play: 6000,
+                win: 3300,
+                pick_rate: 0.4,
+            },
+        ];
+
+        // 1. With MostPopular (most games played):
+        let popular_blocks = build_5_item_blocks(
+            starter.clone(),
+            boots.clone(),
+            candidates.clone(),
+            "AP",
+            BuildPriorityPreference::MostPopular,
+        );
+        // Ordered by play count: 3118 (10k), 4645 (8k), 3157 (6k)
+        assert_eq!(popular_blocks[1].item_ids, vec![3118, 4645, 3157]);
+
+        // 2. With HighestWinRate:
+        let winrate_blocks = build_5_item_blocks(
+            starter,
+            boots,
+            candidates,
+            "AP",
+            BuildPriorityPreference::HighestWinRate,
+        );
+        // Ordered by win rate: 3089 (65%), 3157 (55%), 4645 (52.5%)
+        assert_eq!(winrate_blocks[1].item_ids, vec![3089, 3157, 4645]);
+    }
+
+    #[test]
+    fn test_boots_ranking_prioritizes_most_played_boots() {
+        // Boot 3020 (Sorcerer's): 50,000 games, 50% win rate
+        // Boot 3158 (Lucidity): 5,000 games, 60% win rate
+        // Boot 3111 (Mercs): 10,000 games, 52% win rate
+        let starter = Some(ItemStatEntry {
+            ids: vec![1056, 2003],
+            play: 50000,
+            win: 25000,
+            pick_rate: 0.9,
+        });
+        let boots = vec![
+            ItemStatEntry {
+                ids: vec![3158],
+                play: 5000,
+                win: 3000,
+                pick_rate: 0.1,
+            },
+            ItemStatEntry {
+                ids: vec![3020],
+                play: 50000,
+                win: 25000,
+                pick_rate: 0.7,
+            },
+            ItemStatEntry {
+                ids: vec![3111],
+                play: 10000,
+                win: 5200,
+                pick_rate: 0.2,
+            },
+        ];
+        let candidates = vec![ItemStatEntry {
+            ids: vec![3118, 4645, 3089],
+            play: 20000,
+            win: 11000,
+            pick_rate: 0.5,
+        }];
+
+        let blocks = build_5_item_blocks(
+            starter,
+            boots,
+            candidates,
+            "AP",
+            BuildPriorityPreference::HighestWinRate, // Even if HighestWinRate is selected!
+        );
+
+        // Boots MUST be sorted by play count descending: 3020 (50k) -> 3111 (10k) -> 3158 (5k)
+        assert_eq!(blocks[2].title, "3 Botas Mais Feitas");
+        assert_eq!(blocks[2].item_ids, vec![3020, 3111, 3158]);
+    }
+
+    #[test]
+    fn test_situational_items_filtered_and_sorted_by_play() {
+        let starter = Some(ItemStatEntry {
+            ids: vec![1056, 2003],
+            play: 50000,
+            win: 25000,
+            pick_rate: 0.9,
+        });
+        let boots = vec![ItemStatEntry {
+            ids: vec![3020],
+            play: 40000,
+            win: 20000,
+            pick_rate: 0.8,
+        }];
+        let candidates = vec![
+            ItemStatEntry {
+                ids: vec![3118, 4645, 3157],
+                play: 20000,
+                win: 10000,
+                pick_rate: 0.4,
+            }, // Core
+            ItemStatEntry {
+                ids: vec![3089],
+                play: 8000,
+                win: 4500,
+                pick_rate: 0.3,
+            }, // Final build 4th
+            ItemStatEntry {
+                ids: vec![3135],
+                play: 5000,
+                win: 2500,
+                pick_rate: 0.2,
+            }, // Final build 5th
+            ItemStatEntry {
+                ids: vec![4646],
+                play: 1500,
+                win: 700,
+                pick_rate: 0.1,
+            }, // Situational (1500 plays)
+            ItemStatEntry {
+                ids: vec![4629],
+                play: 3200,
+                win: 1600,
+                pick_rate: 0.15,
+            }, // Situational (3200 plays)
+            ItemStatEntry {
+                ids: vec![3165],
+                play: 700,
+                win: 350,
+                pick_rate: 0.05,
+            }, // Situational (700 plays)
+        ];
+
+        let blocks = build_5_item_blocks(
+            starter,
+            boots,
+            candidates,
+            "AP",
+            BuildPriorityPreference::MostPopular,
+        );
+
+        // Clean core (first 3): 3118, 4645, 3157
+        assert_eq!(blocks[1].item_ids, vec![3118, 4645, 3157]);
+        // Final build (5 items): 3118, 4645, 3157, 3089, 3135
+        assert_eq!(blocks[3].item_ids, vec![3118, 4645, 3157, 3089, 3135]);
+
+        // Situational items:
+        // Must NOT contain any item from core or final build:
+        for &id in &blocks[4].item_ids {
+            assert!(!blocks[1].item_ids.contains(&id));
+            assert!(!blocks[3].item_ids.contains(&id));
+            assert!(!is_boot_item(id));
+        }
+
+        // Must be ordered strictly by play count descending:
+        // 4629 (3200 plays) should appear BEFORE 4646 (1500 plays) which is BEFORE 3165 (700 plays)!
+        let pos_4629 = blocks[4].item_ids.iter().position(|&x| x == 4629).unwrap();
+        let pos_4646 = blocks[4].item_ids.iter().position(|&x| x == 4646).unwrap();
+        let pos_3165 = blocks[4].item_ids.iter().position(|&x| x == 3165).unwrap();
+        assert!(pos_4629 < pos_4646);
+        assert!(pos_4646 < pos_3165);
     }
 }

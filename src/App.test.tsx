@@ -155,6 +155,9 @@ describe("App Component", () => {
     expect(screen.getByLabelText("Injetar Feitiços de Invocador")).toBeChecked();
     expect(screen.getByLabelText("Injetar Conjuntos de Itens na Loja")).toBeChecked();
     expect(screen.getByRole("button", { name: /Flash no D/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { name: /Critério da Build Recomendada/i })).toBeInTheDocument();
+    expect(screen.getByTestId("priority-most-popular")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("priority-highest-winrate")).toHaveAttribute("aria-pressed", "false");
   });
 
   it("toggles preferences and persists them to localStorage", () => {
@@ -181,6 +184,13 @@ describe("App Component", () => {
     const stored = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
     expect(stored.autoInjectRunes).toBe(false);
     expect(stored.autoInjectItems).toBe(false);
+    // Switch build priority to highest win rate
+    const winrateBtn = screen.getByTestId("priority-highest-winrate");
+    fireEvent.click(winrateBtn);
+    expect(winrateBtn).toHaveAttribute("aria-pressed", "true");
+
+    const stored2 = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
+    expect(stored2.buildPriority).toBe("highest_win_rate");
     expect(stored.flashKey).toBe("F");
     expect(stored.autoAcceptMatch).toBeUndefined();
   });
@@ -296,5 +306,43 @@ describe("App Component", () => {
     expect(screen.getByText(/3. 3 Botas Mais Feitas/i)).toBeInTheDocument();
     expect(screen.getByText(/4. Build Final/i)).toBeInTheDocument();
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
+  });
+
+  it("updates build priority preference and re-fetches build when champion select is active", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+    });
+
+    // Enter champ select with Ahri
+    act(() => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "SummonersRift",
+          locked_in: true,
+        },
+      });
+    });
+
+    // Switch to Settings tab
+    act(() => {
+      const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
+      fireEvent.click(settingsBtn);
+    });
+
+    // Switch priority to highest win rate
+    const winrateBtn = screen.getByTestId("priority-highest-winrate");
+    await act(async () => {
+      fireEvent.click(winrateBtn);
+    });
+
+    expect(winrateBtn).toHaveAttribute("aria-pressed", "true");
+    expect(invoke).toHaveBeenCalledWith("get_recommended_build_for_champion", {
+      championId: 103,
+      queueId: 420,
+    });
   });
 });

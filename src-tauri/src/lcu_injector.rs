@@ -20,6 +20,15 @@ pub enum FlashKeyPreference {
     F,
 }
 
+/// Represents the user's preferred build optimization metric (highest win rate vs most games played).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildPriorityPreference {
+    #[default]
+    MostPopular,
+    HighestWinRate,
+}
+
 /// User preferences synchronized between frontend and backend.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +37,8 @@ pub struct UserPreferences {
     pub auto_inject_spells: bool,
     pub auto_inject_items: bool,
     pub flash_key: FlashKeyPreference,
+    #[serde(default)]
+    pub build_priority: BuildPriorityPreference,
 }
 
 impl Default for UserPreferences {
@@ -37,6 +48,7 @@ impl Default for UserPreferences {
             auto_inject_spells: true,
             auto_inject_items: true,
             flash_key: FlashKeyPreference::D,
+            build_priority: BuildPriorityPreference::MostPopular,
         }
     }
 }
@@ -119,22 +131,14 @@ pub fn build_rune_page_payload(build: &ChampionBuild) -> Result<serde_json::Valu
 pub fn find_schumaz_page_id(pages_json: &serde_json::Value) -> Option<i64> {
     let pages = pages_json.as_array()?;
     for page in pages {
+        let name = page.get("name").and_then(|n| n.as_str()).unwrap_or("");
         let is_deletable = page
             .get("isDeletable")
-            .and_then(|v| v.as_bool())
+            .and_then(|d| d.as_bool())
             .unwrap_or(false);
 
-        if !is_deletable {
-            continue;
-        }
-
-        let is_schumaz = page
-            .get("name")
-            .and_then(|v| v.as_str())
-            .is_some_and(|name| name.ends_with(SCHUMAZ_PAGE_SUFFIX));
-
-        if is_schumaz {
-            return page.get("id").and_then(|v| v.as_i64());
+        if name.ends_with(SCHUMAZ_PAGE_SUFFIX) && is_deletable {
+            return page.get("id").and_then(|id| id.as_i64());
         }
     }
     None
@@ -147,11 +151,11 @@ pub fn find_first_deletable_page_id(pages_json: &serde_json::Value) -> Option<i6
     for page in pages {
         let is_deletable = page
             .get("isDeletable")
-            .and_then(|v| v.as_bool())
+            .and_then(|d| d.as_bool())
             .unwrap_or(false);
 
         if is_deletable {
-            return page.get("id").and_then(|v| v.as_i64());
+            return page.get("id").and_then(|id| id.as_i64());
         }
     }
     None
@@ -162,11 +166,11 @@ pub fn find_first_deletable_page_id(pages_json: &serde_json::Value) -> Option<i6
 pub fn extract_deletable_rune_page_id(current_page_json: &serde_json::Value) -> Option<i64> {
     let is_deletable = current_page_json
         .get("isDeletable")
-        .and_then(|v| v.as_bool())
+        .and_then(|d| d.as_bool())
         .unwrap_or(false);
 
     if is_deletable {
-        current_page_json.get("id").and_then(|v| v.as_i64())
+        current_page_json.get("id").and_then(|id| id.as_i64())
     } else {
         None
     }
@@ -441,6 +445,7 @@ mod tests {
             auto_inject_spells: true,
             auto_inject_items: false,
             flash_key: FlashKeyPreference::F,
+            build_priority: BuildPriorityPreference::HighestWinRate,
         };
 
         set_user_preferences(prefs.clone());
