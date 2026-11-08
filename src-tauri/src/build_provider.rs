@@ -96,6 +96,31 @@ pub fn default_spells_for_queue(queue_id: i32) -> (i32, i32) {
     if queue_id == 450 { (4, 32) } else { (4, 14) }
 }
 
+/// Known League of Legends boot item IDs (basic, upgraded, and tier-3 boots).
+pub fn is_boot_item(item_id: i32) -> bool {
+    matches!(
+        item_id,
+        1001 // Boots
+        | 3006 // Berserker's Greaves
+        | 3009 // Boots of Swiftness
+        | 3020 // Sorcerer's Shoes
+        | 3047 // Plated Steelcaps
+        | 3111 // Mercury's Treads
+        | 3117 // Boots of Mobility
+        | 3158 // Ionian Boots of Lucidity
+        | 2422 // Slightly Magical Footwear
+        | 3170 | 3171 | 3172 | 3173 | 3174 | 3175 // Tier 3 / Wild Rift / Arena boots
+    )
+}
+
+/// Normalizes DataDragon champion key into OP.GG's required champion name enum format.
+pub fn champion_key_to_opgg_name(key: &str) -> String {
+    match key {
+        "MonkeyKing" => "MONKEY_KING".to_string(),
+        _ => key.to_uppercase(),
+    }
+}
+
 /// Constructs a safe, universal fallback build in case OP.GG API is down or times out.
 pub fn build_fallback_champion_build(
     champion_id: i32,
@@ -123,6 +148,11 @@ pub fn build_fallback_champion_build(
         vec![1055, 2003] // Doran's Blade + Health Potion
     };
 
+    // Core 3 items must strictly exclude any boots (e.g. Infinity Edge, Rapid Firecannon, Mortal Reminder)
+    let core_items = vec![3031, 3094, 3036];
+    let final_items = vec![3031, 3094, 3036, 3072, 3026];
+    let boots_items = vec![3006, 3047, 3111];
+
     ChampionBuild {
         champion_id,
         champion_name: champion_name.to_string(),
@@ -141,17 +171,17 @@ pub fn build_fallback_champion_build(
             },
             ItemBlock {
                 title: "Primeiros 3 Itens".to_string(),
-                item_ids: vec![3031, 3006, 3094],
+                item_ids: core_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
                 title: "Build Final".to_string(),
-                item_ids: vec![3031, 3006, 3094, 3036, 3026],
+                item_ids: final_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
                 title: "3 Botas Mais Feitas".to_string(),
-                item_ids: vec![3006, 3047, 3111],
+                item_ids: boots_items,
                 item_icon_urls: vec![],
             },
         ],
@@ -506,28 +536,290 @@ pub async fn get_or_init_ddragon_cache(
         .await
 }
 
+/// Parses text format returned in OP.GG MCP `result.content[0].text`.
+pub fn parse_opgg_mcp_text(
+    text: &str,
+    champion_id: i32,
+    champion_name: &str,
+) -> Result<ChampionBuild, String> {
+    // 1. Extract win_rate and pick_rate: AverageStats(0.51, 0.12)
+    let mut win_rate = 50.0;
+    let mut pick_rate = 5.0;
+    if let Some(avg_idx) = text.find("AverageStats(") {
+        let after_avg = &text[avg_idx + 13..];
+        if let Some(close_idx) = after_avg.find(')') {
+            let parts: Vec<&str> = after_avg[..close_idx].split(',').collect();
+            if parts.len() >= 2 {
+                if let Ok(w) = parts[0].trim().parse::<f64>() {
+                    win_rate = if w <= 1.0 {
+                        (w * 1000.0).round() / 10.0
+                    } else {
+                        w
+                    };
+                }
+                if let Ok(p) = parts[1].trim().parse::<f64>() {
+                    pick_rate = if p <= 1.0 {
+                        (p * 1000.0).round() / 10.0
+                    } else {
+                        p
+                    };
+                }
+            }
+        }
+    }
+
+    // 2. Extract Runes: Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])
+    let runes_idx = text
+        .find("Runes(")
+        .ok_or_else(|| "Missing Runes block in OP.GG text".to_string())?;
+    let after_runes = &text[runes_idx + 6..];
+
+    // Find primary style id
+    let comma1 = after_runes
+        .find(',')
+        .ok_or_else(|| "Invalid Runes format".to_string())?;
+    let primary_style_id: i32 = after_runes[..comma1]
+        .trim()
+        .parse()
+        .map_err(|e| format!("Invalid primary style id: {}", e))?;
+
+    // Primary perks array: [ ... ]
+    let p_open = after_runes
+        .find('[')
+        .ok_or_else(|| "Missing primary perks [".to_string())?;
+    let p_close = after_runes
+        .find(']')
+        .ok_or_else(|| "Missing primary perks ]".to_string())?;
+    let primary_perks: Vec<i32> = after_runes[p_open + 1..p_close]
+        .split(',')
+        .filter_map(|s| s.trim().parse::<i32>().ok())
+        .collect();
+
+    let after_primary = &after_runes[p_close + 1..];
+    let after_primary_trim =
+        after_primary.trim_start_matches(|c: char| c == ',' || c.is_whitespace());
+
+    // Sub style id
+    let comma2 = after_primary_trim
+        .find(',')
+        .ok_or_else(|| "Invalid sub style format".to_string())?;
+    let sub_style_id: i32 = after_primary_trim[..comma2]
+        .trim()
+        .parse()
+        .map_err(|e| format!("Invalid sub style id: {}", e))?;
+
+    // Secondary perks array: [ ... ]
+    let s_open = after_primary_trim
+        .find('[')
+        .ok_or_else(|| "Missing secondary perks [".to_string())?;
+    let s_close = after_primary_trim
+        .find(']')
+        .ok_or_else(|| "Missing secondary perks ]".to_string())?;
+    let secondary_perks: Vec<i32> = after_primary_trim[s_open + 1..s_close]
+        .split(',')
+        .filter_map(|s| s.trim().parse::<i32>().ok())
+        .collect();
+
+    // Stat mods array: [ ... ]
+    let after_sec = &after_primary_trim[s_close + 1..];
+    let m_open = after_sec
+        .find('[')
+        .ok_or_else(|| "Missing stat mods [".to_string())?;
+    let m_close = after_sec
+        .find(']')
+        .ok_or_else(|| "Missing stat mods ]".to_string())?;
+    let stat_mods: Vec<i32> = after_sec[m_open + 1..m_close]
+        .split(',')
+        .filter_map(|s| s.trim().parse::<i32>().ok())
+        .collect();
+
+    let mut selected_perk_ids = Vec::with_capacity(9);
+    selected_perk_ids.extend(primary_perks);
+    selected_perk_ids.extend(secondary_perks);
+    selected_perk_ids.extend(stat_mods);
+
+    if selected_perk_ids.len() != 9 {
+        return Err(format!(
+            "Expected 9 perks, extracted {}",
+            selected_perk_ids.len()
+        ));
+    }
+
+    // 3. Extract all CoreItems arrays
+    let mut all_item_arrays: Vec<Vec<i32>> = Vec::new();
+    let mut search_slice = text;
+    while let Some(ci_idx) = search_slice.find("CoreItems(") {
+        let after_ci = &search_slice[ci_idx + 10..];
+        let maybe_brackets = after_ci
+            .find('[')
+            .zip(after_ci.find(']'))
+            .filter(|(open, close)| open < close);
+        if let Some((open_bracket, close_bracket)) = maybe_brackets {
+            let inside = &after_ci[open_bracket + 1..close_bracket];
+            let ids: Vec<i32> = inside
+                .split(',')
+                .filter_map(|s| s.trim().parse::<i32>().ok())
+                .collect();
+            if !ids.is_empty() {
+                all_item_arrays.push(ids);
+            }
+            search_slice = &after_ci[close_bracket + 1..];
+            continue;
+        }
+        break;
+    }
+
+    // 4. Extract summoner spells (two spells from CoreItems or default)
+    let mut spell1_id = 4;
+    let mut spell2_id = 14;
+    for arr in &all_item_arrays {
+        if arr.len() == 2 && matches!(arr[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32) {
+            spell1_id = arr[0];
+            spell2_id = arr[1];
+            break;
+        }
+    }
+
+    // Filter out spell arrays from items list
+    let item_candidate_arrays: Vec<Vec<i32>> = all_item_arrays
+        .into_iter()
+        .filter(|arr| {
+            !(arr.len() == 2 && matches!(arr[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32))
+        })
+        .collect();
+
+    // 1st array: core items, 2nd array: boots, 3rd array: starters, rest: situational/final
+    let raw_core = item_candidate_arrays
+        .first()
+        .cloned()
+        .unwrap_or_else(|| vec![3118, 4645, 3157]);
+    let raw_boots = item_candidate_arrays
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| vec![3020]);
+    let raw_starters = item_candidate_arrays
+        .get(2)
+        .cloned()
+        .unwrap_or_else(|| vec![1056, 2003, 2003]);
+
+    // Clean core items: strictly filter out any boots!
+    let mut clean_core: Vec<i32> = raw_core
+        .into_iter()
+        .filter(|id| !is_boot_item(*id))
+        .collect();
+
+    // Collect all remaining non-boot items to fill core to 3 if needed, and build final block
+    let mut additional_items: Vec<i32> = Vec::new();
+    for arr in item_candidate_arrays.iter().skip(3) {
+        for &id in arr {
+            if !is_boot_item(id) && !clean_core.contains(&id) && !additional_items.contains(&id) {
+                additional_items.push(id);
+            }
+        }
+    }
+
+    while clean_core.len() < 3 && !additional_items.is_empty() {
+        clean_core.push(additional_items.remove(0));
+    }
+
+    // Build Final
+    let mut final_build: Vec<i32> = clean_core.clone();
+    for &id in &additional_items {
+        if final_build.len() < 6 && !final_build.contains(&id) {
+            final_build.push(id);
+        }
+    }
+
+    // 3 Botas Mais Feitas
+    let mut boots_list: Vec<i32> = raw_boots
+        .into_iter()
+        .filter(|id| is_boot_item(*id))
+        .collect();
+    let default_boots = [3020, 3158, 3111, 3047];
+    for b in default_boots {
+        if !boots_list.contains(&b) && boots_list.len() < 3 {
+            boots_list.push(b);
+        }
+    }
+
+    Ok(ChampionBuild {
+        champion_id,
+        champion_name: champion_name.to_string(),
+        win_rate,
+        pick_rate,
+        primary_style_id,
+        sub_style_id,
+        selected_perk_ids,
+        spell1_id,
+        spell2_id,
+        item_blocks: vec![
+            ItemBlock {
+                title: "Itens Iniciais".to_string(),
+                item_ids: raw_starters,
+                item_icon_urls: vec![],
+            },
+            ItemBlock {
+                title: "Primeiros 3 Itens".to_string(),
+                item_ids: clean_core,
+                item_icon_urls: vec![],
+            },
+            ItemBlock {
+                title: "Build Final".to_string(),
+                item_ids: final_build,
+                item_icon_urls: vec![],
+            },
+            ItemBlock {
+                title: "3 Botas Mais Feitas".to_string(),
+                item_ids: boots_list,
+                item_icon_urls: vec![],
+            },
+        ],
+        ..Default::default()
+    })
+}
+
 /// Pure parser function to transform an OP.GG champion analysis response into `ChampionBuild`.
 pub fn parse_opgg_analysis_payload(
     opgg_json: &serde_json::Value,
     champion_id: i32,
     champion_name: &str,
 ) -> Result<ChampionBuild, String> {
+    // If the response is wrapped in MCP content text (e.g. result.content[0].text), use text parser!
+    if let Some(text) = opgg_json
+        .pointer("/result/content/0/text")
+        .and_then(|v| v.as_str())
+    {
+        return parse_opgg_mcp_text(text, champion_id, champion_name);
+    }
+
     let analysis = opgg_json
         .get("data")
         .or_else(|| opgg_json.pointer("/result/data"))
         .unwrap_or(opgg_json);
 
-    let win_rate = analysis
+    let raw_win_rate = analysis
         .get("win_rate")
         .or_else(|| analysis.pointer("/stats/win_rate"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
-    let pick_rate = analysis
+    let win_rate = if raw_win_rate > 0.0 && raw_win_rate <= 1.0 {
+        (raw_win_rate * 1000.0).round() / 10.0
+    } else {
+        raw_win_rate
+    };
+
+    let raw_pick_rate = analysis
         .get("pick_rate")
         .or_else(|| analysis.pointer("/stats/pick_rate"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
+
+    let pick_rate = if raw_pick_rate > 0.0 && raw_pick_rate <= 1.0 {
+        (raw_pick_rate * 1000.0).round() / 10.0
+    } else {
+        raw_pick_rate
+    };
 
     // Extract rune styles and perks
     let primary_style_id = analysis
@@ -631,20 +923,48 @@ pub fn parse_opgg_analysis_payload(
         item_icon_urls: vec![],
     });
 
-    // 2. Primeiros 3 Itens (Core)
-    let core_ids: Vec<i32> = analysis
+    // 2. Primeiros 3 Itens (Core) - Strictly exclude any boots
+    let raw_core: Vec<i32> = analysis
         .pointer("/items/core")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
                 .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .take(3)
                 .collect()
         })
-        .unwrap_or_else(|| vec![3285, 3020, 3089]);
+        .unwrap_or_else(|| vec![3285, 4645, 3089]);
+
+    let mut clean_core: Vec<i32> = raw_core
+        .into_iter()
+        .filter(|id| !is_boot_item(*id))
+        .collect();
+
+    // Pull situational/extra items to fill clean_core to 3 if needed
+    let situational_items: Vec<i32> = analysis
+        .pointer("/items/situational")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .filter(|id| !is_boot_item(*id))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    for sit in &situational_items {
+        if clean_core.len() < 3 && !clean_core.contains(sit) {
+            clean_core.push(*sit);
+        }
+    }
+
+    if clean_core.is_empty() {
+        clean_core = vec![3031, 3094, 3036];
+    }
+    let core_ids = clean_core.clone();
+
     item_blocks.push(ItemBlock {
         title: "Primeiros 3 Itens".to_string(),
-        item_ids: core_ids.clone(),
+        item_ids: clean_core,
         item_icon_urls: vec![],
     });
 
@@ -725,6 +1045,7 @@ pub async fn fetch_opgg_champion_analysis(
     champion_name: &str,
     queue_name: &str,
 ) -> Result<serde_json::Value, String> {
+    let formatted_champ = champion_key_to_opgg_name(champion_name);
     let payload = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -732,9 +1053,20 @@ pub async fn fetch_opgg_champion_analysis(
         "params": {
             "name": "lol_get_champion_analysis",
             "arguments": {
-                "champion_name": champion_name,
-                "queue": queue_name,
-                "desired_output_fields": "data.{stats,runes,spells,items}"
+                "game_mode": queue_name,
+                "champion": formatted_champ,
+                "position": "mid",
+                "desired_output_fields": [
+                    "data.summary.average_stats.{win_rate,pick_rate}",
+                    "data.runes.{primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[]}",
+                    "data.summoner_spells.{ids[]}",
+                    "data.starter_items.{ids[]}",
+                    "data.core_items.{ids[]}",
+                    "data.boots.{ids[]}",
+                    "data.fourth_items[].{ids[]}",
+                    "data.fifth_items[].{ids[]}",
+                    "data.sixth_items[].{ids[]}"
+                ]
             }
         }
     });
@@ -1076,7 +1408,8 @@ mod tests {
         assert_eq!(build.item_blocks.len(), 4);
         assert_eq!(build.item_blocks[0].title, "Itens Iniciais");
         assert_eq!(build.item_blocks[1].title, "Primeiros 3 Itens");
-        assert_eq!(build.item_blocks[1].item_ids, vec![3285, 3020, 3089]);
+        // 3020 is a boot, so it was filtered out and filled with situational item 3157, ensuring 3 core non-boot items!
+        assert_eq!(build.item_blocks[1].item_ids, vec![3285, 3089, 3157]);
         assert_eq!(build.item_blocks[2].title, "Build Final");
         assert_eq!(build.item_blocks[3].title, "3 Botas Mais Feitas");
         assert_eq!(build.item_blocks[3].item_ids, vec![3020, 3111, 3047]);
@@ -1173,5 +1506,57 @@ mod tests {
         assert_eq!(build.selected_perk_ids.len(), 9);
         assert_eq!(build.spell1_id, 4);
         assert_eq!(build.spell2_id, 32); // ARAM snowball
+    }
+
+    #[test]
+    fn test_parse_opgg_mcp_text_real_ahri_payload() {
+        let ahri_mcp_json = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "class LolGetChampionAnalysis: data\nclass Data: summary,core_items,boots,starter_items,fourth_items,fifth_items,sixth_items,summoner_spells,runes\nclass Summary: average_stats\nclass AverageStats: win_rate,pick_rate\nclass CoreItems: ids\nclass Runes: primary_page_id,primary_rune_ids,secondary_page_id,secondary_rune_ids,stat_mod_ids\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(0.51,0.12)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003,2003]),[CoreItems([3089]),CoreItems([3157]),CoreItems([3135])],[CoreItems([3089]),CoreItems([3135]),CoreItems([3157])],[CoreItems([4629]),CoreItems([3135]),CoreItems([4646])],CoreItems([4,14]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])))"
+                    }
+                ]
+            }
+        });
+
+        let build = parse_opgg_analysis_payload(&ahri_mcp_json, 103, "Ahri")
+            .expect("Parsing real Ahri MCP payload should succeed");
+
+        assert_eq!(build.champion_id, 103);
+        assert_eq!(build.champion_name, "Ahri");
+        // win_rate: 0.51 converted to 51.0%, pick_rate: 0.12 converted to 12.0%
+        assert_eq!(build.win_rate, 51.0);
+        assert_eq!(build.pick_rate, 12.0);
+
+        // Runes: Domination 8100 + Sorcery 8200
+        assert_eq!(build.primary_style_id, 8100);
+        assert_eq!(build.sub_style_id, 8200);
+        assert_eq!(
+            build.selected_perk_ids,
+            vec![8112, 8139, 8140, 8106, 8210, 8226, 5005, 5008, 5001]
+        );
+
+        // Spells: Flash (4) + Ignite (14)
+        assert_eq!(build.spell1_id, 4);
+        assert_eq!(build.spell2_id, 14);
+
+        // Core 3 items: Malignance (3118), Shadowflame (4645), Zhonya's (3157) - NO BOOTS!
+        assert_eq!(build.item_blocks[1].title, "Primeiros 3 Itens");
+        assert_eq!(build.item_blocks[1].item_ids, vec![3118, 4645, 3157]);
+        for item in &build.item_blocks[1].item_ids {
+            assert!(
+                !is_boot_item(*item),
+                "Boot item {} must not be in Core 3 items",
+                item
+            );
+        }
+
+        // Boots block: Sorcerer's Shoes (3020)
+        assert_eq!(build.item_blocks[3].title, "3 Botas Mais Feitas");
+        assert!(build.item_blocks[3].item_ids.contains(&3020));
     }
 }
