@@ -36,9 +36,10 @@ const mockAhriBuild: ChampionBuild = {
   ],
   item_blocks: [
     { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
-    { title: "Primeiros 3 Itens", item_ids: [3285, 3020, 3089], item_icon_urls: ["3285.png", "3020.png", "3089.png"] },
-    { title: "Build Final", item_ids: [3285, 3020, 3089, 3157, 3135], item_icon_urls: ["3285.png", "3020.png", "3089.png", "3157.png", "3135.png"] },
+    { title: "Primeiros 3 Itens", item_ids: [3285, 3157, 3089], item_icon_urls: ["3285.png", "3157.png", "3089.png"] },
     { title: "3 Botas Mais Feitas", item_ids: [3020, 3111, 3047], item_icon_urls: ["3020.png", "3111.png", "3047.png"] },
+    { title: "Build Final", item_ids: [3285, 3157, 3089, 3135, 4645], item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png"] },
+    { title: "Itens Situacionais / Úteis", item_ids: [4629, 3165, 3102], item_icon_urls: ["4629.png", "3165.png", "3102.png"] },
   ],
 };
 
@@ -108,12 +109,13 @@ describe("App Component", () => {
     expect(btn).toBeDisabled();
   });
 
-  it("renders all 4 requested shop item block categories in the Runas tab", () => {
+  it("renders all 5 requested shop item block categories in the Runas tab", () => {
     render(<App />);
     expect(screen.getByText(/1. Itens Iniciais/i)).toBeInTheDocument();
     expect(screen.getByText(/2. Primeiros 3 Itens/i)).toBeInTheDocument();
-    expect(screen.getByText(/3. Build Final/i)).toBeInTheDocument();
-    expect(screen.getByText(/4. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+    expect(screen.getByText(/3. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+    expect(screen.getByText(/4. Build Final/i)).toBeInTheDocument();
+    expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
   it("renders the floating bottom dock with exactly 2 navigation tabs: Runas and Configurações", () => {
@@ -259,8 +261,9 @@ describe("App Component", () => {
     // Check shop item blocks
     expect(screen.getByText(/1. Itens Iniciais/i)).toBeInTheDocument();
     expect(screen.getByText(/2. Primeiros 3 Itens/i)).toBeInTheDocument();
-    expect(screen.getByText(/3. Build Final/i)).toBeInTheDocument();
-    expect(screen.getByText(/4. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+    expect(screen.getByText(/3. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+    expect(screen.getByText(/4. Build Final/i)).toBeInTheDocument();
+    expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
   it("displays Practice Tool badge and ranked items when practice tool session is detected", async () => {
     render(<App />);
@@ -290,7 +293,8 @@ describe("App Component", () => {
     expect(screen.getByText("Modo Treino (Build Ranqueada)")).toBeInTheDocument();
     expect(screen.getByText(/1. Itens Iniciais/i)).toBeInTheDocument();
     expect(screen.getByText(/2. Primeiros 3 Itens/i)).toBeInTheDocument();
-    expect(screen.getByText(/3. Build Final/i)).toBeInTheDocument();
-    expect(screen.getByText(/4. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+    expect(screen.getByText(/3. 3 Botas Mais Feitas/i)).toBeInTheDocument();
+    expect(screen.getByText(/4. Build Final/i)).toBeInTheDocument();
+    expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 });

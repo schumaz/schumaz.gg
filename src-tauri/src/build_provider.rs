@@ -148,10 +148,13 @@ pub fn build_fallback_champion_build(
         vec![1055, 2003] // Doran's Blade + Health Potion
     };
 
-    // Core 3 items must strictly exclude any boots (e.g. Infinity Edge, Rapid Firecannon, Mortal Reminder)
+    // Core 3 items must strictly exclude any boots (e.g. Infinity Edge, Rapid Firecannon, Lord Dominik's)
     let core_items = vec![3031, 3094, 3036];
-    let final_items = vec![3031, 3094, 3036, 3072, 3026];
     let boots_items = vec![3006, 3047, 3111];
+    // Final build: core + late-game items (e.g. Bloodthirster, Guardian Angel)
+    let final_items = vec![3031, 3094, 3036, 3072, 3026];
+    // Useful / situational items: high pickrate items that are NOT in core nor in final build
+    let situational_items = vec![3046, 3091, 3139]; // Phantom Dancer, Wit's End, Mercurial
 
     ChampionBuild {
         champion_id,
@@ -175,13 +178,18 @@ pub fn build_fallback_champion_build(
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                title: "3 Botas Mais Feitas".to_string(),
+                item_ids: boots_items,
+                item_icon_urls: vec![],
+            },
+            ItemBlock {
                 title: "Build Final".to_string(),
                 item_ids: final_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
-                title: "3 Botas Mais Feitas".to_string(),
-                item_ids: boots_items,
+                title: "Itens Situacionais / Úteis".to_string(),
+                item_ids: situational_items,
                 item_icon_urls: vec![],
             },
         ],
@@ -708,29 +716,37 @@ pub fn parse_opgg_mcp_text(
         .filter(|id| !is_boot_item(*id))
         .collect();
 
-    // Collect all remaining non-boot items to fill core to 3 if needed, and build final block
-    let mut additional_items: Vec<i32> = Vec::new();
+    // Collect all candidate items from subsequent arrays (excluding boots and starters)
+    let mut candidate_pool: Vec<i32> = Vec::new();
     for arr in item_candidate_arrays.iter().skip(3) {
         for &id in arr {
-            if !is_boot_item(id) && !clean_core.contains(&id) && !additional_items.contains(&id) {
-                additional_items.push(id);
+            if !is_boot_item(id)
+                && !raw_starters.contains(&id)
+                && !clean_core.contains(&id)
+                && !candidate_pool.contains(&id)
+            {
+                candidate_pool.push(id);
             }
         }
     }
 
-    while clean_core.len() < 3 && !additional_items.is_empty() {
-        clean_core.push(additional_items.remove(0));
+    while clean_core.len() < 3 && !candidate_pool.is_empty() {
+        clean_core.push(candidate_pool.remove(0));
     }
 
-    // Build Final
+    // 4. Build Final: clean_core (3 items) + top 2-3 late-game completion items
     let mut final_build: Vec<i32> = clean_core.clone();
-    for &id in &additional_items {
-        if final_build.len() < 6 && !final_build.contains(&id) {
+    let mut remaining_pool: Vec<i32> = Vec::new();
+
+    for &id in &candidate_pool {
+        if final_build.len() < 5 && !final_build.contains(&id) {
             final_build.push(id);
+        } else if !final_build.contains(&id) && !remaining_pool.contains(&id) {
+            remaining_pool.push(id);
         }
     }
 
-    // 3 Botas Mais Feitas
+    // 3. 3 Botas Mais Feitas
     let mut boots_list: Vec<i32> = raw_boots
         .into_iter()
         .filter(|id| is_boot_item(*id))
@@ -739,6 +755,25 @@ pub fn parse_opgg_mcp_text(
     for b in default_boots {
         if !boots_list.contains(&b) && boots_list.len() < 3 {
             boots_list.push(b);
+        }
+    }
+
+    // 5. (NOVO) Itens Situacionais / Úteis:
+    // Itens de alto pickrate/utilidade que NÃO estão nos primeiros 3 itens nem na build final!
+    let mut situational_items: Vec<i32> = remaining_pool
+        .into_iter()
+        .filter(|id| !clean_core.contains(id) && !final_build.contains(id) && !is_boot_item(*id))
+        .collect();
+
+    // If candidate pool had few items, supplement with safe high-utility situational items (without duplicates)
+    let fallback_situational = [4629, 4646, 3102, 3165, 6653, 3046, 3091, 3139, 3026];
+    for &item in &fallback_situational {
+        if situational_items.len() < 4
+            && !clean_core.contains(&item)
+            && !final_build.contains(&item)
+            && !situational_items.contains(&item)
+        {
+            situational_items.push(item);
         }
     }
 
@@ -764,13 +799,18 @@ pub fn parse_opgg_mcp_text(
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                title: "3 Botas Mais Feitas".to_string(),
+                item_ids: boots_list,
+                item_icon_urls: vec![],
+            },
+            ItemBlock {
                 title: "Build Final".to_string(),
                 item_ids: final_build,
                 item_icon_urls: vec![],
             },
             ItemBlock {
-                title: "3 Botas Mais Feitas".to_string(),
-                item_ids: boots_list,
+                title: "Itens Situacionais / Úteis".to_string(),
+                item_ids: situational_items,
                 item_icon_urls: vec![],
             },
         ],
@@ -960,15 +1000,36 @@ pub fn parse_opgg_analysis_payload(
     if clean_core.is_empty() {
         clean_core = vec![3031, 3094, 3036];
     }
-    let core_ids = clean_core.clone();
 
     item_blocks.push(ItemBlock {
         title: "Primeiros 3 Itens".to_string(),
-        item_ids: clean_core,
+        item_ids: clean_core.clone(),
         item_icon_urls: vec![],
     });
 
-    // 3. Build Final
+    // 3. 3 Botas Mais Feitas (Position 3)
+    let mut boots_ids: Vec<i32> = analysis
+        .pointer("/items/boots")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .filter(|id| is_boot_item(*id))
+                .take(3)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if boots_ids.is_empty() {
+        boots_ids = vec![3020, 3111, 3047];
+    }
+    item_blocks.push(ItemBlock {
+        title: "3 Botas Mais Feitas".to_string(),
+        item_ids: boots_ids,
+        item_icon_urls: vec![],
+    });
+
+    // 4. Build Final (Position 4)
     let mut final_build_ids: Vec<i32> = analysis
         .pointer("/items/final_build")
         .or_else(|| analysis.pointer("/items/full_build"))
@@ -976,50 +1037,45 @@ pub fn parse_opgg_analysis_payload(
         .map(|arr| {
             arr.iter()
                 .filter_map(|v| v.as_i64().map(|id| id as i32))
+                .filter(|id| !is_boot_item(*id))
                 .collect()
         })
         .unwrap_or_default();
 
     if final_build_ids.is_empty() {
-        final_build_ids = core_ids.clone();
-        if let Some(situational) = analysis
-            .pointer("/items/situational")
-            .and_then(|v| v.as_array())
-        {
-            for id_val in situational
-                .iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-            {
-                if !final_build_ids.contains(&id_val) && final_build_ids.len() < 6 {
-                    final_build_ids.push(id_val);
-                }
+        final_build_ids = clean_core.clone();
+        for id_val in &situational_items {
+            if !final_build_ids.contains(id_val) && final_build_ids.len() < 5 {
+                final_build_ids.push(*id_val);
             }
         }
     }
     item_blocks.push(ItemBlock {
         title: "Build Final".to_string(),
-        item_ids: final_build_ids,
+        item_ids: final_build_ids.clone(),
         item_icon_urls: vec![],
     });
 
-    // 4. 3 Botas Mais Feitas
-    let mut boots_ids: Vec<i32> = analysis
-        .pointer("/items/boots")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .take(3)
-                .collect()
-        })
-        .unwrap_or_default();
+    // 5. Itens Situacionais / Úteis (Position 5)
+    // High pick rate items that are NOT in clean_core AND NOT in final_build_ids!
+    let mut extra_situational: Vec<i32> = situational_items
+        .into_iter()
+        .filter(|id| !clean_core.contains(id) && !final_build_ids.contains(id) && !is_boot_item(*id))
+        .collect();
 
-    if boots_ids.is_empty() {
-        boots_ids = vec![3020, 3111, 3047]; // Sorcerer's Shoes, Mercury's, Plated Steelcaps
+    let default_extras = [4629, 4646, 3102, 3165, 6653, 3046, 3091, 3139];
+    for &d in &default_extras {
+        if extra_situational.len() < 3
+            && !clean_core.contains(&d)
+            && !final_build_ids.contains(&d)
+            && !extra_situational.contains(&d)
+        {
+            extra_situational.push(d);
+        }
     }
     item_blocks.push(ItemBlock {
-        title: "3 Botas Mais Feitas".to_string(),
-        item_ids: boots_ids,
+        title: "Itens Situacionais / Úteis".to_string(),
+        item_ids: extra_situational,
         item_icon_urls: vec![],
     });
 
@@ -1065,7 +1121,8 @@ pub async fn fetch_opgg_champion_analysis(
                     "data.boots.{ids[]}",
                     "data.fourth_items[].{ids[]}",
                     "data.fifth_items[].{ids[]}",
-                    "data.sixth_items[].{ids[]}"
+                    "data.sixth_items[].{ids[]}",
+                    "data.last_items[].{ids[]}"
                 ]
             }
         }
@@ -1164,11 +1221,12 @@ mod tests {
         assert_eq!(aram_fallback.selected_perk_ids.len(), 9);
         assert_eq!(aram_fallback.spell1_id, 4);
         assert_eq!(aram_fallback.spell2_id, 32);
-        assert_eq!(aram_fallback.item_blocks.len(), 4);
+        assert_eq!(aram_fallback.item_blocks.len(), 5);
         assert_eq!(aram_fallback.item_blocks[0].title, "Itens Iniciais");
         assert_eq!(aram_fallback.item_blocks[1].title, "Primeiros 3 Itens");
-        assert_eq!(aram_fallback.item_blocks[2].title, "Build Final");
-        assert_eq!(aram_fallback.item_blocks[3].title, "3 Botas Mais Feitas");
+        assert_eq!(aram_fallback.item_blocks[2].title, "3 Botas Mais Feitas");
+        assert_eq!(aram_fallback.item_blocks[3].title, "Build Final");
+        assert_eq!(aram_fallback.item_blocks[4].title, "Itens Situacionais / Úteis");
 
         let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
@@ -1222,7 +1280,7 @@ mod tests {
         assert_eq!(build.spells[0].name, "Flash");
         assert!(build.spells[0].icon_url.contains("SummonerFlash.png"));
         assert_eq!(build.perks.len(), 9);
-        assert_eq!(build.item_blocks.len(), 4);
+        assert_eq!(build.item_blocks.len(), 5);
         assert!(!build.item_blocks[0].item_icon_urls.is_empty());
         assert!(build.item_blocks[0].item_icon_urls[0].contains("/img/item/"));
     }
@@ -1405,14 +1463,21 @@ mod tests {
         );
         assert_eq!(build.spell1_id, 4);
         assert_eq!(build.spell2_id, 14);
-        assert_eq!(build.item_blocks.len(), 4);
+        assert_eq!(build.item_blocks.len(), 5);
         assert_eq!(build.item_blocks[0].title, "Itens Iniciais");
         assert_eq!(build.item_blocks[1].title, "Primeiros 3 Itens");
         // 3020 is a boot, so it was filtered out and filled with situational item 3157, ensuring 3 core non-boot items!
         assert_eq!(build.item_blocks[1].item_ids, vec![3285, 3089, 3157]);
-        assert_eq!(build.item_blocks[2].title, "Build Final");
-        assert_eq!(build.item_blocks[3].title, "3 Botas Mais Feitas");
-        assert_eq!(build.item_blocks[3].item_ids, vec![3020, 3111, 3047]);
+        assert_eq!(build.item_blocks[2].title, "3 Botas Mais Feitas");
+        assert_eq!(build.item_blocks[2].item_ids, vec![3020, 3111, 3047]);
+        assert_eq!(build.item_blocks[3].title, "Build Final");
+        assert_eq!(build.item_blocks[4].title, "Itens Situacionais / Úteis");
+        // Verify situational items are disjoint from core and final build!
+        for &item in &build.item_blocks[4].item_ids {
+            assert!(!build.item_blocks[1].item_ids.contains(&item));
+            assert!(!build.item_blocks[3].item_ids.contains(&item));
+            assert!(!is_boot_item(item));
+        }
     }
 
     #[tokio::test]
@@ -1555,8 +1620,24 @@ mod tests {
             );
         }
 
-        // Boots block: Sorcerer's Shoes (3020)
-        assert_eq!(build.item_blocks[3].title, "3 Botas Mais Feitas");
-        assert!(build.item_blocks[3].item_ids.contains(&3020));
+        assert_eq!(build.item_blocks.len(), 5);
+        // Position 3: Boots block: Sorcerer's Shoes (3020)
+        assert_eq!(build.item_blocks[2].title, "3 Botas Mais Feitas");
+        assert!(build.item_blocks[2].item_ids.contains(&3020));
+
+        // Position 4: Build Final
+        assert_eq!(build.item_blocks[3].title, "Build Final");
+        for &core_item in &build.item_blocks[1].item_ids {
+            assert!(build.item_blocks[3].item_ids.contains(&core_item));
+        }
+
+        // Position 5: Itens Situacionais / Úteis
+        assert_eq!(build.item_blocks[4].title, "Itens Situacionais / Úteis");
+        assert!(!build.item_blocks[4].item_ids.is_empty());
+        for &item in &build.item_blocks[4].item_ids {
+            assert!(!build.item_blocks[1].item_ids.contains(&item), "Situational item {} cannot be in Core 3", item);
+            assert!(!build.item_blocks[3].item_ids.contains(&item), "Situational item {} cannot be in Final Build", item);
+            assert!(!is_boot_item(item), "Situational item {} cannot be a boot", item);
+        }
     }
 }

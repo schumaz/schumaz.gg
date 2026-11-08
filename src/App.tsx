@@ -467,7 +467,7 @@ function App() {
                           Runas: {injectionReport.runes_injected ? "Injetadas com Sucesso" : "Falha"}
                         </span>
                         <span className={`badge ${injectionReport.items_injected ? "badge-success" : "badge-fail"}`}>
-                          Itens na Loja: {injectionReport.items_injected ? "Injetados (4 Blocos)" : "Falha"}
+                          Itens na Loja: {injectionReport.items_injected ? "Injetados (5 Blocos)" : "Falha"}
                         </span>
                         <span className={`badge ${injectionReport.spells_injected ? "badge-success" : "badge-neutral"}`}>
                           Feitiços: {injectionReport.spells_injected ? "Injetados" : "Indisponíveis fora do Champ Select"}
@@ -481,9 +481,9 @@ function App() {
                 </section>
               </div>
 
-              {/* 4 Shop Item Blocks with DataDragon Icons */}
+              {/* 5 Shop Item Blocks with DataDragon Icons */}
               <section className="card item-blocks-preview" data-testid="item-blocks">
-                <h2>Conjuntos de Itens na Loja (4 Blocos Oficiais)</h2>
+                <h2>Conjuntos de Itens na Loja (5 Blocos Oficiais)</h2>
                 <div className="grid-blocks">
                   {build.item_blocks.map((block, bIndex) => (
                     <div key={block.title || bIndex} className="block-item">
@@ -530,7 +530,7 @@ function App() {
                 <h2>Aguardando Seleção de Campeões</h2>
                 <p className="card-desc">
                   Entre em uma partida ou sala de draft no League of Legends. Assim que você selecionar ou travar um
-                  campeão, as runas recomendadas, feitiços e os 4 blocos de itens serão carregados e aplicados
+                  campeão, as runas recomendadas, feitiços e os 5 blocos de itens serão carregados e aplicados
                   automaticamente com maior taxa de vitória do OP.GG.
                 </p>
 
@@ -570,12 +570,16 @@ function App() {
                     <p>Os 3 itens principais com maior win rate</p>
                   </div>
                   <div className="block-item">
-                    <h4>3. Build Final</h4>
+                    <h4>3. 3 Botas Mais Feitas</h4>
+                    <p>As 3 opções de botas mais populares</p>
+                  </div>
+                  <div className="block-item">
+                    <h4>4. Build Final</h4>
                     <p>Build final completa de late-game</p>
                   </div>
                   <div className="block-item">
-                    <h4>4. 3 Botas Mais Feitas</h4>
-                    <p>As 3 opções de botas mais populares</p>
+                    <h4>5. Itens Situacionais / Úteis</h4>
+                    <p>Itens alternativos de alto pick rate para a partida</p>
                   </div>
                 </div>
               </section>
@@ -634,7 +638,7 @@ function App() {
                   <div className="settings-item-text">
                     <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
                     <span className="settings-item-desc">
-                      Cria os 4 blocos de itens recomendados diretamente na interface de loja do jogo.
+                      Cria os 5 blocos de itens recomendados diretamente na interface de loja do jogo.
                     </span>
                   </div>
                   <input
