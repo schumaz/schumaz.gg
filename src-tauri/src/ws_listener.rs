@@ -195,11 +195,13 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                 // If queueId is unknown, attempt to fetch it once
                 let mut current_q = q_ref.load(Ordering::Relaxed);
                 if current_q == 0 {
-                    if let Ok(conn) = crate::lcu_connector::LcuConnection::connect() {
-                        if let Ok(fetched_q) = conn.get_current_queue_id().await {
-                            q_ref.store(fetched_q, Ordering::Relaxed);
-                            current_q = fetched_q;
-                        }
+                    let maybe_fetched = match crate::lcu_connector::LcuConnection::connect() {
+                        Ok(conn) => conn.get_current_queue_id().await.ok(),
+                        Err(_) => None,
+                    };
+                    if let Some(fetched_q) = maybe_fetched {
+                        q_ref.store(fetched_q, Ordering::Relaxed);
+                        current_q = fetched_q;
                     }
                 }
 
@@ -222,32 +224,32 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                                 };
 
                                 tokio::spawn(async move {
-                                    if let Ok(conn) = crate::lcu_connector::LcuConnection::connect()
-                                    {
-                                        if let Ok(summoner) = conn.get_current_summoner().await {
-                                            let http_client = reqwest::Client::new();
-                                            if let Ok(build) =
-                                                crate::build_provider::get_recommended_build(
-                                                    &http_client,
-                                                    champ_id,
-                                                    q_id,
-                                                )
-                                                .await
-                                            {
-                                                let _ = handle_for_inject
-                                                    .emit("recommended-build", &build);
-                                                let report =
-                                                    crate::lcu_injector::inject_champion_build(
-                                                        &conn,
-                                                        summoner.summoner_id,
-                                                        &build,
-                                                    )
-                                                    .await;
-                                                let _ = handle_for_inject
-                                                    .emit("build-injected", &report);
-                                            }
-                                        }
-                                    }
+                                    let Ok(conn) = crate::lcu_connector::LcuConnection::connect()
+                                    else {
+                                        return;
+                                    };
+                                    let Ok(summoner) = conn.get_current_summoner().await else {
+                                        return;
+                                    };
+                                    let http_client = reqwest::Client::new();
+                                    let Ok(build) = crate::build_provider::get_recommended_build(
+                                        &http_client,
+                                        champ_id,
+                                        q_id,
+                                    )
+                                    .await
+                                    else {
+                                        return;
+                                    };
+
+                                    let _ = handle_for_inject.emit("recommended-build", &build);
+                                    let report = crate::lcu_injector::inject_champion_build(
+                                        &conn,
+                                        summoner.summoner_id,
+                                        &build,
+                                    )
+                                    .await;
+                                    let _ = handle_for_inject.emit("build-injected", &report);
                                 });
                             }
                         }

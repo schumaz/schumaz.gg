@@ -59,10 +59,13 @@ pub fn find_schumaz_page_id(pages_json: &serde_json::Value) -> Option<i64> {
             continue;
         }
 
-        if let Some(name) = page.get("name").and_then(|v| v.as_str()) {
-            if name.ends_with(SCHUMAZ_PAGE_SUFFIX) {
-                return page.get("id").and_then(|v| v.as_i64());
-            }
+        let is_schumaz = page
+            .get("name")
+            .and_then(|v| v.as_str())
+            .is_some_and(|name| name.ends_with(SCHUMAZ_PAGE_SUFFIX));
+
+        if is_schumaz {
+            return page.get("id").and_then(|v| v.as_i64());
         }
     }
     None
