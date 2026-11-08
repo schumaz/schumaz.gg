@@ -833,13 +833,57 @@ pub fn build_5_item_blocks(
         }
     }
 
-    // Block 2: Primeiros 3 Itens (Strictly top 3 non-boot items)
+    // Block 2: Primeiros 3 Itens
+    // The 3 core items must strictly appear in sequential order of progression:
+    // (1st most built item -> 2nd item after the 1st -> 3rd item after the 2nd).
     let mut clean_core: Vec<i32> = Vec::new();
+
+    // Check if candidate_entries contains multi-item core combinations (length >= 2 non-boot items)
+    let mut core_combos: Vec<&ItemStatEntry> = candidate_entries
+        .iter()
+        .filter(|e| {
+            let non_boot_count = e
+                .ids
+                .iter()
+                .filter(|&&id| !is_boot_item(id) && !starter_ids.contains(&id))
+                .count();
+            non_boot_count >= 2
+        })
+        .collect();
+
+    if !core_combos.is_empty() {
+        match priority {
+            BuildPriorityPreference::MostPopular => {
+                core_combos.sort_by_key(|a| std::cmp::Reverse(a.play));
+            }
+            BuildPriorityPreference::HighestWinRate => {
+                core_combos.sort_by(|a, b| {
+                    b.win_rate()
+                        .partial_cmp(&a.win_rate())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| b.play.cmp(&a.play))
+                });
+            }
+        }
+        let best_combo = core_combos[0];
+        for &id in &best_combo.ids {
+            if clean_core.len() < 3
+                && !is_boot_item(id)
+                && !starter_ids.contains(&id)
+                && !clean_core.contains(&id)
+            {
+                clean_core.push(id);
+            }
+        }
+    }
+
+    // Fill up to 3 core items from the top sorted candidates if needed
     for cand in &all_candidates {
         if clean_core.len() < 3 && !clean_core.contains(&cand.id) {
             clean_core.push(cand.id);
         }
     }
+
     let default_core = if damage_type == "AP" {
         vec![3118, 4645, 3089]
     } else {
@@ -851,7 +895,9 @@ pub fn build_5_item_blocks(
         }
     }
 
-    // Block 4: Build Final (5 items: clean_core + top 2 late-game items)
+    // Block 4: Build Final (5 items)
+    // The first 3 items MUST be identical to clean_core in the EXACT SAME sequential order,
+    // followed by the top 2 late-game items.
     let mut final_build: Vec<i32> = clean_core.clone();
     for cand in &all_candidates {
         if final_build.len() < 5 && !final_build.contains(&cand.id) {
@@ -951,27 +997,59 @@ pub fn parse_opgg_mcp_text_with_priority(
     champion_name: &str,
     priority: BuildPriorityPreference,
 ) -> Result<ChampionBuild, String> {
-    // 1. Extract win_rate and pick_rate: AverageStats(0.51, 0.12)
+    // 1. Extract win_rate and pick_rate: AverageStats(...)
     let mut win_rate = 50.0;
     let mut pick_rate = 5.0;
+
+    let avg_fields: Vec<&str> = if let Some(def_idx) = text.find("class AverageStats:") {
+        let line_rest = &text[def_idx + 19..];
+        let end_line = line_rest.find('\n').unwrap_or(line_rest.len());
+        line_rest[..end_line]
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     if let Some(avg_idx) = text.find("AverageStats(") {
         let after_avg = &text[avg_idx + 13..];
         if let Some(close_idx) = after_avg.find(')') {
             let parts: Vec<&str> = after_avg[..close_idx].split(',').collect();
-            if parts.len() >= 2 {
-                if let Ok(w) = parts[0].trim().parse::<f64>() {
-                    win_rate = if w <= 1.0 {
-                        (w * 1000.0).round() / 10.0
-                    } else {
-                        w
-                    };
+            if !avg_fields.is_empty() && avg_fields.len() == parts.len() {
+                for (field_name, val_str) in avg_fields.iter().zip(parts.iter()) {
+                    if let Ok(num) = val_str.trim().parse::<f64>() {
+                        if *field_name == "win_rate" {
+                            win_rate = if num <= 1.0 {
+                                (num * 1000.0).round() / 10.0
+                            } else {
+                                num
+                            };
+                        } else if *field_name == "pick_rate" {
+                            pick_rate = if num <= 1.0 {
+                                (num * 1000.0).round() / 10.0
+                            } else {
+                                num
+                            };
+                        }
+                    }
                 }
-                if let Ok(p) = parts[1].trim().parse::<f64>() {
-                    pick_rate = if p <= 1.0 {
-                        (p * 1000.0).round() / 10.0
-                    } else {
-                        p
-                    };
+            } else {
+                // Heuristic fallback: play count is an integer > 100, win_rate and pick_rate are <= 100
+                let float_candidates: Vec<f64> = parts
+                    .iter()
+                    .filter_map(|s| s.trim().parse::<f64>().ok())
+                    .filter(|&v| v <= 100.0)
+                    .collect();
+                if float_candidates.len() >= 2 {
+                    let w = float_candidates[0];
+                    let p = float_candidates[1];
+                    win_rate = if w <= 1.0 { (w * 1000.0).round() / 10.0 } else { w };
+                    pick_rate = if p <= 1.0 { (p * 1000.0).round() / 10.0 } else { p };
+                } else if float_candidates.len() == 1 {
+                    let w = float_candidates[0];
+                    win_rate = if w <= 1.0 { (w * 1000.0).round() / 10.0 } else { w };
                 }
             }
         }
@@ -1199,6 +1277,8 @@ pub fn parse_opgg_analysis_payload_with_priority(
     let raw_win_rate = analysis
         .get("win_rate")
         .or_else(|| analysis.pointer("/stats/win_rate"))
+        .or_else(|| analysis.pointer("/summary/average_stats/win_rate"))
+        .or_else(|| analysis.pointer("/average_stats/win_rate"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
@@ -1211,6 +1291,8 @@ pub fn parse_opgg_analysis_payload_with_priority(
     let raw_pick_rate = analysis
         .get("pick_rate")
         .or_else(|| analysis.pointer("/stats/pick_rate"))
+        .or_else(|| analysis.pointer("/summary/average_stats/pick_rate"))
+        .or_else(|| analysis.pointer("/average_stats/pick_rate"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
@@ -2152,5 +2234,16 @@ mod tests {
         let pos_3165 = blocks[4].item_ids.iter().position(|&x| x == 3165).unwrap();
         assert!(pos_4629 < pos_4646);
         assert!(pos_4646 < pos_3165);
+    }
+    #[test]
+    fn test_parse_opgg_mcp_text_with_play_in_average_stats() {
+        let text_with_play = "class LolGetChampionAnalysis: data\nclass Data: summary\nclass Summary: average_stats\nclass AverageStats: play,win_rate,pick_rate\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(80342,0.512,0.118)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003]),CoreItems([4,14]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])))";
+        let build = parse_opgg_mcp_text(text_with_play, 103, "Ahri")
+            .expect("Parsing payload with play field in AverageStats should succeed");
+        assert_eq!(build.win_rate, 51.2);
+        assert_eq!(build.pick_rate, 11.8);
+        assert_eq!(build.item_blocks[1].item_ids, vec![3118, 4645, 3157]);
+        // Build final first 3 items must be identical to clean_core in exact sequential order
+        assert_eq!(&build.item_blocks[3].item_ids[..3], &[3118, 4645, 3157]);
     }
 }

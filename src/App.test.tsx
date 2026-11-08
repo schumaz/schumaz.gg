@@ -51,24 +51,7 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_summoner_status") {
       return Promise.resolve(null);
     }
-    if (cmd === "test_inject_runes") {
-      return Promise.resolve({
-        champion_name: "Ahri",
-        runes_injected: true,
-        spells_injected: false,
-        items_injected: true,
-        message: "Runas injetadas | Itens injetados",
-      });
-    }
-    if (cmd === "inject_build_for_champion") {
-      return Promise.resolve({
-        champion_name: "Ahri",
-        runes_injected: true,
-        spells_injected: true,
-        items_injected: true,
-        message: "Runas injetadas | Feitiços injetados | Itens injetados",
-      });
-    }
+
     if (cmd === "get_recommended_build_for_champion") {
       return Promise.resolve(mockAhriBuild);
     }
@@ -99,14 +82,10 @@ describe("App Component", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the manual injection test button in the Runas tab", () => {
+  it("does not render manual injection buttons as injection is strictly automatic", () => {
     render(<App />);
-    const btn = screen.getByRole("button", {
-      name: /Testar Injeção/i,
-    });
-    expect(btn).toBeInTheDocument();
-    // Disabled initially when summoner is not connected
-    expect(btn).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Testar Injeção/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Reaplicar Build/i })).not.toBeInTheDocument();
   });
 
   it("renders all 5 requested shop item block categories in the Runas tab", () => {
@@ -253,10 +232,8 @@ describe("App Component", () => {
     expect(screen.getByText(/51.8% Win Rate/i)).toBeInTheDocument();
     expect(screen.getByText(/8.4% Pick Rate/i)).toBeInTheDocument();
 
-    // Check prominent quick action button
-    const reapplyBtn = screen.getByTestId("reapply-build-btn");
-    expect(reapplyBtn).toBeInTheDocument();
-    expect(reapplyBtn).toHaveTextContent("Reaplicar Build Agora");
+    // Manual reapply button must not exist in automatic mode
+    expect(screen.queryByTestId("reapply-build-btn")).not.toBeInTheDocument();
 
     // Check runes tree
     expect(screen.getByText("Dominação")).toBeInTheDocument();

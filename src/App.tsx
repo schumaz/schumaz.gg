@@ -222,27 +222,7 @@ function App() {
     };
   }, []);
 
-  // Quick action: Force reapplying or testing build injection immediately
-  const handleReapplyBuild = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      let report: InjectionReport;
-      if (champSelect?.champion_id) {
-        report = await invoke<InjectionReport>("inject_build_for_champion", {
-          championId: champSelect.champion_id,
-          queueId: champSelect.queue_id,
-        });
-      } else {
-        report = await invoke<InjectionReport>("test_inject_runes");
-      }
-      setInjectionReport(report);
-    } catch (err: unknown) {
-      setErrorMsg(typeof err === "string" ? err : JSON.stringify(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   // Helper to reorder spells according to the user's preferred Flash key (D vs F)
   const getOrderedSpells = () => {
@@ -338,20 +318,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="champ-hero-actions">
-                  <button
-                    type="button"
-                    className="btn-primary btn-reapply"
-                    onClick={handleReapplyBuild}
-                    disabled={loading || !summoner}
-                    data-testid="reapply-build-btn"
-                  >
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                    </svg>
-                    <span>{loading ? "Reaplicando..." : "Reaplicar Build Agora"}</span>
-                  </button>
-                </div>
+
               </section>
 
               {/* Runes Tree & Spells Layout */}
@@ -551,16 +518,7 @@ function App() {
                   automaticamente com maior taxa de vitória do OP.GG.
                 </p>
 
-                <div className="idle-actions">
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={handleReapplyBuild}
-                    disabled={loading || !summoner}
-                  >
-                    {loading ? "Injetando..." : "Testar Injeção de Demonstração (Ahri)"}
-                  </button>
-                </div>
+
 
                 {!summoner && (
                   <p className="hint-text">
