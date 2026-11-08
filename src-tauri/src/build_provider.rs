@@ -11,6 +11,49 @@ pub const DDRAGON_BASE_URL: &str = "https://ddragon.leagueoflegends.com";
 
 static DDRAGON_CACHE: OnceCell<DataDragonCache> = OnceCell::const_new();
 
+/// Cache holding dynamically parsed item categories from Riot's latest DataDragon item.json.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ItemClassificationCache {
+    pub boots: std::collections::HashSet<i32>,
+    pub components: std::collections::HashSet<i32>,
+    pub completed: std::collections::HashSet<i32>,
+}
+
+static DYNAMIC_ITEM_CLASSIFICATIONS: std::sync::RwLock<Option<ItemClassificationCache>> =
+    std::sync::RwLock::new(None);
+
+pub fn set_dynamic_item_classifications(cache: ItemClassificationCache) {
+    if let Ok(mut guard) = DYNAMIC_ITEM_CLASSIFICATIONS.write() {
+        *guard = Some(cache);
+    }
+}
+
+pub fn get_dynamic_item_classifications() -> Option<ItemClassificationCache> {
+    DYNAMIC_ITEM_CLASSIFICATIONS.read().ok().and_then(|g| g.clone())
+}
+
+/// Dynamically checks whether an item is a boot using Riot DataDragon tags or fallback catalog.
+pub fn is_boot_item_dynamic(id: i32) -> bool {
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && cache.boots.contains(&id)
+    {
+        return true;
+    }
+    is_boot_item(id)
+}
+
+/// Dynamically checks whether an item is a component using Riot DataDragon recipe tree or fallback catalog.
+pub fn is_component_item_dynamic(id: i32) -> bool {
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && cache.components.contains(&id)
+    {
+        return true;
+    }
+    is_component_item(id)
+}
+
 /// Champion metadata translated from Riot's DataDragon.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChampionMetadata {
@@ -745,6 +788,50 @@ pub fn parse_all_ddragon_champions(
     Ok(map)
 }
 
+/// Parses DataDragon `item.json` into dynamic classifications (boots, components, completed items).
+pub fn parse_ddragon_item_classifications(items_json: &serde_json::Value) -> ItemClassificationCache {
+    let mut boots = std::collections::HashSet::new();
+    let mut components = std::collections::HashSet::new();
+    let mut completed = std::collections::HashSet::new();
+
+    if let Some(data) = items_json.get("data").and_then(|d| d.as_object()) {
+        for (id_str, item_val) in data {
+            if let Ok(id) = id_str.parse::<i32>() {
+                let has_into = item_val
+                    .get("into")
+                    .and_then(|into_arr| into_arr.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false);
+                let gold = item_val
+                    .pointer("/gold/total")
+                    .and_then(|g| g.as_i64())
+                    .unwrap_or(0);
+                let tags: Vec<&str> = item_val
+                    .get("tags")
+                    .and_then(|t| t.as_array())
+                    .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+                    .unwrap_or_default();
+
+                if tags.contains(&"Boots") {
+                    boots.insert(id);
+                }
+                if has_into {
+                    components.insert(id);
+                }
+                if !has_into && gold >= 1600 && !tags.contains(&"Boots") {
+                    completed.insert(id);
+                }
+            }
+        }
+    }
+
+    ItemClassificationCache {
+        boots,
+        components,
+        completed,
+    }
+}
+
 /// Parses DataDragon `item.json` to identify completed legendary/mythic items (gold >= 1600, no 'into' recipes).
 pub fn parse_ddragon_completed_items(
     items_json: &serde_json::Value,
@@ -906,6 +993,16 @@ pub async fn load_ddragon_cache_from_base_url(
         .map_err(|e| format!("Failed to parse runesReforged.json: {}", e))?;
 
     let runes = parse_ddragon_runes(&runes_res)?;
+
+    // 4. Dynamically fetch and index item.json for future-proof patch adaptation (fail-safe)
+    let items_url = format!("{}/cdn/{}/data/pt_BR/item.json", base_url, version);
+    if let Ok(res) = client.get(&items_url).send().await
+        && res.status().is_success()
+        && let Ok(items_res) = res.json::<serde_json::Value>().await
+    {
+        let classification = parse_ddragon_item_classifications(&items_res);
+        set_dynamic_item_classifications(classification);
+    }
 
     Ok(DataDragonCache {
         version,
@@ -1268,12 +1365,33 @@ pub fn build_5_item_blocks_with_depth_lists(
         }
     };
 
+    // Future-proof contextual sets directly from OP.GG structures:
+    let known_boots: std::collections::HashSet<i32> = boot_entries
+        .iter()
+        .flat_map(|e| e.ids.iter().copied())
+        .collect();
+
+    let known_starters: std::collections::HashSet<i32> = starter_entries
+        .iter()
+        .flat_map(|e| e.ids.iter().copied())
+        .collect();
+
+    let is_boot = |id: i32| -> bool {
+        known_boots.contains(&id) || is_boot_item_dynamic(id)
+    };
+    let is_starter = |id: i32| -> bool {
+        known_starters.contains(&id) || starter_ids.contains(&id) || is_starter_item(id)
+    };
+    let is_comp = |id: i32| -> bool {
+        is_component_item_dynamic(id)
+    };
+
     // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
     let mut boot_map: HashMap<i32, (i64, usize)> = HashMap::new();
     let mut boot_seen_counter = 0;
     for entry in &boot_entries {
         for &id in &entry.ids {
-            if is_boot_item(id) || (!is_starter_item(id) && !is_component_item(id)) {
+            if is_boot(id) || (!is_starter(id) && !is_comp(id)) {
                 let slot = boot_map.entry(id).or_insert_with(|| {
                     let idx = boot_seen_counter;
                     boot_seen_counter += 1;
@@ -1287,7 +1405,7 @@ pub fn build_5_item_blocks_with_depth_lists(
     if boot_map.len() < 3 {
         for entry in &candidate_entries {
             for &id in &entry.ids {
-                if is_boot_item(id) {
+                if is_boot(id) {
                     let slot = boot_map.entry(id).or_insert_with(|| {
                         let idx = boot_seen_counter;
                         boot_seen_counter += 1;
@@ -1334,7 +1452,7 @@ pub fn build_5_item_blocks_with_depth_lists(
         .chain(sixth_entries.iter())
     {
         for &id in &entry.ids {
-            if !is_boot_item(id) && !starter_ids.contains(&id) {
+            if !is_boot(id) && !is_starter(id) && !is_comp(id) {
                 let entry_play = entry.play.max(1);
                 let slot = item_map.entry(id).or_insert_with(|| {
                     let idx = item_seen_counter;
@@ -1374,7 +1492,7 @@ pub fn build_5_item_blocks_with_depth_lists(
             let non_boot_count = e
                 .ids
                 .iter()
-                .filter(|&&id| !is_boot_item(id) && !starter_ids.contains(&id))
+                .filter(|&&id| !is_boot(id) && !is_starter(id) && !is_comp(id))
                 .count();
             non_boot_count >= 2
         })
@@ -1385,8 +1503,9 @@ pub fn build_5_item_blocks_with_depth_lists(
         let best_combo = core_combos[0];
         for &id in &best_combo.ids {
             if clean_core.len() < 3
-                && !is_boot_item(id)
-                && !starter_ids.contains(&id)
+                && !is_boot(id)
+                && !is_starter(id)
+                && !is_comp(id)
                 && !clean_core.contains(&id)
             {
                 clean_core.push(id);
@@ -1423,9 +1542,9 @@ pub fn build_5_item_blocks_with_depth_lists(
         for entry in sorted {
             for &id in &entry.ids {
                 if !current_build.contains(&id)
-                    && !is_component_item(id)
-                    && !is_starter_item(id)
-                    && !is_boot_item(id)
+                    && !is_comp(id)
+                    && !is_starter(id)
+                    && !is_boot(id)
                 {
                     return Some(id);
                 }
@@ -1446,9 +1565,9 @@ pub fn build_5_item_blocks_with_depth_lists(
     for cand in &all_candidates {
         if final_build.len() < 6
             && !final_build.contains(&cand.id)
-            && !is_component_item(cand.id)
-            && !is_starter_item(cand.id)
-            && !is_boot_item(cand.id)
+            && !is_comp(cand.id)
+            && !is_starter(cand.id)
+            && !is_boot(cand.id)
         {
             final_build.push(cand.id);
         }
@@ -1472,9 +1591,9 @@ pub fn build_5_item_blocks_with_depth_lists(
         .filter(|cand| {
             !clean_core.contains(&cand.id)
                 && !final_build.contains(&cand.id)
-                && !is_component_item(cand.id)
-                && !is_starter_item(cand.id)
-                && !is_boot_item(cand.id)
+                && !is_comp(cand.id)
+                && !is_starter(cand.id)
+                && !is_boot(cand.id)
         })
         .collect();
     situational_candidates.sort_by(|a, b| {
@@ -3685,5 +3804,71 @@ mod tests {
             "support",
         );
         assert_eq!(supp_blocks[0].item_ids, vec![2003]);
+    }
+    #[test]
+    fn test_future_proof_dynamic_classification_and_opgg_context_trust() {
+        // Simulate a new patch with completely un-hardcoded future item IDs:
+        // Item 9901: brand new boot introduced by Riot (tags: ["Boots"])
+        // Item 9902: brand new component item (has "into" recipe)
+        // Item 9903: brand new completed legendary item (cost >= 1600, no "into")
+        let ddragon_items_json = serde_json::json!({
+            "data": {
+                "9901": {
+                    "name": "Astral Treads",
+                    "tags": ["Boots"],
+                    "gold": { "total": 1100 }
+                },
+                "9902": {
+                    "name": "Arcane Filament",
+                    "into": ["9903"],
+                    "tags": ["Damage"],
+                    "gold": { "total": 850 }
+                },
+                "9903": {
+                    "name": "Celestial Singularity",
+                    "tags": ["Damage"],
+                    "gold": { "total": 3300 }
+                }
+            }
+        });
+
+        let cache = parse_ddragon_item_classifications(&ddragon_items_json);
+        set_dynamic_item_classifications(cache);
+
+        // Verify dynamic classifier recognized future items without any hardcoded IDs:
+        assert!(is_boot_item_dynamic(9901));
+        assert!(is_component_item_dynamic(9902));
+        assert!(!is_component_item_dynamic(9903));
+
+        // Test building blocks with these items in OP.GG payload:
+        let boots = vec![ItemStatEntry { ids: vec![9901], play: 50000, win: 25000, pick_rate: 0.9 }];
+        let candidate_entries = vec![
+            ItemStatEntry { ids: vec![9903, 3089, 3157], play: 25000, win: 13000, pick_rate: 0.5 },
+            ItemStatEntry { ids: vec![9902], play: 20000, win: 10000, pick_rate: 0.4 }, // Component - must be skipped!
+            ItemStatEntry { ids: vec![3135], play: 15000, win: 8000, pick_rate: 0.3 },
+            ItemStatEntry { ids: vec![3102], play: 12000, win: 6000, pick_rate: 0.25 },
+            ItemStatEntry { ids: vec![4629], play: 10000, win: 5000, pick_rate: 0.2 },
+            ItemStatEntry { ids: vec![4646], play: 8000, win: 4000, pick_rate: 0.15 },
+        ];
+
+        let blocks = build_5_item_blocks(
+            Some(ItemStatEntry { ids: vec![1056, 2003], play: 50000, win: 25000, pick_rate: 0.9 }),
+            boots,
+            candidate_entries,
+            "AP",
+        );
+
+        // 1. Boot block must contain the new boot 9901
+        assert_eq!(blocks[2].title, "3 Botas Mais Feitas");
+        assert!(blocks[2].item_ids.contains(&9901));
+
+        // 2. Component 9902 must NEVER appear in Core, Final Build, or Situational blocks
+        assert!(!blocks[1].item_ids.contains(&9902));
+        assert!(!blocks[3].item_ids.contains(&9902));
+        assert!(!blocks[4].item_ids.contains(&9902));
+
+        // 3. New Legendary 9903 must be correctly integrated in Core and Final Build
+        assert!(blocks[1].item_ids.contains(&9903));
+        assert!(blocks[3].item_ids.contains(&9903));
     }
 }
