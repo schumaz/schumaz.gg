@@ -113,7 +113,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Sync preferences state with localStorage
+  // Sync preferences state with localStorage and Tauri backend
   const updatePreference = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
     setPreferences((prev) => {
       const next = { ...prev, [key]: value };
@@ -122,11 +122,15 @@ function App() {
       } catch {
         // Ignore localStorage quota errors
       }
+      invoke("sync_user_preferences", { preferences: next }).catch(() => {});
       return next;
     });
   };
 
   useEffect(() => {
+    // Sync initial preferences with backend
+    invoke("sync_user_preferences", { preferences }).catch(() => {});
+
     // Initial check for summoner status
     invoke<SummonerInfo | null>("get_summoner_status")
       .then((data) => {

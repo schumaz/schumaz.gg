@@ -96,6 +96,12 @@ async fn get_summoner_status() -> Result<Option<lcu_connector::SummonerInfo>, St
     }
 }
 
+/// Tauri command to sync user preferences from the frontend to the backend engine.
+#[tauri::command]
+fn sync_user_preferences(preferences: lcu_injector::UserPreferences) {
+    lcu_injector::set_user_preferences(preferences);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -105,7 +111,8 @@ pub fn run() {
             test_inject_runes,
             inject_build_for_champion,
             get_recommended_build_for_champion,
-            get_summoner_status
+            get_summoner_status,
+            sync_user_preferences
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();

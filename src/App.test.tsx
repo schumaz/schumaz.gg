@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import App, { ChampionBuild, DEFAULT_PREFERENCES } from "./App";
+import { invoke } from "@tauri-apps/api/core";
 
 // Sample mock recommended build for Ahri
 const mockAhriBuild: ChampionBuild = {
