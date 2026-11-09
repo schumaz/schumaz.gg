@@ -43,3 +43,7 @@ strip = true
 [dev-dependencies]
 tokio-test = "0.4.6"
 wiremock = "0.6.5"
+
+[[test]]
+name = "integration"
+path = "tests/integration/main.rs"
