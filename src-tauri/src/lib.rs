@@ -121,9 +121,13 @@ async fn inject_summoner_spells(
 #[tauri::command]
 async fn inject_item_build(
     champion_id: i32,
+    build_index: Option<usize>,
     core_index: Option<usize>,
     final_index: Option<usize>,
 ) -> Result<(), String> {
+    if let Some(idx) = build_index {
+        lcu_injector::set_selected_build(champion_id, idx);
+    }
     if let Some(idx) = core_index {
         lcu_injector::set_selected_core_build(champion_id, idx);
     }

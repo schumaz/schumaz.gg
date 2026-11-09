@@ -109,7 +109,39 @@ const mockAhriBuild: ChampionBuild = {
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },
   ],
-    core_build_options: [
+    build_options: [
+    {
+      name: "Build 1 (Mais Feita)",
+      core_item_ids: [3285, 3157, 3089],
+      core_item_icon_urls: ["3285.png", "3157.png", "3089.png"],
+      final_item_ids: [3285, 3157, 3089, 3135, 4645, 3102],
+      final_item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"],
+      play: 25000,
+      win: 13000,
+      pick_rate: 65.0,
+    },
+    {
+      name: "Build 2",
+      core_item_ids: [3285, 4645, 3089],
+      core_item_icon_urls: ["3285.png", "4645.png", "3089.png"],
+      final_item_ids: [3285, 4645, 3089, 3157, 3135, 3102],
+      final_item_icon_urls: ["3285.png", "4645.png", "3089.png", "3157.png", "3135.png", "3102.png"],
+      play: 8000,
+      win: 4200,
+      pick_rate: 20.8,
+    },
+    {
+      name: "Build 3",
+      core_item_ids: [3285, 3165, 3089],
+      core_item_icon_urls: ["3285.png", "3165.png", "3089.png"],
+      final_item_ids: [3285, 3165, 3089, 3157, 3135, 4629],
+      final_item_icon_urls: ["3285.png", "3165.png", "3089.png", "3157.png", "3135.png", "4629.png"],
+      play: 3000,
+      win: 1550,
+      pick_rate: 7.8,
+    },
+  ],
+  core_build_options: [
     {
       item_ids: [3285, 3157, 3089],
       item_icon_urls: ["3285.png", "3157.png", "3089.png"],
@@ -748,7 +780,7 @@ describe("App Component", () => {
     expect(screen.getByTestId("rune-page-btn-1")).not.toHaveClass("active");
   });
 
-  it("renders 3 core build options and final build options, allows independent selection with LCU injection, and persists choices across lock-in", async () => {
+  it("renders unified build selector with 3 cohesive build options and preview icons, allows selection with LCU injection, and persists choice across lock-in", async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -770,51 +802,38 @@ describe("App Component", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("core-build-selector")).toBeInTheDocument();
-      expect(screen.getByTestId("final-build-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("unified-build-selector")).toBeInTheDocument();
     });
 
-    // Verify pills for Core 3
-    const coreOpt0 = screen.getByTestId("core-opt-btn-0");
-    const coreOpt1 = screen.getByTestId("core-opt-btn-1");
-    const coreOpt2 = screen.getByTestId("core-opt-btn-2");
-    expect(coreOpt0).toBeInTheDocument();
-    expect(coreOpt1).toBeInTheDocument();
-    expect(coreOpt2).toBeInTheDocument();
+    // Verify 3 unified build buttons
+    const buildOpt0 = screen.getByTestId("build-opt-btn-0");
+    const buildOpt1 = screen.getByTestId("build-opt-btn-1");
+    const buildOpt2 = screen.getByTestId("build-opt-btn-2");
+    expect(buildOpt0).toBeInTheDocument();
+    expect(buildOpt1).toBeInTheDocument();
+    expect(buildOpt2).toBeInTheDocument();
 
-    expect(coreOpt0).toHaveClass("active");
-    expect(coreOpt1).not.toHaveClass("active");
+    expect(buildOpt0).toHaveClass("active");
+    expect(buildOpt1).not.toHaveClass("active");
+    expect(buildOpt2).not.toHaveClass("active");
 
-    // Verify pills for Final Build
-    const finalOpt0 = screen.getByTestId("final-opt-btn-0");
-    const finalOpt1 = screen.getByTestId("final-opt-btn-1");
-    expect(finalOpt0).toBeInTheDocument();
-    expect(finalOpt1).toBeInTheDocument();
-    expect(finalOpt0).toHaveClass("active");
-    expect(finalOpt1).not.toHaveClass("active");
+    // Verify preview mini-icons exist inside each button
+    expect(buildOpt0.querySelectorAll(".build-pill-mini-icon")).toHaveLength(3);
+    expect(buildOpt1.querySelectorAll(".build-pill-mini-icon")).toHaveLength(3);
 
-    // Click Core Option 2 (index 1: with item 4645 Shadowflame)
+    // Initial Block 2 and Block 4 reflect Build 1 (3157 in core)
+    expect(screen.getAllByAltText("Item 3157").length).toBeGreaterThan(0);
+
+    // Click Build Option 2 (index 1: core has 4645 Shadowflame)
     await act(async () => {
-      fireEvent.click(coreOpt1);
+      fireEvent.click(buildOpt1);
     });
 
-    expect(coreOpt1).toHaveClass("active");
-    expect(coreOpt0).not.toHaveClass("active");
+    expect(buildOpt1).toHaveClass("active");
+    expect(buildOpt0).not.toHaveClass("active");
     expect(invoke).toHaveBeenCalledWith("inject_item_build", {
       championId: 103,
-      coreIndex: 1,
-      finalIndex: 0,
-    });
-
-    // Click Final Option 2 (index 1: with item 4629 Cosmic Drive)
-    await act(async () => {
-      fireEvent.click(finalOpt1);
-    });
-
-    expect(finalOpt1).toHaveClass("active");
-    expect(finalOpt0).not.toHaveClass("active");
-    expect(invoke).toHaveBeenCalledWith("inject_item_build", {
-      championId: 103,
+      buildIndex: 1,
       coreIndex: 1,
       finalIndex: 1,
     });
@@ -832,9 +851,9 @@ describe("App Component", () => {
       eventListeners["recommended-build"]({ payload: mockAhriBuild });
     });
 
-    // Choices MUST persist across lock-in!
-    expect(coreOpt1).toHaveClass("active");
-    expect(finalOpt1).toHaveClass("active");
+    // Choice MUST persist across lock-in!
+    expect(buildOpt1).toHaveClass("active");
+    expect(buildOpt0).not.toHaveClass("active");
   });
 
 });

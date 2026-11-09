@@ -136,6 +136,7 @@ pub struct ChampionSelections {
     pub champion_id: i32,
     pub rune_page_index: Option<usize>,
     pub secondary_spell_id: Option<i32>,
+    pub build_index: Option<usize>,
     pub core_build_index: Option<usize>,
     pub final_build_index: Option<usize>,
 }
@@ -152,6 +153,7 @@ pub fn set_selected_rune_page(champion_id: i32, page_index: usize) {
             champion_id,
             rune_page_index: None,
             secondary_spell_id: None,
+            build_index: None,
             core_build_index: None,
             final_build_index: None,
         });
@@ -160,6 +162,7 @@ pub fn set_selected_rune_page(champion_id: i32, page_index: usize) {
                 champion_id,
                 rune_page_index: Some(page_index),
                 secondary_spell_id: None,
+                build_index: None,
                 core_build_index: None,
                 final_build_index: None,
             };
@@ -175,6 +178,7 @@ pub fn set_selected_secondary_spell(champion_id: i32, spell_id: i32) {
             champion_id,
             rune_page_index: None,
             secondary_spell_id: None,
+            build_index: None,
             core_build_index: None,
             final_build_index: None,
         });
@@ -183,6 +187,7 @@ pub fn set_selected_secondary_spell(champion_id: i32, spell_id: i32) {
                 champion_id,
                 rune_page_index: None,
                 secondary_spell_id: Some(spell_id),
+                build_index: None,
                 core_build_index: None,
                 final_build_index: None,
             };
@@ -193,12 +198,14 @@ pub fn set_selected_secondary_spell(champion_id: i32, spell_id: i32) {
 }
 
 
-pub fn set_selected_core_build(champion_id: i32, core_index: usize) {
+
+pub fn set_selected_build(champion_id: i32, build_index: usize) {
     if let Ok(mut guard) = get_selections_lock().write() {
         let current = guard.get_or_insert_with(|| ChampionSelections {
             champion_id,
             rune_page_index: None,
             secondary_spell_id: None,
+            build_index: None,
             core_build_index: None,
             final_build_index: None,
         });
@@ -207,6 +214,31 @@ pub fn set_selected_core_build(champion_id: i32, core_index: usize) {
                 champion_id,
                 rune_page_index: None,
                 secondary_spell_id: None,
+                build_index: Some(build_index),
+                core_build_index: None,
+                final_build_index: None,
+            };
+        } else {
+            current.build_index = Some(build_index);
+        }
+    }
+}
+pub fn set_selected_core_build(champion_id: i32, core_index: usize) {
+    if let Ok(mut guard) = get_selections_lock().write() {
+        let current = guard.get_or_insert_with(|| ChampionSelections {
+            champion_id,
+            rune_page_index: None,
+            secondary_spell_id: None,
+            build_index: None,
+            core_build_index: None,
+            final_build_index: None,
+        });
+        if current.champion_id != champion_id {
+            *current = ChampionSelections {
+                champion_id,
+                rune_page_index: None,
+                secondary_spell_id: None,
+                build_index: None,
                 core_build_index: Some(core_index),
                 final_build_index: None,
             };
@@ -222,6 +254,7 @@ pub fn set_selected_final_build(champion_id: i32, final_index: usize) {
             champion_id,
             rune_page_index: None,
             secondary_spell_id: None,
+            build_index: None,
             core_build_index: None,
             final_build_index: None,
         });
@@ -230,6 +263,7 @@ pub fn set_selected_final_build(champion_id: i32, final_index: usize) {
                 champion_id,
                 rune_page_index: None,
                 secondary_spell_id: None,
+                build_index: None,
                 core_build_index: None,
                 final_build_index: Some(final_index),
             };
@@ -423,19 +457,31 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
     for block in &build.item_blocks {
         let mut item_ids = block.item_ids.clone();
 
-        // Check if user selected an alternative Core 3 option (Block title matches "Primeiros 3 Itens")
-        if block.title.contains("Primeiros 3 Itens")
-            && let Some(sel) = selections.as_ref()
-            && let Some(core_idx) = sel.core_build_index
-            && core_idx < build.core_build_options.len()
+        // If unified build option is selected, use it for both Primeiros 3 Itens and Build Final
+        if let Some(sel) = selections.as_ref()
+            && let Some(b_idx) = sel.build_index
+            && b_idx < build.build_options.len()
         {
-            item_ids = build.core_build_options[core_idx].item_ids.clone();
-        } else if block.title.contains("Build Final")
-            && let Some(sel) = selections.as_ref()
-            && let Some(final_idx) = sel.final_build_index
-            && final_idx < build.final_build_options.len()
-        {
-            item_ids = build.final_build_options[final_idx].item_ids.clone();
+            if block.title.contains("Primeiros 3 Itens") {
+                item_ids = build.build_options[b_idx].core_item_ids.clone();
+            } else if block.title.contains("Build Final") {
+                item_ids = build.build_options[b_idx].final_item_ids.clone();
+            }
+        } else {
+            // Fallback for independent core / final build options
+            if block.title.contains("Primeiros 3 Itens")
+                && let Some(sel) = selections.as_ref()
+                && let Some(core_idx) = sel.core_build_index
+                && core_idx < build.core_build_options.len()
+            {
+                item_ids = build.core_build_options[core_idx].item_ids.clone();
+            } else if block.title.contains("Build Final")
+                && let Some(sel) = selections.as_ref()
+                && let Some(final_idx) = sel.final_build_index
+                && final_idx < build.final_build_options.len()
+            {
+                item_ids = build.final_build_options[final_idx].item_ids.clone();
+            }
         }
 
         let items: Vec<serde_json::Value> = item_ids
@@ -986,6 +1032,68 @@ pub mod tests {
         let selected_payload = build_rune_page_payload(&build).unwrap();
         assert_eq!(selected_payload["primaryStyleId"], 8200);
         assert_eq!(selected_payload["subStyleId"], 8300);
+
+        clear_champion_selections();
+    }
+
+    #[test]
+    fn test_build_item_sets_payload_respects_unified_build_selection() {
+        clear_champion_selections();
+        let build = ChampionBuild {
+            champion_id: 103,
+            champion_name: "Ahri".to_string(),
+            item_blocks: vec![
+                crate::build_provider::ItemBlock {
+                    title: "1. Itens Iniciais".to_string(),
+                    item_ids: vec![1056, 2003],
+                    item_icon_urls: vec![],
+                },
+                crate::build_provider::ItemBlock {
+                    title: "2. Primeiros 3 Itens".to_string(),
+                    item_ids: vec![3118, 4645, 3089],
+                    item_icon_urls: vec![],
+                },
+                crate::build_provider::ItemBlock {
+                    title: "3. 3 Botas Mais Feitas".to_string(),
+                    item_ids: vec![3020, 3158, 3111],
+                    item_icon_urls: vec![],
+                },
+                crate::build_provider::ItemBlock {
+                    title: "4. Build Final".to_string(),
+                    item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
+                    item_icon_urls: vec![],
+                },
+            ],
+            build_options: vec![
+                crate::build_provider::UnifiedBuildOption {
+                    name: "Build 1 (Mais Feita)".to_string(),
+                    core_item_ids: vec![3118, 4645, 3089],
+                    final_item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
+                    ..Default::default()
+                },
+                crate::build_provider::UnifiedBuildOption {
+                    name: "Build 2".to_string(),
+                    core_item_ids: vec![3157, 3089, 4629],
+                    final_item_ids: vec![3157, 3089, 4629, 3118, 3135, 3102],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Select Unified Build Option 1 (index 1)
+        set_selected_build(103, 1);
+
+        let p = build_item_sets_payload(12345, &build);
+        let blocks = p["itemSets"][0]["blocks"].as_array().unwrap();
+        // Block 2: 3157, 3089, 4629
+        assert_eq!(blocks[1]["items"][0]["id"], "3157");
+        assert_eq!(blocks[1]["items"][1]["id"], "3089");
+        assert_eq!(blocks[1]["items"][2]["id"], "4629");
+
+        // Block 4: 3157, 3089, 4629, 3118, 3135, 3102
+        assert_eq!(blocks[3]["items"][0]["id"], "3157");
+        assert_eq!(blocks[3]["items"][5]["id"], "3102");
 
         clear_champion_selections();
     }

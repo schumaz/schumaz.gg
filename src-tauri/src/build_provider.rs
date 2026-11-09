@@ -18,6 +18,7 @@ pub struct ItemClassificationCache {
     pub components: std::collections::HashSet<i32>,
     pub completed: std::collections::HashSet<i32>,
     pub evolved_fallbacks: std::collections::HashMap<i32, i32>,
+    pub item_tags: std::collections::HashMap<i32, Vec<String>>,
 }
 
 static DYNAMIC_ITEM_CLASSIFICATIONS: std::sync::RwLock<Option<ItemClassificationCache>> =
@@ -34,6 +35,17 @@ pub fn get_dynamic_item_classifications() -> Option<ItemClassificationCache> {
         .read()
         .ok()
         .and_then(|g| g.clone())
+}
+
+/// Dynamically retrieves DataDragon tags for an item.
+pub fn get_item_tags_dynamic(id: i32) -> Vec<String> {
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && let Some(tags) = cache.item_tags.get(&id)
+    {
+        return tags.clone();
+    }
+    Vec::new()
 }
 
 /// Dynamically checks whether an item is a boot using Riot DataDragon tags or fallback catalog.
@@ -198,6 +210,21 @@ pub struct DataDragonCache {
     pub runes: HashMap<i32, RuneMetadata>,
 }
 
+/// Complete unified build archetype (Core 3 + matching 6-item Final Build).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct UnifiedBuildOption {
+    pub name: String,
+    pub core_item_ids: Vec<i32>,
+    #[serde(default)]
+    pub core_item_icon_urls: Vec<String>,
+    pub final_item_ids: Vec<i32>,
+    #[serde(default)]
+    pub final_item_icon_urls: Vec<String>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+}
+
 /// Metadata for a multi-option item build (e.g. Core 3 or Final 6).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ItemBuildOption {
@@ -235,6 +262,8 @@ pub struct ChampionBuild {
     pub rune_pages: Vec<RunePageOption>,
     #[serde(default)]
     pub core_build_options: Vec<ItemBuildOption>,
+    #[serde(default)]
+    pub build_options: Vec<UnifiedBuildOption>,
     #[serde(default)]
     pub final_build_options: Vec<ItemBuildOption>,
     #[serde(default)]
@@ -923,6 +952,29 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
             .collect();
     }
 
+    for opt in &mut build.build_options {
+        opt.core_item_icon_urls = opt
+            .core_item_ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "https://ddragon.leagueoflegends.com/cdn/{}/img/item/{}.png",
+                    cache.version, id
+                )
+            })
+            .collect();
+        opt.final_item_icon_urls = opt
+            .final_item_ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "https://ddragon.leagueoflegends.com/cdn/{}/img/item/{}.png",
+                    cache.version, id
+                )
+            })
+            .collect();
+    }
+
     for opt in &mut build.core_build_options {
         opt.item_icon_urls = opt
             .item_ids
@@ -1013,6 +1065,7 @@ pub fn parse_ddragon_item_classifications(
     let mut components = std::collections::HashSet::new();
     let mut completed = std::collections::HashSet::new();
     let mut evolved_fallbacks = std::collections::HashMap::new();
+    let mut item_tags = std::collections::HashMap::new();
 
     // Default static fallbacks for Tear of the Goddess upgrades:
     evolved_fallbacks.insert(3042, 3004); // Muramana -> Manamune
@@ -1037,6 +1090,8 @@ pub fn parse_ddragon_item_classifications(
                     .and_then(|t| t.as_array())
                     .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
                     .unwrap_or_default();
+                let string_tags: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+                item_tags.insert(id, string_tags);
 
                 let in_store = item_val
                     .get("inStore")
@@ -1069,6 +1124,7 @@ pub fn parse_ddragon_item_classifications(
         components,
         completed,
         evolved_fallbacks,
+        item_tags,
     }
 }
 
@@ -1509,7 +1565,157 @@ fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatEntry
 // 4. Build Final (6 items: 3 Core items + #1 most played 4th item + #1 most played 5th item + #1 most played 6th item)
 // 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
 
-/// Extracts up to 3 Core 3 ItemBuildOptions from candidate/core entries, sorted by play count descending.
+/// Computes dynamic synergy affinity score between a candidate item and core tags (no hardcoded IDs).
+pub fn compute_item_affinity_score(
+    item_id: i32,
+    core_tags: &[String],
+    core_is_pure_ad: bool,
+    core_is_pure_ap: bool,
+) -> i64 {
+    let tags = get_item_tags_dynamic(item_id);
+    if tags.is_empty() {
+        return 0;
+    }
+    let has_ap = tags.iter().any(|t| t == "SpellDamage" || t == "MagicPenetration");
+    let has_ad = tags
+        .iter()
+        .any(|t| t == "Damage" || t == "CriticalStrike" || t == "LifeSteal" || t == "ArmorPenetration");
+
+    if core_is_pure_ad && has_ap && !has_ad {
+        return -1_000_000;
+    }
+    if core_is_pure_ap && has_ad && !has_ap {
+        return -1_000_000;
+    }
+
+    let mut score = 0;
+    for t in &tags {
+        if core_tags.contains(t) {
+            score += 100_000;
+        }
+    }
+    score
+}
+
+/// Dynamically builds a cohesive 6-item final build for a specific core trio.
+pub fn build_cohesive_final_build_for_core(
+    core_items: &[i32],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    damage_type: &str,
+) -> Vec<i32> {
+    let mut build_6 = core_items.to_vec();
+
+    let mut core_tags: Vec<String> = Vec::new();
+    for &id in core_items {
+        for tag in get_item_tags_dynamic(id) {
+            if !core_tags.contains(&tag) {
+                core_tags.push(tag);
+            }
+        }
+    }
+    let core_has_ap = core_tags.iter().any(|t| t == "SpellDamage" || t == "MagicPenetration");
+    let core_has_ad = core_tags
+        .iter()
+        .any(|t| t == "Damage" || t == "CriticalStrike" || t == "LifeSteal" || t == "ArmorPenetration");
+    let core_is_pure_ad = core_has_ad && !core_has_ap;
+    let core_is_pure_ap = core_has_ap && !core_has_ad;
+
+    let mut candidates_with_scores: Vec<(i32, i64)> = Vec::new();
+
+    let all_late_entries = fourth_entries
+        .iter()
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .chain(candidate_entries.iter());
+
+    for entry in all_late_entries {
+        for &id in &entry.ids {
+            let norm_id = normalize_tear_item_dynamic(id);
+            if !build_6.contains(&norm_id)
+                && !is_boot_item_dynamic(norm_id)
+                && !is_starter_item(norm_id)
+                && !is_component_item_dynamic(norm_id)
+                && !candidates_with_scores.iter().any(|(cand, _)| *cand == norm_id)
+            {
+                let affinity = compute_item_affinity_score(norm_id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+                let score = affinity + entry.play.max(1);
+                candidates_with_scores.push((norm_id, score));
+            }
+        }
+    }
+
+    candidates_with_scores.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
+
+    for (cand_id, score) in candidates_with_scores {
+        if build_6.len() < 6 && score > -500_000 && !build_6.contains(&cand_id) {
+            build_6.push(cand_id);
+        }
+    }
+
+    // Dynamic late-game completion fallback if depth lists were sparse
+    let default_late = if damage_type == "AP" || core_has_ap {
+        vec![3157, 3135, 4629, 3102, 4646]
+    } else {
+        vec![3072, 3026, 3139, 3033, 3091]
+    };
+    for d in default_late {
+        let norm_d = normalize_tear_item_dynamic(d);
+        if build_6.len() < 6 && !build_6.contains(&norm_d) {
+            build_6.push(norm_d);
+        }
+    }
+
+    build_6
+}
+
+/// Builds up to 3 unified build options (each with 3 core items and 6 matching final items).
+pub fn build_unified_build_options(
+    core_entries: &[ItemStatEntry],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    damage_type: &str,
+    _position: &str,
+) -> Vec<UnifiedBuildOption> {
+    let cand_ids: Vec<i32> = candidate_entries.iter().flat_map(|e| e.ids.clone()).collect();
+    let core_opts = extract_top_core_build_options(core_entries, &cand_ids, damage_type);
+
+    let mut unified_options = Vec::new();
+    for (idx, core_opt) in core_opts.into_iter().enumerate() {
+        let final_6 = build_cohesive_final_build_for_core(
+            &core_opt.item_ids,
+            fourth_entries,
+            fifth_entries,
+            sixth_entries,
+            candidate_entries,
+            damage_type,
+        );
+
+        let name = if idx == 0 {
+            "Build 1 (Mais Feita)".to_string()
+        } else {
+            format!("Build {}", idx + 1)
+        };
+
+        unified_options.push(UnifiedBuildOption {
+            name,
+            core_item_ids: core_opt.item_ids,
+            core_item_icon_urls: Vec::new(),
+            final_item_ids: final_6,
+            final_item_icon_urls: Vec::new(),
+            play: core_opt.play,
+            win: core_opt.win,
+            pick_rate: core_opt.pick_rate,
+        });
+    }
+
+    unified_options
+}
+
 pub fn extract_top_core_build_options(
     core_entries: &[ItemStatEntry],
     all_candidates: &[i32],
@@ -2545,6 +2751,15 @@ pub fn parse_opgg_mcp_text(
     } else {
         vec![]
     };
+    let build_options = build_unified_build_options(
+        &candidate_entries,
+        &fourth_entries,
+        &fifth_entries,
+        &sixth_entries,
+        &candidate_entries,
+        damage_type,
+        position,
+    );
     let final_build_options = build_3_final_build_options(
         &primary_core,
         &fourth_entries,
@@ -2602,6 +2817,7 @@ pub fn parse_opgg_mcp_text(
         item_blocks,
         spell_choices,
         rune_pages: top_rune_pages,
+        build_options,
         core_build_options,
         final_build_options,
         ..Default::default()
@@ -3270,6 +3486,15 @@ pub fn parse_opgg_analysis_payload(
     } else {
         vec![]
     };
+    let build_options = build_unified_build_options(
+        &core_entries,
+        &fourth_entries,
+        &fifth_entries,
+        &sixth_entries,
+        &candidate_entries,
+        damage_type,
+        position,
+    );
     let final_build_options = build_3_final_build_options(
         &primary_core,
         &fourth_entries,
@@ -3330,6 +3555,7 @@ pub fn parse_opgg_analysis_payload(
         item_blocks,
         spell_choices,
         rune_pages: top_rune_pages,
+        build_options,
         core_build_options,
         final_build_options,
         ..Default::default()
