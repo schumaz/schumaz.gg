@@ -1580,6 +1580,26 @@ fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatEntry
 // 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
 
 /// Computes dynamic synergy affinity score between a candidate item and core tags (no hardcoded IDs).
+pub fn is_offensive_ad_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "Damage" | "CriticalStrike" | "LifeSteal" | "ArmorPenetration" | "AttackSpeed" | "OnHit"
+    )
+}
+
+pub fn is_offensive_ap_tag(tag: &str) -> bool {
+    matches!(tag, "SpellDamage" | "MagicPenetration")
+}
+
+pub fn is_universal_defense_tag(tag: &str) -> bool {
+    matches!(tag, "Armor" | "SpellBlock" | "Health" | "HealthRegen" | "Tenacity")
+}
+
+pub fn is_utility_mana_tag(tag: &str) -> bool {
+    matches!(tag, "Mana" | "AbilityHaste" | "CooldownReduction" | "NonbootsMovement")
+}
+
+/// Computes dynamic synergy affinity score between a candidate item and core tags (zero hardcoded IDs).
 pub fn compute_item_affinity_score(
     item_id: i32,
     core_tags: &[String],
@@ -1590,24 +1610,36 @@ pub fn compute_item_affinity_score(
     if tags.is_empty() {
         return 0;
     }
-    let has_ap = tags.iter().any(|t| t == "SpellDamage" || t == "MagicPenetration");
-    let has_ad = tags
-        .iter()
-        .any(|t| t == "Damage" || t == "CriticalStrike" || t == "LifeSteal" || t == "ArmorPenetration");
+    let has_offensive_ap = tags.iter().any(|t| is_offensive_ap_tag(t));
+    let has_offensive_ad = tags.iter().any(|t| is_offensive_ad_tag(t));
 
-    if core_is_pure_ad && has_ap && !has_ad {
+    // Strict direct offensive archetype conflict blocking:
+    // Pure AD archetype rejects purely offensive AP items (e.g. Rabadon, Void Staff)
+    if core_is_pure_ad && has_offensive_ap && !has_offensive_ad {
         return -1_000_000;
     }
-    if core_is_pure_ap && has_ad && !has_ap {
+    // Pure AP archetype rejects purely offensive AD items (e.g. Infinity Edge, Collector, LDR)
+    if core_is_pure_ap && has_offensive_ad && !has_offensive_ap {
         return -1_000_000;
     }
 
     let mut score = 0;
+
+    // Special utility/mana synergy:
+    // If core builds mana (e.g. Manamune, Archangel, Tear), an item with Mana (e.g. Frozen Heart) gets mana synergy bonus
+    let core_has_mana = core_tags.iter().any(|t| t == "Mana");
+    let item_has_mana = tags.iter().any(|t| t == "Mana");
+    if core_has_mana && item_has_mana {
+        score += 10_000;
+    }
+
+    // Direct shared tags synergy
     for t in &tags {
         if core_tags.contains(t) {
-            score += 100_000;
+            score += 1_000;
         }
     }
+
     score
 }
 
@@ -1621,70 +1653,108 @@ pub fn extract_core_archetype_tags(core_items: &[i32]) -> (Vec<String>, bool, bo
             }
         }
     }
-    let core_has_ap = core_tags.iter().any(|t| t == "SpellDamage" || t == "MagicPenetration");
-    let core_has_ad = core_tags
-        .iter()
-        .any(|t| t == "Damage" || t == "CriticalStrike" || t == "LifeSteal" || t == "ArmorPenetration");
+    let core_has_ap = core_tags.iter().any(|t| t == "SpellDamage");
+    let core_has_ad = core_tags.iter().any(|t| is_offensive_ad_tag(t));
     let core_is_pure_ad = core_has_ad && !core_has_ap;
     let core_is_pure_ap = core_has_ap && !core_has_ad;
     (core_tags, core_has_ap, core_has_ad, core_is_pure_ad, core_is_pure_ap)
 }
 
-/// Dynamically builds a cohesive 6-item final build for a specific core trio.
+/// Dynamically builds a cohesive 6-item final build for a specific core trio
+/// using strict sequential slot selection (4th item from fourth_entries, 5th from fifth_entries,
+/// 6th from sixth_entries) with zero hardcoded IDs.
 pub fn build_cohesive_final_build_for_core(
     core_items: &[i32],
     fourth_entries: &[ItemStatEntry],
     fifth_entries: &[ItemStatEntry],
     sixth_entries: &[ItemStatEntry],
     candidate_entries: &[ItemStatEntry],
-    damage_type: &str,
+    _damage_type: &str,
 ) -> Vec<i32> {
     let mut build_6 = core_items.to_vec();
-    let (core_tags, core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
+    let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
         extract_core_archetype_tags(core_items);
 
-    let mut candidates_with_scores: Vec<(i32, i64)> = Vec::new();
-
-    let all_late_entries = fourth_entries
-        .iter()
-        .chain(fifth_entries.iter())
-        .chain(sixth_entries.iter())
-        .chain(candidate_entries.iter());
-
-    for entry in all_late_entries {
-        for &id in &entry.ids {
-            let norm_id = normalize_tear_item_dynamic(id);
-            if !build_6.contains(&norm_id)
-                && !is_boot_item_dynamic(norm_id)
-                && !is_starter_item(norm_id)
-                && !is_component_item_dynamic(norm_id)
-                && !candidates_with_scores.iter().any(|(cand, _)| *cand == norm_id)
-            {
-                let affinity = compute_item_affinity_score(norm_id, &core_tags, core_is_pure_ad, core_is_pure_ap);
-                let score = affinity + entry.play.max(1);
-                candidates_with_scores.push((norm_id, score));
+    let pick_best_item_for_slot = |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
+        let mut play_by_item: HashMap<i32, i64> = HashMap::new();
+        let mut order_seen: HashMap<i32, usize> = HashMap::new();
+        let mut idx = 0;
+        for entry in entries {
+            for &id in &entry.ids {
+                let norm_id = normalize_tear_item_dynamic(id);
+                if !current_build.contains(&norm_id)
+                    && !is_boot_item_dynamic(norm_id)
+                    && !is_starter_item(norm_id)
+                    && !is_component_item_dynamic(norm_id)
+                {
+                    let affinity = compute_item_affinity_score(norm_id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+                    if affinity > -500_000 {
+                        *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
+                        order_seen.entry(norm_id).or_insert(idx);
+                        idx += 1;
+                    }
+                }
             }
         }
-    }
-
-    candidates_with_scores.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
-
-    for (cand_id, score) in candidates_with_scores {
-        if build_6.len() < 6 && score > -500_000 && !build_6.contains(&cand_id) {
-            build_6.push(cand_id);
-        }
-    }
-
-    // Dynamic late-game completion fallback if depth lists were sparse
-    let default_late = if damage_type == "AP" || core_has_ap {
-        vec![3157, 3135, 4629, 3102, 4646]
-    } else {
-        vec![3072, 3026, 3139, 3033, 3091]
+        let mut candidates: Vec<(i32, i64, usize)> = play_by_item
+            .into_iter()
+            .map(|(id, play)| (id, play, *order_seen.get(&id).unwrap_or(&0)))
+            .collect();
+        candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+        candidates.first().map(|&(id, _, _)| id)
     };
-    for d in default_late {
-        let norm_d = normalize_tear_item_dynamic(d);
-        if build_6.len() < 6 && !build_6.contains(&norm_d) {
-            build_6.push(norm_d);
+
+    // Sequential slot selection:
+    // Slot 4: #1 most played compatible item from fourth_entries
+    if let Some(item_4) = pick_best_item_for_slot(fourth_entries, &build_6) {
+        build_6.push(item_4);
+    }
+    // Slot 5: #1 most played compatible item from fifth_entries
+    if let Some(item_5) = pick_best_item_for_slot(fifth_entries, &build_6) {
+        build_6.push(item_5);
+    }
+    // Slot 6: #1 most played compatible item from sixth_entries
+    if let Some(item_6) = pick_best_item_for_slot(sixth_entries, &build_6) {
+        build_6.push(item_6);
+    }
+
+    // Dynamic late-game completion fallback if any depth lists were exhausted or sparse
+    if build_6.len() < 6 {
+        let all_remaining_entries = fourth_entries
+            .iter()
+            .chain(fifth_entries.iter())
+            .chain(sixth_entries.iter())
+            .chain(candidate_entries.iter());
+
+        let mut fallback_play: HashMap<i32, i64> = HashMap::new();
+        let mut fallback_seen: HashMap<i32, usize> = HashMap::new();
+        let mut f_idx = 0;
+        for entry in all_remaining_entries {
+            for &id in &entry.ids {
+                let norm_id = normalize_tear_item_dynamic(id);
+                if !build_6.contains(&norm_id)
+                    && !is_boot_item_dynamic(norm_id)
+                    && !is_starter_item(norm_id)
+                    && !is_component_item_dynamic(norm_id)
+                {
+                    let affinity = compute_item_affinity_score(norm_id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+                    if affinity > -500_000 {
+                        *fallback_play.entry(norm_id).or_insert(0) += entry.play.max(1);
+                        fallback_seen.entry(norm_id).or_insert(f_idx);
+                        f_idx += 1;
+                    }
+                }
+            }
+        }
+        let mut fallback_cands: Vec<(i32, i64, usize)> = fallback_play
+            .into_iter()
+            .map(|(id, play)| (id, play, *fallback_seen.get(&id).unwrap_or(&0)))
+            .collect();
+        fallback_cands.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+        for (id, _, _) in fallback_cands {
+            if build_6.len() < 6 && !build_6.contains(&id) {
+                build_6.push(id);
+            }
         }
     }
 
@@ -6018,6 +6088,157 @@ mod tests {
         // Should have 6 items sorted by play count descending:
         // 104 (800) > 102 (500) > 106 (400) > 103 (300) > 105 (200) > 101 (100)
         assert_eq!(sit, vec![104, 102, 106, 103, 105, 101]);
+    }
+
+
+    #[test]
+    fn test_shaco_ad_picks_ldr_ga_youmuu_sequentially_per_slot() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+        let mut cache = ItemClassificationCache::default();
+        cache.item_tags.insert(6697, vec!["Damage".to_string(), "ArmorPenetration".to_string()]); // Cyclosword
+        cache.item_tags.insert(6676, vec!["Damage".to_string(), "CriticalStrike".to_string(), "ArmorPenetration".to_string()]); // Collector
+        cache.item_tags.insert(3031, vec!["Damage".to_string(), "CriticalStrike".to_string()]); // Infinity Edge
+        cache.item_tags.insert(3036, vec!["Damage".to_string(), "ArmorPenetration".to_string()]); // Lord Dominik's Regards
+        cache.item_tags.insert(3026, vec!["Damage".to_string(), "Armor".to_string()]); // Guardian Angel
+        cache.item_tags.insert(3142, vec!["Damage".to_string(), "ArmorPenetration".to_string(), "NonbootsMovement".to_string()]); // Youmuu's Ghostblade
+        cache.item_tags.insert(3179, vec!["Damage".to_string(), "ArmorPenetration".to_string(), "AbilityHaste".to_string()]); // Umbral Glaive
+        cache.item_tags.insert(3089, vec!["SpellDamage".to_string()]); // Rabadon
+        cache.item_tags.insert(3157, vec!["SpellDamage".to_string(), "Armor".to_string()]); // Zhonya
+        cache.completed.extend(vec![6697, 6676, 3031, 3036, 3026, 3142, 3179, 3089, 3157]);
+        set_dynamic_item_classifications(cache);
+
+        let core = vec![6697, 6676, 3031];
+        let fourth = vec![
+            ItemStatEntry { ids: vec![3036], play: 2790, win: 1578, pick_rate: 56.56 }, // LDR -> 1st for 4th slot
+            ItemStatEntry { ids: vec![3031], play: 2266, win: 1304, pick_rate: 57.55 }, // IE (already in core)
+        ];
+        let fifth = vec![
+            ItemStatEntry { ids: vec![3026], play: 567, win: 359, pick_rate: 63.32 }, // GA -> 1st for 5th slot
+            ItemStatEntry { ids: vec![3031], play: 476, win: 288, pick_rate: 60.50 }, // IE (already in core)
+            ItemStatEntry { ids: vec![3089], play: 370, win: 244, pick_rate: 65.95 }, // Rabadon (blocked: AP offensive!)
+            ItemStatEntry { ids: vec![3036], play: 314, win: 205, pick_rate: 65.29 }, // LDR (already in 4th slot)
+            ItemStatEntry { ids: vec![3157], play: 260, win: 142, pick_rate: 54.62 }, // Zhonya (blocked: AP offensive!)
+        ];
+        let sixth = vec![
+            ItemStatEntry { ids: vec![3142], play: 110, win: 71, pick_rate: 64.55 }, // Youmuu -> 1st for 6th slot
+            ItemStatEntry { ids: vec![3026], play: 44, win: 25, pick_rate: 56.82 }, // GA (already in 5th slot)
+        ];
+        let candidates = vec![
+            ItemStatEntry { ids: vec![3179], play: 5000, win: 2500, pick_rate: 0.5 }, // Umbral Glaive in candidate pool
+        ];
+
+        let final_6 = build_cohesive_final_build_for_core(
+            &core,
+            &fourth,
+            &fifth,
+            &sixth,
+            &candidates,
+            "AD",
+        );
+
+        // Strict sequential slot selection:
+        // Slot 4: 3036 (LDR)
+        // Slot 5: 3026 (GA)
+        // Slot 6: 3142 (Youmuu's Ghostblade)
+        // Umbral Glaive (3179) must NOT displace slot 6!
+        // Rabadon (3089) and Zhonya (3157) must NOT be picked!
+        assert_eq!(final_6, vec![6697, 6676, 3031, 3036, 3026, 3142]);
+    }
+
+    #[test]
+    fn test_vayne_adc_accepts_jaksho_and_randuins_universal_defense() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+        let mut cache = ItemClassificationCache::default();
+        cache.item_tags.insert(6672, vec!["Damage".to_string(), "AttackSpeed".to_string()]); // Kraken
+        cache.item_tags.insert(3124, vec!["Damage".to_string(), "AttackSpeed".to_string(), "OnHit".to_string()]); // Guinsoo
+        cache.item_tags.insert(3302, vec!["Damage".to_string(), "AttackSpeed".to_string(), "ArmorPenetration".to_string(), "MagicPenetration".to_string()]); // Terminus
+        cache.item_tags.insert(3153, vec!["Damage".to_string(), "AttackSpeed".to_string(), "LifeSteal".to_string()]); // BotRK
+        cache.item_tags.insert(6665, vec!["Armor".to_string(), "SpellBlock".to_string(), "Health".to_string(), "AbilityHaste".to_string()]); // Jak'Sho
+        cache.item_tags.insert(3143, vec!["Armor".to_string(), "Health".to_string()]); // Randuin's Omen
+        cache.item_tags.insert(3089, vec!["SpellDamage".to_string()]); // Rabadon (offensive AP)
+        cache.completed.extend(vec![6672, 3124, 3302, 3153, 6665, 3143, 3089]);
+        set_dynamic_item_classifications(cache);
+
+        let core = vec![6672, 3124, 3302];
+        let fourth = vec![
+            ItemStatEntry { ids: vec![3153], play: 3000, win: 1600, pick_rate: 0.6 },
+        ];
+        let fifth = vec![
+            ItemStatEntry { ids: vec![6665], play: 2500, win: 1350, pick_rate: 0.5 }, // Jak'Sho
+        ];
+        let sixth = vec![
+            ItemStatEntry { ids: vec![3089], play: 5000, win: 2500, pick_rate: 0.7 }, // Rabadon (blocked!)
+            ItemStatEntry { ids: vec![3143], play: 1200, win: 650, pick_rate: 0.25 }, // Randuin
+        ];
+
+        let final_6 = build_cohesive_final_build_for_core(
+            &core,
+            &fourth,
+            &fifth,
+            &sixth,
+            &[],
+            "AD",
+        );
+
+        assert_eq!(final_6, vec![6672, 3124, 3302, 3153, 6665, 3143]);
+        assert!(!final_6.contains(&3089), "Rabadon must be blocked from AD build");
+    }
+
+    #[test]
+    fn test_ezreal_mana_synergy_recognizes_frozen_heart() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+        let mut cache = ItemClassificationCache::default();
+        cache.item_tags.insert(3078, vec!["Damage".to_string(), "AttackSpeed".to_string(), "Health".to_string(), "AbilityHaste".to_string()]); // Triforce
+        cache.item_tags.insert(3004, vec!["Damage".to_string(), "Mana".to_string(), "AbilityHaste".to_string()]); // Manamune
+        cache.item_tags.insert(3036, vec!["Damage".to_string(), "ArmorPenetration".to_string()]); // LDR
+        cache.item_tags.insert(3072, vec!["Damage".to_string(), "LifeSteal".to_string(), "CriticalStrike".to_string()]); // BT
+        cache.item_tags.insert(3110, vec!["Armor".to_string(), "Mana".to_string(), "AbilityHaste".to_string()]); // Frozen Heart
+        cache.item_tags.insert(3153, vec!["Damage".to_string(), "AttackSpeed".to_string(), "LifeSteal".to_string()]); // BotRK
+        cache.completed.extend(vec![3078, 3004, 3036, 3072, 3110, 3153]);
+        set_dynamic_item_classifications(cache);
+
+        let core = vec![3078, 3004, 3036];
+        let fourth = vec![
+            ItemStatEntry { ids: vec![3072], play: 2000, win: 1100, pick_rate: 0.4 },
+        ];
+        let fifth = vec![
+            ItemStatEntry { ids: vec![3110], play: 1500, win: 850, pick_rate: 0.3 }, // Frozen Heart
+        ];
+        let sixth = vec![
+            ItemStatEntry { ids: vec![3153], play: 1000, win: 550, pick_rate: 0.2 },
+        ];
+
+        let final_6 = build_cohesive_final_build_for_core(
+            &core,
+            &fourth,
+            &fifth,
+            &sixth,
+            &[],
+            "AD",
+        );
+
+        assert_eq!(final_6, vec![3078, 3004, 3036, 3072, 3110, 3153]);
+        assert!(final_6.contains(&3110), "Frozen Heart must be recognized via Mana synergy");
+    }
+
+    #[test]
+    fn test_strict_offensive_archetype_blocking_remains_intact() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+        let mut cache = ItemClassificationCache::default();
+        cache.item_tags.insert(6697, vec!["Damage".to_string(), "ArmorPenetration".to_string()]);
+        cache.item_tags.insert(3089, vec!["SpellDamage".to_string()]);
+        cache.item_tags.insert(3135, vec!["SpellDamage".to_string(), "MagicPenetration".to_string()]);
+        cache.item_tags.insert(3031, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        cache.item_tags.insert(6676, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        set_dynamic_item_classifications(cache);
+
+        let ad_core_tags = vec!["Damage".to_string(), "ArmorPenetration".to_string()];
+        assert_eq!(compute_item_affinity_score(3089, &ad_core_tags, true, false), -1_000_000);
+        assert_eq!(compute_item_affinity_score(3135, &ad_core_tags, true, false), -1_000_000);
+
+        let ap_core_tags = vec!["SpellDamage".to_string()];
+        assert_eq!(compute_item_affinity_score(3031, &ap_core_tags, false, true), -1_000_000);
+        assert_eq!(compute_item_affinity_score(6676, &ap_core_tags, false, true), -1_000_000);
     }
 
 }
