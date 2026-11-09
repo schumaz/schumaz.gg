@@ -55,7 +55,7 @@ pub fn is_component_item_dynamic(id: i32) -> bool {
     is_component_item(id)
 }
 
-/// Normalizes an evolved item (like Muramana, Seraph's Embrace, Fimbulwinter) to its purchasable base.
+/// Normalizes an evolved item (like Muramana, Seraph's Embrace, Fimbulwinter, Diadem of Songs) to its purchasable base.
 pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
     if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
         && let Some(cache) = guard.as_ref()
@@ -67,8 +67,64 @@ pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
         3042 => 3004, // Muramana -> Manamune
         3040 => 3003, // Seraph's Embrace -> Archangel's Staff
         3121 => 3119, // Fimbulwinter -> Winter's Approach
+        2530 => 2526, // Diadem of Songs -> Whispering Circlet
         other => other,
     }
+}
+
+pub const TEAR_COMPLETED_ITEMS: [i32; 4] = [
+    2526, // Whispering Circlet (Circuleto Sussurrante)
+    3003, // Archangel's Staff (Cajado do Arcanjo)
+    3004, // Manamune
+    3119, // Winter's Approach (Aproximação do Inverno)
+];
+
+/// Resolves a raw Tear of the Goddess (3070) into its completed purchasable legendary item
+/// by inspecting the champion's candidate/depth entries or defaulting by position and damage type.
+pub fn resolve_tear_to_completed_item(
+    entries: &[ItemStatEntry],
+    position: &str,
+    damage_type: &str,
+) -> i32 {
+    // 1. Look for any completed tear item in the champion's item entries
+    for entry in entries {
+        for &id in &entry.ids {
+            let norm = normalize_tear_item_dynamic(id);
+            if TEAR_COMPLETED_ITEMS.contains(&norm) {
+                return norm;
+            }
+        }
+    }
+
+    // 2. Fallback based on champion position / archetype
+    let norm_pos = position.to_lowercase();
+    if norm_pos == "support" || norm_pos == "supp" || norm_pos == "utility" {
+        2526 // Whispering Circlet (Circuleto Sussurrante)
+    } else if damage_type == "AP" {
+        3003 // Archangel's Staff (Cajado do Arcanjo)
+    } else if damage_type == "TANK" || norm_pos == "top" {
+        3119 // Winter's Approach (Aproximação do Inverno)
+    } else {
+        3004 // Manamune
+    }
+}
+
+/// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
+/// and optionally promoting Tear of the Goddess (3070) to its completed item,
+/// deduplicating while preserving original order.
+pub fn resolve_tear_item_ids(ids: &[i32], tear_upgrade: i32) -> Vec<i32> {
+    let mut result = Vec::new();
+    for &id in ids {
+        let norm = if id == 3070 {
+            tear_upgrade
+        } else {
+            normalize_tear_item_dynamic(id)
+        };
+        if !result.contains(&norm) {
+            result.push(norm);
+        }
+    }
+    result
 }
 
 /// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
@@ -936,6 +992,7 @@ pub fn parse_ddragon_item_classifications(items_json: &serde_json::Value) -> Ite
     evolved_fallbacks.insert(3042, 3004); // Muramana -> Manamune
     evolved_fallbacks.insert(3040, 3003); // Seraph's Embrace -> Archangel's Staff
     evolved_fallbacks.insert(3121, 3119); // Fimbulwinter -> Winter's Approach
+    evolved_fallbacks.insert(2530, 2526); // Diadem of Songs -> Whispering Circlet
 
     if let Some(data) = items_json.get("data").and_then(|d| d.as_object()) {
         for (id_str, item_val) in data {
@@ -1423,6 +1480,7 @@ pub fn extract_top_core_build_options(
     all_candidates: &[i32],
     damage_type: &str,
 ) -> Vec<ItemBuildOption> {
+    let tear_upgrade = resolve_tear_to_completed_item(core_entries, "", damage_type);
     let mut options: Vec<ItemBuildOption> = Vec::new();
 
     // 1. Filter core combinations with >= 2 non-boot, non-starter, non-component items
@@ -1443,7 +1501,7 @@ pub fn extract_top_core_build_options(
     for combo in valid_combos {
         let mut items = Vec::new();
         for &id in &combo.ids {
-            let norm_id = normalize_tear_item_dynamic(id);
+            let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
             if items.len() < 3
                 && !is_boot_item_dynamic(norm_id)
                 && !is_starter_item(norm_id)
@@ -1455,7 +1513,7 @@ pub fn extract_top_core_build_options(
         }
         // If combo had only 2 items, fill 3rd from top candidates
         for &cand in all_candidates {
-            let norm_cand = normalize_tear_item_dynamic(cand);
+            let norm_cand = if cand == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(cand) };
             if items.len() < 3 && !items.contains(&norm_cand) {
                 items.push(norm_cand);
             }
@@ -1480,7 +1538,7 @@ pub fn extract_top_core_build_options(
 
     let mut pool: Vec<i32> = Vec::new();
     for &c in all_candidates {
-        let norm_c = normalize_tear_item_dynamic(c);
+        let norm_c = if c == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(c) };
         if !pool.contains(&norm_c) {
             pool.push(norm_c);
         }
@@ -1553,6 +1611,13 @@ pub fn build_3_final_build_options(
     all_candidates: &[i32],
     damage_type: &str,
 ) -> Vec<ItemBuildOption> {
+    let all_for_tear: Vec<ItemStatEntry> = fourth_entries
+        .iter()
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, "", damage_type);
     let mut options: Vec<ItemBuildOption> = Vec::new();
 
     let pick_all_from_depth_list = |entries: &[ItemStatEntry]| -> Vec<i32> {
@@ -1561,7 +1626,7 @@ pub fn build_3_final_build_options(
         let mut ids = Vec::new();
         for entry in sorted {
             for &id in &entry.ids {
-                let norm_id = normalize_tear_item_dynamic(id);
+                let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
                 if !ids.contains(&norm_id) && !is_component_item_dynamic(norm_id) && !is_starter_item(norm_id) && !is_boot_item_dynamic(norm_id) {
                     ids.push(norm_id);
                 }
@@ -1605,7 +1670,7 @@ pub fn build_3_final_build_options(
         available_late.extend(&default_late);
 
         for &item in &available_late {
-            let norm_item = normalize_tear_item_dynamic(item);
+            let norm_item = if item == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(item) };
             if build_6.len() < 6
                 && !build_6.contains(&norm_item)
                 && !is_boot_item_dynamic(norm_item)
@@ -1834,6 +1899,15 @@ pub fn build_5_item_blocks_with_depth_lists(
         first_seen_index: usize,
     }
 
+    let all_entries_for_tear: Vec<ItemStatEntry> = candidate_entries
+        .iter()
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_entries_for_tear, position, damage_type);
+
     let mut item_map: HashMap<i32, (i64, usize)> = HashMap::new();
     let mut item_seen_counter = 0;
     for entry in candidate_entries
@@ -1843,7 +1917,7 @@ pub fn build_5_item_blocks_with_depth_lists(
         .chain(sixth_entries.iter())
     {
         for &id in &entry.ids {
-            let norm_id = normalize_tear_item_dynamic(id);
+            let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
             if !is_boot(norm_id) && !is_starter(norm_id) && !is_comp(norm_id) {
                 let entry_play = entry.play.max(1);
                 let slot = item_map.entry(norm_id).or_insert_with(|| {
@@ -1894,7 +1968,7 @@ pub fn build_5_item_blocks_with_depth_lists(
         core_combos.sort_by_key(|a| std::cmp::Reverse(a.play));
         let best_combo = core_combos[0];
         for &id in &best_combo.ids {
-            let norm_id = normalize_tear_item_dynamic(id);
+            let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
             if clean_core.len() < 3
                 && !is_boot_item_dynamic(norm_id)
                 && !is_starter_item(norm_id)
@@ -1908,7 +1982,7 @@ pub fn build_5_item_blocks_with_depth_lists(
 
     // Fill up to 3 core items from the top sorted candidates if needed
     for cand in &all_candidates {
-        let norm_id = normalize_tear_item_dynamic(cand.id);
+        let norm_id = if cand.id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(cand.id) };
         if clean_core.len() < 3 && !clean_core.contains(&norm_id) {
             clean_core.push(norm_id);
         }
@@ -1935,7 +2009,7 @@ pub fn build_5_item_blocks_with_depth_lists(
         sorted.sort_by_key(|e| std::cmp::Reverse(e.play));
         for entry in sorted {
             for &id in &entry.ids {
-                let norm_id = normalize_tear_item_dynamic(id);
+                let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
                 if !current_build.contains(&norm_id)
                     && !is_component_item_dynamic(norm_id)
                     && !is_starter_item(norm_id)
@@ -1984,7 +2058,7 @@ pub fn build_5_item_blocks_with_depth_lists(
     let mut situational_candidates: Vec<&ItemAggregate> = all_candidates
         .iter()
         .filter(|cand| {
-            let norm_id = normalize_tear_item_dynamic(cand.id);
+            let norm_id = if cand.id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(cand.id) };
             !clean_core.contains(&norm_id)
                 && !final_build.contains(&norm_id)
                 && !is_component_item_dynamic(norm_id)
@@ -2000,7 +2074,7 @@ pub fn build_5_item_blocks_with_depth_lists(
 
     let mut situational_items: Vec<i32> = Vec::new();
     for c in situational_candidates {
-        let norm_id = normalize_tear_item_dynamic(c.id);
+        let norm_id = if c.id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(c.id) };
         if !situational_items.contains(&norm_id) && !clean_core.contains(&norm_id) && !final_build.contains(&norm_id) {
             situational_items.push(norm_id);
         }
@@ -2333,9 +2407,18 @@ pub fn parse_opgg_mcp_text(
         ""
     };
 
+    let all_for_tear: Vec<ItemStatEntry> = candidate_entries
+        .iter()
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, position, damage_type);
+
     let normalize_entries = |entries: &mut [ItemStatEntry]| {
         for entry in entries.iter_mut() {
-            entry.ids = normalize_item_ids_dedup(&entry.ids);
+            entry.ids = resolve_tear_item_ids(&entry.ids, tear_upgrade);
         }
     };
     normalize_entries(&mut candidate_entries);
@@ -3017,9 +3100,19 @@ pub fn parse_opgg_analysis_payload(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
+    let all_for_tear: Vec<ItemStatEntry> = core_entries
+        .iter()
+        .chain(candidate_entries.iter())
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, position, damage_type);
+
     let normalize_entries = |entries: &mut [ItemStatEntry]| {
         for entry in entries.iter_mut() {
-            entry.ids = normalize_item_ids_dedup(&entry.ids);
+            entry.ids = resolve_tear_item_ids(&entry.ids, tear_upgrade);
         }
     };
     normalize_entries(&mut core_entries);
@@ -4966,4 +5059,85 @@ mod tests {
         let pos_3026 = final_ids.iter().position(|&x| x == 3026).unwrap();
         assert!(pos_3004 < pos_3026);
     }
+
+    #[test]
+    fn test_diadem_of_songs_normalizes_to_whispering_circlet() {
+        assert_eq!(normalize_tear_item_dynamic(2530), 2526);
+        assert_eq!(
+            resolve_tear_item_ids(&[2530, 3001, 3070], 2526),
+            vec![2526, 3001]
+        );
+    }
+
+    #[test]
+    fn test_seraphine_tear_in_core_promotes_to_whispering_circlet() {
+        // Seraphine payload: core items has [6617, 3001, 3070] (Helia, Moonstone, Tear 3070)
+        // And later entries has 2530 (Diadem of Songs) / 2526 (Whispering Circlet)
+        let analysis_json = serde_json::json!({
+            "summary": { "position": "support" },
+            "core_items": [
+                { "ids": [6617, 3001, 3070], "play": 18000, "win": 9500, "pick_rate": 55.0 }
+            ],
+            "boots": [
+                { "ids": [3158], "play": 25000, "win": 13500, "pick_rate": 75.0 }
+            ],
+            "starters": [
+                { "ids": [2003], "play": 28000, "win": 15000, "pick_rate": 90.0 }
+            ],
+            "fourth_items": [
+                { "ids": [2530], "play": 12000, "win": 6800, "pick_rate": 45.0 }
+            ],
+            "fifth_items": [
+                { "ids": [3107], "play": 8000, "win": 4300, "pick_rate": 30.0 }
+            ],
+            "sixth_items": [
+                { "ids": [3504], "play": 5000, "win": 2800, "pick_rate": 20.0 }
+            ],
+            "runes": [
+                {
+                    "primary_page_id": 8200,
+                    "primary_rune_ids": [8214, 8226, 8210, 8237],
+                    "secondary_page_id": 8300,
+                    "secondary_rune_ids": [8304, 8345],
+                    "stat_mod_ids": [5008, 5008, 5001],
+                    "play": 22000,
+                    "win": 12000
+                }
+            ],
+            "spells": [
+                { "ids": [4, 7], "play": 25000, "win": 13500, "pick_rate": 85.0 }
+            ]
+        });
+
+        let build = parse_opgg_analysis_payload(
+            &analysis_json,
+            147,
+            "Seraphine",
+        )
+        .expect("Build parsing should succeed");
+
+        // Core block must NOT contain 3070 (Tear); it must contain 2526 (Whispering Circlet)!
+        assert_eq!(build.item_blocks[1].item_ids, vec![6617, 3001, 2526]);
+        assert!(!build.item_blocks[1].item_ids.contains(&3070));
+        assert!(!build.item_blocks[1].item_ids.contains(&2530));
+
+        // Core options must also contain 2526, not 3070
+        assert_eq!(build.core_build_options[0].item_ids, vec![6617, 3001, 2526]);
+
+        // Final build must contain 2526 exactly once, without 3070 or 2530
+        let final_ids = &build.item_blocks[3].item_ids;
+        assert_eq!(final_ids.iter().filter(|&&id| id == 2526).count(), 1);
+        assert!(!final_ids.contains(&3070));
+        assert!(!final_ids.contains(&2530));
+    }
+
+    #[test]
+    fn test_resolve_tear_to_completed_item_by_archetype() {
+        let empty_entries: Vec<ItemStatEntry> = Vec::new();
+        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "support", "AP"), 2526); // Whispering Circlet
+        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "mid", "AP"), 3003); // Archangel's Staff
+        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "adc", "AD"), 3004); // Manamune
+        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "top", "TANK"), 3119); // Winter's Approach
+    }
+
 }
