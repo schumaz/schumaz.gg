@@ -80,6 +80,8 @@ export interface UnifiedBuildOption {
   core_item_icon_urls: string[];
   final_item_ids: number[];
   final_item_icon_urls: string[];
+  situational_item_ids?: number[];
+  situational_item_icon_urls?: string[];
   play: number;
   win: number;
   pick_rate: number;
@@ -924,6 +926,7 @@ function App() {
                   {build.item_blocks.map((block, bIndex) => {
                     const isCoreBlock = block.title.includes("Primeiros 3 Itens");
                     const isFinalBlock = block.title.includes("Build Final");
+                    const isSituationalBlock = block.title.includes("Itens Situacionais") || block.title.includes("Úteis") || block.title.includes("Uteis");
 
                     let activeIds = block.item_ids;
                     let activeIcons = block.item_icon_urls;
@@ -936,6 +939,9 @@ function App() {
                       } else if (isFinalBlock) {
                         activeIds = selectedBuild.final_item_ids;
                         activeIcons = selectedBuild.final_item_icon_urls;
+                      } else if (isSituationalBlock && selectedBuild.situational_item_ids && selectedBuild.situational_item_ids.length > 0) {
+                        activeIds = selectedBuild.situational_item_ids;
+                        activeIcons = selectedBuild.situational_item_icon_urls || [];
                       }
                     } else if (isCoreBlock && build.core_build_options && build.core_build_options.length > selectedBuildIndex) {
                       activeIds = build.core_build_options[selectedBuildIndex].item_ids;

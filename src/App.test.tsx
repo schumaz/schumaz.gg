@@ -116,6 +116,8 @@ const mockAhriBuild: ChampionBuild = {
       core_item_icon_urls: ["3285.png", "3157.png", "3089.png"],
       final_item_ids: [3285, 3157, 3089, 3135, 4645, 3102],
       final_item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"],
+      situational_item_ids: [4629, 3165, 3102],
+      situational_item_icon_urls: ["4629.png", "3165.png", "3102.png"],
       play: 25000,
       win: 13000,
       pick_rate: 65.0,
@@ -126,6 +128,8 @@ const mockAhriBuild: ChampionBuild = {
       core_item_icon_urls: ["3285.png", "4645.png", "3089.png"],
       final_item_ids: [3285, 4645, 3089, 3157, 3135, 3102],
       final_item_icon_urls: ["3285.png", "4645.png", "3089.png", "3157.png", "3135.png", "3102.png"],
+      situational_item_ids: [3165, 4629, 3116],
+      situational_item_icon_urls: ["3165.png", "4629.png", "3116.png"],
       play: 8000,
       win: 4200,
       pick_rate: 20.8,
@@ -136,6 +140,8 @@ const mockAhriBuild: ChampionBuild = {
       core_item_icon_urls: ["3285.png", "3165.png", "3089.png"],
       final_item_ids: [3285, 3165, 3089, 3157, 3135, 4629],
       final_item_icon_urls: ["3285.png", "3165.png", "3089.png", "3157.png", "3135.png", "4629.png"],
+      situational_item_ids: [4645, 3102, 3041],
+      situational_item_icon_urls: ["4645.png", "3102.png", "3041.png"],
       play: 3000,
       win: 1550,
       pick_rate: 7.8,
@@ -856,4 +862,40 @@ describe("App Component", () => {
     expect(buildOpt0).not.toHaveClass("active");
   });
 
+  it("updates situational items dynamically when switching unified build options", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: false,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("unified-build-selector")).toBeInTheDocument();
+    });
+
+    // Initially Build 1 situational items (item 3116 is in Build 2, not in Build 1)
+    expect(screen.queryByAltText("Item 3116")).not.toBeInTheDocument();
+
+    // Switch to Build Option 2
+    const buildOpt1 = screen.getByTestId("build-opt-btn-1");
+    await act(async () => {
+      fireEvent.click(buildOpt1);
+    });
+
+    // Now Item 3116 should be rendered in the Situational block
+    expect(screen.getByAltText("Item 3116")).toBeInTheDocument();
+  });
 });

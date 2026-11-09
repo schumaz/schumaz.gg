@@ -220,6 +220,10 @@ pub struct UnifiedBuildOption {
     pub final_item_ids: Vec<i32>,
     #[serde(default)]
     pub final_item_icon_urls: Vec<String>,
+    #[serde(default)]
+    pub situational_item_ids: Vec<i32>,
+    #[serde(default)]
+    pub situational_item_icon_urls: Vec<String>,
     pub play: i64,
     pub win: i64,
     pub pick_rate: f64,
@@ -973,6 +977,16 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
                 )
             })
             .collect();
+        opt.situational_item_icon_urls = opt
+            .situational_item_ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "https://ddragon.leagueoflegends.com/cdn/{}/img/item/{}.png",
+                    cache.version, id
+                )
+            })
+            .collect();
     }
 
     for opt in &mut build.core_build_options {
@@ -1597,17 +1611,8 @@ pub fn compute_item_affinity_score(
     score
 }
 
-/// Dynamically builds a cohesive 6-item final build for a specific core trio.
-pub fn build_cohesive_final_build_for_core(
-    core_items: &[i32],
-    fourth_entries: &[ItemStatEntry],
-    fifth_entries: &[ItemStatEntry],
-    sixth_entries: &[ItemStatEntry],
-    candidate_entries: &[ItemStatEntry],
-    damage_type: &str,
-) -> Vec<i32> {
-    let mut build_6 = core_items.to_vec();
-
+/// Extracts combined tags and archetype flags (AP/AD/pure) for a core item trio.
+pub fn extract_core_archetype_tags(core_items: &[i32]) -> (Vec<String>, bool, bool, bool, bool) {
     let mut core_tags: Vec<String> = Vec::new();
     for &id in core_items {
         for tag in get_item_tags_dynamic(id) {
@@ -1622,6 +1627,21 @@ pub fn build_cohesive_final_build_for_core(
         .any(|t| t == "Damage" || t == "CriticalStrike" || t == "LifeSteal" || t == "ArmorPenetration");
     let core_is_pure_ad = core_has_ad && !core_has_ap;
     let core_is_pure_ap = core_has_ap && !core_has_ad;
+    (core_tags, core_has_ap, core_has_ad, core_is_pure_ad, core_is_pure_ap)
+}
+
+/// Dynamically builds a cohesive 6-item final build for a specific core trio.
+pub fn build_cohesive_final_build_for_core(
+    core_items: &[i32],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    damage_type: &str,
+) -> Vec<i32> {
+    let mut build_6 = core_items.to_vec();
+    let (core_tags, core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
+        extract_core_archetype_tags(core_items);
 
     let mut candidates_with_scores: Vec<(i32, i64)> = Vec::new();
 
@@ -1671,13 +1691,93 @@ pub fn build_cohesive_final_build_for_core(
     build_6
 }
 
-/// Builds up to 3 unified build options (each with 3 core items and 6 matching final items).
+/// Builds up to 6 coherent situational / useful items for a specific build option,
+/// strictly excluding core items, final build items, boots, starters, and components,
+/// while filtering out conflicting archetypes.
+#[allow(clippy::too_many_arguments)]
+pub fn build_situational_items_for_option(
+    core_items: &[i32],
+    final_items: &[i32],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    extra_entries: &[ItemStatEntry],
+    general_situational: &[i32],
+    _damage_type: &str,
+) -> Vec<i32> {
+    let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
+        extract_core_archetype_tags(core_items);
+
+    let all_entries = fourth_entries
+        .iter()
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .chain(candidate_entries.iter())
+        .chain(extra_entries.iter());
+
+    let mut play_by_item: HashMap<i32, i64> = HashMap::new();
+    let mut first_seen: HashMap<i32, usize> = HashMap::new();
+    let mut idx = 0;
+
+    for entry in all_entries {
+        for &id in &entry.ids {
+            let norm_id = normalize_tear_item_dynamic(id);
+            if !core_items.contains(&norm_id)
+                && !final_items.contains(&norm_id)
+                && !is_boot_item_dynamic(norm_id)
+                && !is_starter_item(norm_id)
+                && !is_component_item_dynamic(norm_id)
+            {
+                *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
+                first_seen.entry(norm_id).or_insert(idx);
+                idx += 1;
+            }
+        }
+    }
+
+    // Include items from general_situational as candidate pool if not already present
+    for &id in general_situational {
+        let norm_id = normalize_tear_item_dynamic(id);
+        if !core_items.contains(&norm_id)
+            && !final_items.contains(&norm_id)
+            && !is_boot_item_dynamic(norm_id)
+            && !is_starter_item(norm_id)
+            && !is_component_item_dynamic(norm_id)
+        {
+            play_by_item.entry(norm_id).or_insert(1);
+            first_seen.entry(norm_id).or_insert(idx);
+            idx += 1;
+        }
+    }
+
+    let mut candidates: Vec<(i32, i64, usize)> = Vec::new();
+    for (id, play) in play_by_item {
+        let affinity = compute_item_affinity_score(id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+        if affinity > -500_000 {
+            let seen = *first_seen.get(&id).unwrap_or(&0);
+            candidates.push((id, play, seen));
+        }
+    }
+
+    // Sort strictly by play descending, tie-break by order seen
+    candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+
+    let mut situational: Vec<i32> = candidates.into_iter().map(|(id, _, _)| id).collect();
+    situational.truncate(6);
+    situational
+}
+
+/// Builds up to 3 unified build options (each with 3 core items, 6 matching final items, and coherent situational items).
+#[allow(clippy::too_many_arguments)]
 pub fn build_unified_build_options(
     core_entries: &[ItemStatEntry],
     fourth_entries: &[ItemStatEntry],
     fifth_entries: &[ItemStatEntry],
     sixth_entries: &[ItemStatEntry],
     candidate_entries: &[ItemStatEntry],
+    extra_entries: &[ItemStatEntry],
+    general_situational: &[i32],
     damage_type: &str,
     _position: &str,
 ) -> Vec<UnifiedBuildOption> {
@@ -1695,6 +1795,18 @@ pub fn build_unified_build_options(
             damage_type,
         );
 
+        let situational_items = build_situational_items_for_option(
+            &core_opt.item_ids,
+            &final_6,
+            fourth_entries,
+            fifth_entries,
+            sixth_entries,
+            candidate_entries,
+            extra_entries,
+            general_situational,
+            damage_type,
+        );
+
         let name = if idx == 0 {
             "Build 1 (Mais Feita)".to_string()
         } else {
@@ -1707,6 +1819,8 @@ pub fn build_unified_build_options(
             core_item_icon_urls: Vec::new(),
             final_item_ids: final_6,
             final_item_icon_urls: Vec::new(),
+            situational_item_ids: situational_items,
+            situational_item_icon_urls: Vec::new(),
             play: core_opt.play,
             win: core_opt.win,
             pick_rate: core_opt.pick_rate,
@@ -2385,21 +2499,6 @@ pub fn build_5_item_blocks_with_depth_lists(
         }
     }
 
-    // If candidate pool had few items, supplement with safe high-utility situational items (without duplicates)
-    let archetype_situational = if damage_type == "AP" {
-        vec![4629, 4646, 3102, 3165, 6653]
-    } else {
-        vec![3026, 3139, 3072, 3046, 3091]
-    };
-    for item in archetype_situational {
-        if situational_items.len() < 4
-            && !clean_core.contains(&item)
-            && !final_build.contains(&item)
-            && !situational_items.contains(&item)
-        {
-            situational_items.push(item);
-        }
-    }
     situational_items.truncate(6);
 
     vec![
@@ -2678,7 +2777,7 @@ pub fn parse_opgg_mcp_text(
     };
 
     if !last_entries.is_empty() {
-        for entry in last_entries {
+        for entry in &last_entries {
             let filtered_ids: Vec<i32> = entry
                 .ids
                 .iter()
@@ -2751,12 +2850,26 @@ pub fn parse_opgg_mcp_text(
     } else {
         vec![]
     };
+    let item_blocks = build_5_item_blocks_with_depth_lists(
+        starter_entries,
+        boot_entries,
+        candidate_entries.clone(),
+        fourth_entries.clone(),
+        fifth_entries.clone(),
+        sixth_entries.clone(),
+        damage_type,
+        position,
+    );
+    let general_situational = item_blocks.get(4).map(|b| b.item_ids.clone()).unwrap_or_default();
+
     let build_options = build_unified_build_options(
         &candidate_entries,
         &fourth_entries,
         &fifth_entries,
         &sixth_entries,
         &candidate_entries,
+        &last_entries,
+        &general_situational,
         damage_type,
         position,
     );
@@ -2767,17 +2880,6 @@ pub fn parse_opgg_mcp_text(
         &sixth_entries,
         &cand_ids,
         damage_type,
-    );
-
-    let item_blocks = build_5_item_blocks_with_depth_lists(
-        starter_entries,
-        boot_entries,
-        candidate_entries,
-        fourth_entries,
-        fifth_entries,
-        sixth_entries,
-        damage_type,
-        position,
     );
 
     let spell_choices = vec![SpellMetadata {
@@ -3486,12 +3588,26 @@ pub fn parse_opgg_analysis_payload(
     } else {
         vec![]
     };
+    let item_blocks = build_5_item_blocks_with_depth_lists(
+        starter_entries,
+        boot_entries,
+        candidate_entries.clone(),
+        fourth_entries.clone(),
+        fifth_entries.clone(),
+        sixth_entries.clone(),
+        damage_type,
+        position,
+    );
+    let general_situational = item_blocks.get(4).map(|b| b.item_ids.clone()).unwrap_or_default();
+
     let build_options = build_unified_build_options(
         &core_entries,
         &fourth_entries,
         &fifth_entries,
         &sixth_entries,
         &candidate_entries,
+        &[],
+        &general_situational,
         damage_type,
         position,
     );
@@ -3502,17 +3618,6 @@ pub fn parse_opgg_analysis_payload(
         &sixth_entries,
         &cand_ids,
         damage_type,
-    );
-
-    let item_blocks = build_5_item_blocks_with_depth_lists(
-        starter_entries,
-        boot_entries,
-        candidate_entries,
-        fourth_entries,
-        fifth_entries,
-        sixth_entries,
-        damage_type,
-        position,
     );
 
     let spell_choices = spell_choice_ids
@@ -3980,6 +4085,7 @@ pub async fn get_recommended_build(
 #[cfg(test)]
 mod tests {
     use super::*;
+    static TEST_CLASSIFICATION_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -4158,6 +4264,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_ddragon_cache_with_wiremock() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
         let mock_server = MockServer::start().await;
 
         let versions_json = serde_json::json!(["14.23.1"]);
@@ -5228,6 +5335,7 @@ mod tests {
     }
     #[test]
     fn test_future_proof_dynamic_classification_and_opgg_context_trust() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
         // Simulate a new patch with completely un-hardcoded future item IDs:
         // Item 9901: brand new boot introduced by Riot (tags: ["Boots"])
         // Item 9902: brand new component item (has "into" recipe)
@@ -5532,6 +5640,7 @@ mod tests {
 
     #[test]
     fn test_parse_ddragon_item_classifications_handles_special_recipe_evolutions() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
         let ddragon_items_json = serde_json::json!({
             "data": {
                 "9904": { "name": "Future Base Item", "gold": { "total": 2900 } },
@@ -5745,4 +5854,170 @@ mod tests {
             3119
         ); // Winter's Approach
     }
+
+    #[test]
+    fn test_option_situational_excludes_core_final_boots_components() {
+        let core = vec![3031, 3094, 3036];
+        let final_items = vec![3031, 3094, 3036, 3026, 3072, 3139];
+        let fourth = vec![ItemStatEntry { ids: vec![3026], play: 1000, win: 500, pick_rate: 0.1 }];
+        let fifth = vec![ItemStatEntry { ids: vec![3072], play: 800, win: 400, pick_rate: 0.1 }];
+        let sixth = vec![ItemStatEntry { ids: vec![3139], play: 600, win: 300, pick_rate: 0.1 }];
+        let candidates = vec![
+            ItemStatEntry { ids: vec![3006], play: 5000, win: 2500, pick_rate: 0.5 }, // Greaves (boot) -> exclude
+            ItemStatEntry { ids: vec![1055], play: 4000, win: 2000, pick_rate: 0.4 }, // Doran's Blade (starter) -> exclude
+            ItemStatEntry { ids: vec![1038], play: 3000, win: 1500, pick_rate: 0.3 }, // BF Sword (component) -> exclude
+            ItemStatEntry { ids: vec![3046], play: 2500, win: 1200, pick_rate: 0.25 }, // Phantom Dancer -> VALID
+            ItemStatEntry { ids: vec![3085], play: 2000, win: 1000, pick_rate: 0.2 }, // Runaan's Hurricane -> VALID
+            ItemStatEntry { ids: vec![3078], play: 1500, win: 750, pick_rate: 0.15 }, // Trinity Force -> VALID
+            ItemStatEntry { ids: vec![6676], play: 1200, win: 600, pick_rate: 0.12 }, // Collector -> VALID
+            ItemStatEntry { ids: vec![3153], play: 1000, win: 500, pick_rate: 0.1 }, // Blade of Ruined King -> VALID
+        ];
+
+        let sit = build_situational_items_for_option(
+            &core,
+            &final_items,
+            &fourth,
+            &fifth,
+            &sixth,
+            &candidates,
+            &[],
+            &[],
+            "AD",
+        );
+
+        // Core and final build must be completely excluded
+        for id in &core {
+            assert!(!sit.contains(id), "Core item {id} must not be in situational");
+        }
+        for id in &final_items {
+            assert!(!sit.contains(id), "Final item {id} must not be in situational");
+        }
+        // Boots, starters, and components must be excluded
+        assert!(!sit.contains(&3006), "Boot 3006 must not be in situational");
+        assert!(!sit.contains(&1055), "Starter 1055 must not be in situational");
+        assert!(!sit.contains(&1038), "Component 1038 must not be in situational");
+
+        // Valid situational items must be present
+        assert_eq!(sit, vec![3046, 3085, 3078, 6676, 3153]);
+    }
+
+    #[test]
+    fn test_option_situational_filters_by_archetype() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+        let mut cache = ItemClassificationCache::default();
+        cache.item_tags.insert(6697, vec!["Damage".to_string(), "ArmorPenetration".to_string()]);
+        cache.item_tags.insert(6676, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        cache.item_tags.insert(3031, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        cache.item_tags.insert(3036, vec!["Damage".to_string(), "ArmorPenetration".to_string()]);
+        cache.item_tags.insert(3026, vec!["Damage".to_string(), "Armor".to_string()]);
+        cache.item_tags.insert(3142, vec!["Damage".to_string(), "ArmorPenetration".to_string()]);
+        cache.item_tags.insert(3046, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        cache.item_tags.insert(3078, vec!["Damage".to_string(), "AttackSpeed".to_string()]);
+        cache.item_tags.insert(3153, vec!["Damage".to_string(), "LifeSteal".to_string()]);
+        cache.item_tags.insert(3089, vec!["SpellDamage".to_string()]);
+        cache.item_tags.insert(3157, vec!["SpellDamage".to_string()]);
+        cache.completed.extend(vec![6697, 6676, 3031, 3036, 3026, 3142, 3046, 3078, 3153, 3089, 3157]);
+        set_dynamic_item_classifications(cache);
+
+        let ad_core = vec![6697, 6676, 3031];
+        let ad_final = vec![6697, 6676, 3031, 3036, 3026, 3142];
+        let candidates = vec![
+            ItemStatEntry { ids: vec![3089], play: 10000, win: 5000, pick_rate: 0.5 },
+            ItemStatEntry { ids: vec![3157], play: 8000, win: 4000, pick_rate: 0.4 },
+            ItemStatEntry { ids: vec![3046], play: 3000, win: 1500, pick_rate: 0.3 },
+            ItemStatEntry { ids: vec![3078], play: 2000, win: 1000, pick_rate: 0.2 },
+            ItemStatEntry { ids: vec![3153], play: 1000, win: 500, pick_rate: 0.1 },
+        ];
+
+        let sit = build_situational_items_for_option(
+            &ad_core,
+            &ad_final,
+            &[],
+            &[],
+            &[],
+            &candidates,
+            &[],
+            &[],
+            "AD",
+        );
+
+        assert!(!sit.contains(&3089), "AP item Rabadon must be excluded from AD build");
+        assert!(!sit.contains(&3157), "AP item Zhonya must be excluded from AD build");
+        assert!(sit.contains(&3046));
+        assert!(sit.contains(&3078));
+        assert!(sit.contains(&3153));
+    }
+
+    #[test]
+    fn test_option_situational_hybrid_keeps_both() {
+        let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+        let mut cache = ItemClassificationCache::default();
+        cache.item_tags.insert(3115, vec!["SpellDamage".to_string(), "AttackSpeed".to_string()]);
+        cache.item_tags.insert(3124, vec!["Damage".to_string(), "SpellDamage".to_string()]);
+        cache.item_tags.insert(3089, vec!["SpellDamage".to_string()]);
+        cache.item_tags.insert(3046, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        cache.item_tags.insert(3157, vec!["SpellDamage".to_string()]);
+        cache.item_tags.insert(3072, vec!["Damage".to_string(), "LifeSteal".to_string()]);
+        cache.completed.extend(vec![3115, 3124, 3089, 3046, 3157, 3072]);
+        set_dynamic_item_classifications(cache);
+
+        let hybrid_core = vec![3115, 3124, 3089];
+        let hybrid_final = vec![3115, 3124, 3089, 3157];
+        let candidates = vec![
+            ItemStatEntry { ids: vec![3046], play: 2000, win: 1000, pick_rate: 0.3 },
+            ItemStatEntry { ids: vec![3072], play: 1500, win: 750, pick_rate: 0.2 },
+        ];
+
+        let sit = build_situational_items_for_option(
+            &hybrid_core,
+            &hybrid_final,
+            &[],
+            &[],
+            &[],
+            &candidates,
+            &[],
+            &[],
+            "HYBRID",
+        );
+
+        assert!(sit.contains(&3046), "Hybrid build should keep AD item PD");
+        assert!(sit.contains(&3072), "Hybrid build should keep AD item BT");
+    }
+
+    #[test]
+    fn test_option_situational_min_5_sorted_by_play() {
+        let core = vec![1, 2, 3];
+        let final_items = vec![1, 2, 3, 4, 5, 6];
+        let fourth = vec![
+            ItemStatEntry { ids: vec![101], play: 100, win: 50, pick_rate: 0.1 },
+            ItemStatEntry { ids: vec![102], play: 500, win: 250, pick_rate: 0.2 },
+        ];
+        let fifth = vec![
+            ItemStatEntry { ids: vec![103], play: 300, win: 150, pick_rate: 0.15 },
+        ];
+        let sixth = vec![
+            ItemStatEntry { ids: vec![104], play: 800, win: 400, pick_rate: 0.3 },
+        ];
+        let candidates = vec![
+            ItemStatEntry { ids: vec![105], play: 200, win: 100, pick_rate: 0.1 },
+            ItemStatEntry { ids: vec![106], play: 400, win: 200, pick_rate: 0.18 },
+        ];
+
+        let sit = build_situational_items_for_option(
+            &core,
+            &final_items,
+            &fourth,
+            &fifth,
+            &sixth,
+            &candidates,
+            &[],
+            &[],
+            "AD",
+        );
+
+        // Should have 6 items sorted by play count descending:
+        // 104 (800) > 102 (500) > 106 (400) > 103 (300) > 105 (200) > 101 (100)
+        assert_eq!(sit, vec![104, 102, 106, 103, 105, 101]);
+    }
+
 }

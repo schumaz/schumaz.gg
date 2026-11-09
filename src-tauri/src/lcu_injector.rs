@@ -466,6 +466,12 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
                 item_ids = build.build_options[b_idx].core_item_ids.clone();
             } else if block.title.contains("Build Final") {
                 item_ids = build.build_options[b_idx].final_item_ids.clone();
+            } else if (block.title.contains("Itens Situacionais")
+                || block.title.contains("Úteis")
+                || block.title.contains("Uteis"))
+                && !build.build_options[b_idx].situational_item_ids.is_empty()
+            {
+                item_ids = build.build_options[b_idx].situational_item_ids.clone();
             }
         } else {
             // Fallback for independent core / final build options
@@ -1063,18 +1069,25 @@ pub mod tests {
                     item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
                     item_icon_urls: vec![],
                 },
+                crate::build_provider::ItemBlock {
+                    title: "5. Itens Situacionais / Úteis".to_string(),
+                    item_ids: vec![3102, 3165],
+                    item_icon_urls: vec![],
+                },
             ],
             build_options: vec![
                 crate::build_provider::UnifiedBuildOption {
                     name: "Build 1 (Mais Feita)".to_string(),
                     core_item_ids: vec![3118, 4645, 3089],
                     final_item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
+                    situational_item_ids: vec![3102, 3165],
                     ..Default::default()
                 },
                 crate::build_provider::UnifiedBuildOption {
                     name: "Build 2".to_string(),
                     core_item_ids: vec![3157, 3089, 4629],
                     final_item_ids: vec![3157, 3089, 4629, 3118, 3135, 3102],
+                    situational_item_ids: vec![4646, 6653, 3165],
                     ..Default::default()
                 },
             ],
@@ -1094,6 +1107,11 @@ pub mod tests {
         // Block 4: 3157, 3089, 4629, 3118, 3135, 3102
         assert_eq!(blocks[3]["items"][0]["id"], "3157");
         assert_eq!(blocks[3]["items"][5]["id"], "3102");
+
+        // Block 5: Situational items for Option 2 -> 4646, 6653, 3165
+        assert_eq!(blocks[4]["items"][0]["id"], "4646");
+        assert_eq!(blocks[4]["items"][1]["id"], "6653");
+        assert_eq!(blocks[4]["items"][2]["id"], "3165");
 
         clear_champion_selections();
     }
