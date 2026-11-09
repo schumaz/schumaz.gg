@@ -130,29 +130,126 @@ pub struct InjectionReport {
     pub message: String,
 }
 
-/// Builds the JSON payload for creating/replacing a rune page via POST /lol-perks/v1/pages.
-/// Formats page name as "%Champname% | schumaz.gg".
-pub fn build_rune_page_payload(build: &ChampionBuild) -> Result<serde_json::Value, String> {
-    if build.selected_perk_ids.len() != 9 {
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ChampionSelections {
+    pub champion_id: i32,
+    pub rune_page_index: Option<usize>,
+    pub secondary_spell_id: Option<i32>,
+}
+
+static CHAMPION_SELECTIONS: OnceLock<RwLock<Option<ChampionSelections>>> = OnceLock::new();
+
+fn get_selections_lock() -> &'static RwLock<Option<ChampionSelections>> {
+    CHAMPION_SELECTIONS.get_or_init(|| RwLock::new(None))
+}
+
+pub fn set_selected_rune_page(champion_id: i32, page_index: usize) {
+    if let Ok(mut guard) = get_selections_lock().write() {
+        let current = guard.get_or_insert_with(|| ChampionSelections {
+            champion_id,
+            rune_page_index: None,
+            secondary_spell_id: None,
+        });
+        if current.champion_id != champion_id {
+            *current = ChampionSelections {
+                champion_id,
+                rune_page_index: Some(page_index),
+                secondary_spell_id: None,
+            };
+        } else {
+            current.rune_page_index = Some(page_index);
+        }
+    }
+}
+
+pub fn set_selected_secondary_spell(champion_id: i32, spell_id: i32) {
+    if let Ok(mut guard) = get_selections_lock().write() {
+        let current = guard.get_or_insert_with(|| ChampionSelections {
+            champion_id,
+            rune_page_index: None,
+            secondary_spell_id: None,
+        });
+        if current.champion_id != champion_id {
+            *current = ChampionSelections {
+                champion_id,
+                rune_page_index: None,
+                secondary_spell_id: Some(spell_id),
+            };
+        } else {
+            current.secondary_spell_id = Some(spell_id);
+        }
+    }
+}
+
+pub fn get_champion_selections(champion_id: i32) -> Option<ChampionSelections> {
+    if let Ok(guard) = get_selections_lock().read()
+        && let Some(sel) = guard.as_ref()
+        && sel.champion_id == champion_id
+    {
+        return Some(sel.clone());
+    }
+    None
+}
+
+pub fn clear_champion_selections() {
+    if let Ok(mut guard) = get_selections_lock().write() {
+        *guard = None;
+    }
+}
+
+/// Builds the JSON payload for creating/replacing a rune page from individual components.
+pub fn build_rune_page_payload_from_parts(
+    champion_name: &str,
+    primary_style_id: i32,
+    sub_style_id: i32,
+    selected_perk_ids: &[i32],
+) -> Result<serde_json::Value, String> {
+    if selected_perk_ids.len() != 9 {
         return Err(format!(
             "Invalid perk count: expected 9 perks, found {}",
-            build.selected_perk_ids.len()
+            selected_perk_ids.len()
         ));
     }
 
-    if build.primary_style_id == build.sub_style_id {
+    if primary_style_id == sub_style_id {
         return Err("Primary style and sub style cannot be identical".to_string());
     }
 
     let payload = json!({
-        "name": format!("{}{}", build.champion_name, SCHUMAZ_PAGE_SUFFIX),
-        "primaryStyleId": build.primary_style_id,
-        "subStyleId": build.sub_style_id,
-        "selectedPerkIds": build.selected_perk_ids,
+        "name": format!("{}{}", champion_name, SCHUMAZ_PAGE_SUFFIX),
+        "primaryStyleId": primary_style_id,
+        "subStyleId": sub_style_id,
+        "selectedPerkIds": selected_perk_ids,
         "current": true
     });
 
     Ok(payload)
+}
+
+/// Builds the JSON payload for creating/replacing a rune page via POST /lol-perks/v1/pages.
+/// Formats page name as "%Champname% | schumaz.gg".
+/// Automatically respects user's selected rune page option for this champion if present in ChampionSelections.
+pub fn build_rune_page_payload(build: &ChampionBuild) -> Result<serde_json::Value, String> {
+    if let Some(sel) = get_champion_selections(build.champion_id)
+        && let Some(idx) = sel.rune_page_index
+        && idx < build.rune_pages.len()
+    {
+        let page = &build.rune_pages[idx];
+        return build_rune_page_payload_from_parts(
+            &build.champion_name,
+            page.primary_style_id,
+            page.sub_style_id,
+            &page.selected_perk_ids,
+        );
+    }
+
+    build_rune_page_payload_from_parts(
+        &build.champion_name,
+        build.primary_style_id,
+        build.sub_style_id,
+        &build.selected_perk_ids,
+    )
 }
 
 /// Checks an array of rune pages and finds the first deletable custom page ID (if any).
@@ -302,46 +399,74 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
 
 /// Injects rune page into the LCU. Reuses and overwrites the single schumaz.gg rune page across matches
 /// instead of creating a new page every match.
-pub async fn inject_runes(
+pub async fn inject_rune_payload(
     conn: &crate::lcu_connector::LcuConnection,
-    build: &ChampionBuild,
+    payload: &serde_json::Value,
 ) -> Result<(), String> {
-    let payload = build_rune_page_payload(build)?;
-
     // 1. Check all rune pages to see if a schumaz.gg page already exists
     if let Ok(pages) = conn.get_all_rune_pages().await {
         if let Some(existing_page_id) = find_schumaz_page_id(&pages) {
             // Overwrite the existing page in-place via PUT
-            if conn.put_rune_page(existing_page_id, &payload).await.is_ok() {
+            if conn.put_rune_page(existing_page_id, payload).await.is_ok() {
                 return Ok(());
             }
             // If PUT fails, delete the existing schumaz page and recreate
             let _ = conn.delete_rune_page(existing_page_id).await;
-            conn.create_rune_page(&payload).await?;
+            conn.create_rune_page(payload).await?;
             return Ok(());
         }
 
         // 2. No schumaz.gg page exists yet. Try creating a new one.
-        match conn.create_rune_page(&payload).await {
+        match conn.create_rune_page(payload).await {
             Ok(_) => return Ok(()),
             Err(_) => {
                 // If creation failed (e.g. max page limit reached), overwrite or delete the first custom page
                 if let Some(deletable_id) = find_first_deletable_page_id(&pages) {
-                    if conn.put_rune_page(deletable_id, &payload).await.is_ok() {
+                    if conn.put_rune_page(deletable_id, payload).await.is_ok() {
                         return Ok(());
                     }
                     let _ = conn.delete_rune_page(deletable_id).await;
-                    conn.create_rune_page(&payload).await?;
+                    conn.create_rune_page(payload).await?;
                     return Ok(());
                 }
             }
         }
     } else {
         // Fallback: direct create if pages endpoint query failed
-        conn.create_rune_page(&payload).await?;
+        conn.create_rune_page(payload).await?;
     }
 
     Ok(())
+}
+
+/// Injects rune page into the LCU. Reuses and overwrites the single schumaz.gg rune page across matches
+/// instead of creating a new page every match.
+pub async fn inject_runes(
+    conn: &crate::lcu_connector::LcuConnection,
+    build: &ChampionBuild,
+) -> Result<(), String> {
+    let payload = build_rune_page_payload(build)?;
+    inject_rune_payload(conn, &payload).await
+}
+
+/// Injects a specific chosen rune page directly into the LCU and saves the user choice in ChampionSelections.
+pub async fn inject_specific_rune_page(
+    conn: &crate::lcu_connector::LcuConnection,
+    champion_id: i32,
+    champion_name: &str,
+    page_index: usize,
+    primary_style_id: i32,
+    sub_style_id: i32,
+    selected_perk_ids: &[i32],
+) -> Result<(), String> {
+    set_selected_rune_page(champion_id, page_index);
+    let payload = build_rune_page_payload_from_parts(
+        champion_name,
+        primary_style_id,
+        sub_style_id,
+        selected_perk_ids,
+    )?;
+    inject_rune_payload(conn, &payload).await
 }
 
 /// Injects summoner spells into the active Champion Select session adapting to the Flash key preference
@@ -352,9 +477,23 @@ pub async fn inject_spells(
     flash_key: FlashKeyPreference,
 ) -> Result<(), String> {
     let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
+    let (mut s1, mut s2) = (build.spell1_id, build.spell2_id);
+
+    if let Some(sel) = get_champion_selections(build.champion_id)
+        && let Some(sec_spell) = sel.secondary_spell_id
+    {
+        if s1 == SPELL_FLASH_ID {
+            s2 = sec_spell;
+        } else if s2 == SPELL_FLASH_ID {
+            s1 = sec_spell;
+        } else {
+            s2 = sec_spell;
+        }
+    }
+
     let payload = build_spells_payload_with_jungle_and_preference(
-        build.spell1_id,
-        build.spell2_id,
+        s1,
+        s2,
         flash_key,
         is_jungle,
     )?;
@@ -730,5 +869,70 @@ pub mod tests {
         let json = serde_json::to_string(&report).unwrap();
         let parsed: InjectionReport = serde_json::from_str(&json).unwrap();
         assert_eq!(report, parsed);
+    }
+
+    #[test]
+    fn test_build_rune_page_payload_respects_champion_selections() {
+        clear_champion_selections();
+        let mut build = ChampionBuild {
+            champion_id: 103,
+            champion_name: "Ahri".to_string(),
+            primary_style_id: 8000,
+            sub_style_id: 8100,
+            selected_perk_ids: vec![8005, 9101, 9104, 8299, 8126, 8135, 5008, 5008, 5002],
+            ..Default::default()
+        };
+        build.rune_pages = vec![
+            crate::build_provider::RunePageOption {
+                primary_style_id: 8000,
+                sub_style_id: 8100,
+                selected_perk_ids: vec![8005, 9101, 9104, 8299, 8126, 8135, 5008, 5008, 5002],
+                play: 5000,
+                win: 2600,
+                pick_rate: 65.0,
+                ..Default::default()
+            },
+            crate::build_provider::RunePageOption {
+                primary_style_id: 8200,
+                sub_style_id: 8300,
+                selected_perk_ids: vec![8214, 8224, 8210, 8237, 8304, 8345, 5008, 5008, 5001],
+                play: 1200,
+                win: 600,
+                pick_rate: 15.0,
+                ..Default::default()
+            },
+        ];
+
+        // Default: index 0 (build.primary_style_id)
+        let default_payload = build_rune_page_payload(&build).unwrap();
+        assert_eq!(default_payload["primaryStyleId"], 8000);
+
+        // Select page index 1
+        set_selected_rune_page(build.champion_id, 1);
+        let selected_payload = build_rune_page_payload(&build).unwrap();
+        assert_eq!(selected_payload["primaryStyleId"], 8200);
+        assert_eq!(selected_payload["subStyleId"], 8300);
+
+        clear_champion_selections();
+    }
+    #[test]
+    fn test_champion_selections_lock_in_persistence() {
+        clear_champion_selections();
+        assert_eq!(get_champion_selections(103), None);
+
+        // User selected rune page index 1 and secondary spell 3 (Exhaust) for Ahri (103)
+        set_selected_rune_page(103, 1);
+        set_selected_secondary_spell(103, 3);
+
+        let sel = get_champion_selections(103).expect("Selections should exist for champ 103");
+        assert_eq!(sel.rune_page_index, Some(1));
+        assert_eq!(sel.secondary_spell_id, Some(3));
+
+        // Different champion query should return None
+        assert_eq!(get_champion_selections(804), None);
+
+        // Clearing selections resets back to None
+        clear_champion_selections();
+        assert_eq!(get_champion_selections(103), None);
     }
 }

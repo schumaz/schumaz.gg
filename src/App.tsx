@@ -60,6 +60,20 @@ export interface SpellMetadata {
   icon_url: string;
 }
 
+export interface RunePageOption {
+  primary_style_id: number;
+  sub_style_id: number;
+  selected_perk_ids: number[];
+  play: number;
+  win: number;
+  pick_rate: number;
+  primary_style_name?: string;
+  primary_style_icon_url?: string;
+  sub_style_name?: string;
+  sub_style_icon_url?: string;
+  perks?: RuneMetadata[];
+}
+
 export interface ItemBlock {
   title: string;
   item_ids: number[];
@@ -85,6 +99,7 @@ export interface ChampionBuild {
   perks?: RuneMetadata[];
   spells?: SpellMetadata[];
   spell_choices?: SpellMetadata[];
+  rune_pages?: RunePageOption[];
   active_position?: string;
   active_tier?: string;
   active_region?: string;
@@ -119,6 +134,7 @@ function App() {
   const [build, setBuild] = useState<ChampionBuild | null>(null);
   const [spellsInverted, setSpellsInverted] = useState(false);
   const [selectedSecondarySpellId, setSelectedSecondarySpellId] = useState<number | null>(null);
+  const [selectedRunePageIndex, setSelectedRunePageIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -263,9 +279,14 @@ function App() {
         });
 
         unlistenChampSelected = await listen<ChampSelectedPayload>("champ-selected", async (event) => {
-          setChampSelect(event.payload);
-          setSpellsInverted(false);
-          setSelectedSecondarySpellId(null);
+          setChampSelect((prev) => {
+            if (prev?.champion_id !== event.payload.champion_id) {
+              setSpellsInverted(false);
+              setSelectedSecondarySpellId(null);
+              setSelectedRunePageIndex(0);
+            }
+            return event.payload;
+          });
 
           // Fetch recommended build for selected champion if not already received
           try {
@@ -279,7 +300,13 @@ function App() {
                 patch: null,
               });
               if (recommended) {
-                setBuild(recommended);
+                setBuild((prev) => {
+                  if (prev?.champion_id !== recommended.champion_id) {
+                    setSelectedSecondarySpellId(null);
+                    setSelectedRunePageIndex(0);
+                  }
+                  return recommended;
+                });
               }
             } else {
               const recommended = await invoke<ChampionBuild>("get_recommended_build_for_champion", {
@@ -287,7 +314,13 @@ function App() {
                 queueId: event.payload.queue_id || 420,
               });
               if (recommended) {
-                setBuild(recommended);
+                setBuild((prev) => {
+                  if (prev?.champion_id !== recommended.champion_id) {
+                    setSelectedSecondarySpellId(null);
+                    setSelectedRunePageIndex(0);
+                  }
+                  return recommended;
+                });
               }
             }
           } catch {
@@ -303,8 +336,13 @@ function App() {
         });
 
         unlistenBuild = await listen<ChampionBuild>("recommended-build", (event) => {
-          setBuild(event.payload);
-          setSelectedSecondarySpellId(null);
+          setBuild((prev) => {
+            if (prev?.champion_id !== event.payload.champion_id) {
+              setSelectedSecondarySpellId(null);
+              setSelectedRunePageIndex(0);
+            }
+            return event.payload;
+          });
         });
 
         // Injection report is not displayed in the UI
@@ -352,10 +390,45 @@ function App() {
         await invoke("inject_summoner_spells", {
           spell1Id: reordered[0].id,
           spell2Id: reordered[1].id,
+          championId: build?.champion_id,
+          secondarySpellId: spellId,
         });
       } catch (e) {
         console.warn("Failed to inject secondary spell change:", e);
       }
+    }
+  };
+
+  const activeRunePage =
+    build?.rune_pages && build.rune_pages.length > selectedRunePageIndex
+      ? build.rune_pages[selectedRunePageIndex]
+      : null;
+
+  const primaryStyleName =
+    activeRunePage?.primary_style_name || build?.primary_style_name || "Árvore Primária";
+  const primaryStyleIcon =
+    activeRunePage?.primary_style_icon_url || build?.primary_style_icon_url;
+  const subStyleName =
+    activeRunePage?.sub_style_name || build?.sub_style_name || "Árvore Secundária";
+  const subStyleIcon =
+    activeRunePage?.sub_style_icon_url || build?.sub_style_icon_url;
+  const perksList = activeRunePage?.perks || build?.perks || [];
+
+  const handleSelectRunePage = async (pageIndex: number) => {
+    if (!build?.rune_pages || pageIndex >= build.rune_pages.length) return;
+    setSelectedRunePageIndex(pageIndex);
+    const page = build.rune_pages[pageIndex];
+    try {
+      await invoke("inject_rune_page", {
+        championId: build.champion_id,
+        championName: build.champion_name,
+        pageIndex,
+        primaryStyleId: page.primary_style_id,
+        subStyleId: page.sub_style_id,
+        selectedPerkIds: page.selected_perk_ids,
+      });
+    } catch (e) {
+      console.warn("Failed to inject chosen rune page:", e);
     }
   };
 
@@ -554,37 +627,86 @@ function App() {
               <div className="runes-spells-grid">
                 {/* Visual Rune Tree Card */}
                 <section className="card runes-tree-card" data-testid="runes-tree">
+                  {build.rune_pages && build.rune_pages.length > 1 && (
+                    <div className="rune-pages-selector" data-testid="rune-pages-selector">
+                      <div className="rune-pages-selector-header">
+                        <span className="rune-pages-selector-title">Páginas de Runas</span>
+                        <span className="rune-pages-selector-desc">Escolha entre as mais jogadas</span>
+                      </div>
+                      <div className="rune-pages-options">
+                        {build.rune_pages.map((page, idx) => {
+                          const isSelected = selectedRunePageIndex === idx;
+                          const keystone = page.perks && page.perks.length > 0 ? page.perks[0] : null;
+                          const subIcon = page.sub_style_icon_url;
+                          const label = idx === 0 ? "Opção 1 (Mais Usada)" : `Opção ${idx + 1}`;
+                          return (
+                            <button
+                              key={`rune-page-${idx}`}
+                              type="button"
+                              className={`rune-page-btn ${isSelected ? "active" : ""}`}
+                              data-testid={`rune-page-btn-${idx}`}
+                              onClick={() => handleSelectRunePage(idx)}
+                            >
+                              <div className="rune-page-btn-icons">
+                                {keystone?.icon_url && (
+                                  <img
+                                    src={keystone.icon_url}
+                                    alt={keystone.name || "Keystone"}
+                                    className="rune-page-keystone-icon"
+                                  />
+                                )}
+                                {subIcon && (
+                                  <img
+                                    src={subIcon}
+                                    alt={page.sub_style_name || "Secundária"}
+                                    className="rune-page-sub-icon"
+                                  />
+                                )}
+                              </div>
+                              <div className="rune-page-btn-info">
+                                <span className="rune-page-label">{label}</span>
+                                <span className="rune-page-games">
+                                  {page.play ? `${page.play.toLocaleString()} partidas` : `${page.pick_rate}%`}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="runes-tree-columns">
                     {/* Primary Rune Tree */}
                     <div className="rune-column primary-column">
                       <div className="tree-header">
-                        {build.primary_style_icon_url && (
+                        {primaryStyleIcon && (
                           <img
-                            src={build.primary_style_icon_url}
-                            alt={build.primary_style_name || "Primária"}
+                            src={primaryStyleIcon}
+                            alt={primaryStyleName}
                             className="tree-icon"
                           />
                         )}
-                        <h3>{build.primary_style_name || "Árvore Primária"}</h3>
+                        <h3>{primaryStyleName}</h3>
                       </div>
 
                       {/* Primary Keystone */}
-                      {build.perks && build.perks.length > 0 && (
-                        <div className="keystone-item" title={build.perks[0].name}>
-                          {build.perks[0].icon_url && (
+                      {perksList.length > 0 && (
+                        <div className="keystone-item" title={perksList[0].name}>
+                          {perksList[0].icon_url && (
                             <img
-                              src={build.perks[0].icon_url}
-                              alt={build.perks[0].name}
+                              src={perksList[0].icon_url}
+                              alt={perksList[0].name}
                               className="keystone-icon"
                             />
                           )}
-                          <span className="keystone-name">{build.perks[0].name}</span>
+                          <span className="keystone-name">{perksList[0].name}</span>
                         </div>
                       )}
 
                       {/* Primary Minor Perks (Slots 1, 2, 3) */}
                       <div className="minor-perks-list">
-                        {build.perks?.slice(1, 4).map((perk, index) => (
+                        {perksList.slice(1, 4).map((perk, index) => (
                           <div key={`primary-${index}-${perk.id}`} className="perk-item" title={perk.name}>
                             {perk.icon_url && (
                               <img src={perk.icon_url} alt={perk.name} className="perk-icon" />
@@ -598,19 +720,19 @@ function App() {
                     {/* Secondary Rune Tree & Stat Shards */}
                     <div className="rune-column secondary-column">
                       <div className="tree-header">
-                        {build.sub_style_icon_url && (
+                        {subStyleIcon && (
                           <img
-                            src={build.sub_style_icon_url}
-                            alt={build.sub_style_name || "Secundária"}
+                            src={subStyleIcon}
+                            alt={subStyleName}
                             className="tree-icon"
                           />
                         )}
-                        <h3>{build.sub_style_name || "Árvore Secundária"}</h3>
+                        <h3>{subStyleName}</h3>
                       </div>
 
                       {/* Secondary Minor Perks (Slots 4, 5) */}
                       <div className="minor-perks-list">
-                        {build.perks?.slice(4, 6).map((perk, index) => (
+                        {perksList.slice(4, 6).map((perk, index) => (
                           <div key={`sub-${index}-${perk.id}`} className="perk-item" title={perk.name}>
                             {perk.icon_url && (
                               <img src={perk.icon_url} alt={perk.name} className="perk-icon" />
@@ -624,7 +746,7 @@ function App() {
                       <div className="stat-shards-section">
                         <h4>Fragmentos de Atributo</h4>
                         <div className="stat-shards-list">
-                          {build.perks?.slice(6, 9).map((shard, index) => (
+                          {perksList.slice(6, 9).map((shard, index) => (
                             <div key={`shard-${index}-${shard.id}`} className="shard-item" title={shard.name}>
                               {shard.icon_url && (
                                 <img src={shard.icon_url} alt={shard.name} className="shard-icon" />

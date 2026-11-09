@@ -30,6 +30,77 @@ const mockAhriBuild: ChampionBuild = {
     { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
     { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "health.png" },
   ],
+    rune_pages: [
+    {
+      primary_style_id: 8100,
+      sub_style_id: 8200,
+      selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],
+      play: 45000,
+      win: 23500,
+      pick_rate: 62.5,
+      primary_style_name: "Dominação",
+      primary_style_icon_url: "domination.png",
+      sub_style_name: "Feitiçaria",
+      sub_style_icon_url: "sorcery.png",
+      perks: [
+        { id: 8112, key: "Electrocute", name: "Eletrocutar", icon_url: "electrocute.png" },
+        { id: 8126, key: "CheapShot", name: "Golpe Desleal", icon_url: "cheapshot.png" },
+        { id: 8138, key: "EyeballCollection", name: "Globos Oculares", icon_url: "eyeball.png" },
+        { id: 8135, key: "TreasureHunter", name: "Caçador de Tesouros", icon_url: "treasure.png" },
+        { id: 8226, key: "ManaflowBand", name: "Faixa de Fluxo", icon_url: "manaflow.png" },
+        { id: 8210, key: "Transcendence", name: "Transcendência", icon_url: "transcendence.png" },
+        { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
+        { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
+        { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "health.png" },
+      ],
+    },
+    {
+      primary_style_id: 8300,
+      sub_style_id: 8100,
+      selected_perk_ids: [8351, 8304, 8345, 8352, 8126, 8135, 5008, 5008, 5001],
+      play: 12000,
+      win: 6200,
+      pick_rate: 16.7,
+      primary_style_name: "Inspiração",
+      primary_style_icon_url: "inspiration.png",
+      sub_style_name: "Dominação",
+      sub_style_icon_url: "domination.png",
+      perks: [
+        { id: 8351, key: "GlacialAugment", name: "Aprimoramento Glacial", icon_url: "glacial.png" },
+        { id: 8304, key: "MagicalFootwear", name: "Calçados Mágicos", icon_url: "footwear.png" },
+        { id: 8345, key: "BiscuitDelivery", name: "Entrega de Biscoitos", icon_url: "biscuits.png" },
+        { id: 8352, key: "TimeWarpTonic", name: "Tônico de Distorção", icon_url: "timewarp.png" },
+        { id: 8126, key: "CheapShot", name: "Golpe Desleal", icon_url: "cheapshot.png" },
+        { id: 8135, key: "TreasureHunter", name: "Caçador de Tesouros", icon_url: "treasure.png" },
+        { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
+        { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
+        { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "health.png" },
+      ],
+    },
+    {
+      primary_style_id: 8200,
+      sub_style_id: 8300,
+      selected_perk_ids: [8229, 8226, 8210, 8237, 8304, 8345, 5008, 5008, 5001],
+      play: 8000,
+      win: 4100,
+      pick_rate: 11.1,
+      primary_style_name: "Feitiçaria",
+      primary_style_icon_url: "sorcery.png",
+      sub_style_name: "Inspiração",
+      sub_style_icon_url: "inspiration.png",
+      perks: [
+        { id: 8229, key: "ArcaneComet", name: "Cometa Arcano", icon_url: "comet.png" },
+        { id: 8226, key: "ManaflowBand", name: "Faixa de Fluxo", icon_url: "manaflow.png" },
+        { id: 8210, key: "Transcendence", name: "Transcendência", icon_url: "transcendence.png" },
+        { id: 8237, key: "Scorch", name: "Chamuscar", icon_url: "scorch.png" },
+        { id: 8304, key: "MagicalFootwear", name: "Calçados Mágicos", icon_url: "footwear.png" },
+        { id: 8345, key: "BiscuitDelivery", name: "Entrega de Biscoitos", icon_url: "biscuits.png" },
+        { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
+        { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "adaptive.png" },
+        { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "health.png" },
+      ],
+    },
+  ],
   spell_choices: [
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },
     { id: 12, name: "Teleporte", icon_url: "teleport.png" },
@@ -498,6 +569,144 @@ describe("App Component", () => {
     expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
       spell1Id: 4,
       spell2Id: 12,
+      championId: 103,
+      secondarySpellId: 12,
     });
   });
+  it("renders rune page selector with 3 most played options, displays keystone/sub-style and game count, and allows switching rune pages with LCU injection", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    act(() => {
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("rune-pages-selector")).toBeInTheDocument();
+    });
+
+    // Check all 3 rune page buttons
+    const opt0 = screen.getByTestId("rune-page-btn-0");
+    const opt1 = screen.getByTestId("rune-page-btn-1");
+    const opt2 = screen.getByTestId("rune-page-btn-2");
+
+    expect(opt0).toBeInTheDocument();
+    expect(opt1).toBeInTheDocument();
+    expect(opt2).toBeInTheDocument();
+
+    expect(opt0).toHaveClass("active");
+    expect(opt1).not.toHaveClass("active");
+    expect(opt2).not.toHaveClass("active");
+
+    expect(screen.getByText("Opção 1 (Mais Usada)")).toBeInTheDocument();
+    expect(screen.getByText("Opção 2")).toBeInTheDocument();
+    expect(screen.getByText("Opção 3")).toBeInTheDocument();
+    expect(screen.getByText(/45[.,]000 partidas/i)).toBeInTheDocument();
+    expect(screen.getByText(/12[.,]000 partidas/i)).toBeInTheDocument();
+
+    // Default keystone is Electrocute
+    expect(screen.getByText("Eletrocutar")).toBeInTheDocument();
+
+    // Click Option 2 (Inspiration: Glacial Augment)
+    act(() => {
+      fireEvent.click(opt1);
+    });
+
+    expect(opt1).toHaveClass("active");
+    expect(opt0).not.toHaveClass("active");
+
+    // Displays Glacial Augment in the tree
+    expect(screen.getByText("Aprimoramento Glacial")).toBeInTheDocument();
+
+    // Injected immediately via LCU
+    expect(invoke).toHaveBeenCalledWith("inject_rune_page", {
+      championId: 103,
+      championName: "Ahri",
+      pageIndex: 1,
+      primaryStyleId: 8300,
+      subStyleId: 8100,
+      selectedPerkIds: [8351, 8304, 8345, 8352, 8126, 8135, 5008, 5008, 5001],
+    });
+  });
+
+  it("persists user manual rune page and secondary spell selections across draft lock-in for the same champion", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    // 1. Hover Ahri (not locked in)
+    act(() => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: false,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sec-spell-btn-12")).toBeInTheDocument();
+      expect(screen.getByTestId("rune-page-btn-1")).toBeInTheDocument();
+    });
+
+    // User chooses secondary spell Teleport (12) and rune page Option 2 (index 1)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("sec-spell-btn-12"));
+      fireEvent.click(screen.getByTestId("rune-page-btn-1"));
+    });
+
+    expect(screen.getByTestId("sec-spell-btn-12")).toHaveClass("active");
+    expect(screen.getByTestId("rune-page-btn-1")).toHaveClass("active");
+
+    // 2. Draft Lock-In: LoL client emits champ-selected with locked_in: true for Ahri (103)
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    // Selections MUST persist across lock-in!
+    expect(screen.getByTestId("sec-spell-btn-12")).toHaveClass("active");
+    expect(screen.getByTestId("rune-page-btn-1")).toHaveClass("active");
+    expect(screen.getByText("Aprimoramento Glacial")).toBeInTheDocument();
+
+    // 3. If a DIFFERENT champion is selected, selections reset back to default
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 804,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: false,
+        },
+      });
+      eventListeners["recommended-build"]({
+        payload: {
+          ...mockAhriBuild,
+          champion_id: 804,
+          champion_name: "Yunara",
+        },
+      });
+    });
+
+    // Should reset to Option 1 (index 0) and default secondary spell
+    expect(screen.getByTestId("rune-page-btn-0")).toHaveClass("active");
+    expect(screen.getByTestId("rune-page-btn-1")).not.toHaveClass("active");
+  });
+
 });

@@ -72,9 +72,42 @@ async fn get_summoner_status() -> Result<Option<lcu_connector::SummonerInfo>, St
     }
 }
 
+/// Tauri command to immediately inject a specific chosen rune page into the LoL client.
+#[tauri::command]
+async fn inject_rune_page(
+    champion_id: i32,
+    champion_name: String,
+    page_index: usize,
+    primary_style_id: i32,
+    sub_style_id: i32,
+    selected_perk_ids: Vec<i32>,
+) -> Result<(), String> {
+    lcu_injector::set_selected_rune_page(champion_id, page_index);
+    let conn = lcu_connector::LcuConnection::connect()
+        .map_err(|e| format!("Não foi possível conectar ao cliente do LoL: {}", e))?;
+    lcu_injector::inject_specific_rune_page(
+        &conn,
+        champion_id,
+        &champion_name,
+        page_index,
+        primary_style_id,
+        sub_style_id,
+        &selected_perk_ids,
+    )
+    .await
+}
+
 /// Tauri command to immediately inject only summoner spells into an active Champ Select session.
 #[tauri::command]
-async fn inject_summoner_spells(spell1_id: i32, spell2_id: i32) -> Result<(), String> {
+async fn inject_summoner_spells(
+    spell1_id: i32,
+    spell2_id: i32,
+    champion_id: Option<i32>,
+    secondary_spell_id: Option<i32>,
+) -> Result<(), String> {
+    if let (Some(champ_id), Some(sec_spell)) = (champion_id, secondary_spell_id) {
+        lcu_injector::set_selected_secondary_spell(champ_id, sec_spell);
+    }
     let conn = lcu_connector::LcuConnection::connect()
         .map_err(|e| format!("Não foi possível conectar ao cliente do LoL: {}", e))?;
     let payload = lcu_injector::build_spells_payload(spell1_id, spell2_id)?;
@@ -100,7 +133,8 @@ pub fn run() {
             update_build_filters,
             get_summoner_status,
             sync_user_preferences,
-            inject_summoner_spells
+            inject_summoner_spells,
+            inject_rune_page
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();

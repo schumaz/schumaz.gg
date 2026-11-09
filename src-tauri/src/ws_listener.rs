@@ -278,6 +278,11 @@ async fn handle_session_transition(
             let mut last_guard = last_payload_ref.lock().await;
             let current_opt = Some(payload.clone());
             if should_emit_champ_select(&last_guard, &current_opt) {
+                if let Some(prev) = last_guard.as_ref()
+                    && prev.champion_id != payload.champion_id
+                {
+                    crate::lcu_injector::clear_champion_selections();
+                }
                 let _ = handle.emit("champ-selected", &payload);
                 *last_guard = current_opt;
 
