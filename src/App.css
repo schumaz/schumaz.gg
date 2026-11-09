@@ -1184,3 +1184,43 @@ body {
   font-size: 0.72rem;
   color: var(--text-secondary);
 }
+
+/* Multi-build Option Pill Selectors */
+.block-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.build-options-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.build-option-pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.build-option-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-highlight);
+  color: var(--text-primary);
+}
+
+.build-option-pill.active {
+  background: rgba(10, 132, 255, 0.2);
+  border-color: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 6px rgba(10, 132, 255, 0.3);
+}

@@ -74,6 +74,14 @@ export interface RunePageOption {
   perks?: RuneMetadata[];
 }
 
+export interface ItemBuildOption {
+  item_ids: number[];
+  item_icon_urls?: string[];
+  play: number;
+  win: number;
+  pick_rate: number;
+}
+
 export interface ItemBlock {
   title: string;
   item_ids: number[];
@@ -100,6 +108,8 @@ export interface ChampionBuild {
   spells?: SpellMetadata[];
   spell_choices?: SpellMetadata[];
   rune_pages?: RunePageOption[];
+  core_build_options?: ItemBuildOption[];
+  final_build_options?: ItemBuildOption[];
   active_position?: string;
   active_tier?: string;
   active_region?: string;
@@ -135,6 +145,8 @@ function App() {
   const [spellsInverted, setSpellsInverted] = useState(false);
   const [selectedSecondarySpellId, setSelectedSecondarySpellId] = useState<number | null>(null);
   const [selectedRunePageIndex, setSelectedRunePageIndex] = useState<number>(0);
+  const [selectedCoreBuildIndex, setSelectedCoreBuildIndex] = useState<number>(0);
+  const [selectedFinalBuildIndex, setSelectedFinalBuildIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -284,6 +296,8 @@ function App() {
               setSpellsInverted(false);
               setSelectedSecondarySpellId(null);
               setSelectedRunePageIndex(0);
+              setSelectedCoreBuildIndex(0);
+              setSelectedFinalBuildIndex(0);
             }
             return event.payload;
           });
@@ -304,6 +318,8 @@ function App() {
                   if (prev?.champion_id !== recommended.champion_id) {
                     setSelectedSecondarySpellId(null);
                     setSelectedRunePageIndex(0);
+                    setSelectedCoreBuildIndex(0);
+                    setSelectedFinalBuildIndex(0);
                   }
                   return recommended;
                 });
@@ -318,6 +334,8 @@ function App() {
                   if (prev?.champion_id !== recommended.champion_id) {
                     setSelectedSecondarySpellId(null);
                     setSelectedRunePageIndex(0);
+                    setSelectedCoreBuildIndex(0);
+                    setSelectedFinalBuildIndex(0);
                   }
                   return recommended;
                 });
@@ -333,6 +351,9 @@ function App() {
           setBuild(null);
           setSpellsInverted(false);
           setSelectedSecondarySpellId(null);
+          setSelectedRunePageIndex(0);
+          setSelectedCoreBuildIndex(0);
+          setSelectedFinalBuildIndex(0);
         });
 
         unlistenBuild = await listen<ChampionBuild>("recommended-build", (event) => {
@@ -340,6 +361,8 @@ function App() {
             if (prev?.champion_id !== event.payload.champion_id) {
               setSelectedSecondarySpellId(null);
               setSelectedRunePageIndex(0);
+              setSelectedCoreBuildIndex(0);
+              setSelectedFinalBuildIndex(0);
             }
             return event.payload;
           });
@@ -429,6 +452,35 @@ function App() {
       });
     } catch (e) {
       console.warn("Failed to inject chosen rune page:", e);
+    }
+  };
+
+  
+  const handleSelectCoreBuild = async (index: number) => {
+    if (!build?.core_build_options || index >= build.core_build_options.length) return;
+    setSelectedCoreBuildIndex(index);
+    try {
+      await invoke("inject_item_build", {
+        championId: build.champion_id,
+        coreIndex: index,
+        finalIndex: selectedFinalBuildIndex,
+      });
+    } catch (e) {
+      console.warn("Failed to inject chosen core build:", e);
+    }
+  };
+
+  const handleSelectFinalBuild = async (index: number) => {
+    if (!build?.final_build_options || index >= build.final_build_options.length) return;
+    setSelectedFinalBuildIndex(index);
+    try {
+      await invoke("inject_item_build", {
+        championId: build.champion_id,
+        coreIndex: selectedCoreBuildIndex,
+        finalIndex: index,
+      });
+    } catch (e) {
+      console.warn("Failed to inject chosen final build:", e);
     }
   };
 
@@ -841,34 +893,84 @@ function App() {
               <section className="card item-blocks-preview" data-testid="item-blocks">
                 <h2>Build Recomendada na Loja</h2>
                 <div className="grid-blocks">
-                  {build.item_blocks.map((block, bIndex) => (
-                    <div key={block.title || bIndex} className="block-item">
-                      <h4>
-                        {bIndex + 1}. {block.title}
-                      </h4>
-                      <div className="block-items-row">
-                        {block.item_ids.map((itemId, iIndex) => {
-                          const iconUrl = block.item_icon_urls?.[iIndex];
-                          return (
-                            <div key={`${itemId}-${iIndex}`} className="item-icon-box" title={block.title}>
-                              {iconUrl ? (
-                                <img
-                                  src={iconUrl}
-                                  alt={`Item ${itemId}`}
-                                  className="shop-item-icon"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <span className="item-id-fallback">{itemId}</span>
-                              )}
+                  {build.item_blocks.map((block, bIndex) => {
+                    const isCoreBlock = block.title.includes("Primeiros 3 Itens");
+                    const isFinalBlock = block.title.includes("Build Final");
+
+                    let activeIds = block.item_ids;
+                    let activeIcons = block.item_icon_urls;
+
+                    if (isCoreBlock && build.core_build_options && build.core_build_options.length > selectedCoreBuildIndex) {
+                      activeIds = build.core_build_options[selectedCoreBuildIndex].item_ids;
+                      activeIcons = build.core_build_options[selectedCoreBuildIndex].item_icon_urls;
+                    } else if (isFinalBlock && build.final_build_options && build.final_build_options.length > selectedFinalBuildIndex) {
+                      activeIds = build.final_build_options[selectedFinalBuildIndex].item_ids;
+                      activeIcons = build.final_build_options[selectedFinalBuildIndex].item_icon_urls;
+                    }
+
+                    return (
+                      <div key={block.title || bIndex} className="block-item">
+                        <div className="block-header-row">
+                          <h4>
+                            {bIndex + 1}. {block.title}
+                          </h4>
+                          {isCoreBlock && build.core_build_options && build.core_build_options.length > 1 && (
+                            <div className="build-options-selector" data-testid="core-build-selector">
+                              {build.core_build_options.map((opt, optIdx) => (
+                                <button
+                                  key={`core-opt-${optIdx}`}
+                                  type="button"
+                                  className={`build-option-pill ${selectedCoreBuildIndex === optIdx ? "active" : ""}`}
+                                  data-testid={`core-opt-btn-${optIdx}`}
+                                  onClick={() => handleSelectCoreBuild(optIdx)}
+                                  title={`${opt.play.toLocaleString()} partidas (${opt.pick_rate}%)`}
+                                >
+                                  {optIdx === 0 ? "Opção 1 (Mais Feita)" : `Opção ${optIdx + 1}`}
+                                </button>
+                              ))}
                             </div>
-                          );
-                        })}
+                          )}
+                          {isFinalBlock && build.final_build_options && build.final_build_options.length > 1 && (
+                            <div className="build-options-selector" data-testid="final-build-selector">
+                              {build.final_build_options.map((opt, optIdx) => (
+                                <button
+                                  key={`final-opt-${optIdx}`}
+                                  type="button"
+                                  className={`build-option-pill ${selectedFinalBuildIndex === optIdx ? "active" : ""}`}
+                                  data-testid={`final-opt-btn-${optIdx}`}
+                                  onClick={() => handleSelectFinalBuild(optIdx)}
+                                  title={`${opt.play.toLocaleString()} partidas (${opt.pick_rate}%)`}
+                                >
+                                  {optIdx === 0 ? "Opção 1 (Mais Feita)" : `Opção ${optIdx + 1}`}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="block-items-row">
+                          {activeIds.map((itemId, iIndex) => {
+                            const iconUrl = activeIcons?.[iIndex];
+                            return (
+                              <div key={`${itemId}-${iIndex}`} className="item-icon-box" title={block.title}>
+                                {iconUrl ? (
+                                  <img
+                                    src={iconUrl}
+                                    alt={`Item ${itemId}`}
+                                    className="shop-item-icon"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="item-id-fallback">{itemId}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             </>

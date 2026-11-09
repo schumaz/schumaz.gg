@@ -109,6 +109,45 @@ const mockAhriBuild: ChampionBuild = {
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },
   ],
+    core_build_options: [
+    {
+      item_ids: [3285, 3157, 3089],
+      item_icon_urls: ["3285.png", "3157.png", "3089.png"],
+      play: 25000,
+      win: 13000,
+      pick_rate: 65.0,
+    },
+    {
+      item_ids: [3285, 4645, 3089],
+      item_icon_urls: ["3285.png", "4645.png", "3089.png"],
+      play: 8000,
+      win: 4200,
+      pick_rate: 20.8,
+    },
+    {
+      item_ids: [3285, 3165, 3089],
+      item_icon_urls: ["3285.png", "3165.png", "3089.png"],
+      play: 3000,
+      win: 1550,
+      pick_rate: 7.8,
+    },
+  ],
+  final_build_options: [
+    {
+      item_ids: [3285, 3157, 3089, 3135, 4645, 3102],
+      item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"],
+      play: 12000,
+      win: 6500,
+      pick_rate: 55.0,
+    },
+    {
+      item_ids: [3285, 3157, 3089, 4629, 3135, 3102],
+      item_icon_urls: ["3285.png", "3157.png", "3089.png", "4629.png", "3135.png", "3102.png"],
+      play: 5000,
+      win: 2700,
+      pick_rate: 22.9,
+    },
+  ],
   item_blocks: [
     { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
     { title: "Primeiros 3 Itens", item_ids: [3285, 3157, 3089], item_icon_urls: ["3285.png", "3157.png", "3089.png"] },
@@ -602,8 +641,8 @@ describe("App Component", () => {
     expect(opt2).not.toHaveClass("active");
 
     expect(screen.getByText("Opção 1 (Mais Usada)")).toBeInTheDocument();
-    expect(screen.getByText("Opção 2")).toBeInTheDocument();
-    expect(screen.getByText("Opção 3")).toBeInTheDocument();
+    expect(screen.getAllByText("Opção 2").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Opção 3").length).toBeGreaterThan(0);
     expect(screen.getByText(/45[.,]000 partidas/i)).toBeInTheDocument();
     expect(screen.getByText(/12[.,]000 partidas/i)).toBeInTheDocument();
 
@@ -707,6 +746,95 @@ describe("App Component", () => {
     // Should reset to Option 1 (index 0) and default secondary spell
     expect(screen.getByTestId("rune-page-btn-0")).toHaveClass("active");
     expect(screen.getByTestId("rune-page-btn-1")).not.toHaveClass("active");
+  });
+
+  it("renders 3 core build options and final build options, allows independent selection with LCU injection, and persists choices across lock-in", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    // 1. Initial hover
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: false,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("core-build-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("final-build-selector")).toBeInTheDocument();
+    });
+
+    // Verify pills for Core 3
+    const coreOpt0 = screen.getByTestId("core-opt-btn-0");
+    const coreOpt1 = screen.getByTestId("core-opt-btn-1");
+    const coreOpt2 = screen.getByTestId("core-opt-btn-2");
+    expect(coreOpt0).toBeInTheDocument();
+    expect(coreOpt1).toBeInTheDocument();
+    expect(coreOpt2).toBeInTheDocument();
+
+    expect(coreOpt0).toHaveClass("active");
+    expect(coreOpt1).not.toHaveClass("active");
+
+    // Verify pills for Final Build
+    const finalOpt0 = screen.getByTestId("final-opt-btn-0");
+    const finalOpt1 = screen.getByTestId("final-opt-btn-1");
+    expect(finalOpt0).toBeInTheDocument();
+    expect(finalOpt1).toBeInTheDocument();
+    expect(finalOpt0).toHaveClass("active");
+    expect(finalOpt1).not.toHaveClass("active");
+
+    // Click Core Option 2 (index 1: with item 4645 Shadowflame)
+    await act(async () => {
+      fireEvent.click(coreOpt1);
+    });
+
+    expect(coreOpt1).toHaveClass("active");
+    expect(coreOpt0).not.toHaveClass("active");
+    expect(invoke).toHaveBeenCalledWith("inject_item_build", {
+      championId: 103,
+      coreIndex: 1,
+      finalIndex: 0,
+    });
+
+    // Click Final Option 2 (index 1: with item 4629 Cosmic Drive)
+    await act(async () => {
+      fireEvent.click(finalOpt1);
+    });
+
+    expect(finalOpt1).toHaveClass("active");
+    expect(finalOpt0).not.toHaveClass("active");
+    expect(invoke).toHaveBeenCalledWith("inject_item_build", {
+      championId: 103,
+      coreIndex: 1,
+      finalIndex: 1,
+    });
+
+    // 2. Draft Lock-in: Confirm champion Ahri (103)
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+
+    // Choices MUST persist across lock-in!
+    expect(coreOpt1).toHaveClass("active");
+    expect(finalOpt1).toHaveClass("active");
   });
 
 });

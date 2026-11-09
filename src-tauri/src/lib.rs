@@ -117,6 +117,33 @@ async fn inject_summoner_spells(
     Ok(())
 }
 
+/// Tauri command to immediately update and re-inject item sets into the LoL client shop.
+#[tauri::command]
+async fn inject_item_build(
+    champion_id: i32,
+    core_index: Option<usize>,
+    final_index: Option<usize>,
+) -> Result<(), String> {
+    if let Some(idx) = core_index {
+        lcu_injector::set_selected_core_build(champion_id, idx);
+    }
+    if let Some(idx) = final_index {
+        lcu_injector::set_selected_final_build(champion_id, idx);
+    }
+
+    let conn = lcu_connector::LcuConnection::connect()
+        .map_err(|e| format!("Não foi possível conectar ao cliente do LoL: {}", e))?;
+    let summoner = conn
+        .get_current_summoner()
+        .await
+        .map_err(|e| format!("Falha ao obter invocador: {}", e))?;
+
+    let client = reqwest::Client::new();
+    let build = build_provider::get_recommended_build(&client, champion_id, 420).await?;
+
+    lcu_injector::inject_item_sets(&conn, summoner.summoner_id, &build).await
+}
+
 /// Tauri command to sync user preferences from the frontend to the backend engine.
 #[tauri::command]
 fn sync_user_preferences(preferences: lcu_injector::UserPreferences) {
@@ -134,7 +161,8 @@ pub fn run() {
             get_summoner_status,
             sync_user_preferences,
             inject_summoner_spells,
-            inject_rune_page
+            inject_rune_page,
+            inject_item_build
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();

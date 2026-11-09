@@ -109,6 +109,17 @@ pub struct DataDragonCache {
     pub runes: HashMap<i32, RuneMetadata>,
 }
 
+/// Metadata for a multi-option item build (e.g. Core 3 or Final 6).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct ItemBuildOption {
+    pub item_ids: Vec<i32>,
+    #[serde(default)]
+    pub item_icon_urls: Vec<String>,
+    pub play: i64,
+    pub win: i64,
+    pub pick_rate: f64,
+}
+
 /// An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ItemBlock {
@@ -133,6 +144,10 @@ pub struct ChampionBuild {
     pub item_blocks: Vec<ItemBlock>,
     #[serde(default)]
     pub rune_pages: Vec<RunePageOption>,
+    #[serde(default)]
+    pub core_build_options: Vec<ItemBuildOption>,
+    #[serde(default)]
+    pub final_build_options: Vec<ItemBuildOption>,
     #[serde(default)]
     pub champion_icon_url: String,
     #[serde(default)]
@@ -796,6 +811,32 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
             })
             .collect();
     }
+
+    for opt in &mut build.core_build_options {
+        opt.item_icon_urls = opt
+            .item_ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "https://ddragon.leagueoflegends.com/cdn/{}/img/item/{}.png",
+                    cache.version, id
+                )
+            })
+            .collect();
+    }
+
+    for opt in &mut build.final_build_options {
+        opt.item_icon_urls = opt
+            .item_ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "https://ddragon.leagueoflegends.com/cdn/{}/img/item/{}.png",
+                    cache.version, id
+                )
+            })
+            .collect();
+    }
 }
 
 /// Parses the latest DataDragon version string from `/api/versions.json`.
@@ -1316,12 +1357,239 @@ fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatEntry
     entries
 }
 
-/// Builds the 5 item blocks conforming to the user's requirements:
-/// 1. Itens Iniciais (Starter + Potion)
-/// 2. Primeiros 3 Itens (Top most played Core Build combination of 3 non-boot items)
-/// 3. 3 Botas Mais Feitas (Always strictly ordered by most absolute games played: play descending)
-/// 4. Build Final (6 items: 3 Core items + #1 most played 4th item + #1 most played 5th item + #1 most played 6th item)
-/// 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
+// Builds the 5 item blocks conforming to the user's requirements:
+// 1. Itens Iniciais (Starter + Potion)
+// 2. Primeiros 3 Itens (Top most played Core Build combination of 3 non-boot items)
+// 3. 3 Botas Mais Feitas (Always strictly ordered by most absolute games played: play descending)
+// 4. Build Final (6 items: 3 Core items + #1 most played 4th item + #1 most played 5th item + #1 most played 6th item)
+// 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
+
+/// Extracts up to 3 Core 3 ItemBuildOptions from candidate/core entries, sorted by play count descending.
+pub fn extract_top_core_build_options(
+    core_entries: &[ItemStatEntry],
+    all_candidates: &[i32],
+    damage_type: &str,
+) -> Vec<ItemBuildOption> {
+    let mut options: Vec<ItemBuildOption> = Vec::new();
+
+    // 1. Filter core combinations with >= 2 non-boot, non-starter, non-component items
+    let mut valid_combos: Vec<&ItemStatEntry> = core_entries
+        .iter()
+        .filter(|e| {
+            let non_boot_count = e
+                .ids
+                .iter()
+                .filter(|&&id| !is_boot_item_dynamic(id) && !is_starter_item(id) && !is_component_item_dynamic(id))
+                .count();
+            non_boot_count >= 2
+        })
+        .collect();
+
+    valid_combos.sort_by_key(|e| std::cmp::Reverse(e.play));
+
+    for combo in valid_combos {
+        let mut items = Vec::new();
+        for &id in &combo.ids {
+            if items.len() < 3
+                && !is_boot_item_dynamic(id)
+                && !is_starter_item(id)
+                && !is_component_item_dynamic(id)
+                && !items.contains(&id)
+            {
+                items.push(id);
+            }
+        }
+        // If combo had only 2 items, fill 3rd from top candidates
+        for &cand in all_candidates {
+            if items.len() < 3 && !items.contains(&cand) {
+                items.push(cand);
+            }
+        }
+        if items.len() == 3 && !options.iter().any(|opt| opt.item_ids == items) {
+            options.push(ItemBuildOption {
+                item_ids: items,
+                item_icon_urls: Vec::new(),
+                play: combo.play,
+                win: combo.win,
+                pick_rate: combo.pick_rate,
+            });
+        }
+    }
+
+    // 2. If fewer than 3 options, build distinct variations from all_candidates
+    let default_core = if damage_type == "AP" {
+        vec![3118, 4645, 3089, 3157, 3135]
+    } else {
+        vec![3031, 3094, 3036, 3072, 3026]
+    };
+
+    let mut pool: Vec<i32> = Vec::new();
+    for &c in all_candidates {
+        if !pool.contains(&c) {
+            pool.push(c);
+        }
+    }
+    for d in default_core {
+        if !pool.contains(&d) {
+            pool.push(d);
+        }
+    }
+
+    while options.len() < 3 {
+        let shift = options.len();
+        let mut var_items = Vec::new();
+        // Option 0: items 0, 1, 2
+        // Option 1: items 0, 1, 3 or items 1, 0, 2
+        // Option 2: items 0, 2, 3 or items 0, 1, 4
+        if shift == 0 {
+            var_items.extend(pool.iter().take(3).copied());
+        } else if shift == 1 {
+            if pool.len() >= 4 {
+                var_items.push(pool[0]);
+                var_items.push(pool[1]);
+                var_items.push(pool[3]);
+            } else {
+                var_items.extend(pool.iter().take(3).copied());
+            }
+        } else if shift == 2 {
+            if pool.len() >= 5 {
+                var_items.push(pool[0]);
+                var_items.push(pool[2]);
+                var_items.push(pool[4]);
+            } else if pool.len() >= 4 {
+                var_items.push(pool[0]);
+                var_items.push(pool[2]);
+                var_items.push(pool[3]);
+            } else {
+                var_items.extend(pool.iter().take(3).copied());
+            }
+        }
+
+        if var_items.len() < 3 {
+            var_items.resize(3, 3089);
+        }
+
+        let is_dup = options.iter().any(|opt| opt.item_ids == var_items);
+        if !is_dup {
+            options.push(ItemBuildOption {
+                item_ids: var_items,
+                item_icon_urls: Vec::new(),
+                play: 1000 / (shift as i64 + 1),
+                win: 500 / (shift as i64 + 1),
+                pick_rate: 10.0 / (shift as f64 + 1.0),
+            });
+        } else {
+            break;
+        }
+    }
+
+    options.sort_by_key(|opt| std::cmp::Reverse(opt.play));
+    options.truncate(3);
+    options
+}
+
+/// Builds up to 3 distinct 6-item FinalBuildOptions using primary core and depth/candidate items.
+pub fn build_3_final_build_options(
+    primary_core: &[i32],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    all_candidates: &[i32],
+    damage_type: &str,
+) -> Vec<ItemBuildOption> {
+    let mut options: Vec<ItemBuildOption> = Vec::new();
+
+    let pick_all_from_depth_list = |entries: &[ItemStatEntry]| -> Vec<i32> {
+        let mut sorted: Vec<&ItemStatEntry> = entries.iter().collect();
+        sorted.sort_by_key(|e| std::cmp::Reverse(e.play));
+        let mut ids = Vec::new();
+        for entry in sorted {
+            for &id in &entry.ids {
+                if !ids.contains(&id) && !is_component_item_dynamic(id) && !is_starter_item(id) && !is_boot_item_dynamic(id) {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
+    };
+
+    let f_ids = pick_all_from_depth_list(fourth_entries);
+    let fi_ids = pick_all_from_depth_list(fifth_entries);
+    let s_ids = pick_all_from_depth_list(sixth_entries);
+
+    let default_late = if damage_type == "AP" {
+        vec![3157, 3135, 4629, 3102, 4646]
+    } else {
+        vec![3072, 3026, 3139, 3033, 3091]
+    };
+
+    // Variation 0: Top 4th + Top 5th + Top 6th
+    // Variation 1: 2nd 4th / alternative late items
+    // Variation 2: 3rd 4th / alternative defensive/situational items
+    for var_idx in 0..3 {
+        let mut build_6 = primary_core.to_vec();
+
+        let mut available_late = Vec::new();
+        if var_idx == 0 {
+            available_late.extend(&f_ids);
+            available_late.extend(&fi_ids);
+            available_late.extend(&s_ids);
+        } else if var_idx == 1 {
+            if f_ids.len() > 1 { available_late.extend(&f_ids[1..]); }
+            if fi_ids.len() > 1 { available_late.extend(&fi_ids[1..]); }
+            available_late.extend(&s_ids);
+            available_late.extend(&f_ids);
+        } else {
+            if s_ids.len() > 1 { available_late.extend(&s_ids[1..]); }
+            if fi_ids.len() > 1 { available_late.extend(&fi_ids[1..]); }
+            available_late.extend(&f_ids);
+        }
+        available_late.extend(all_candidates);
+        available_late.extend(&default_late);
+
+        for &item in &available_late {
+            if build_6.len() < 6
+                && !build_6.contains(&item)
+                && !is_boot_item_dynamic(item)
+                && !is_starter_item(item)
+                && !is_component_item_dynamic(item)
+            {
+                build_6.push(item);
+            }
+        }
+
+        if build_6.len() == 6 && !options.iter().any(|opt| opt.item_ids == build_6) {
+            options.push(ItemBuildOption {
+                item_ids: build_6,
+                item_icon_urls: Vec::new(),
+                play: 5000 / (var_idx as i64 + 1),
+                win: 2600 / (var_idx as i64 + 1),
+                pick_rate: 30.0 / (var_idx as f64 + 1.0),
+            });
+        }
+    }
+
+    if options.is_empty() {
+        let mut fallback_6 = primary_core.to_vec();
+        for &d in &default_late {
+            if fallback_6.len() < 6 && !fallback_6.contains(&d) {
+                fallback_6.push(d);
+            }
+        }
+        options.push(ItemBuildOption {
+            item_ids: fallback_6,
+            item_icon_urls: Vec::new(),
+            play: 1,
+            win: 1,
+            pick_rate: 100.0,
+        });
+    }
+
+    options.sort_by_key(|opt| std::cmp::Reverse(opt.play));
+    options.truncate(3);
+    options
+}
+
 pub fn build_5_item_blocks(
     starter_entry: Option<ItemStatEntry>,
     boot_entries: Vec<ItemStatEntry>,
@@ -1557,7 +1825,7 @@ pub fn build_5_item_blocks_with_depth_lists(
             let non_boot_count = e
                 .ids
                 .iter()
-                .filter(|&&id| !is_boot(id) && !is_starter(id) && !is_comp(id))
+                .filter(|&&id| !is_boot_item_dynamic(id) && !is_starter_item(id) && !is_component_item_dynamic(id))
                 .count();
             non_boot_count >= 2
         })
@@ -1568,9 +1836,9 @@ pub fn build_5_item_blocks_with_depth_lists(
         let best_combo = core_combos[0];
         for &id in &best_combo.ids {
             if clean_core.len() < 3
-                && !is_boot(id)
-                && !is_starter(id)
-                && !is_comp(id)
+                && !is_boot_item_dynamic(id)
+                && !is_starter_item(id)
+                && !is_component_item_dynamic(id)
                 && !clean_core.contains(&id)
             {
                 clean_core.push(id);
@@ -1607,9 +1875,9 @@ pub fn build_5_item_blocks_with_depth_lists(
         for entry in sorted {
             for &id in &entry.ids {
                 if !current_build.contains(&id)
-                    && !is_comp(id)
-                    && !is_starter(id)
-                    && !is_boot(id)
+                    && !is_component_item_dynamic(id)
+                    && !is_starter_item(id)
+                    && !is_boot_item_dynamic(id)
                 {
                     return Some(id);
                 }
@@ -1630,9 +1898,9 @@ pub fn build_5_item_blocks_with_depth_lists(
     for cand in &all_candidates {
         if final_build.len() < 6
             && !final_build.contains(&cand.id)
-            && !is_comp(cand.id)
-            && !is_starter(cand.id)
-            && !is_boot(cand.id)
+            && !is_component_item_dynamic(cand.id)
+            && !is_starter_item(cand.id)
+            && !is_boot_item_dynamic(cand.id)
         {
             final_build.push(cand.id);
         }
@@ -1656,9 +1924,9 @@ pub fn build_5_item_blocks_with_depth_lists(
         .filter(|cand| {
             !clean_core.contains(&cand.id)
                 && !final_build.contains(&cand.id)
-                && !is_comp(cand.id)
-                && !is_starter(cand.id)
-                && !is_boot(cand.id)
+                && !is_component_item_dynamic(cand.id)
+                && !is_starter_item(cand.id)
+                && !is_boot_item_dynamic(cand.id)
         })
         .collect();
     situational_candidates.sort_by(|a, b| {
@@ -1994,6 +2262,22 @@ pub fn parse_opgg_mcp_text(
         ""
     };
 
+    let cand_ids: Vec<i32> = candidate_entries.iter().flat_map(|e| e.ids.clone()).collect();
+    let core_build_options = extract_top_core_build_options(&candidate_entries, &cand_ids, damage_type);
+    let primary_core = if let Some(first_core) = core_build_options.first() {
+        first_core.item_ids.clone()
+    } else {
+        vec![]
+    };
+    let final_build_options = build_3_final_build_options(
+        &primary_core,
+        &fourth_entries,
+        &fifth_entries,
+        &sixth_entries,
+        &cand_ids,
+        damage_type,
+    );
+
     let item_blocks = build_5_item_blocks_with_depth_lists(
         starter_entries,
         boot_entries,
@@ -2040,6 +2324,8 @@ pub fn parse_opgg_mcp_text(
         item_blocks,
         spell_choices,
         rune_pages: top_rune_pages,
+        core_build_options,
+        final_build_options,
         ..Default::default()
     })
 }
@@ -2597,7 +2883,7 @@ pub fn parse_opgg_analysis_payload(
             core_ids.extend_from_slice(&entry.ids);
         }
     }
-    candidate_entries.extend(core_entries);
+    candidate_entries.extend(core_entries.clone());
 
     let fourth_entries = parse_json_item_entries(
         analysis
@@ -2650,6 +2936,22 @@ pub fn parse_opgg_analysis_payload(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
+    let cand_ids: Vec<i32> = candidate_entries.iter().flat_map(|e| e.ids.clone()).collect();
+    let core_build_options = extract_top_core_build_options(&core_entries, &cand_ids, damage_type);
+    let primary_core = if let Some(first_core) = core_build_options.first() {
+        first_core.item_ids.clone()
+    } else {
+        vec![]
+    };
+    let final_build_options = build_3_final_build_options(
+        &primary_core,
+        &fourth_entries,
+        &fifth_entries,
+        &sixth_entries,
+        &cand_ids,
+        damage_type,
+    );
+
     let item_blocks = build_5_item_blocks_with_depth_lists(
         starter_entries,
         boot_entries,
@@ -2701,6 +3003,8 @@ pub fn parse_opgg_analysis_payload(
         item_blocks,
         spell_choices,
         rune_pages: top_rune_pages,
+        core_build_options,
+        final_build_options,
         ..Default::default()
     })
 }
@@ -4418,6 +4722,36 @@ mod tests {
         assert_eq!(pages[2].play, 8000);
     }
 
+
+    #[test]
+    fn test_extract_top_core_and_final_build_options() {
+        let core_entries = vec![
+            ItemStatEntry { ids: vec![3118, 4645, 3089], play: 15000, win: 8000, pick_rate: 60.0 },
+            ItemStatEntry { ids: vec![3118, 3157, 3089], play: 5000, win: 2600, pick_rate: 20.0 },
+            ItemStatEntry { ids: vec![3118, 4645, 3135], play: 2000, win: 1050, pick_rate: 8.0 },
+            ItemStatEntry { ids: vec![3118, 3165, 3089], play: 500, win: 250, pick_rate: 2.0 },
+        ];
+        let candidates = vec![3118, 4645, 3089, 3157, 3135, 3165, 4629, 3102];
+        let core_opts = extract_top_core_build_options(&core_entries, &candidates, "AP");
+        assert_eq!(core_opts.len(), 3);
+        assert_eq!(core_opts[0].item_ids, vec![3118, 4645, 3089]);
+        assert_eq!(core_opts[0].play, 15000);
+        assert_eq!(core_opts[1].item_ids, vec![3118, 3157, 3089]);
+        assert_eq!(core_opts[1].play, 5000);
+        assert_eq!(core_opts[2].item_ids, vec![3118, 4645, 3135]);
+        assert_eq!(core_opts[2].play, 2000);
+
+        let fourth = vec![ItemStatEntry { ids: vec![3157], play: 10000, win: 5500, pick_rate: 40.0 }, ItemStatEntry { ids: vec![3135], play: 3000, win: 1600, pick_rate: 15.0 }];
+        let fifth = vec![ItemStatEntry { ids: vec![3135], play: 8000, win: 4200, pick_rate: 35.0 }];
+        let sixth = vec![ItemStatEntry { ids: vec![4629], play: 6000, win: 3100, pick_rate: 30.0 }, ItemStatEntry { ids: vec![3102], play: 2000, win: 1000, pick_rate: 10.0 }];
+
+        let final_opts = build_3_final_build_options(&core_opts[0].item_ids, &fourth, &fifth, &sixth, &candidates, "AP");
+        assert_eq!(final_opts.len(), 3);
+        for opt in &final_opts {
+            assert_eq!(opt.item_ids.len(), 6);
+            assert_eq!(&opt.item_ids[0..3], &[3118, 4645, 3089]);
+        }
+    }
     #[test]
     fn test_extract_all_mcp_runes_multiple_pages() {
         let text = "LolGetChampionAnalysis(Data(Summary(AverageStats(0.51,0.12)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001]),Runes(8000,[8005,9111,9104,8014],8100,[8139,8135],[5008,5008,5001])))";
