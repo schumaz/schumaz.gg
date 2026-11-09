@@ -30,7 +30,10 @@ pub fn set_dynamic_item_classifications(cache: ItemClassificationCache) {
 }
 
 pub fn get_dynamic_item_classifications() -> Option<ItemClassificationCache> {
-    DYNAMIC_ITEM_CLASSIFICATIONS.read().ok().and_then(|g| g.clone())
+    DYNAMIC_ITEM_CLASSIFICATIONS
+        .read()
+        .ok()
+        .and_then(|g| g.clone())
 }
 
 /// Dynamically checks whether an item is a boot using Riot DataDragon tags or fallback catalog.
@@ -377,7 +380,10 @@ pub async fn resolve_champion_most_played_lane(
     }
 
     // 2. Fetch from OP.GG
-    let mut url = format!("{}/{}/champions/ranked?tier={}", OPGG_REST_API_BASE, region, tier);
+    let mut url = format!(
+        "{}/{}/champions/ranked?tier={}",
+        OPGG_REST_API_BASE, region, tier
+    );
     if let Some(v) = version
         && !v.trim().is_empty()
     {
@@ -391,7 +397,10 @@ pub async fn resolve_champion_most_played_lane(
         .map_err(|e| format!("Failed to request champions/ranked from OP.GG: {}", e))?;
 
     if !res.status().is_success() {
-        return Err(format!("OP.GG champions/ranked returned status: {}", res.status()));
+        return Err(format!(
+            "OP.GG champions/ranked returned status: {}",
+            res.status()
+        ));
     }
 
     let json_body: serde_json::Value = res
@@ -465,7 +474,8 @@ pub fn parse_iso8601_to_unix(iso_str: &str) -> Option<u64> {
     }
     total_days += (day - 1) as i64;
 
-    let total_secs_utc = total_days * 86400 + (hour as i64) * 3600 + (min as i64) * 60 + (sec as i64) - offset_secs;
+    let total_secs_utc =
+        total_days * 86400 + (hour as i64) * 3600 + (min as i64) * 60 + (sec as i64) - offset_secs;
     if total_secs_utc >= 0 {
         Some(total_secs_utc as u64)
     } else {
@@ -728,7 +738,7 @@ pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
         ),
         5007 => (
             "Aceleração de Habilidade",
-            "perk-images/StatMods/StatModsCDRIcon.png",
+            "perk-images/StatMods/StatModsCDRScalingIcon.png",
         ),
         5002 => ("Armadura", "perk-images/StatMods/StatModsArmorIcon.png"),
         5003 => (
@@ -865,14 +875,28 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
     if build.spell_choices.is_empty() {
         let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
         let non_primary = if is_jungle {
-            if build.spell1_id == 11 { build.spell2_id } else { build.spell1_id }
+            if build.spell1_id == 11 {
+                build.spell2_id
+            } else {
+                build.spell1_id
+            }
         } else {
-            if build.spell1_id == 4 { build.spell2_id } else { build.spell1_id }
+            if build.spell1_id == 4 {
+                build.spell2_id
+            } else {
+                build.spell1_id
+            }
         };
         let second_alt = if is_jungle {
             if non_primary == 4 { 6 } else { 4 }
         } else {
-            if non_primary == 21 { 3 } else if non_primary == 14 { 12 } else { 14 }
+            if non_primary == 21 {
+                3
+            } else if non_primary == 14 {
+                12
+            } else {
+                14
+            }
         };
         build.spell_choices = vec![
             get_spell_metadata(&cache.version, non_primary),
@@ -982,7 +1006,9 @@ pub fn parse_all_ddragon_champions(
 }
 
 /// Parses DataDragon `item.json` into dynamic classifications (boots, components, completed items).
-pub fn parse_ddragon_item_classifications(items_json: &serde_json::Value) -> ItemClassificationCache {
+pub fn parse_ddragon_item_classifications(
+    items_json: &serde_json::Value,
+) -> ItemClassificationCache {
     let mut boots = std::collections::HashSet::new();
     let mut components = std::collections::HashSet::new();
     let mut completed = std::collections::HashSet::new();
@@ -1021,9 +1047,7 @@ pub fn parse_ddragon_item_classifications(items_json: &serde_json::Value) -> Ite
                     .and_then(|v| v.as_i64())
                     .map(|v| v as i32);
 
-                if !in_store
-                    && let Some(base_id) = special_recipe
-                {
+                if !in_store && let Some(base_id) = special_recipe {
                     evolved_fallbacks.insert(id, base_id);
                 }
 
@@ -1261,7 +1285,14 @@ impl ItemStatEntry {
 pub fn extract_all_core_items_from_text(text: &str) -> Vec<ItemStatEntry> {
     let mut entries = Vec::new();
     let mut search_slice = text;
-    let prefixes = ["CoreItems(", "FourthItem(", "FifthItem(", "SixthItem(", "Boots(", "Boot("];
+    let prefixes = [
+        "CoreItems(",
+        "FourthItem(",
+        "FifthItem(",
+        "SixthItem(",
+        "Boots(",
+        "Boot(",
+    ];
     loop {
         let next_match = prefixes
             .iter()
@@ -1391,7 +1422,11 @@ pub fn extract_mcp_grouped_item_lists(text: &str) -> Vec<(String, Vec<ItemStatEn
     } else {
         let default_names = ["fourth_items", "fifth_items", "sixth_items", "last_items"];
         for (idx, items) in groups.into_iter().enumerate() {
-            let name = default_names.get(idx).copied().unwrap_or("other").to_string();
+            let name = default_names
+                .get(idx)
+                .copied()
+                .unwrap_or("other")
+                .to_string();
             result.push((name, items));
         }
     }
@@ -1490,7 +1525,11 @@ pub fn extract_top_core_build_options(
             let non_boot_count = e
                 .ids
                 .iter()
-                .filter(|&&id| !is_boot_item_dynamic(id) && !is_starter_item(id) && !is_component_item_dynamic(id))
+                .filter(|&&id| {
+                    !is_boot_item_dynamic(id)
+                        && !is_starter_item(id)
+                        && !is_component_item_dynamic(id)
+                })
                 .count();
             non_boot_count >= 2
         })
@@ -1501,7 +1540,11 @@ pub fn extract_top_core_build_options(
     for combo in valid_combos {
         let mut items = Vec::new();
         for &id in &combo.ids {
-            let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
+            let norm_id = if id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(id)
+            };
             if items.len() < 3
                 && !is_boot_item_dynamic(norm_id)
                 && !is_starter_item(norm_id)
@@ -1513,7 +1556,11 @@ pub fn extract_top_core_build_options(
         }
         // If combo had only 2 items, fill 3rd from top candidates
         for &cand in all_candidates {
-            let norm_cand = if cand == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(cand) };
+            let norm_cand = if cand == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(cand)
+            };
             if items.len() < 3 && !items.contains(&norm_cand) {
                 items.push(norm_cand);
             }
@@ -1538,7 +1585,11 @@ pub fn extract_top_core_build_options(
 
     let mut pool: Vec<i32> = Vec::new();
     for &c in all_candidates {
-        let norm_c = if c == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(c) };
+        let norm_c = if c == 3070 {
+            tear_upgrade
+        } else {
+            normalize_tear_item_dynamic(c)
+        };
         if !pool.contains(&norm_c) {
             pool.push(norm_c);
         }
@@ -1626,8 +1677,16 @@ pub fn build_3_final_build_options(
         let mut ids = Vec::new();
         for entry in sorted {
             for &id in &entry.ids {
-                let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
-                if !ids.contains(&norm_id) && !is_component_item_dynamic(norm_id) && !is_starter_item(norm_id) && !is_boot_item_dynamic(norm_id) {
+                let norm_id = if id == 3070 {
+                    tear_upgrade
+                } else {
+                    normalize_tear_item_dynamic(id)
+                };
+                if !ids.contains(&norm_id)
+                    && !is_component_item_dynamic(norm_id)
+                    && !is_starter_item(norm_id)
+                    && !is_boot_item_dynamic(norm_id)
+                {
                     ids.push(norm_id);
                 }
             }
@@ -1657,20 +1716,32 @@ pub fn build_3_final_build_options(
             available_late.extend(&fi_ids);
             available_late.extend(&s_ids);
         } else if var_idx == 1 {
-            if f_ids.len() > 1 { available_late.extend(&f_ids[1..]); }
-            if fi_ids.len() > 1 { available_late.extend(&fi_ids[1..]); }
+            if f_ids.len() > 1 {
+                available_late.extend(&f_ids[1..]);
+            }
+            if fi_ids.len() > 1 {
+                available_late.extend(&fi_ids[1..]);
+            }
             available_late.extend(&s_ids);
             available_late.extend(&f_ids);
         } else {
-            if s_ids.len() > 1 { available_late.extend(&s_ids[1..]); }
-            if fi_ids.len() > 1 { available_late.extend(&fi_ids[1..]); }
+            if s_ids.len() > 1 {
+                available_late.extend(&s_ids[1..]);
+            }
+            if fi_ids.len() > 1 {
+                available_late.extend(&fi_ids[1..]);
+            }
             available_late.extend(&f_ids);
         }
         available_late.extend(all_candidates);
         available_late.extend(&default_late);
 
         for &item in &available_late {
-            let norm_item = if item == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(item) };
+            let norm_item = if item == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(item)
+            };
             if build_6.len() < 6
                 && !build_6.contains(&norm_item)
                 && !is_boot_item_dynamic(norm_item)
@@ -1807,13 +1878,10 @@ pub fn build_5_item_blocks_with_depth_lists(
             .map(|(id, (p, idx))| (id, p, idx))
             .collect();
         sorted_starters.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-        let best_starter = sorted_starters.first().map(|(id, _, _)| *id).unwrap_or_else(|| {
-            if damage_type == "AP" {
-                1056
-            } else {
-                1055
-            }
-        });
+        let best_starter = sorted_starters
+            .first()
+            .map(|(id, _, _)| *id)
+            .unwrap_or_else(|| if damage_type == "AP" { 1056 } else { 1055 });
         if best_starter == 2033 {
             vec![2033]
         } else {
@@ -1832,15 +1900,11 @@ pub fn build_5_item_blocks_with_depth_lists(
         .flat_map(|e| e.ids.iter().copied())
         .collect();
 
-    let is_boot = |id: i32| -> bool {
-        known_boots.contains(&id) || is_boot_item_dynamic(id)
-    };
+    let is_boot = |id: i32| -> bool { known_boots.contains(&id) || is_boot_item_dynamic(id) };
     let is_starter = |id: i32| -> bool {
         known_starters.contains(&id) || starter_ids.contains(&id) || is_starter_item(id)
     };
-    let is_comp = |id: i32| -> bool {
-        is_component_item_dynamic(id)
-    };
+    let is_comp = |id: i32| -> bool { is_component_item_dynamic(id) };
 
     // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
     let mut boot_map: HashMap<i32, (i64, usize)> = HashMap::new();
@@ -1917,7 +1981,11 @@ pub fn build_5_item_blocks_with_depth_lists(
         .chain(sixth_entries.iter())
     {
         for &id in &entry.ids {
-            let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
+            let norm_id = if id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(id)
+            };
             if !is_boot(norm_id) && !is_starter(norm_id) && !is_comp(norm_id) {
                 let entry_play = entry.play.max(1);
                 let slot = item_map.entry(norm_id).or_insert_with(|| {
@@ -1958,7 +2026,11 @@ pub fn build_5_item_blocks_with_depth_lists(
             let non_boot_count = e
                 .ids
                 .iter()
-                .filter(|&&id| !is_boot_item_dynamic(id) && !is_starter_item(id) && !is_component_item_dynamic(id))
+                .filter(|&&id| {
+                    !is_boot_item_dynamic(id)
+                        && !is_starter_item(id)
+                        && !is_component_item_dynamic(id)
+                })
                 .count();
             non_boot_count >= 2
         })
@@ -1968,7 +2040,11 @@ pub fn build_5_item_blocks_with_depth_lists(
         core_combos.sort_by_key(|a| std::cmp::Reverse(a.play));
         let best_combo = core_combos[0];
         for &id in &best_combo.ids {
-            let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
+            let norm_id = if id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(id)
+            };
             if clean_core.len() < 3
                 && !is_boot_item_dynamic(norm_id)
                 && !is_starter_item(norm_id)
@@ -1982,7 +2058,11 @@ pub fn build_5_item_blocks_with_depth_lists(
 
     // Fill up to 3 core items from the top sorted candidates if needed
     for cand in &all_candidates {
-        let norm_id = if cand.id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(cand.id) };
+        let norm_id = if cand.id == 3070 {
+            tear_upgrade
+        } else {
+            normalize_tear_item_dynamic(cand.id)
+        };
         if clean_core.len() < 3 && !clean_core.contains(&norm_id) {
             clean_core.push(norm_id);
         }
@@ -2004,23 +2084,28 @@ pub fn build_5_item_blocks_with_depth_lists(
     // followed by the top valid non-duplicate item from fourth_items, fifth_items, and sixth_items.
     let mut final_build: Vec<i32> = clean_core.clone();
 
-    let pick_top_from_depth_list = |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
-        let mut sorted: Vec<&ItemStatEntry> = entries.iter().collect();
-        sorted.sort_by_key(|e| std::cmp::Reverse(e.play));
-        for entry in sorted {
-            for &id in &entry.ids {
-                let norm_id = if id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(id) };
-                if !current_build.contains(&norm_id)
-                    && !is_component_item_dynamic(norm_id)
-                    && !is_starter_item(norm_id)
-                    && !is_boot_item_dynamic(norm_id)
-                {
-                    return Some(norm_id);
+    let pick_top_from_depth_list =
+        |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
+            let mut sorted: Vec<&ItemStatEntry> = entries.iter().collect();
+            sorted.sort_by_key(|e| std::cmp::Reverse(e.play));
+            for entry in sorted {
+                for &id in &entry.ids {
+                    let norm_id = if id == 3070 {
+                        tear_upgrade
+                    } else {
+                        normalize_tear_item_dynamic(id)
+                    };
+                    if !current_build.contains(&norm_id)
+                        && !is_component_item_dynamic(norm_id)
+                        && !is_starter_item(norm_id)
+                        && !is_boot_item_dynamic(norm_id)
+                    {
+                        return Some(norm_id);
+                    }
                 }
             }
-        }
-        None
-    };
+            None
+        };
 
     for depth_list in [&fourth_entries, &fifth_entries, &sixth_entries] {
         if final_build.len() < 6
@@ -2058,7 +2143,11 @@ pub fn build_5_item_blocks_with_depth_lists(
     let mut situational_candidates: Vec<&ItemAggregate> = all_candidates
         .iter()
         .filter(|cand| {
-            let norm_id = if cand.id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(cand.id) };
+            let norm_id = if cand.id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(cand.id)
+            };
             !clean_core.contains(&norm_id)
                 && !final_build.contains(&norm_id)
                 && !is_component_item_dynamic(norm_id)
@@ -2074,8 +2163,15 @@ pub fn build_5_item_blocks_with_depth_lists(
 
     let mut situational_items: Vec<i32> = Vec::new();
     for c in situational_candidates {
-        let norm_id = if c.id == 3070 { tear_upgrade } else { normalize_tear_item_dynamic(c.id) };
-        if !situational_items.contains(&norm_id) && !clean_core.contains(&norm_id) && !final_build.contains(&norm_id) {
+        let norm_id = if c.id == 3070 {
+            tear_upgrade
+        } else {
+            normalize_tear_item_dynamic(c.id)
+        };
+        if !situational_items.contains(&norm_id)
+            && !clean_core.contains(&norm_id)
+            && !final_build.contains(&norm_id)
+        {
             situational_items.push(norm_id);
         }
         if situational_items.len() == 6 {
@@ -2183,11 +2279,23 @@ pub fn parse_opgg_mcp_text(
                 if float_candidates.len() >= 2 {
                     let w = float_candidates[0];
                     let p = float_candidates[1];
-                    win_rate = if w <= 1.0 { (w * 1000.0).round() / 10.0 } else { w };
-                    pick_rate = if p <= 1.0 { (p * 1000.0).round() / 10.0 } else { p };
+                    win_rate = if w <= 1.0 {
+                        (w * 1000.0).round() / 10.0
+                    } else {
+                        w
+                    };
+                    pick_rate = if p <= 1.0 {
+                        (p * 1000.0).round() / 10.0
+                    } else {
+                        p
+                    };
                 } else if float_candidates.len() == 1 {
                     let w = float_candidates[0];
-                    win_rate = if w <= 1.0 { (w * 1000.0).round() / 10.0 } else { w };
+                    win_rate = if w <= 1.0 {
+                        (w * 1000.0).round() / 10.0
+                    } else {
+                        w
+                    };
                 }
             }
         }
@@ -2426,8 +2534,12 @@ pub fn parse_opgg_mcp_text(
     normalize_entries(&mut fifth_entries);
     normalize_entries(&mut sixth_entries);
 
-    let cand_ids: Vec<i32> = candidate_entries.iter().flat_map(|e| e.ids.clone()).collect();
-    let core_build_options = extract_top_core_build_options(&candidate_entries, &cand_ids, damage_type);
+    let cand_ids: Vec<i32> = candidate_entries
+        .iter()
+        .flat_map(|e| e.ids.clone())
+        .collect();
+    let core_build_options =
+        extract_top_core_build_options(&candidate_entries, &cand_ids, damage_type);
     let primary_core = if let Some(first_core) = core_build_options.first() {
         first_core.item_ids.clone()
     } else {
@@ -2453,9 +2565,11 @@ pub fn parse_opgg_mcp_text(
         position,
     );
 
-    let spell_choices = vec![
-        SpellMetadata { id: spell2_id, name: String::new(), icon_url: String::new() },
-    ];
+    let spell_choices = vec![SpellMetadata {
+        id: spell2_id,
+        name: String::new(),
+        icon_url: String::new(),
+    }];
 
     let mut top_rune_pages = extract_all_mcp_runes(text);
     if top_rune_pages.is_empty() {
@@ -2498,7 +2612,10 @@ pub fn parse_opgg_mcp_text(
 /// (Option 1 = most used, Option 2 = second most used).
 /// For Jungle, Smite (11) is guaranteed and spell_choices provides the top 2 companion spells (e.g. Flash vs Ghost, or Ignite vs Flash).
 /// For Laners, Flash (4) is anchor and spell_choices provides the top 2 secondary spells (e.g. Barrier vs Exhaust).
-pub fn extract_summoner_spell_choices(analysis: &serde_json::Value, is_jungle: bool) -> ((i32, i32), Vec<i32>) {
+pub fn extract_summoner_spell_choices(
+    analysis: &serde_json::Value,
+    is_jungle: bool,
+) -> ((i32, i32), Vec<i32>) {
     let mut combo_entries: Vec<(i32, i32, i64)> = Vec::new();
 
     if let Some(arr) = analysis.get("summoner_spells").and_then(|v| v.as_array()) {
@@ -2512,7 +2629,9 @@ pub fn extract_summoner_spell_choices(analysis: &serde_json::Value, is_jungle: b
                 if s1 > 0 && s2 > 0 {
                     combo_entries.push((s1, s2, play));
                 }
-            } else if let Some(ids) = item.as_array() && ids.len() >= 2 {
+            } else if let Some(ids) = item.as_array()
+                && ids.len() >= 2
+            {
                 let s1 = ids[0].as_i64().unwrap_or(0) as i32;
                 let s2 = ids[1].as_i64().unwrap_or(0) as i32;
                 if s1 > 0 && s2 > 0 {
@@ -2558,7 +2677,11 @@ pub fn extract_summoner_spell_choices(analysis: &serde_json::Value, is_jungle: b
             }
         }
         if secondary_choices.is_empty() {
-            let other = if top_combo.0 == 11 { top_combo.1 } else { top_combo.0 };
+            let other = if top_combo.0 == 11 {
+                top_combo.1
+            } else {
+                top_combo.0
+            };
             if other != 11 && other > 0 {
                 secondary_choices.push(other);
             }
@@ -2602,7 +2725,10 @@ pub fn extract_summoner_spell_choices(analysis: &serde_json::Value, is_jungle: b
         // Fallbacks if only 1 combo was played in data
         let default_alts = [21, 3, 14, 12, 7, 6, 1]; // Barrier, Exhaust, Ignite, Teleport, Heal, Ghost, Cleanse
         for fallback in default_alts {
-            if secondary_choices.len() < 2 && !secondary_choices.contains(&fallback) && fallback != primary_spell {
+            if secondary_choices.len() < 2
+                && !secondary_choices.contains(&fallback)
+                && fallback != primary_spell
+            {
                 secondary_choices.push(fallback);
             }
         }
@@ -2683,7 +2809,10 @@ pub fn parse_single_rune_entry(entry: &serde_json::Value) -> Option<RunePageOpti
 
     let play = entry.get("play").and_then(|v| v.as_i64()).unwrap_or(0);
     let win = entry.get("win").and_then(|v| v.as_i64()).unwrap_or(0);
-    let pick_rate = entry.get("pick_rate").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let pick_rate = entry
+        .get("pick_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
 
     Some(RunePageOption {
         primary_style_id,
@@ -2700,7 +2829,8 @@ pub fn parse_single_rune_entry(entry: &serde_json::Value) -> Option<RunePageOpti
 pub fn extract_top_rune_pages(analysis: &serde_json::Value) -> Vec<RunePageOption> {
     let mut pages: Vec<RunePageOption> = Vec::new();
 
-    let runes_val = analysis.get("runes")
+    let runes_val = analysis
+        .get("runes")
         .or_else(|| analysis.get("rune_pages"))
         .or_else(|| analysis.pointer("/data/runes"))
         .or_else(|| analysis.pointer("/data/rune_pages"));
@@ -2722,9 +2852,7 @@ pub fn extract_top_rune_pages(analysis: &serde_json::Value) -> Vec<RunePageOptio
                     }
                 }
             }
-            if !has_numeric_keys
-                && let Some(page) = parse_single_rune_entry(val)
-            {
+            if !has_numeric_keys && let Some(page) = parse_single_rune_entry(val) {
                 pages.push(page);
             }
         }
@@ -2761,7 +2889,8 @@ pub fn extract_all_mcp_runes(text: &str) -> Vec<RunePageOption> {
         if let Some(comma1) = after_runes.find(',')
             && let Ok(primary_style_id) = after_runes[..comma1].trim().parse::<i32>()
             && let (Some(p_open), Some(p_close)) = (after_runes.find('['), after_runes.find(']'))
-            && p_open < p_close && p_open > comma1
+            && p_open < p_close
+            && p_open > comma1
         {
             let primary_perks: Vec<i32> = after_runes[p_open + 1..p_close]
                 .split(',')
@@ -2769,13 +2898,15 @@ pub fn extract_all_mcp_runes(text: &str) -> Vec<RunePageOption> {
                 .collect();
 
             let after_primary = &after_runes[p_close + 1..];
-            let after_primary_trim = after_primary
-                .trim_start_matches(|c: char| c == ',' || c.is_whitespace());
+            let after_primary_trim =
+                after_primary.trim_start_matches(|c: char| c == ',' || c.is_whitespace());
 
             if let Some(comma2) = after_primary_trim.find(',')
                 && let Ok(sub_style_id) = after_primary_trim[..comma2].trim().parse::<i32>()
-                && let (Some(s_open), Some(s_close)) = (after_primary_trim.find('['), after_primary_trim.find(']'))
-                && s_open < s_close && s_open > comma2
+                && let (Some(s_open), Some(s_close)) =
+                    (after_primary_trim.find('['), after_primary_trim.find(']'))
+                && s_open < s_close
+                && s_open > comma2
             {
                 let secondary_perks: Vec<i32> = after_primary_trim[s_open + 1..s_close]
                     .split(',')
@@ -2838,11 +2969,17 @@ pub fn extract_most_used_summoner_spells(analysis: &serde_json::Value) -> (i32, 
                 let s2 = ids[1].as_i64().unwrap_or(0) as i32;
                 let play = item.get("play").and_then(|p| p.as_i64()).unwrap_or(1);
                 let win = item.get("win").and_then(|w| w.as_i64()).unwrap_or(0);
-                let win_rate = if play > 0 { win as f64 / play as f64 } else { 0.0 };
+                let win_rate = if play > 0 {
+                    win as f64 / play as f64
+                } else {
+                    0.0
+                };
                 if s1 > 0 && s2 > 0 {
                     entries.push((s1, s2, play, win_rate));
                 }
-            } else if let Some(ids) = item.as_array() && ids.len() >= 2 {
+            } else if let Some(ids) = item.as_array()
+                && ids.len() >= 2
+            {
                 let s1 = ids[0].as_i64().unwrap_or(0) as i32;
                 let s2 = ids[1].as_i64().unwrap_or(0) as i32;
                 if s1 > 0 && s2 > 0 {
@@ -2867,7 +3004,9 @@ pub fn extract_most_used_summoner_spells(analysis: &serde_json::Value) -> (i32, 
         return (s1, s2);
     }
 
-    if let Some(arr) = analysis.pointer("/summoner_spells/ids").and_then(|v| v.as_array())
+    if let Some(arr) = analysis
+        .pointer("/summoner_spells/ids")
+        .and_then(|v| v.as_array())
         && arr.len() >= 2
     {
         let s1 = arr[0].as_i64().unwrap_or(4) as i32;
@@ -3121,7 +3260,10 @@ pub fn parse_opgg_analysis_payload(
     normalize_entries(&mut fifth_entries);
     normalize_entries(&mut sixth_entries);
 
-    let cand_ids: Vec<i32> = candidate_entries.iter().flat_map(|e| e.ids.clone()).collect();
+    let cand_ids: Vec<i32> = candidate_entries
+        .iter()
+        .flat_map(|e| e.ids.clone())
+        .collect();
     let core_build_options = extract_top_core_build_options(&core_entries, &cand_ids, damage_type);
     let primary_core = if let Some(first_core) = core_build_options.first() {
         first_core.item_ids.clone()
@@ -3266,16 +3408,10 @@ pub async fn get_recommended_build_with_endpoint(
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-            Ok(json_res) => {
-                match parse_opgg_analysis_payload(
-                    &json_res,
-                    champion_id,
-                    champ_name,
-                ) {
-                    Ok(build) => build,
-                    Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
-                }
-            }
+            Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
+                Ok(build) => build,
+                Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+            },
             Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
         };
 
@@ -3285,7 +3421,10 @@ pub async fn get_recommended_build_with_endpoint(
 
 /// Fetches available patch versions from the OP.GG REST API.
 pub async fn fetch_opgg_versions(client: &reqwest::Client, region: &str) -> Vec<String> {
-    let url = format!("{}/{}/champions/ranked/versions", OPGG_REST_API_BASE, region);
+    let url = format!(
+        "{}/{}/champions/ranked/versions",
+        OPGG_REST_API_BASE, region
+    );
     if let Ok(res) = client.get(&url).send().await
         && let Ok(json) = res.json::<serde_json::Value>().await
         && let Some(arr) = json.get("data").and_then(|d| d.as_array())
@@ -3328,7 +3467,10 @@ pub async fn fetch_opgg_rest_champion_analysis(
         .map_err(|e| format!("REST request to OP.GG failed: {}", e))?;
 
     if !res.status().is_success() {
-        return Err(format!("OP.GG REST responded with HTTP error: {}", res.status()));
+        return Err(format!(
+            "OP.GG REST responded with HTTP error: {}",
+            res.status()
+        ));
     }
 
     let json_body: serde_json::Value = res
@@ -3435,10 +3577,16 @@ pub async fn get_recommended_build_with_filters(
         if !p.trim().is_empty() {
             (p.to_string(), false)
         } else {
-            (available_versions.first().cloned().unwrap_or_default(), false)
+            (
+                available_versions.first().cloned().unwrap_or_default(),
+                false,
+            )
         }
     } else {
-        (available_versions.first().cloned().unwrap_or_default(), false)
+        (
+            available_versions.first().cloned().unwrap_or_default(),
+            false,
+        )
     };
 
     let target_position = if is_aram {
@@ -3481,27 +3629,27 @@ pub async fn get_recommended_build_with_filters(
         )
         .await
     {
-            let created_at_iso = probe_json
-                .pointer("/data/trends/win/0/created_at")
-                .and_then(|v| v.as_str());
-            let prev_patch_created_at_iso = probe_json
-                .pointer("/data/trends/win/1/created_at")
-                .and_then(|v| v.as_str());
-            let play_count = probe_json
-                .pointer("/data/summary/average_stats/play")
-                .or_else(|| probe_json.pointer("/data/average_stats/play"))
-                .and_then(|v| v.as_u64());
+        let created_at_iso = probe_json
+            .pointer("/data/trends/win/0/created_at")
+            .and_then(|v| v.as_str());
+        let prev_patch_created_at_iso = probe_json
+            .pointer("/data/trends/win/1/created_at")
+            .and_then(|v| v.as_str());
+        let play_count = probe_json
+            .pointer("/data/summary/average_stats/play")
+            .or_else(|| probe_json.pointer("/data/average_stats/play"))
+            .and_then(|v| v.as_u64());
 
-            let (chosen_patch, fallback) = select_effective_patch_with_volume(
-                &available_versions,
-                created_at_iso,
-                prev_patch_created_at_iso,
-                play_count,
-                now_unix,
-                None,
-            );
-            effective_patch = chosen_patch;
-            patch_fallback_applied = fallback;
+        let (chosen_patch, fallback) = select_effective_patch_with_volume(
+            &available_versions,
+            created_at_iso,
+            prev_patch_created_at_iso,
+            play_count,
+            now_unix,
+            None,
+        );
+        effective_patch = chosen_patch;
+        patch_fallback_applied = fallback;
     }
 
     // 3. Fetch build with effective patch (and enrich with MCP fourth/fifth/sixth item lists)
@@ -3557,11 +3705,7 @@ pub async fn get_recommended_build_with_filters(
                     data_obj.insert("sixth_items".to_string(), to_json_arr(sixth));
                 }
             }
-            match parse_opgg_analysis_payload(
-                &json_res,
-                champion_id,
-                champ_name,
-            ) {
+            match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
                 Ok(b) => b,
                 Err(_) => {
                     get_recommended_build_with_endpoint(
@@ -4114,12 +4258,7 @@ mod tests {
         ];
 
         // Ordering MUST strictly follow play count descending (absolute matches played):
-        let popular_blocks = build_5_item_blocks(
-            starter,
-            boots,
-            candidates,
-            "AP",
-        );
+        let popular_blocks = build_5_item_blocks(starter, boots, candidates, "AP");
         // Ordered by play count: 3118 (10k), 4645 (8k), 3157 (6k)
         assert_eq!(popular_blocks[1].item_ids, vec![3118, 4645, 3157]);
     }
@@ -4162,12 +4301,7 @@ mod tests {
             pick_rate: 0.5,
         }];
 
-        let blocks = build_5_item_blocks(
-            starter,
-            boots,
-            candidates,
-            "AP",
-        );
+        let blocks = build_5_item_blocks(starter, boots, candidates, "AP");
 
         // Boots MUST be sorted by play count descending: 3020 (50k) -> 3111 (10k) -> 3158 (5k)
         assert_eq!(blocks[2].title, "3 Botas Mais Feitas");
@@ -4233,12 +4367,7 @@ mod tests {
             }, // Situational (700 plays)
         ];
 
-        let blocks = build_5_item_blocks(
-            starter,
-            boots,
-            candidates,
-            "AP",
-        );
+        let blocks = build_5_item_blocks(starter, boots, candidates, "AP");
 
         // Clean core (first 3): 3118, 4645, 3157
         assert_eq!(blocks[1].item_ids, vec![3118, 4645, 3157]);
@@ -4287,8 +4416,7 @@ mod tests {
         let created_unix = parse_iso8601_to_unix(created_at).unwrap();
         let now_unix = created_unix + 36000; // 10h later
 
-        let (patch, fallback) =
-            select_effective_patch(&versions, Some(created_at), now_unix, None);
+        let (patch, fallback) = select_effective_patch(&versions, Some(created_at), now_unix, None);
         assert_eq!(patch, "16.21");
         assert!(fallback);
     }
@@ -4300,8 +4428,7 @@ mod tests {
         let created_unix = parse_iso8601_to_unix(created_at).unwrap();
         let now_unix = created_unix + (3 * 86400); // 3 days later
 
-        let (patch, fallback) =
-            select_effective_patch(&versions, Some(created_at), now_unix, None);
+        let (patch, fallback) = select_effective_patch(&versions, Some(created_at), now_unix, None);
         assert_eq!(patch, "16.22");
         assert!(!fallback);
     }
@@ -4368,8 +4495,16 @@ mod tests {
     async fn test_resolve_champion_most_played_lane_cached() {
         let champ_id = 99999;
         let positions = vec![
-            OpggPositionInfo { name: "TOP".to_string(), play: 100, role_rate: 0.1 },
-            OpggPositionInfo { name: "ADC".to_string(), play: 9500, role_rate: 0.9 },
+            OpggPositionInfo {
+                name: "TOP".to_string(),
+                play: 100,
+                role_rate: 0.1,
+            },
+            OpggPositionInfo {
+                name: "ADC".to_string(),
+                play: 9500,
+                role_rate: 0.9,
+            },
         ];
 
         let mut inner_map = HashMap::new();
@@ -4387,7 +4522,8 @@ mod tests {
             "global",
             "emerald_plus",
             Some("test_v1"),
-        ).await;
+        )
+        .await;
 
         assert_eq!(resolved, Ok("adc".to_string()));
     }
@@ -4476,26 +4612,81 @@ mod tests {
             pick_rate: 0.8,
         }];
         let candidates = vec![
-            ItemStatEntry { ids: vec![6672, 3085, 3031], play: 16000, win: 8000, pick_rate: 0.5 }, // Core
-            ItemStatEntry { ids: vec![3032], play: 12000, win: 6000, pick_rate: 0.4 }, // Yun Tal (4th)
-            ItemStatEntry { ids: vec![1038], play: 11000, win: 5500, pick_rate: 0.35 }, // B.F. Sword (component - MUST BE SKIPPED!)
-            ItemStatEntry { ids: vec![3036], play: 10000, win: 5000, pick_rate: 0.3 }, // LDR (5th)
-            ItemStatEntry { ids: vec![3026], play: 9000, win: 4500, pick_rate: 0.28 }, // GA (6th)
-            ItemStatEntry { ids: vec![2523], play: 8000, win: 4000, pick_rate: 0.25 }, // Situational 1
-            ItemStatEntry { ids: vec![2512], play: 7000, win: 3500, pick_rate: 0.2 }, // Situational 2
-            ItemStatEntry { ids: vec![3033], play: 6000, win: 3000, pick_rate: 0.18 }, // Situational 3
-            ItemStatEntry { ids: vec![6673], play: 4000, win: 2000, pick_rate: 0.12 }, // Situational 4
-            ItemStatEntry { ids: vec![3072], play: 3000, win: 1500, pick_rate: 0.1 }, // Situational 5
-            ItemStatEntry { ids: vec![3139], play: 2000, win: 1000, pick_rate: 0.08 }, // Situational 6
-            ItemStatEntry { ids: vec![3046], play: 1000, win: 500, pick_rate: 0.04 }, // Situational 7 (should be dropped by cap)
+            ItemStatEntry {
+                ids: vec![6672, 3085, 3031],
+                play: 16000,
+                win: 8000,
+                pick_rate: 0.5,
+            }, // Core
+            ItemStatEntry {
+                ids: vec![3032],
+                play: 12000,
+                win: 6000,
+                pick_rate: 0.4,
+            }, // Yun Tal (4th)
+            ItemStatEntry {
+                ids: vec![1038],
+                play: 11000,
+                win: 5500,
+                pick_rate: 0.35,
+            }, // B.F. Sword (component - MUST BE SKIPPED!)
+            ItemStatEntry {
+                ids: vec![3036],
+                play: 10000,
+                win: 5000,
+                pick_rate: 0.3,
+            }, // LDR (5th)
+            ItemStatEntry {
+                ids: vec![3026],
+                play: 9000,
+                win: 4500,
+                pick_rate: 0.28,
+            }, // GA (6th)
+            ItemStatEntry {
+                ids: vec![2523],
+                play: 8000,
+                win: 4000,
+                pick_rate: 0.25,
+            }, // Situational 1
+            ItemStatEntry {
+                ids: vec![2512],
+                play: 7000,
+                win: 3500,
+                pick_rate: 0.2,
+            }, // Situational 2
+            ItemStatEntry {
+                ids: vec![3033],
+                play: 6000,
+                win: 3000,
+                pick_rate: 0.18,
+            }, // Situational 3
+            ItemStatEntry {
+                ids: vec![6673],
+                play: 4000,
+                win: 2000,
+                pick_rate: 0.12,
+            }, // Situational 4
+            ItemStatEntry {
+                ids: vec![3072],
+                play: 3000,
+                win: 1500,
+                pick_rate: 0.1,
+            }, // Situational 5
+            ItemStatEntry {
+                ids: vec![3139],
+                play: 2000,
+                win: 1000,
+                pick_rate: 0.08,
+            }, // Situational 6
+            ItemStatEntry {
+                ids: vec![3046],
+                play: 1000,
+                win: 500,
+                pick_rate: 0.04,
+            }, // Situational 7 (should be dropped by cap)
         ];
 
-        let blocks = build_5_item_blocks(
-            starter,
-            boots,
-            candidates,
-            "AD",
-        );
+        let blocks = build_5_item_blocks(starter, boots, candidates, "AD");
 
         // Core items
         assert_eq!(blocks[1].item_ids, vec![6672, 3085, 3031]);
@@ -4583,8 +4774,9 @@ mod tests {
             }
         });
 
-        let build = parse_opgg_analysis_payload(&json, 804, "Yunara")
-            .expect("Parsing Yunara build with core_items and 4th/5th/6th item lists should succeed");
+        let build = parse_opgg_analysis_payload(&json, 804, "Yunara").expect(
+            "Parsing Yunara build with core_items and 4th/5th/6th item lists should succeed",
+        );
 
         // Block 2 (Primeiros 3 Itens): must pick [6672, 3085, 3031] because 19,057 > 15,006
         assert_eq!(build.item_blocks[1].item_ids, vec![6672, 3085, 3031]);
@@ -4653,9 +4845,18 @@ mod tests {
 
         // Verify boots never leak into Core (Block 1), Final Build (Block 3), or Situational (Block 4)
         for &boot_id in &[3008, 3006, 3047, 3009, 3111] {
-            assert!(!build.item_blocks[1].item_ids.contains(&boot_id), "Boot {boot_id} leaked into core");
-            assert!(!build.item_blocks[3].item_ids.contains(&boot_id), "Boot {boot_id} leaked into final build");
-            assert!(!build.item_blocks[4].item_ids.contains(&boot_id), "Boot {boot_id} leaked into situational");
+            assert!(
+                !build.item_blocks[1].item_ids.contains(&boot_id),
+                "Boot {boot_id} leaked into core"
+            );
+            assert!(
+                !build.item_blocks[3].item_ids.contains(&boot_id),
+                "Boot {boot_id} leaked into final build"
+            );
+            assert!(
+                !build.item_blocks[4].item_ids.contains(&boot_id),
+                "Boot {boot_id} leaked into situational"
+            );
         }
 
         // Verify is_boot_item recognizes 3008, 3010, and 3013
@@ -4667,8 +4868,18 @@ mod tests {
     fn test_starter_items_by_position_adc_top_mid_jungle_support() {
         // Standard ADC (Yunara): Doran's Blade (1055, 76k) > Doran's Shield (1054, 12k) + Potion (2003)
         let adc_starters = vec![
-            ItemStatEntry { ids: vec![1055, 2003], play: 76942, win: 38123, pick_rate: 0.8 },
-            ItemStatEntry { ids: vec![1054, 2003], play: 12000, win: 6000, pick_rate: 0.15 },
+            ItemStatEntry {
+                ids: vec![1055, 2003],
+                play: 76942,
+                win: 38123,
+                pick_rate: 0.8,
+            },
+            ItemStatEntry {
+                ids: vec![1054, 2003],
+                play: 12000,
+                win: 6000,
+                pick_rate: 0.15,
+            },
         ];
         let adc_blocks = build_5_item_blocks_with_depth_lists(
             adc_starters,
@@ -4685,8 +4896,18 @@ mod tests {
 
         // Standard Top (Tank): Doran's Shield (1054, 40k) > Doran's Blade (1055, 5k) + Potion (2003)
         let top_starters = vec![
-            ItemStatEntry { ids: vec![1054, 2003], play: 40000, win: 20000, pick_rate: 0.7 },
-            ItemStatEntry { ids: vec![1055, 2003], play: 5000, win: 2500, pick_rate: 0.1 },
+            ItemStatEntry {
+                ids: vec![1054, 2003],
+                play: 40000,
+                win: 20000,
+                pick_rate: 0.7,
+            },
+            ItemStatEntry {
+                ids: vec![1055, 2003],
+                play: 5000,
+                win: 2500,
+                pick_rate: 0.1,
+            },
         ];
         let top_blocks = build_5_item_blocks_with_depth_lists(
             top_starters,
@@ -4702,8 +4923,18 @@ mod tests {
 
         // Standard Mid (Mage): Doran's Ring (1056, 30k) > Dark Seal (1082, 5k) + Potion (2003)
         let mid_starters = vec![
-            ItemStatEntry { ids: vec![1056, 2003], play: 30000, win: 15000, pick_rate: 0.8 },
-            ItemStatEntry { ids: vec![1082, 2003], play: 5000, win: 2500, pick_rate: 0.1 },
+            ItemStatEntry {
+                ids: vec![1056, 2003],
+                play: 30000,
+                win: 15000,
+                pick_rate: 0.8,
+            },
+            ItemStatEntry {
+                ids: vec![1082, 2003],
+                play: 5000,
+                win: 2500,
+                pick_rate: 0.1,
+            },
         ];
         let mid_blocks = build_5_item_blocks_with_depth_lists(
             mid_starters,
@@ -4719,9 +4950,24 @@ mod tests {
 
         // Jungle: Mosstomper (1102, 50k) > Gustwalker (1103, 20k) > Scorchclaw (1101, 10k) + Potion (2003)
         let jng_starters = vec![
-            ItemStatEntry { ids: vec![1102, 2003], play: 50000, win: 25000, pick_rate: 0.6 },
-            ItemStatEntry { ids: vec![1103, 2003], play: 20000, win: 10000, pick_rate: 0.25 },
-            ItemStatEntry { ids: vec![1101, 2003], play: 10000, win: 5000, pick_rate: 0.15 },
+            ItemStatEntry {
+                ids: vec![1102, 2003],
+                play: 50000,
+                win: 25000,
+                pick_rate: 0.6,
+            },
+            ItemStatEntry {
+                ids: vec![1103, 2003],
+                play: 20000,
+                win: 10000,
+                pick_rate: 0.25,
+            },
+            ItemStatEntry {
+                ids: vec![1101, 2003],
+                play: 10000,
+                win: 5000,
+                pick_rate: 0.15,
+            },
         ];
         let jng_blocks = build_5_item_blocks_with_depth_lists(
             jng_starters,
@@ -4736,9 +4982,12 @@ mod tests {
         assert_eq!(jng_blocks[0].item_ids, vec![1102, 2003]);
 
         // Support: Quest item is pre-granted/bought, must ONLY contain Potion!
-        let supp_starters = vec![
-            ItemStatEntry { ids: vec![3865, 2003, 2003], play: 60000, win: 30000, pick_rate: 0.95 },
-        ];
+        let supp_starters = vec![ItemStatEntry {
+            ids: vec![3865, 2003, 2003],
+            play: 60000,
+            win: 30000,
+            pick_rate: 0.95,
+        }];
         let supp_blocks = build_5_item_blocks_with_depth_lists(
             supp_starters,
             vec![],
@@ -4787,18 +5036,58 @@ mod tests {
         assert!(!is_component_item_dynamic(9903));
 
         // Test building blocks with these items in OP.GG payload:
-        let boots = vec![ItemStatEntry { ids: vec![9901], play: 50000, win: 25000, pick_rate: 0.9 }];
+        let boots = vec![ItemStatEntry {
+            ids: vec![9901],
+            play: 50000,
+            win: 25000,
+            pick_rate: 0.9,
+        }];
         let candidate_entries = vec![
-            ItemStatEntry { ids: vec![9903, 3089, 3157], play: 25000, win: 13000, pick_rate: 0.5 },
-            ItemStatEntry { ids: vec![9902], play: 20000, win: 10000, pick_rate: 0.4 }, // Component - must be skipped!
-            ItemStatEntry { ids: vec![3135], play: 15000, win: 8000, pick_rate: 0.3 },
-            ItemStatEntry { ids: vec![3102], play: 12000, win: 6000, pick_rate: 0.25 },
-            ItemStatEntry { ids: vec![4629], play: 10000, win: 5000, pick_rate: 0.2 },
-            ItemStatEntry { ids: vec![4646], play: 8000, win: 4000, pick_rate: 0.15 },
+            ItemStatEntry {
+                ids: vec![9903, 3089, 3157],
+                play: 25000,
+                win: 13000,
+                pick_rate: 0.5,
+            },
+            ItemStatEntry {
+                ids: vec![9902],
+                play: 20000,
+                win: 10000,
+                pick_rate: 0.4,
+            }, // Component - must be skipped!
+            ItemStatEntry {
+                ids: vec![3135],
+                play: 15000,
+                win: 8000,
+                pick_rate: 0.3,
+            },
+            ItemStatEntry {
+                ids: vec![3102],
+                play: 12000,
+                win: 6000,
+                pick_rate: 0.25,
+            },
+            ItemStatEntry {
+                ids: vec![4629],
+                play: 10000,
+                win: 5000,
+                pick_rate: 0.2,
+            },
+            ItemStatEntry {
+                ids: vec![4646],
+                play: 8000,
+                win: 4000,
+                pick_rate: 0.15,
+            },
         ];
 
         let blocks = build_5_item_blocks(
-            Some(ItemStatEntry { ids: vec![1056, 2003], play: 50000, win: 25000, pick_rate: 0.9 }),
+            Some(ItemStatEntry {
+                ids: vec![1056, 2003],
+                play: 50000,
+                win: 25000,
+                pick_rate: 0.9,
+            }),
             boots,
             candidate_entries,
             "AP",
@@ -4907,14 +5196,33 @@ mod tests {
         assert_eq!(pages[2].play, 8000);
     }
 
-
     #[test]
     fn test_extract_top_core_and_final_build_options() {
         let core_entries = vec![
-            ItemStatEntry { ids: vec![3118, 4645, 3089], play: 15000, win: 8000, pick_rate: 60.0 },
-            ItemStatEntry { ids: vec![3118, 3157, 3089], play: 5000, win: 2600, pick_rate: 20.0 },
-            ItemStatEntry { ids: vec![3118, 4645, 3135], play: 2000, win: 1050, pick_rate: 8.0 },
-            ItemStatEntry { ids: vec![3118, 3165, 3089], play: 500, win: 250, pick_rate: 2.0 },
+            ItemStatEntry {
+                ids: vec![3118, 4645, 3089],
+                play: 15000,
+                win: 8000,
+                pick_rate: 60.0,
+            },
+            ItemStatEntry {
+                ids: vec![3118, 3157, 3089],
+                play: 5000,
+                win: 2600,
+                pick_rate: 20.0,
+            },
+            ItemStatEntry {
+                ids: vec![3118, 4645, 3135],
+                play: 2000,
+                win: 1050,
+                pick_rate: 8.0,
+            },
+            ItemStatEntry {
+                ids: vec![3118, 3165, 3089],
+                play: 500,
+                win: 250,
+                pick_rate: 2.0,
+            },
         ];
         let candidates = vec![3118, 4645, 3089, 3157, 3135, 3165, 4629, 3102];
         let core_opts = extract_top_core_build_options(&core_entries, &candidates, "AP");
@@ -4926,11 +5234,49 @@ mod tests {
         assert_eq!(core_opts[2].item_ids, vec![3118, 4645, 3135]);
         assert_eq!(core_opts[2].play, 2000);
 
-        let fourth = vec![ItemStatEntry { ids: vec![3157], play: 10000, win: 5500, pick_rate: 40.0 }, ItemStatEntry { ids: vec![3135], play: 3000, win: 1600, pick_rate: 15.0 }];
-        let fifth = vec![ItemStatEntry { ids: vec![3135], play: 8000, win: 4200, pick_rate: 35.0 }];
-        let sixth = vec![ItemStatEntry { ids: vec![4629], play: 6000, win: 3100, pick_rate: 30.0 }, ItemStatEntry { ids: vec![3102], play: 2000, win: 1000, pick_rate: 10.0 }];
+        let fourth = vec![
+            ItemStatEntry {
+                ids: vec![3157],
+                play: 10000,
+                win: 5500,
+                pick_rate: 40.0,
+            },
+            ItemStatEntry {
+                ids: vec![3135],
+                play: 3000,
+                win: 1600,
+                pick_rate: 15.0,
+            },
+        ];
+        let fifth = vec![ItemStatEntry {
+            ids: vec![3135],
+            play: 8000,
+            win: 4200,
+            pick_rate: 35.0,
+        }];
+        let sixth = vec![
+            ItemStatEntry {
+                ids: vec![4629],
+                play: 6000,
+                win: 3100,
+                pick_rate: 30.0,
+            },
+            ItemStatEntry {
+                ids: vec![3102],
+                play: 2000,
+                win: 1000,
+                pick_rate: 10.0,
+            },
+        ];
 
-        let final_opts = build_3_final_build_options(&core_opts[0].item_ids, &fourth, &fifth, &sixth, &candidates, "AP");
+        let final_opts = build_3_final_build_options(
+            &core_opts[0].item_ids,
+            &fourth,
+            &fifth,
+            &sixth,
+            &candidates,
+            "AP",
+        );
         assert_eq!(final_opts.len(), 3);
         for opt in &final_opts {
             assert_eq!(opt.item_ids.len(), 6);
@@ -5013,12 +5359,8 @@ mod tests {
             ]
         });
 
-        let build = parse_opgg_analysis_payload(
-            &analysis_json,
-            81,
-            "Ezreal",
-        )
-        .expect("Build parsing should succeed");
+        let build = parse_opgg_analysis_payload(&analysis_json, 81, "Ezreal")
+            .expect("Build parsing should succeed");
 
         // Core block must contain 3004 (Manamune), NOT 3042 (Muramana)
         assert_eq!(build.item_blocks[1].item_ids, vec![3078, 3004, 3036]);
@@ -5037,14 +5379,44 @@ mod tests {
 
     #[test]
     fn test_tear_item_merges_play_count_with_base_item() {
-        let starter_entry = Some(ItemStatEntry { ids: vec![1055, 2003], play: 50000, win: 25000, pick_rate: 0.9 });
-        let boots = vec![ItemStatEntry { ids: vec![3006], play: 50000, win: 25000, pick_rate: 0.9 }];
+        let starter_entry = Some(ItemStatEntry {
+            ids: vec![1055, 2003],
+            play: 50000,
+            win: 25000,
+            pick_rate: 0.9,
+        });
+        let boots = vec![ItemStatEntry {
+            ids: vec![3006],
+            play: 50000,
+            win: 25000,
+            pick_rate: 0.9,
+        }];
         let candidate_entries = vec![
-            ItemStatEntry { ids: vec![3078, 3036, 3072], play: 25000, win: 13000, pick_rate: 0.5 },
+            ItemStatEntry {
+                ids: vec![3078, 3036, 3072],
+                play: 25000,
+                win: 13000,
+                pick_rate: 0.5,
+            },
             // Both 3004 and 3042 present:
-            ItemStatEntry { ids: vec![3004], play: 5000, win: 2500, pick_rate: 0.1 },
-            ItemStatEntry { ids: vec![3042], play: 15000, win: 8000, pick_rate: 0.3 },
-            ItemStatEntry { ids: vec![3026], play: 4000, win: 2000, pick_rate: 0.08 },
+            ItemStatEntry {
+                ids: vec![3004],
+                play: 5000,
+                win: 2500,
+                pick_rate: 0.1,
+            },
+            ItemStatEntry {
+                ids: vec![3042],
+                play: 15000,
+                win: 8000,
+                pick_rate: 0.3,
+            },
+            ItemStatEntry {
+                ids: vec![3026],
+                play: 4000,
+                win: 2000,
+                pick_rate: 0.08,
+            },
         ];
 
         let blocks = build_5_item_blocks(starter_entry, boots, candidate_entries, "AD");
@@ -5109,12 +5481,8 @@ mod tests {
             ]
         });
 
-        let build = parse_opgg_analysis_payload(
-            &analysis_json,
-            147,
-            "Seraphine",
-        )
-        .expect("Build parsing should succeed");
+        let build = parse_opgg_analysis_payload(&analysis_json, 147, "Seraphine")
+            .expect("Build parsing should succeed");
 
         // Core block must NOT contain 3070 (Tear); it must contain 2526 (Whispering Circlet)!
         assert_eq!(build.item_blocks[1].item_ids, vec![6617, 3001, 2526]);
@@ -5134,10 +5502,21 @@ mod tests {
     #[test]
     fn test_resolve_tear_to_completed_item_by_archetype() {
         let empty_entries: Vec<ItemStatEntry> = Vec::new();
-        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "support", "AP"), 2526); // Whispering Circlet
-        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "mid", "AP"), 3003); // Archangel's Staff
-        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "adc", "AD"), 3004); // Manamune
-        assert_eq!(resolve_tear_to_completed_item(&empty_entries, "top", "TANK"), 3119); // Winter's Approach
+        assert_eq!(
+            resolve_tear_to_completed_item(&empty_entries, "support", "AP"),
+            2526
+        ); // Whispering Circlet
+        assert_eq!(
+            resolve_tear_to_completed_item(&empty_entries, "mid", "AP"),
+            3003
+        ); // Archangel's Staff
+        assert_eq!(
+            resolve_tear_to_completed_item(&empty_entries, "adc", "AD"),
+            3004
+        ); // Manamune
+        assert_eq!(
+            resolve_tear_to_completed_item(&empty_entries, "top", "TANK"),
+            3119
+        ); // Winter's Approach
     }
-
 }
