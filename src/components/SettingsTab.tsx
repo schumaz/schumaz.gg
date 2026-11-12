@@ -6,11 +6,20 @@ interface SettingsTabProps {
     key: K,
     value: UserPreferences[K]
   ) => void;
+  isActive?: boolean;
 }
 
-export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProps) {
+export function SettingsTab({
+  preferences,
+  onUpdatePreference,
+  isActive = true,
+}: SettingsTabProps) {
   return (
-    <div className="tab-content" data-testid="view-settings">
+    <div
+      className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
+      data-testid="view-settings"
+      aria-hidden={!isActive}
+    >
       <div className="settings-container">
         {/* Group 1: Automatic Injection */}
         <section className="card settings-group-card">

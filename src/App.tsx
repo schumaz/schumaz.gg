@@ -68,9 +68,14 @@ function App() {
     <main className="container">
       <StatusDock summoner={summoner} />
 
-      {/* View 1: "Runas" Tab (Match Dashboard) */}
-      {activeTab === "runes" && (
-        <div className="tab-content" data-testid="view-runes">
+      {/* Main Content Area with Seamless Crossfade Transition */}
+      <div className="tabs-viewport">
+        {/* View 1: "Runas" Tab (Match Dashboard) */}
+        <div
+          className={`tab-content ${activeTab === "runes" ? "active-tab" : "inactive-tab"}`}
+          data-testid="view-runes"
+          aria-hidden={activeTab !== "runes"}
+        >
           {build ? (
             <div className="dashboard-layout">
               <FiltersHeader
@@ -110,15 +115,14 @@ function App() {
             <IdleState summoner={summoner} errorMsg={errorMsg} />
           )}
         </div>
-      )}
 
-      {/* View 2: "Configurações" Tab (Settings & Preferences) */}
-      {activeTab === "settings" && (
+        {/* View 2: "Configurações" Tab (Settings & Preferences) */}
         <SettingsTab
           preferences={preferences}
           onUpdatePreference={updatePreference}
+          isActive={activeTab === "settings"}
         />
-      )}
+      </div>
 
       {/* Bottom Navigation Dock */}
       <NavigationDock activeTab={activeTab} onTabChange={setActiveTab} />
