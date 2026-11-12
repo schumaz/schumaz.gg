@@ -11,24 +11,29 @@
 }
 
 :root {
-  --bg-base: #000000;
-  --bg-surface: #0a0a0a;
-  --bg-card: #141414;
-  --bg-card-hover: #1a1a1a;
-  --bg-glass: rgba(18, 18, 18, 0.78);
+  /* Linear Amethyst Dark Palette */
+  --bg-base: #0d0e12;
+  --bg-surface: #13141a;
+  --bg-card: #13141a;
+  --bg-card-hover: #1a1b24;
+  --bg-glass: rgba(19, 20, 26, 0.85);
+  --bg-input: #151620;
   
-  --border-subtle: #222222;
-  --border-highlight: #2e2e2e;
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-highlight: rgba(255, 255, 255, 0.16);
 
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --text-muted: #636366;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
 
-  --accent-primary: #0a84ff;
-  --accent-primary-hover: #409cff;
-  --accent-success: #30d158;
-  --accent-warning: #ff9f0a;
-  --accent-danger: #ff453a;
+  --accent-primary: #7c3aed;
+  --accent-primary-hover: #a78bfa;
+  --accent-subtle: rgba(124, 58, 237, 0.16);
+  --accent-border: rgba(124, 58, 237, 0.45);
+
+  --accent-success: #34d399;
+  --accent-warning: #fbbf24;
+  --accent-danger: #f87171;
 
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
@@ -243,9 +248,9 @@ img {
 }
 
 .tag.hovering {
-  background-color: rgba(10, 132, 255, 0.2);
+  background-color: var(--accent-subtle);
   color: var(--accent-primary);
-  border: 1px solid rgba(10, 132, 255, 0.3);
+  border: 1px solid var(--accent-border);
 }
 
 /* Action Buttons */
@@ -263,7 +268,7 @@ img {
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -445,7 +450,7 @@ img {
 
 .filter-select:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.2);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 .filter-select:disabled {
@@ -555,8 +560,8 @@ img {
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  background-color: rgba(10, 132, 255, 0.08);
-  border: 1px solid rgba(10, 132, 255, 0.3);
+  background-color: rgba(124, 58, 237, 0.12);
+  border: 1px solid var(--accent-border);
   border-radius: 12px;
 }
 
@@ -679,7 +684,7 @@ img {
 }
 
 .invert-spells-btn:hover {
-  background-color: rgba(10, 132, 255, 0.12);
+  background-color: var(--accent-subtle);
   border-color: var(--accent-primary);
   transform: translateY(-1px);
 }
@@ -836,9 +841,9 @@ img {
   color: var(--accent-primary);
   display: inline-flex;
   padding: 14px;
-  background-color: rgba(10, 132, 255, 0.1);
+  background-color: var(--accent-subtle);
   border-radius: 20px;
-  border: 1px solid rgba(10, 132, 255, 0.2);
+  border: 1px solid var(--accent-subtle);
 }
 
 .idle-actions {
@@ -1001,7 +1006,7 @@ img {
 }
 
 .toggle-switch:checked {
-  background-color: var(--accent-success);
+  background-color: var(--accent-primary);
 }
 
 .toggle-switch:checked::after {
@@ -1053,10 +1058,11 @@ img {
 }
 
 .segment-btn.active {
-  background-color: var(--bg-card-hover);
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .segmented-caption {
@@ -1109,7 +1115,8 @@ img {
 
 .dock-btn.active {
   color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
@@ -1167,9 +1174,9 @@ img {
 }
 
 .secondary-spell-btn.active {
-  background-color: rgba(10, 132, 255, 0.12);
+  background-color: var(--accent-subtle);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 10px rgba(10, 132, 255, 0.2);
+  box-shadow: 0 0 10px var(--accent-subtle);
 }
 
 .secondary-spell-icon {
@@ -1237,9 +1244,9 @@ img {
 }
 
 .rune-page-btn.active {
-  background-color: rgba(10, 132, 255, 0.12);
+  background-color: var(--accent-subtle);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 10px rgba(10, 132, 255, 0.2);
+  box-shadow: 0 0 10px var(--accent-subtle);
 }
 
 .rune-page-btn-icons {
@@ -1322,10 +1329,10 @@ img {
 }
 
 .build-option-pill.active {
-  background: rgba(10, 132, 255, 0.2);
+  background: var(--accent-subtle);
   border-color: var(--accent-primary);
   color: #fff;
-  box-shadow: 0 0 6px rgba(10, 132, 255, 0.3);
+  box-shadow: 0 0 6px var(--accent-border);
 }
 
 /* Unified Build Selector */
@@ -1385,10 +1392,10 @@ img {
 }
 
 .unified-build-pill.active {
-  background: rgba(10, 132, 255, 0.18);
+  background: var(--accent-subtle);
   border-color: var(--accent-primary);
   color: #fff;
-  box-shadow: 0 0 8px rgba(10, 132, 255, 0.35);
+  box-shadow: 0 0 8px var(--accent-border);
 }
 
 .build-pill-name {

@@ -18,7 +18,7 @@ export function IdleState({ summoner: _summoner, errorMsg }: IdleStateProps) {
         </div>
         <h2>Aguardando Seleção de Campeões</h2>
         <p className="card-desc">
-          Selecione ou confirme um campeão no League of Legends para carregar runas, feitiços e itens automaticamente.
+          Selecione ou confirme um campeão no LoL para carregar runas, feitiços e itens automaticamente.
         </p>
 
         {errorMsg && (

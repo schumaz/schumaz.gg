@@ -9,7 +9,7 @@ describe("StatusDock", () => {
 
     expect(screen.getByTestId("status-disconnected")).toBeInTheDocument();
     expect(
-      screen.getByText("Aguardando cliente do LoL...")
+      screen.getByText("Aguardando cliente do LoL")
     ).toBeInTheDocument();
   });
 
