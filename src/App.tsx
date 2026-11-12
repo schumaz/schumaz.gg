@@ -72,7 +72,7 @@ function App() {
       {activeTab === "runes" && (
         <div className="tab-content" data-testid="view-runes">
           {build ? (
-            <>
+            <div className="dashboard-layout">
               <FiltersHeader
                 build={build}
                 champSelect={champSelect}
@@ -80,28 +80,32 @@ function App() {
                 onFilterChange={handleFilterChange}
               />
 
-              <div className="runes-spells-grid">
-                <RuneTree
-                  build={build}
-                  selectedRunePageIndex={selectedRunePageIndex}
-                  onSelectRunePage={handleSelectRunePage}
-                />
+              <div className="dashboard-split-grid">
+                <div className="dashboard-col dashboard-col-left">
+                  <RuneTree
+                    build={build}
+                    selectedRunePageIndex={selectedRunePageIndex}
+                    onSelectRunePage={handleSelectRunePage}
+                  />
+                </div>
 
-                <SpellsBar
-                  orderedSpells={orderedSpells}
-                  spellChoices={build.spell_choices}
-                  selectedSecondarySpellId={selectedSecondarySpellId}
-                  onInvertSpells={handleInvertSpells}
-                  onSelectSecondarySpell={handleSelectSecondarySpell}
-                />
+                <div className="dashboard-col dashboard-col-right">
+                  <SpellsBar
+                    orderedSpells={orderedSpells}
+                    spellChoices={build.spell_choices}
+                    selectedSecondarySpellId={selectedSecondarySpellId}
+                    onInvertSpells={handleInvertSpells}
+                    onSelectSecondarySpell={handleSelectSecondarySpell}
+                  />
+
+                  <ItemBlocks
+                    build={build}
+                    selectedBuildIndex={selectedBuildIndex}
+                    onSelectBuild={handleSelectBuild}
+                  />
+                </div>
               </div>
-
-              <ItemBlocks
-                build={build}
-                selectedBuildIndex={selectedBuildIndex}
-                onSelectBuild={handleSelectBuild}
-              />
-            </>
+            </div>
           ) : (
             <IdleState summoner={summoner} errorMsg={errorMsg} />
           )}
@@ -116,7 +120,7 @@ function App() {
         />
       )}
 
-      {/* Floating Bottom Navigation Dock (iOS / Telegram Style Pill) */}
+      {/* Bottom Navigation Dock */}
       <NavigationDock activeTab={activeTab} onTabChange={setActiveTab} />
     </main>
   );

@@ -32,23 +32,31 @@
   box-sizing: border-box;
 }
 
-body {
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   background-color: var(--bg-base);
   color: var(--text-primary);
-  overflow-x: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+img {
+  -webkit-user-drag: none;
   user-select: none;
 }
 
 /* Custom Minimal Dark Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-base);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -60,47 +68,54 @@ body {
   background: var(--border-highlight);
 }
 
-/* App Container */
+/* App Container (Desktop Viewport Lock) */
 .container {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 24px 20px 100px 20px;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 10px 16px 6px 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* Header & Status Section */
 .header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .title {
-  margin: 0 0 4px 0;
-  font-size: 1.85rem;
+  margin: 0 0 2px 0;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.5px;
 }
 
 .subtitle {
-  margin: 0 0 16px 0;
+  margin: 0 0 6px 0;
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 /* Status Badge */
 .status-badge-container {
   display: flex;
   justify-content: center;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 4px 12px;
   border-radius: 9999px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
@@ -138,13 +153,23 @@ body {
   box-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
 }
 
+/* Workspace Central Area */
+.tab-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
 /* Elevated Cards - iOS/Telegram Dark Style */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 18px;
+  padding: 18px;
+  margin-bottom: 14px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   transition: border-color 0.2s ease, transform 0.2s ease;
 }
@@ -224,8 +249,7 @@ body {
   box-shadow: 0 4px 12px rgba(10, 132, 255, 0.25);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--accent-primary-hover);
+.btn-primary:hover:not(:disabled) {\n  background-color: var(--accent-primary-hover);
   transform: translateY(-1px);
 }
 
@@ -265,9 +289,12 @@ body {
 .champ-hero-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(10, 10, 10, 0.9));
   border: 1px solid var(--border-highlight);
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  padding: 14px 18px;
 }
 
 .champ-hero-top {
@@ -415,19 +442,58 @@ body {
   font-weight: 600;
 }
 
-/* Runes and Spells Grid */
-.runes-spells-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 16px;
+/* Dashboard Desktop View & Split Grid */
+.dashboard-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-@media (max-width: 768px) {
-  .runes-spells-grid {
+.dashboard-split-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.dashboard-col {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-col .card {
+  margin-bottom: 0;
+}
+
+.dashboard-col-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-col-right {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 860px) {
+  .dashboard-split-grid {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
-  .champ-filters-bar {
-    gap: 10px;
+  .dashboard-col {
+    height: auto;
+    overflow-y: visible;
+    padding-right: 0;
   }
 }
 
@@ -664,20 +730,20 @@ body {
 
 /* Shop Item Blocks with Official DataDragon Icons */
 .item-blocks-preview {
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .grid-blocks {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
 
 .block-item {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 14px;
+  padding: 12px;
   transition: border-color 0.2s ease;
 }
 
@@ -686,8 +752,8 @@ body {
 }
 
 .block-item h4 {
-  margin: 0 0 10px 0;
-  font-size: 0.88rem;
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
   color: var(--accent-primary);
   font-weight: 600;
 }
@@ -699,8 +765,8 @@ body {
 }
 
 .item-icon-box {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -730,14 +796,21 @@ body {
 
 /* Idle / Waiting State Card */
 .idle-state-container {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow-y: auto;
 }
 
 .idle-card {
+  max-width: 580px;
+  width: 100%;
   text-align: center;
-  padding: 36px 20px;
+  padding: 32px 24px;
+  margin-bottom: 0;
 }
 
 .idle-icon-box {
@@ -812,17 +885,26 @@ body {
 
 /* Settings View & iOS Dark Groups */
 .settings-container {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px 16px 8px;
 }
 
 .settings-group-card {
-  padding: 22px;
+  padding: 20px;
+  margin-bottom: 0;
 }
 
 .settings-group-header {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .settings-list {
@@ -964,30 +1046,29 @@ body {
   color: var(--text-secondary);
 }
 
-/* Floating Bottom Dock (iOS / Telegram Style Pill) */
+/* Bottom Navigation Dock (Pill Style) */
 .floating-dock {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   background: var(--bg-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+  margin: 6px auto 2px auto;
+  z-index: 100;
 }
 
 .dock-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 18px;
+  padding: 7px 18px;
   border-radius: 9999px;
   background: transparent;
   border: none;
