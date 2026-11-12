@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ItemClassificationCache {
     pub boots: std::collections::HashSet<i32>,
@@ -153,6 +157,8 @@ pub struct ChampionBuild {
     pub available_patches: Vec<String>,
     #[serde(default)]
     pub patch_fallback_applied: bool,
+    #[serde(default = "default_true")]
+    pub supports_runes: bool,
 }
 
 /// Detailed stats for an item or item set from OP.GG.

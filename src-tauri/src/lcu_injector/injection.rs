@@ -1,6 +1,6 @@
+use super::*;
 use crate::build_provider::ChampionBuild;
 use serde::{Deserialize, Serialize};
-use super::*;
 
 pub const PERKS_CURRENT_PAGE_ENDPOINT: &str = "/lol-perks/v1/currentpage";
 pub const PERKS_PAGES_ENDPOINT: &str = "/lol-perks/v1/pages";
@@ -110,12 +110,7 @@ pub async fn inject_spells(
         }
     }
 
-    let payload = build_spells_payload_with_jungle_and_preference(
-        s1,
-        s2,
-        flash_key,
-        is_jungle,
-    )?;
+    let payload = build_spells_payload_with_jungle_and_preference(s1, s2, flash_key, is_jungle)?;
     conn.patch_summoner_spells(&payload).await?;
     Ok(())
 }
@@ -140,7 +135,7 @@ pub async fn inject_champion_build(
 ) -> InjectionReport {
     let prefs = get_user_preferences();
 
-    let runes_res = if prefs.auto_inject_runes {
+    let runes_res = if prefs.auto_inject_runes && build.supports_runes {
         Some(inject_runes(conn, build).await)
     } else {
         None
@@ -163,12 +158,15 @@ pub async fn inject_champion_build(
     let items_ok = items_res.as_ref().is_some_and(|r| r.is_ok());
 
     let mut parts = Vec::new();
-    if let Some(r) = runes_res {
+    if !build.supports_runes {
+        parts.push("Modo ARAM Mayhem (runas desativadas pela Riot)".to_string());
+    } else if let Some(r) = runes_res {
         match r {
             Ok(_) => parts.push("Runas injetadas".to_string()),
             Err(e) => parts.push(format!("Falha nas Runas: {}", e)),
         }
     }
+
     if let Some(s) = spells_res {
         match s {
             Ok(_) => parts.push("Feitiços injetados".to_string()),

@@ -1,17 +1,17 @@
+pub mod analytics;
 pub mod ddragon;
 pub mod fallback;
 pub mod items;
 pub mod models;
-pub mod analytics;
 pub mod patch;
 pub mod runes;
 pub mod spells;
 
+pub use analytics::*;
 pub use ddragon::*;
 pub use fallback::*;
 pub use items::*;
 pub use models::*;
-pub use analytics::*;
 pub use patch::*;
 pub use runes::*;
 pub use spells::*;
@@ -32,7 +32,7 @@ pub async fn get_recommended_build_with_filters(
         .map(|c| c.key_name.as_str())
         .unwrap_or("Unknown");
 
-    let is_aram = queue_id == 450;
+    let is_aram = queue_id == 450 || queue_id == crate::ws_listener::QUEUE_ARAM_MAYHEM;
     let mode = if is_aram { "aram" } else { "ranked" };
     let target_region = region.unwrap_or("global");
     let target_tier = tier.unwrap_or("emerald_plus");
@@ -205,6 +205,7 @@ pub async fn get_recommended_build_with_filters(
     build.active_patch = effective_patch;
     build.available_patches = available_versions;
     build.patch_fallback_applied = patch_fallback_applied;
+    build.supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
 
     enrich_build_with_ddragon(&mut build, ddragon_cache);
     Ok(build)
@@ -218,4 +219,3 @@ pub async fn get_recommended_build(
 ) -> Result<ChampionBuild, String> {
     get_recommended_build_with_filters(client, champion_id, queue_id, None, None, None, None).await
 }
-

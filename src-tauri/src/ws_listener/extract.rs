@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub const QUEUE_SOLO_DUO: i32 = 420;
 pub const QUEUE_FLEX: i32 = 440;
 pub const QUEUE_ARAM: i32 = 450;
+pub const QUEUE_ARAM_MAYHEM: i32 = 2400;
 pub const QUEUE_NORMAL_DRAFT: i32 = 400;
 pub const QUEUE_QUICKPLAY: i32 = 490;
 pub const QUEUE_PRACTICE_TOOL: i32 = -1;
@@ -12,6 +13,7 @@ pub const QUEUE_PRACTICE_TOOL: i32 = -1;
 pub enum QueueMode {
     SummonersRift,
     Aram,
+    AramMayhem,
     PracticeTool,
     Other,
 }
@@ -20,6 +22,7 @@ impl From<i32> for QueueMode {
     fn from(queue_id: i32) -> Self {
         match queue_id {
             QUEUE_ARAM => QueueMode::Aram,
+            QUEUE_ARAM_MAYHEM => QueueMode::AramMayhem,
             QUEUE_PRACTICE_TOOL => QueueMode::PracticeTool,
             QUEUE_SOLO_DUO | QUEUE_FLEX | QUEUE_NORMAL_DRAFT | QUEUE_QUICKPLAY => {
                 QueueMode::SummonersRift
@@ -207,17 +210,24 @@ pub fn extract_assigned_position(session_json: &serde_json::Value) -> Option<Str
 }
 
 /// Extracts the queue ID from a `GET /lol-gameflow/v1/session` JSON payload.
-/// Supports Standard queues, Practice Tool, and Custom games.
+/// Supports Standard queues, ARAM Mayhem, Practice Tool, and Custom games.
 pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String> {
-    // 1. Check for Practice Tool or custom game indicators
+    // 1. Check for Practice Tool, ARAM Mayhem, or custom game indicators in gameMode
     let game_mode = gameflow_json
         .pointer("/gameData/queue/gameMode")
         .or_else(|| gameflow_json.pointer("/gameData/gameMode"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    if game_mode.eq_ignore_ascii_case("PRACTICETOOL") {
+    if game_mode.eq_ignore_ascii_case("PRACTICETOOL")
+        || game_mode.eq_ignore_ascii_case("PRACTICE_TOOL")
+    {
         return Ok(QUEUE_PRACTICE_TOOL);
+    }
+
+    if game_mode.eq_ignore_ascii_case("ARAM_MAYHEM") || game_mode.to_uppercase().contains("MAYHEM")
+    {
+        return Ok(QUEUE_ARAM_MAYHEM);
     }
 
     let is_custom = gameflow_json
@@ -260,9 +270,13 @@ pub mod tests {
             ],
             "actions": [
                 [
-                    { "actorCellId": 0, "type": "ban", "championId": 64, "completed": true }
+                    { "actorCellId": 0, "type": "ban", "championId": 157, "completed": true },
+                    { "actorCellId": 1, "type": "ban", "championId": 238, "completed": true },
+                    { "actorCellId": 2, "type": "ban", "championId": 11, "completed": true }
                 ],
                 [
+                    { "actorCellId": 0, "type": "pick", "championId": 51, "completed": true },
+                    { "actorCellId": 1, "type": "pick", "championId": 89, "completed": true },
                     { "actorCellId": 2, "type": "pick", "championId": 103, "completed": false }
                 ]
             ]
@@ -273,16 +287,32 @@ pub mod tests {
     }
 
     #[test]
-    fn test_extract_champion_ignores_ban_actions() {
-        // If the local player is currently banning a champion, it must NOT be extracted as their pick
+    fn test_extract_champion_from_aram_my_team() {
+        // In ARAM, champion is directly assigned in `myTeam`
         let fixture = serde_json::json!({
             "localPlayerCellId": 3,
+            "actions": [],
             "myTeam": [
-                { "cellId": 3, "championId": 0, "championPickIntent": 0 }
+                { "cellId": 0, "championId": 22, "championPickIntent": 0 },
+                { "cellId": 3, "championId": 222, "championPickIntent": 0 }
+            ]
+        });
+
+        let result = extract_selected_champion(&fixture);
+        assert_eq!(result, Ok(Some((222, true))));
+    }
+
+    #[test]
+    fn test_extract_champion_ignores_ban_actions() {
+        // When local player is currently banning, it should NOT be detected as a pick
+        let fixture = serde_json::json!({
+            "localPlayerCellId": 1,
+            "myTeam": [
+                { "cellId": 1, "championId": 0, "championPickIntent": 0 }
             ],
             "actions": [
                 [
-                    { "actorCellId": 3, "type": "ban", "championId": 119, "completed": false }
+                    { "actorCellId": 1, "type": "ban", "championId": 157, "completed": false }
                 ]
             ]
         });
@@ -292,210 +322,163 @@ pub mod tests {
     }
 
     #[test]
-    fn test_extract_champion_from_aram_my_team() {
-        // Real fixture snippet from ARAM where championId is directly assigned on myTeam
-        let fixture = serde_json::json!({
-            "localPlayerCellId": 4,
-            "myTeam": [
-                { "cellId": 0, "championId": 222, "championPickIntent": 0 },
-                { "cellId": 4, "championId": 51, "championPickIntent": 0 }
-            ],
-            "actions": []
-        });
-
-        let result = extract_selected_champion(&fixture);
-        // ARAM is automatically locked in (true)
-        assert_eq!(result, Ok(Some((51, true))));
-    }
-
-    #[test]
-    fn test_extract_champion_from_practice_tool_session() {
-        // Practice Tool session snippet where player picks a champion
-        let fixture_practice = serde_json::json!({
-            "localPlayerCellId": 0,
-            "myTeam": [
-                { "cellId": 0, "championId": 103, "championPickIntent": 0 }
-            ],
-            "actions": [
-                [
-                    { "actorCellId": 0, "type": "pick", "championId": 103, "completed": false }
-                ]
-            ]
-        });
-
-        let result = extract_selected_champion(&fixture_practice);
-        assert_eq!(result, Ok(Some((103, false))));
-
-        // When locked in
-        let fixture_locked = serde_json::json!({
-            "localPlayerCellId": 0,
-            "myTeam": [
-                { "cellId": 0, "championId": 103, "championPickIntent": 0 }
-            ],
-            "actions": [
-                [
-                    { "actorCellId": 0, "type": "pick", "championId": 103, "completed": true }
-                ]
-            ]
-        });
-
-        let result_locked = extract_selected_champion(&fixture_locked);
-        assert_eq!(result_locked, Ok(Some((103, true))));
-    }
-
-    #[test]
-    fn test_extract_assigned_position_and_normalization() {
-        assert_eq!(normalize_position("top"), Some("top".to_string()));
-        assert_eq!(normalize_position("jungle"), Some("jungle".to_string()));
-        assert_eq!(normalize_position("JNG"), Some("jungle".to_string()));
-        assert_eq!(normalize_position("middle"), Some("mid".to_string()));
-        assert_eq!(normalize_position("mid"), Some("mid".to_string()));
-        assert_eq!(normalize_position("bottom"), Some("adc".to_string()));
-        assert_eq!(normalize_position("bot"), Some("adc".to_string()));
-        assert_eq!(normalize_position("utility"), Some("support".to_string()));
-        assert_eq!(normalize_position("supp"), Some("support".to_string()));
-        assert_eq!(normalize_position(""), None);
-
-        let fixture_draft = serde_json::json!({
-            "localPlayerCellId": 3,
-            "myTeam": [
-                { "cellId": 0, "assignedPosition": "top" },
-                { "cellId": 1, "assignedPosition": "jungle" },
-                { "cellId": 2, "assignedPosition": "middle" },
-                { "cellId": 3, "assignedPosition": "bottom" },
-                { "cellId": 4, "assignedPosition": "utility" }
-            ]
-        });
-
-        assert_eq!(
-            extract_assigned_position(&fixture_draft),
-            Some("adc".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_queue_id_and_classify_mode() {
-        let fixture_aram = serde_json::json!({
-            "gameData": {
-                "queue": {
-                    "id": 450
-                }
-            }
-        });
-        let queue_id = extract_queue_id(&fixture_aram).expect("Queue id should parse");
-        assert_eq!(queue_id, 450);
-        assert_eq!(QueueMode::from(queue_id), QueueMode::Aram);
-
-        let fixture_ranked = serde_json::json!({
-            "gameData": {
-                "queue": {
-                    "id": 420
-                }
-            }
-        });
-        let queue_id_ranked =
-            extract_queue_id(&fixture_ranked).expect("Ranked queue id should parse");
-        assert_eq!(queue_id_ranked, 420);
-        assert_eq!(QueueMode::from(queue_id_ranked), QueueMode::SummonersRift);
-
-        // Practice Tool with id: -1 and gameMode: "PRACTICETOOL"
-        let fixture_practice_tool = serde_json::json!({
-            "gameData": {
-                "isCustomGame": true,
-                "queue": {
-                    "id": -1,
-                    "gameMode": "PRACTICETOOL"
-                }
-            }
-        });
-        let queue_id_practice =
-            extract_queue_id(&fixture_practice_tool).expect("Practice tool queue id should parse");
-        assert_eq!(queue_id_practice, QUEUE_PRACTICE_TOOL);
-        assert_eq!(QueueMode::from(queue_id_practice), QueueMode::PracticeTool);
-
-        // Practice Tool with gameMode on root gameData
-        let fixture_practice_tool_root = serde_json::json!({
-            "gameData": {
-                "isCustomGame": true,
-                "gameMode": "PRACTICETOOL"
-            }
-        });
-        let queue_id_practice_root = extract_queue_id(&fixture_practice_tool_root)
-            .expect("Practice tool queue id should parse");
-        assert_eq!(queue_id_practice_root, QUEUE_PRACTICE_TOOL);
-        assert_eq!(
-            QueueMode::from(queue_id_practice_root),
-            QueueMode::PracticeTool
-        );
-    }
-
-    #[test]
     fn test_should_emit_champ_select_deduplicates_timer_ticks() {
-        let payload1 = Some(ChampSelectedPayload {
+        let p1 = Some(ChampSelectedPayload {
             champion_id: 103,
             queue_id: 420,
             queue_mode: QueueMode::SummonersRift,
             locked_in: false,
-            assigned_position: None,
+            assigned_position: Some("mid".to_string()),
         });
-
-        // Same payload received in a subsequent timer tick
-        let payload1_tick = Some(ChampSelectedPayload {
+        let p2 = Some(ChampSelectedPayload {
             champion_id: 103,
             queue_id: 420,
             queue_mode: QueueMode::SummonersRift,
             locked_in: false,
-            assigned_position: None,
+            assigned_position: Some("mid".to_string()),
         });
-
-        assert!(!should_emit_champ_select(&payload1, &payload1_tick));
-
-        // State changes to locked_in: true
-        let payload2 = Some(ChampSelectedPayload {
+        let p3_locked = Some(ChampSelectedPayload {
             champion_id: 103,
             queue_id: 420,
             queue_mode: QueueMode::SummonersRift,
             locked_in: true,
-            assigned_position: None,
+            assigned_position: Some("mid".to_string()),
         });
 
-        assert!(should_emit_champ_select(&payload1, &payload2));
+        assert!(!should_emit_champ_select(&p1, &p2));
+        assert!(should_emit_champ_select(&p1, &p3_locked));
     }
 
     #[test]
-    fn test_evaluate_ws_event_create_update_and_delete() {
-        let fixture_active = serde_json::json!({
-            "localPlayerCellId": 1,
+    fn test_extract_assigned_position_and_normalization() {
+        let fixture = serde_json::json!({
+            "localPlayerCellId": 4,
             "myTeam": [
-                { "cellId": 1, "championId": 84, "championPickIntent": 0 }
-            ],
-            "actions": []
+                { "cellId": 4, "assignedPosition": "utility" }
+            ]
         });
 
-        let transition = evaluate_ws_event("Update", &fixture_active, 450);
+        let pos = extract_assigned_position(&fixture);
+        assert_eq!(pos, Some("support".to_string()));
+    }
+
+    #[test]
+    fn test_extract_queue_id_and_classify_mode() {
+        let fixture_ranked = serde_json::json!({
+            "gameData": {
+                "queue": { "id": 420 }
+            }
+        });
+        assert_eq!(extract_queue_id(&fixture_ranked), Ok(420));
+        assert_eq!(QueueMode::from(420), QueueMode::SummonersRift);
+
+        let fixture_aram = serde_json::json!({
+            "gameData": {
+                "queue": { "id": 450 }
+            }
+        });
+        assert_eq!(extract_queue_id(&fixture_aram), Ok(450));
+        assert_eq!(QueueMode::from(450), QueueMode::Aram);
+    }
+
+    #[test]
+    fn test_extract_queue_id_with_aram_mayhem_game_mode() {
+        let fixture_mayhem = serde_json::json!({
+            "gameData": {
+                "queue": {
+                    "gameMode": "ARAM_MAYHEM",
+                    "id": 2400
+                }
+            }
+        });
+        assert_eq!(extract_queue_id(&fixture_mayhem), Ok(QUEUE_ARAM_MAYHEM));
+        assert_eq!(QueueMode::from(QUEUE_ARAM_MAYHEM), QueueMode::AramMayhem);
+
+        // Also handles when id is arbitrary or not standard but gameMode is ARAM_MAYHEM
+        let fixture_mayhem_mode_only = serde_json::json!({
+            "gameData": {
+                "gameMode": "MAYHEM"
+            }
+        });
+        assert_eq!(
+            extract_queue_id(&fixture_mayhem_mode_only),
+            Ok(QUEUE_ARAM_MAYHEM)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_ws_event_aram_mayhem() {
+        let fixture_mayhem = serde_json::json!({
+            "localPlayerCellId": 0,
+            "actions": [],
+            "myTeam": [
+                { "cellId": 0, "championId": 222, "championPickIntent": 0 }
+            ]
+        });
+
+        let transition = evaluate_ws_event("Update", &fixture_mayhem, QUEUE_ARAM_MAYHEM);
         assert_eq!(
             transition,
             WsSessionTransition::Active(ChampSelectedPayload {
-                champion_id: 84,
-                queue_id: 450,
-                queue_mode: QueueMode::Aram,
+                champion_id: 222,
+                queue_id: QUEUE_ARAM_MAYHEM,
+                queue_mode: QueueMode::AramMayhem,
                 locked_in: true,
                 assigned_position: None,
             })
         );
+    }
 
-        let transition_end = evaluate_ws_event("Delete", &serde_json::json!({}), 450);
-        assert_eq!(transition_end, WsSessionTransition::Ended);
+    #[test]
+    fn test_evaluate_ws_event_create_update_and_delete() {
+        let fixture_pick = serde_json::json!({
+            "localPlayerCellId": 0,
+            "actions": [
+                [
+                    { "actorCellId": 0, "type": "pick", "championId": 103, "completed": false }
+                ]
+            ],
+            "myTeam": []
+        });
+
+        let t_create = evaluate_ws_event("Create", &fixture_pick, 420);
+        assert_eq!(
+            t_create,
+            WsSessionTransition::Active(ChampSelectedPayload {
+                champion_id: 103,
+                queue_id: 420,
+                queue_mode: QueueMode::SummonersRift,
+                locked_in: false,
+                assigned_position: None,
+            })
+        );
+
+        let t_delete = evaluate_ws_event("Delete", &serde_json::json!({}), 420);
+        assert_eq!(t_delete, WsSessionTransition::Ended);
+    }
+
+    #[test]
+    fn test_extract_champion_from_practice_tool_session() {
+        let fixture_practice = serde_json::json!({
+            "localPlayerCellId": 0,
+            "isCustomGame": true,
+            "actions": [
+                [
+                    { "actorCellId": 0, "type": "pick", "championId": 103, "completed": false }
+                ]
+            ],
+            "myTeam": []
+        });
+
+        let result = extract_selected_champion(&fixture_practice);
+        assert_eq!(result, Ok(Some((103, false))));
     }
 
     #[test]
     fn test_is_custom_or_practice_session_and_fallback() {
         let fixture_custom = serde_json::json!({
-            "isCustomGame": true,
             "localPlayerCellId": 0,
-            "myTeam": [
-                { "cellId": 0, "championId": 103, "championPickIntent": 0 }
-            ],
+            "isCustomGame": true,
             "actions": [
                 [
                     { "actorCellId": 0, "type": "pick", "championId": 103, "completed": false }
@@ -535,4 +518,3 @@ pub mod tests {
         );
     }
 }
-

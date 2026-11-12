@@ -52,7 +52,9 @@ export function FiltersHeader({
 
             <div className="champ-meta-row">
               <span className="badge-meta">
-                {champSelect?.queue_mode === "Aram"
+                {champSelect?.queue_mode === "AramMayhem"
+                  ? "ARAM Mayhem (Howling Abyss)"
+                  : champSelect?.queue_mode === "Aram"
                   ? "ARAM (Howling Abyss)"
                   : champSelect?.queue_mode === "PracticeTool"
                   ? "Modo Treino (Build Ranqueada)"

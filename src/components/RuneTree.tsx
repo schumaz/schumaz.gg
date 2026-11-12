@@ -11,6 +11,31 @@ export function RuneTree({
   selectedRunePageIndex,
   onSelectRunePage,
 }: RuneTreeProps) {
+  if (build.supports_runes === false) {
+    return (
+      <section className="card runes-tree-card mayhem-notice-card" data-testid="runes-tree">
+        <div className="mayhem-notice-content">
+          <div className="mayhem-badge">⚡ ARAM Mayhem</div>
+          <h3 className="mayhem-title">Runas Desativadas</h3>
+          <p className="card-desc">
+            O modo <strong>ARAM Mayhem</strong> não suporta ajuste de runas no lobby da Riot Games.
+            A partida utiliza o sistema dinâmico de <strong>Aprimoramentos (Augments)</strong> durante o jogo.
+          </p>
+          <div className="mayhem-info-box">
+            <div className="mayhem-info-item">
+              <span className="mayhem-check">✓</span>
+              <span>Feitiços dinâmicos recomendados por volume de partidas</span>
+            </div>
+            <div className="mayhem-info-item">
+              <span className="mayhem-check">✓</span>
+              <span>Builds, Core Trio e Itens da loja aplicados automaticamente</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const activeRunePage =
     build.rune_pages && build.rune_pages.length > selectedRunePageIndex
       ? build.rune_pages[selectedRunePageIndex]

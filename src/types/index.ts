@@ -125,4 +125,5 @@ export interface ChampionBuild {
   active_patch?: string;
   available_patches?: string[];
   patch_fallback_applied?: boolean;
+  supports_runes?: boolean;
 }

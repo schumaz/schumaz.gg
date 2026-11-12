@@ -1,24 +1,28 @@
 use super::models::{ChampionBuild, ItemBlock};
+use crate::ws_listener::QUEUE_ARAM_MAYHEM;
 
 /// Maps a queue ID into an OP.GG queue argument string ("aram" or "ranked").
 pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
     match queue_id {
-        450 => "aram",
+        450 | QUEUE_ARAM_MAYHEM => "aram",
         _ => "ranked",
     }
 }
 
 /// Returns sensible default summoner spells adapted to the queue type.
-/// ARAM: Flash (4) + Snowball/Mark (32); Summoner's Rift: Flash (4) + Ignite (14).
+/// ARAM & ARAM Mayhem: Flash (4) + Snowball/Mark (32); Summoner's Rift: Flash (4) + Ignite (14).
 pub fn default_spells_for_queue(queue_id: i32) -> (i32, i32) {
-    if queue_id == 450 { (4, 32) } else { (4, 14) }
+    if queue_id == 450 || queue_id == QUEUE_ARAM_MAYHEM {
+        (4, 32)
+    } else {
+        (4, 14)
+    }
 }
 
 /// Fallback default lane when offline or when OP.GG ranking is unavailable.
 pub fn champion_default_lane(_champion_name: &str) -> &'static str {
     "mid"
 }
-
 
 /// Normalizes DataDragon champion key into OP.GG's required champion name enum format.
 pub fn champion_key_to_opgg_name(key: &str) -> String {
@@ -49,7 +53,7 @@ pub fn build_fallback_champion_build(
         5001, // Health Scaling
     ];
 
-    let starter_items = if queue_id == 450 {
+    let starter_items = if queue_id == 450 || queue_id == QUEUE_ARAM_MAYHEM {
         vec![2051, 2003] // Guardian's Horn/Blade + Potion
     } else {
         vec![1055, 2003] // Doran's Blade + Health Potion
@@ -107,19 +111,22 @@ pub fn build_fallback_champion_build(
         sub_style_icon_url: String::new(),
         perks: vec![],
         spells: vec![],
+        supports_runes: queue_id != QUEUE_ARAM_MAYHEM,
         ..Default::default()
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_opgg_queue_param_and_default_spells_adaptation() {
         assert_eq!(opgg_queue_param_from_id(450), "aram");
         assert_eq!(default_spells_for_queue(450), (4, 32)); // Flash + Snowball
+
+        assert_eq!(opgg_queue_param_from_id(QUEUE_ARAM_MAYHEM), "aram");
+        assert_eq!(default_spells_for_queue(QUEUE_ARAM_MAYHEM), (4, 32));
 
         assert_eq!(opgg_queue_param_from_id(420), "ranked");
         assert_eq!(default_spells_for_queue(420), (4, 14)); // Flash + Ignite
@@ -136,6 +143,7 @@ mod tests {
         assert_eq!(aram_fallback.selected_perk_ids.len(), 9);
         assert_eq!(aram_fallback.spell1_id, 4);
         assert_eq!(aram_fallback.spell2_id, 32);
+        assert!(aram_fallback.supports_runes);
         assert_eq!(aram_fallback.item_blocks.len(), 5);
         assert_eq!(aram_fallback.item_blocks[0].title, "Itens Iniciais");
         assert_eq!(aram_fallback.item_blocks[1].title, "Primeiros 3 Itens");
@@ -146,15 +154,23 @@ mod tests {
             "Itens Situacionais / Úteis"
         );
 
+        let mayhem_fallback = build_fallback_champion_build(103, "Ahri", QUEUE_ARAM_MAYHEM);
+        assert_eq!(mayhem_fallback.spell1_id, 4);
+        assert_eq!(mayhem_fallback.spell2_id, 32);
+        assert_eq!(mayhem_fallback.item_blocks[0].item_ids, vec![2051, 2003]);
+        assert!(!mayhem_fallback.supports_runes);
+
         let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
         assert_eq!(ranked_fallback.spell1_id, 4);
         assert_eq!(ranked_fallback.spell2_id, 14);
+        assert!(ranked_fallback.supports_runes);
 
         let practice_fallback = build_fallback_champion_build(103, "Ahri", -1);
         assert_eq!(practice_fallback.selected_perk_ids.len(), 9);
         assert_eq!(practice_fallback.spell1_id, 4);
         assert_eq!(practice_fallback.spell2_id, 14);
         assert_eq!(practice_fallback.item_blocks[0].item_ids, vec![1055, 2003]);
+        assert!(practice_fallback.supports_runes);
     }
 }

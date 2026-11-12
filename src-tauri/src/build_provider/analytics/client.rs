@@ -1,5 +1,7 @@
-use super::super::fallback::{build_fallback_champion_build, champion_key_to_opgg_name, opgg_queue_param_from_id};
 use super::super::ddragon::enrich_build_with_ddragon;
+use super::super::fallback::{
+    build_fallback_champion_build, champion_key_to_opgg_name, opgg_queue_param_from_id,
+};
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::mcp_parser::extract_mcp_grouped_item_lists;
 use super::rest_parser::parse_opgg_analysis_payload;
@@ -60,6 +62,17 @@ pub async fn fetch_opgg_champion_analysis(
     Ok(json_body)
 }
 
+/// Helper function to fetch champion analysis and return JSON body directly.
+pub async fn fetch_opgg_analysis_json(
+    client: &reqwest::Client,
+    champion_name: &str,
+    queue: &str,
+) -> Result<serde_json::Value, String> {
+    let json_body =
+        fetch_opgg_champion_analysis(client, OPGG_MCP_ENDPOINT, champion_name, queue).await?;
+    Ok(json_body)
+}
+
 /// High-level function that fetches the recommended build for a champion with automatic resilient fallback.
 pub async fn get_recommended_build_with_endpoint(
     client: &reqwest::Client,
@@ -85,6 +98,7 @@ pub async fn get_recommended_build_with_endpoint(
             Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
         };
 
+    build.supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
     enrich_build_with_ddragon(&mut build, ddragon_cache);
     build
 }
@@ -216,4 +230,3 @@ pub async fn fetch_opgg_mcp_depth_items(
     }
     Ok((fourth, fifth, sixth))
 }
-
