@@ -6,11 +6,10 @@ interface StatusDockProps {
 
 export function StatusDock({ summoner }: StatusDockProps) {
   return (
-    <header className="header">
-      <h1 className="title">schumaz.gg</h1>
-      <p className="subtitle">Assistente de Alto Desempenho para League of Legends</p>
+    <header className="header" data-tauri-drag-region>
+      <h1 className="title sr-only" data-tauri-drag-region>schumaz.gg</h1>
 
-      <div className="status-badge-container">
+      <div className="status-badge-container" data-tauri-drag-region>
         {summoner ? (
           <div className="status-badge connected" data-testid="status-connected">
             <span className="dot dot-green"></span>
@@ -22,7 +21,7 @@ export function StatusDock({ summoner }: StatusDockProps) {
         ) : (
           <div className="status-badge disconnected" data-testid="status-disconnected">
             <span className="dot dot-orange"></span>
-            <span>Aguardando cliente do LoL (LeagueClientUx.exe)...</span>
+            <span>Aguardando cliente do LoL</span>
           </div>
         )}
       </div>

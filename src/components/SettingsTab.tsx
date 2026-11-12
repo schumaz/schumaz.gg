@@ -17,7 +17,7 @@ export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProp
           <div className="settings-group-header">
             <h2>Injeção Automática</h2>
             <p className="card-desc">
-              Escolha quais elementos da recomendação de build devem ser aplicados automaticamente no cliente local durante o Champion Select.
+              Sincronização e aplicação automática de dados no cliente durante a seleção de campeões.
             </p>
           </div>
 
@@ -26,7 +26,7 @@ export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProp
               <div className="settings-item-text">
                 <span className="settings-item-title">Injetar Runas Automaticamente</span>
                 <span className="settings-item-desc">
-                  Aplica a página de runas oficial mais utilizada diretamente no cliente do jogo.
+                  Aplica a página de runas recomendada diretamente na conta do jogador.
                 </span>
               </div>
               <input
@@ -42,7 +42,7 @@ export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProp
               <div className="settings-item-text">
                 <span className="settings-item-title">Injetar Feitiços de Invocador</span>
                 <span className="settings-item-desc">
-                  Aplica os feitiços recomendados para a rota e fila atual (ex: Golpear na Selva, Bola de Neve no ARAM).
+                  Configura os feitiços de invocador otimizados para a rota e fila da partida.
                 </span>
               </div>
               <input
@@ -58,7 +58,7 @@ export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProp
               <div className="settings-item-text">
                 <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
                 <span className="settings-item-desc">
-                  Organiza a build recomendada em blocos prontos na loja da sua partida.
+                  Gera blocos de itens recomendados na loja in-game da partida.
                 </span>
               </div>
               <input
@@ -77,7 +77,7 @@ export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProp
           <div className="settings-group-header">
             <h2>Posicionamento do Flash</h2>
             <p className="card-desc">
-              Escolha se prefere posicionar o Flash na tecla D ou F por padrão ao aplicar os feitiços recomendados.
+              Tecla designada para o feitiço Flash ao aplicar as recomendações.
             </p>
           </div>
 
@@ -88,21 +88,20 @@ export function SettingsTab({ preferences, onUpdatePreference }: SettingsTabProp
                 className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
                 onClick={() => onUpdatePreference("flashKey", "D")}
                 aria-pressed={preferences.flashKey === "D"}
+                aria-label="D"
               >
-                <span>Flash no D</span>
+                <span>D</span>
               </button>
               <button
                 type="button"
                 className={`segment-btn ${preferences.flashKey === "F" ? "active" : ""}`}
                 onClick={() => onUpdatePreference("flashKey", "F")}
                 aria-pressed={preferences.flashKey === "F"}
+                aria-label="F"
               >
-                <span>Flash no F</span>
+                <span>F</span>
               </button>
             </div>
-            <span className="segmented-caption">
-              Tecla ativa: <strong>Flash no {preferences.flashKey}</strong> (invertendo feitiços se necessário).
-            </span>
           </div>
         </section>
       </div>

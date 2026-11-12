@@ -5,7 +5,7 @@ interface IdleStateProps {
   errorMsg: string | null;
 }
 
-export function IdleState({ summoner, errorMsg }: IdleStateProps) {
+export function IdleState({ summoner: _summoner, errorMsg }: IdleStateProps) {
   return (
     <div className="idle-state-container">
       <section className="card idle-card">
@@ -18,16 +18,8 @@ export function IdleState({ summoner, errorMsg }: IdleStateProps) {
         </div>
         <h2>Aguardando Seleção de Campeões</h2>
         <p className="card-desc">
-          Entre em uma partida ou sala de draft no League of Legends. Assim que você selecionar ou travar um
-          campeão, as runas recomendadas, feitiços e itens da build mais populares serão carregados e aplicados
-          automaticamente a partir dos dados do OP.GG.
+          Selecione ou confirme um campeão no League of Legends para carregar runas, feitiços e itens automaticamente.
         </p>
-
-        {!summoner && (
-          <p className="hint-text">
-            * Abra o cliente do LoL (LeagueClientUx.exe) para habilitar a conexão e injeção direta.
-          </p>
-        )}
 
         {errorMsg && (
           <div className="alert alert-error" role="alert">

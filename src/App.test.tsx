@@ -320,7 +320,7 @@ describe("App Component", () => {
     expect(screen.getByLabelText("Injetar Runas Automaticamente")).toBeChecked();
     expect(screen.getByLabelText("Injetar Feitiços de Invocador")).toBeChecked();
     expect(screen.getByLabelText("Injetar Conjuntos de Itens na Loja")).toBeChecked();
-    expect(screen.getByRole("button", { name: /Flash no D/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "D" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("heading", { name: /Critério da Build Recomendada/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId("priority-most-popular")).not.toBeInTheDocument();
     expect(screen.queryByTestId("priority-highest-winrate")).not.toBeInTheDocument();
@@ -337,7 +337,7 @@ describe("App Component", () => {
     expect(runesToggle).not.toBeChecked();
 
     // Switch Flash to F
-    const flashFBtn = screen.getByRole("button", { name: /Flash no F/i });
+    const flashFBtn = screen.getByRole("button", { name: "F" });
     fireEvent.click(flashFBtn);
     expect(flashFBtn).toHaveAttribute("aria-pressed", "true");
 
@@ -398,7 +398,7 @@ describe("App Component", () => {
     const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
     fireEvent.click(settingsBtn);
 
-    const flashDBtn = screen.getByRole("button", { name: /Flash no D/i });
+    const flashDBtn = screen.getByRole("button", { name: "D" });
     await act(async () => {
       fireEvent.click(flashDBtn);
     });

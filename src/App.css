@@ -1,3 +1,15 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 :root {
   --bg-base: #000000;
   --bg-surface: #0a0a0a;
@@ -83,8 +95,13 @@ img {
 
 /* Header & Status Section */
 .header {
-  text-align: center;
-  margin-bottom: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 16px 2px 16px;
+  margin-bottom: 6px;
+  background: transparent;
+  border: none;
   flex-shrink: 0;
 }
 
@@ -1014,7 +1031,11 @@ img {
 
 .segment-btn {
   flex: 1;
-  padding: 8px 16px;
+  padding: 8px 24px;
+  min-width: 60px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   background: transparent;
   border: none;
   border-radius: 8px;

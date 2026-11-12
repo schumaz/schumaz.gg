@@ -37,7 +37,7 @@ describe("SettingsTab", () => {
       />
     );
 
-    const flashFBtn = screen.getByText("Flash no F");
+    const flashFBtn = screen.getByRole("button", { name: "F" });
     fireEvent.click(flashFBtn);
 
     expect(handleUpdate).toHaveBeenCalledWith("flashKey", "F");
