@@ -60,9 +60,9 @@ export function FiltersHeader({
                   ? "Modo Treino (Build Ranqueada)"
                   : "Summoner's Rift (Ranqueada / Normal)"}
               </span>
-              {build.pick_rate > 0 && (
+              {(build.pick_rate ?? 0) > 0 && (
                 <span className="badge badge-neutral badge-stat">
-                  {build.pick_rate.toFixed(1)}% Pick Rate
+                  {(build.pick_rate ?? 0).toFixed(1)}% Pick Rate
                 </span>
               )}
               {build.patch_fallback_applied && (

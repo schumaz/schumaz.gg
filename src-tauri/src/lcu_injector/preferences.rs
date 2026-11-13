@@ -1,34 +1,5 @@
-use serde::{Deserialize, Serialize};
+pub use crate::models::{FlashKeyPreference, UserPreferences};
 use std::sync::{OnceLock, RwLock};
-
-/// Represents the user's preferred key for Flash (D vs F).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub enum FlashKeyPreference {
-    #[default]
-    D,
-    F,
-}
-
-/// User preferences synchronized between frontend and backend.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UserPreferences {
-    pub auto_inject_runes: bool,
-    pub auto_inject_spells: bool,
-    pub auto_inject_items: bool,
-    pub flash_key: FlashKeyPreference,
-}
-
-impl Default for UserPreferences {
-    fn default() -> Self {
-        Self {
-            auto_inject_runes: true,
-            auto_inject_spells: true,
-            auto_inject_items: true,
-            flash_key: FlashKeyPreference::D,
-        }
-    }
-}
 
 static USER_PREFERENCES: OnceLock<RwLock<UserPreferences>> = OnceLock::new();
 

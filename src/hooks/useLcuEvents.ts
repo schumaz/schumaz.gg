@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import {
   ChampionBuild,
   ChampSelectedPayload,
   FlashKeyPreference,
   SummonerInfo,
+  commands,
+  events,
 } from "../types";
 import { computeOrderedSpells } from "../utils/spells";
 
@@ -31,14 +31,14 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const updatedBuild = await invoke<ChampionBuild>("update_build_filters", {
-        championId: champId,
-        queueId: qId,
-        position: filterType === "position" ? value : (build.active_position || null),
-        tier: filterType === "tier" ? value : (build.active_tier || null),
-        region: filterType === "region" ? value : (build.active_region || null),
-        patch: filterType === "patch" ? value : (build.active_patch || null),
-      });
+      const updatedBuild = await commands.updateBuildFilters(
+        champId,
+        qId,
+        filterType === "position" ? value : (build.active_position || null),
+        filterType === "tier" ? value : (build.active_tier || null),
+        filterType === "region" ? value : (build.active_region || null),
+        filterType === "patch" ? value : (build.active_patch || null)
+      );
       if (updatedBuild) {
         setBuild(updatedBuild);
       }
@@ -56,7 +56,8 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
 
   useEffect(() => {
     // Initial check for summoner status
-    invoke<SummonerInfo | null>("get_summoner_status")
+    commands
+      .getSummonerStatus()
       .then((data) => {
         if (data) setSummoner(data);
       })
@@ -71,18 +72,18 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
 
     const setupListeners = async () => {
       try {
-        unlistenConnected = await listen<SummonerInfo>("lcu-connected", (event) => {
+        unlistenConnected = await events.lcuConnected.listen((event) => {
           setSummoner(event.payload);
           setErrorMsg(null);
         });
 
-        unlistenDisconnected = await listen("lcu-disconnected", () => {
+        unlistenDisconnected = await events.lcuDisconnected.listen(() => {
           setSummoner(null);
           setChampSelect(null);
           setBuild(null);
         });
 
-        unlistenChampSelected = await listen<ChampSelectedPayload>("champ-selected", async (event) => {
+        unlistenChampSelected = await events.champSelected.listen(async (event) => {
           setChampSelect((prev) => {
             if (prev?.champion_id !== event.payload.champion_id) {
               setSpellsInverted(false);
@@ -96,14 +97,14 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
           // Fetch recommended build for selected champion if not already received
           try {
             if (event.payload.assigned_position) {
-              const recommended = await invoke<ChampionBuild>("update_build_filters", {
-                championId: event.payload.champion_id,
-                queueId: event.payload.queue_id || 420,
-                position: event.payload.assigned_position,
-                tier: null,
-                region: null,
-                patch: null,
-              });
+              const recommended = await commands.updateBuildFilters(
+                event.payload.champion_id,
+                event.payload.queue_id || 420,
+                event.payload.assigned_position,
+                null,
+                null,
+                null
+              );
               if (recommended) {
                 setBuild((prev) => {
                   if (prev?.champion_id !== recommended.champion_id) {
@@ -115,10 +116,10 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
                 });
               }
             } else {
-              const recommended = await invoke<ChampionBuild>("get_recommended_build_for_champion", {
-                championId: event.payload.champion_id,
-                queueId: event.payload.queue_id || 420,
-              });
+              const recommended = await commands.getRecommendedBuildForChampion(
+                event.payload.champion_id,
+                event.payload.queue_id || 420
+              );
               if (recommended) {
                 setBuild((prev) => {
                   if (prev?.champion_id !== recommended.champion_id) {
@@ -135,7 +136,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
           }
         });
 
-        unlistenChampSelectEnded = await listen("champ-select-ended", () => {
+        unlistenChampSelectEnded = await events.champSelectEnded.listen(() => {
           setChampSelect(null);
           setBuild(null);
           setSpellsInverted(false);
@@ -144,7 +145,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
           setSelectedBuildIndex(0);
         });
 
-        unlistenBuild = await listen<ChampionBuild>("recommended-build", (event) => {
+        unlistenBuild = await events.recommendedBuild.listen((event) => {
           setBuild((prev) => {
             if (prev?.champion_id !== event.payload.champion_id) {
               setSelectedSecondarySpellId(null);
@@ -189,12 +190,12 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     );
     if (reordered.length >= 2) {
       try {
-        await invoke("inject_summoner_spells", {
-          spell1Id: reordered[0].id,
-          spell2Id: reordered[1].id,
-          championId: build?.champion_id,
-          secondarySpellId: spellId,
-        });
+        await commands.injectSummonerSpells(
+          reordered[0].id,
+          reordered[1].id,
+          build?.champion_id ?? null,
+          spellId
+        );
       } catch (e) {
         console.warn("Failed to inject secondary spell change:", e);
       }
@@ -206,14 +207,14 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     setSelectedRunePageIndex(pageIndex);
     const page = build.rune_pages[pageIndex];
     try {
-      await invoke("inject_rune_page", {
-        championId: build.champion_id,
-        championName: build.champion_name,
+      await commands.injectRunePage(
+        build.champion_id,
+        build.champion_name,
         pageIndex,
-        primaryStyleId: page.primary_style_id,
-        subStyleId: page.sub_style_id,
-        selectedPerkIds: page.selected_perk_ids,
-      });
+        page.primary_style_id,
+        page.sub_style_id,
+        page.selected_perk_ids
+      );
     } catch (e) {
       console.warn("Failed to inject chosen rune page:", e);
     }
@@ -223,12 +224,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     if (!build?.build_options || index >= build.build_options.length) return;
     setSelectedBuildIndex(index);
     try {
-      await invoke("inject_item_build", {
-        championId: build.champion_id,
-        buildIndex: index,
-        coreIndex: index,
-        finalIndex: index,
-      });
+      await commands.injectItemBuild(build.champion_id, index, index, index);
     } catch (e) {
       console.warn("Failed to inject chosen unified build:", e);
     }

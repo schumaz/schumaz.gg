@@ -3,9 +3,10 @@ use irelia::ws::types::{Event, EventKind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
-use tauri::Emitter;
+use tauri_specta::Event as SpectaEvent;
 
 use super::extract::*;
+use crate::models;
 
 /// Custom error handler for irelia WebSocket that retries connection on transient drops.
 struct ReconnectingErrorHandler;
@@ -37,7 +38,7 @@ async fn handle_session_transition(
                 {
                     crate::lcu_injector::clear_champion_selections();
                 }
-                let _ = handle.emit("champ-selected", &payload);
+                let _ = models::ChampSelected(payload.clone()).emit(handle);
                 *last_guard = current_opt;
 
                 // Automatically fetch recommended build and inject when locked in or in Practice Tool
@@ -73,14 +74,14 @@ async fn handle_session_transition(
                             return;
                         };
 
-                        let _ = handle_for_inject.emit("recommended-build", &build);
+                        let _ = models::RecommendedBuild(build.clone()).emit(&handle_for_inject);
                         let report = crate::lcu_injector::inject_champion_build(
                             &conn,
                             summoner.summoner_id,
                             &build,
                         )
                         .await;
-                        let _ = handle_for_inject.emit("build-injected", &report);
+                        let _ = models::BuildInjected(report).emit(&handle_for_inject);
                     });
                 }
             }
@@ -88,7 +89,7 @@ async fn handle_session_transition(
         WsSessionTransition::Ended => {
             let mut last_guard = last_payload_ref.lock().await;
             if last_guard.is_some() {
-                let _ = handle.emit("champ-select-ended", ());
+                let _ = models::ChampSelectEnded.emit(handle);
                 *last_guard = None;
             }
             q_ref.store(0, Ordering::Relaxed);
@@ -140,7 +141,7 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                 Ok(None) => {
                     let mut last_guard = fallback_last_ref.lock().await;
                     if last_guard.is_some() {
-                        let _ = fallback_handle.emit("champ-select-ended", ());
+                        let _ = models::ChampSelectEnded.emit(&fallback_handle);
                         *last_guard = None;
                     }
                     fallback_q_ref.store(0, Ordering::Relaxed);

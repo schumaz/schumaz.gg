@@ -1,6 +1,6 @@
 use super::mcp_parser::parse_opgg_mcp_text;
 use super::super::spells::extract_summoner_spell_choices;
-use super::mcp_parser::parse_json_item_entries;
+use super::mcp_extractors::parse_json_item_entries;
 use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, RunePageOption, SpellMetadata};
 use super::super::runes::extract_top_rune_pages;

@@ -36,6 +36,9 @@ Desktop.ini
 
 # Project specific docs/rules
 .antigravityrules
+.antigravityignore
+.geminiignore
+docs/
 ARCHITECTURE.md
 architecture.md
 PLAN.md

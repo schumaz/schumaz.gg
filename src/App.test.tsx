@@ -388,6 +388,8 @@ describe("App Component", () => {
     expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
       spell1Id: 14,
       spell2Id: 4,
+      championId: null,
+      secondarySpellId: null,
     });
 
     // Check localStorage reflects the unified preference (F)
@@ -407,6 +409,8 @@ describe("App Component", () => {
     expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
       spell1Id: 4,
       spell2Id: 14,
+      championId: null,
+      secondarySpellId: null,
     });
   });
 

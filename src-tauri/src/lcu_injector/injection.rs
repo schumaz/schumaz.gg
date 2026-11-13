@@ -1,20 +1,10 @@
 use super::*;
 use crate::build_provider::ChampionBuild;
-use serde::{Deserialize, Serialize};
+pub use crate::models::InjectionReport;
 
 pub const PERKS_CURRENT_PAGE_ENDPOINT: &str = "/lol-perks/v1/currentpage";
 pub const PERKS_PAGES_ENDPOINT: &str = "/lol-perks/v1/pages";
 pub const CHAMP_SELECT_MY_SELECTION_ENDPOINT: &str = "/lol-champ-select/v1/session/my-selection";
-
-/// Summary report returned after attempting an injection into the LCU.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct InjectionReport {
-    pub champion_name: String,
-    pub runes_injected: bool,
-    pub spells_injected: bool,
-    pub items_injected: bool,
-    pub message: String,
-}
 
 /// Injects rune page into the LCU. Reuses and overwrites the single schumaz.gg rune page across matches
 /// instead of creating a new page every match.

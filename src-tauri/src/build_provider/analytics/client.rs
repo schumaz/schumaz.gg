@@ -3,7 +3,7 @@ use super::super::fallback::{
     build_fallback_champion_build, champion_key_to_opgg_name, opgg_queue_param_from_id,
 };
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
-use super::mcp_parser::extract_mcp_grouped_item_lists;
+use super::mcp_extractors::extract_mcp_grouped_item_lists;
 use super::rest_parser::parse_opgg_analysis_payload;
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";

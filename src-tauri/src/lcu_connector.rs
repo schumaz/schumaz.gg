@@ -1,39 +1,14 @@
-//! Module 1: Connection and Authentication with the LCU (LeagueClientUx.exe)
+﻿//! Module 1: Connection and Authentication with the LCU (LeagueClientUx.exe)
 //! Handles locating the client, authenticating via Basic Auth, and performing REST calls.
 
+pub use crate::models::{LcuStatus, SummonerInfo};
 use irelia::rest::LcuClient;
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tauri::Emitter;
+use tauri_specta::Event;
 
 pub const CURRENT_SUMMONER_ENDPOINT: &str = "/lol-summoner/v1/current-summoner";
 pub const GAMEFLOW_SESSION_ENDPOINT: &str = "/lol-gameflow/v1/session";
 pub const CHAMP_SELECT_SESSION_ENDPOINT: &str = "/lol-champ-select/v1/session";
-
-/// Represents basic summoner details parsed from `/lol-summoner/v1/current-summoner`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SummonerInfo {
-    #[serde(rename = "summonerId")]
-    pub summoner_id: u64,
-    #[serde(rename = "gameName", default)]
-    pub game_name: String,
-    #[serde(rename = "tagLine", default)]
-    pub tag_line: String,
-    #[serde(rename = "displayName", default)]
-    pub display_name: String,
-    #[serde(rename = "summonerLevel")]
-    pub summoner_level: u32,
-    #[serde(rename = "profileIconId")]
-    pub profile_icon_id: u32,
-}
-
-/// Represents the connection state of the LCU.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "status", content = "data")]
-pub enum LcuStatus {
-    Disconnected,
-    Connected(SummonerInfo),
-}
 
 /// Calculates the reconnection backoff duration in seconds.
 /// Starts at 2s and caps at 10s to conserve CPU while remaining responsive.
@@ -286,7 +261,7 @@ pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
                     Ok(summoner) => {
                         let new_status = LcuStatus::Connected(summoner.clone());
                         if should_emit_status_change(&current_status, &new_status) {
-                            let _ = app_handle.emit("lcu-connected", &summoner);
+                            let _ = crate::models::LcuConnected(summoner.clone()).emit(&app_handle);
                             current_status = new_status;
                         }
                         reconnect_attempt = 0;
@@ -297,7 +272,7 @@ pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
                         // Process found but summoner endpoint not ready yet (e.g., logging in)
                         let new_status = LcuStatus::Disconnected;
                         if should_emit_status_change(&current_status, &new_status) {
-                            let _ = app_handle.emit("lcu-disconnected", ());
+                            let _ = crate::models::LcuDisconnected.emit(&app_handle);
                             current_status = new_status;
                         }
                         let delay = calculate_backoff_secs(reconnect_attempt);
@@ -309,7 +284,7 @@ pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
             Err(_) => {
                 let new_status = LcuStatus::Disconnected;
                 if should_emit_status_change(&current_status, &new_status) {
-                    let _ = app_handle.emit("lcu-disconnected", ());
+                    let _ = crate::models::LcuDisconnected.emit(&app_handle);
                     current_status = new_status;
                 }
                 let delay = calculate_backoff_secs(reconnect_attempt);

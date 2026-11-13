@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
-import { ActiveTab, FlashKeyPreference } from "./types";
+import { ActiveTab, FlashKeyPreference, commands } from "./types";
 import { usePreferences } from "./hooks/usePreferences";
 import { useLcuEvents } from "./hooks/useLcuEvents";
 import { computeOrderedSpells } from "./utils/spells";
@@ -33,10 +32,7 @@ function App() {
       spellsInverted
     );
     if (reordered.length >= 2) {
-      invoke("inject_summoner_spells", {
-        spell1Id: reordered[0].id,
-        spell2Id: reordered[1].id,
-      }).catch(() => {});
+      commands.injectSummonerSpells(reordered[0].id, reordered[1].id, null, null).catch(() => {});
     }
   };
 

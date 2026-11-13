@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   DEFAULT_PREFERENCES,
   FlashKeyPreference,
   PREFERENCES_STORAGE_KEY,
   UserPreferences,
+  commands,
 } from "../types";
 
 export function loadInitialPreferences(): UserPreferences {
@@ -39,7 +39,7 @@ export function usePreferences(onFlashKeyChange?: (newKey: FlashKeyPreference) =
 
   useEffect(() => {
     // Sync initial preferences with backend
-    invoke("sync_user_preferences", { preferences }).catch(() => {});
+    commands.syncUserPreferences(preferences).catch(() => {});
   }, []);
 
   const updatePreference = <K extends keyof UserPreferences>(
@@ -53,7 +53,7 @@ export function usePreferences(onFlashKeyChange?: (newKey: FlashKeyPreference) =
       } catch {
         // Ignore localStorage quota errors
       }
-      invoke("sync_user_preferences", { preferences: next }).catch(() => {});
+      commands.syncUserPreferences(next).catch(() => {});
       return next;
     });
 
