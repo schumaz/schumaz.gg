@@ -522,14 +522,17 @@ describe("App Component", () => {
       expect(screen.getByTestId("champ-filters-bar")).toBeInTheDocument();
     });
 
-    // Check 4 select elements exist with correct initial values
-    const tierSelect = screen.getByTestId("filter-tier") as HTMLSelectElement;
-    const posSelect = screen.getByTestId("filter-position") as HTMLSelectElement;
-    const regionSelect = screen.getByTestId("filter-region") as HTMLSelectElement;
+    // Check 4 filter controls exist with correct initial values
+    const tierSelect = screen.getByTestId("filter-tier");
+    const posSelect = screen.getByTestId("filter-position");
+    const regionSelect = screen.getByTestId("filter-region");
     const patchSelect = screen.getByTestId("filter-patch") as HTMLSelectElement;
 
-    expect(tierSelect.value).toBe("emerald_plus");
-    const tierOptionValues = Array.from(tierSelect.options).map((opt) => opt.value);
+    expect(tierSelect).toHaveAttribute("data-value", "emerald_plus");
+    fireEvent.click(tierSelect);
+    const tierOptionValues = Array.from(
+      screen.getByRole("listbox", { name: "Elo:" }).querySelectorAll('[role="option"]')
+    ).map((opt) => opt.getAttribute("data-value"));
     expect(tierOptionValues).toEqual([
       "all",
       "challenger",
@@ -543,13 +546,17 @@ describe("App Component", () => {
       "bronze",
       "iron",
     ]);
-    expect(posSelect.value).toBe("mid");
-    expect(regionSelect.value).toBe("global");
+    fireEvent.keyDown(tierSelect, { key: "Escape" });
+    expect(posSelect).toHaveAttribute("data-value", "mid");
+    expect(regionSelect).toHaveAttribute("data-value", "global");
     expect(patchSelect.value).toBe("16.22");
 
     // Change Rota to adc
     await act(async () => {
-      fireEvent.change(posSelect, { target: { value: "adc" } });
+      fireEvent.click(posSelect);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("option", { name: "Atirador (Bot)" }));
     });
 
     expect(invoke).toHaveBeenCalledWith("update_build_filters", {
@@ -563,7 +570,10 @@ describe("App Component", () => {
 
     // Change Elo to diamond_plus
     await act(async () => {
-      fireEvent.change(tierSelect, { target: { value: "diamond_plus" } });
+      fireEvent.click(tierSelect);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("option", { name: "Diamante +" }));
     });
 
     expect(invoke).toHaveBeenCalledWith("update_build_filters", expect.objectContaining({
@@ -987,9 +997,12 @@ describe("App Component", () => {
     expect(screen.getByText("ARAM (Howling Abyss)")).toBeInTheDocument();
     expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
 
-    const tierSelect = screen.getByTestId("filter-tier") as HTMLSelectElement;
+    const tierSelect = screen.getByTestId("filter-tier");
     await act(async () => {
-      fireEvent.change(tierSelect, { target: { value: "diamond_plus" } });
+      fireEvent.click(tierSelect);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("option", { name: "Diamante +" }));
     });
 
     expect(invoke).toHaveBeenCalledWith("update_build_filters", {
@@ -1050,9 +1063,12 @@ describe("App Component", () => {
     expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
     expect(screen.queryByTestId("rune-pages-selector")).not.toBeInTheDocument();
 
-    const tierSelect = screen.getByTestId("filter-tier") as HTMLSelectElement;
+    const tierSelect = screen.getByTestId("filter-tier");
     await act(async () => {
-      fireEvent.change(tierSelect, { target: { value: "master_plus" } });
+      fireEvent.click(tierSelect);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("option", { name: "Mestre +" }));
     });
 
     expect(invoke).toHaveBeenCalledWith("update_build_filters", {

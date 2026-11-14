@@ -366,6 +366,8 @@ img {
 
 /* Champion Hero Overview Card */
 .champ-hero-card {
+  position: relative;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -515,6 +517,7 @@ img {
 }
 
 .filter-select {
+  min-height: 29px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
@@ -547,6 +550,156 @@ img {
 .filter-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Custom Accessible Filter Dropdowns (Elo, Rota, Servidor) */
+.filter-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.filter-dropdown.open {
+  z-index: 50;
+}
+
+.filter-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 29px;
+  padding: 4px 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-dropdown-trigger:hover:not(:disabled) {
+  border-color: var(--border-highlight);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.filter-dropdown-trigger:focus-visible,
+.filter-dropdown-trigger[aria-expanded="true"] {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.filter-dropdown-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filter-dropdown-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.filter-dropdown-icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.filter-option-icon {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  display: block;
+}
+
+.filter-flag-svg {
+  width: 18px;
+  height: 13px;
+  border-radius: 2.5px;
+  display: block;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.filter-globe-svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.filter-dropdown-chevron {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.filter-dropdown.open .filter-dropdown-chevron {
+  transform: rotate(180deg);
+  color: var(--text-primary);
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 260px;
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 60;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background-color: #161722;
+  border: 1px solid var(--border-highlight);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(124, 58, 237, 0.12);
+}
+
+.filter-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.filter-dropdown-option.highlighted,
+.filter-dropdown-option:hover {
+  background-color: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.filter-dropdown-option.selected {
+  background-color: var(--accent-subtle);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.filter-dropdown-option-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-dropdown-check {
+  margin-left: 8px;
+  color: var(--accent-primary-hover);
+  flex-shrink: 0;
 }
 
 .patch-fallback-badge {

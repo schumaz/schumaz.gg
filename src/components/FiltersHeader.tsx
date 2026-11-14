@@ -1,4 +1,6 @@
 import { ChampionBuild, ChampSelectedPayload } from "../types";
+import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
+import { RegionFlag } from "./RegionFlag";
 
 interface FiltersHeaderProps {
   build: ChampionBuild;
@@ -9,6 +11,210 @@ interface FiltersHeaderProps {
     value: string
   ) => void;
 }
+
+const CDRAGON_MINI_CRESTS_BASE =
+  "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests";
+const CDRAGON_POSITION_SVG_BASE =
+  "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/svg";
+
+function buildIconImg(src: string, className = "filter-option-icon") {
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      className={className}
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).style.display = "none";
+      }}
+    />
+  );
+}
+
+export const TIER_OPTIONS: FilterDropdownOption[] = [
+  {
+    value: "all",
+    label: "Todos os Elos",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/unranked.svg`),
+  },
+  {
+    value: "challenger",
+    label: "Desafiante",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/challenger.svg`),
+  },
+  {
+    value: "grandmaster",
+    label: "Grão-Mestre",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/grandmaster.svg`),
+  },
+  {
+    value: "master_plus",
+    label: "Mestre +",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/master.svg`),
+  },
+  {
+    value: "diamond_plus",
+    label: "Diamante +",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/diamond.svg`),
+  },
+  {
+    value: "emerald_plus",
+    label: "Esmeralda +",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/emerald.svg`),
+  },
+  {
+    value: "platinum_plus",
+    label: "Platina +",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/platinum.svg`),
+  },
+  {
+    value: "gold_plus",
+    label: "Ouro +",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/gold.svg`),
+  },
+  {
+    value: "silver",
+    label: "Prata",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/silver.svg`),
+  },
+  {
+    value: "bronze",
+    label: "Bronze",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/bronze.svg`),
+  },
+  {
+    value: "iron",
+    label: "Ferro",
+    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/iron.svg`),
+  },
+];
+
+export const POSITION_OPTIONS: FilterDropdownOption[] = [
+  {
+    value: "top",
+    label: "Topo",
+    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-top-light.svg`),
+  },
+  {
+    value: "jungle",
+    label: "Selva",
+    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-jungle-light.svg`),
+  },
+  {
+    value: "mid",
+    label: "Meio",
+    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-middle-light.svg`),
+  },
+  {
+    value: "adc",
+    label: "Atirador (Bot)",
+    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-bottom-light.svg`),
+  },
+  {
+    value: "support",
+    label: "Suporte",
+    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-utility-light.svg`),
+  },
+];
+
+export const REGION_OPTIONS: FilterDropdownOption[] = [
+  {
+    value: "global",
+    label: "Global",
+    title: "Mundial (Global)",
+    icon: <RegionFlag region="global" />,
+  },
+  {
+    value: "br",
+    label: "BR",
+    title: "Brasil (BR)",
+    icon: <RegionFlag region="br" />,
+  },
+  {
+    value: "kr",
+    label: "KR",
+    title: "Coreia (KR)",
+    icon: <RegionFlag region="kr" />,
+  },
+  {
+    value: "na",
+    label: "NA",
+    title: "América do Norte (NA)",
+    icon: <RegionFlag region="na" />,
+  },
+  {
+    value: "euw",
+    label: "EUW",
+    title: "Europa Ocidental (EUW)",
+    icon: <RegionFlag region="euw" />,
+  },
+  {
+    value: "eune",
+    label: "EUNE",
+    title: "Europa Nórdica e Oriental (EUNE)",
+    icon: <RegionFlag region="eune" />,
+  },
+  {
+    value: "lan",
+    label: "LAN",
+    title: "América Latina Norte (LAN)",
+    icon: <RegionFlag region="lan" />,
+  },
+  {
+    value: "las",
+    label: "LAS",
+    title: "América Latina Sul (LAS)",
+    icon: <RegionFlag region="las" />,
+  },
+  {
+    value: "oce",
+    label: "OCE",
+    title: "Oceania (OCE)",
+    icon: <RegionFlag region="oce" />,
+  },
+  {
+    value: "tr",
+    label: "TR",
+    title: "Turquia (TR)",
+    icon: <RegionFlag region="tr" />,
+  },
+  {
+    value: "ru",
+    label: "RU",
+    title: "Rússia (RU)",
+    icon: <RegionFlag region="ru" />,
+  },
+  {
+    value: "jp",
+    label: "JP",
+    title: "Japão (JP)",
+    icon: <RegionFlag region="jp" />,
+  },
+  {
+    value: "me",
+    label: "ME",
+    title: "Oriente Médio (ME)",
+    icon: <RegionFlag region="me" />,
+  },
+  {
+    value: "sg",
+    label: "SG",
+    title: "Singapura (SG)",
+    icon: <RegionFlag region="sg" />,
+  },
+  {
+    value: "tw",
+    label: "TW",
+    title: "Taiwan (TW)",
+    icon: <RegionFlag region="tw" />,
+  },
+  {
+    value: "vn",
+    label: "VN",
+    title: "Vietnã (VN)",
+    icon: <RegionFlag region="vn" />,
+  },
+];
 
 export function FiltersHeader({
   build,
@@ -92,82 +298,50 @@ export function FiltersHeader({
       {/* Filters: Elo Base, Rota (SR only), Servidor, Patch */}
       <div className="champ-filters-bar" data-testid="champ-filters-bar">
         <div className="filter-group">
-          <label htmlFor="filter-tier" className="filter-label">
+          <label id="filter-tier-label" htmlFor="filter-tier" className="filter-label">
             Elo:
           </label>
-          <select
+          <FilterDropdown
             id="filter-tier"
-            data-testid="filter-tier"
-            className="filter-select"
+            labelId="filter-tier-label"
+            testId="filter-tier"
             value={build.active_tier || "emerald_plus"}
+            options={TIER_OPTIONS}
             disabled={loading}
-            onChange={(e) => onFilterChange("tier", e.target.value)}
-          >
-            <option value="all">Todos os Elos</option>
-            <option value="challenger">Desafiante</option>
-            <option value="grandmaster">Grão-Mestre</option>
-            <option value="master_plus">Mestre +</option>
-            <option value="diamond_plus">Diamante +</option>
-            <option value="emerald_plus">Esmeralda +</option>
-            <option value="platinum_plus">Platina +</option>
-            <option value="gold_plus">Ouro +</option>
-            <option value="silver">Prata</option>
-            <option value="bronze">Bronze</option>
-            <option value="iron">Ferro</option>
-          </select>
+            onChange={(val) => onFilterChange("tier", val)}
+          />
         </div>
 
         {!isAram && (
           <div className="filter-group">
-            <label htmlFor="filter-position" className="filter-label">
+            <label id="filter-position-label" htmlFor="filter-position" className="filter-label">
               Rota:
             </label>
-            <select
+            <FilterDropdown
               id="filter-position"
-              data-testid="filter-position"
-              className="filter-select"
+              labelId="filter-position-label"
+              testId="filter-position"
               value={build.active_position || "mid"}
+              options={POSITION_OPTIONS}
               disabled={loading}
-              onChange={(e) => onFilterChange("position", e.target.value)}
-            >
-              <option value="top">Topo</option>
-              <option value="jungle">Selva</option>
-              <option value="mid">Meio</option>
-              <option value="adc">Atirador (Bot)</option>
-              <option value="support">Suporte</option>
-            </select>
+              onChange={(val) => onFilterChange("position", val)}
+            />
           </div>
         )}
 
         <div className="filter-group">
-          <label htmlFor="filter-region" className="filter-label">
+          <label id="filter-region-label" htmlFor="filter-region" className="filter-label">
             Servidor:
           </label>
-          <select
+          <FilterDropdown
             id="filter-region"
-            data-testid="filter-region"
-            className="filter-select"
+            labelId="filter-region-label"
+            testId="filter-region"
             value={build.active_region || "global"}
+            options={REGION_OPTIONS}
             disabled={loading}
-            onChange={(e) => onFilterChange("region", e.target.value)}
-          >
-            <option value="global">Mundial (Global)</option>
-            <option value="br">Brasil (BR)</option>
-            <option value="kr">Coreia (KR)</option>
-            <option value="na">América do Norte (NA)</option>
-            <option value="euw">Europa Ocidental (EUW)</option>
-            <option value="eune">Europa Nórdica e Oriental (EUNE)</option>
-            <option value="lan">América Latina Norte (LAN)</option>
-            <option value="las">América Latina Sul (LAS)</option>
-            <option value="oce">Oceania (OCE)</option>
-            <option value="tr">Turquia (TR)</option>
-            <option value="ru">Rússia (RU)</option>
-            <option value="jp">Japão (JP)</option>
-            <option value="me">Oriente Médio (ME)</option>
-            <option value="sg">Singapura (SG)</option>
-            <option value="tw">Taiwan (TW)</option>
-            <option value="vn">Vietnã (VN)</option>
-          </select>
+            onChange={(val) => onFilterChange("region", val)}
+          />
         </div>
 
         <div className="filter-group">
