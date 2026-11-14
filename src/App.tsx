@@ -235,7 +235,7 @@ function App() {
           )}
         </div>
 
-        {/* View 3: "Ranqueada" Tab (Tier List + Champion Build Detail) */}
+        {/* View 3: "Ranqueada" Tab (Tier List + Read-Only Champion Build Preview) */}
         <RankedTab
           isActive={activeTab === "ranked"}
           filters={ranked.filters}
@@ -247,7 +247,6 @@ function App() {
           buildLoading={ranked.buildLoading}
           buildError={ranked.buildError}
           orderedSpells={ranked.orderedSpells}
-          selectedSecondarySpellId={ranked.selectedSecondarySpellId}
           selectedRunePageIndex={ranked.selectedRunePageIndex}
           selectedBuildIndex={ranked.selectedBuildIndex}
           onTierListFilterChange={ranked.handleTierListFilterChange}
@@ -256,8 +255,6 @@ function App() {
           onBackToTierList={ranked.clearSelectedChampion}
           onRetryTierList={ranked.retryTierList}
           onRetryBuild={ranked.retryChampionBuild}
-          onSelectSecondarySpell={ranked.setSelectedSecondarySpellId}
-          onInvertSpells={handleInvertSpells}
           onSelectRunePage={ranked.setSelectedRunePageIndex}
           onSelectBuild={ranked.setSelectedBuildIndex}
         />
@@ -292,12 +289,12 @@ function App() {
         />
       </div>
 
-      {/* Bottom Navigation Dock */}
+      {/* Persistent Bottom Navigation Dock */}
       <NavigationDock
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onRankedClick={handleRankedDockClick}
         onAramClick={handleAramDockClick}
+        onRankedClick={handleRankedDockClick}
       />
     </main>
   );

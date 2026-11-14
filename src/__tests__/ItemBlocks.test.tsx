@@ -61,6 +61,7 @@ describe("ItemBlocks", () => {
     );
 
     expect(screen.getByTestId("item-blocks")).toBeInTheDocument();
+    expect(screen.getByText("Build na Loja")).toBeInTheDocument();
     expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/60\.0% escolha/i);
     expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/10[.,]000 partidas/i);
 
@@ -84,5 +85,21 @@ describe("ItemBlocks", () => {
     fireEvent.click(build2Btn);
 
     expect(handleSelectBuild).toHaveBeenCalledWith(1);
+  });
+
+  it("uses consultation labels in readOnly mode", () => {
+    render(
+      <ItemBlocks
+        build={mockBuild}
+        selectedBuildIndex={0}
+        onSelectBuild={vi.fn()}
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText("Build Recomendada")).toBeInTheDocument();
+    expect(screen.queryByText("Build na Loja")).not.toBeInTheDocument();
+    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/60\.0% uso/i);
+    expect(screen.queryByText(/escolha/i)).not.toBeInTheDocument();
   });
 });

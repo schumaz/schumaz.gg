@@ -81,7 +81,6 @@ export function useRanked(
   const [buildLoading, setBuildLoading] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
 
-  const [selectedSecondarySpellId, setSelectedSecondarySpellId] = useState<number | null>(null);
   const [selectedRunePageIndex, setSelectedRunePageIndex] = useState<number>(0);
   const [selectedBuildIndex, setSelectedBuildIndex] = useState<number>(0);
 
@@ -227,7 +226,6 @@ export function useRanked(
       setSelectedChampion(entry);
       setChampionBuild(null);
       setBuildError(null);
-      setSelectedSecondarySpellId(null);
       setSelectedRunePageIndex(0);
       setSelectedBuildIndex(0);
       fetchChampionBuild(entry, entry.lane, filters);
@@ -314,12 +312,12 @@ export function useRanked(
     () =>
       computeOrderedSpells(
         championBuild?.spells,
-        selectedSecondarySpellId,
+        null,
         championBuild?.spell_choices,
         flashKey,
         false
       ),
-    [championBuild?.spells, selectedSecondarySpellId, championBuild?.spell_choices, flashKey]
+    [championBuild?.spells, championBuild?.spell_choices, flashKey]
   );
 
   return {
@@ -331,11 +329,9 @@ export function useRanked(
     championBuild,
     buildLoading,
     buildError,
-    selectedSecondarySpellId,
     selectedRunePageIndex,
     selectedBuildIndex,
     orderedSpells,
-    setSelectedSecondarySpellId,
     setSelectedRunePageIndex,
     setSelectedBuildIndex,
     handleTierListFilterChange,

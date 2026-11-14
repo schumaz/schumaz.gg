@@ -1287,4 +1287,22 @@ describe("App Component", () => {
     expect(runesBtn).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
   });
+
+  it("keeps view-settings inactive and hidden unless Configurações tab is selected", () => {
+    render(<App />);
+
+    expect(screen.getByTestId("view-profile")).toHaveClass("active-tab");
+    expect(screen.getByTestId("view-settings")).toHaveClass("inactive-tab");
+    expect(screen.getByTestId("view-settings")).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /^runas$/i }));
+    expect(screen.getByTestId("view-runes")).toHaveClass("active-tab");
+    expect(screen.getByTestId("view-settings")).toHaveClass("inactive-tab");
+    expect(screen.getByTestId("view-settings")).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
+    expect(screen.getByTestId("view-settings")).toHaveClass("active-tab");
+    expect(screen.getByTestId("view-settings")).toHaveAttribute("aria-hidden", "false");
+    expect(screen.getByTestId("view-profile")).toHaveClass("inactive-tab");
+  });
 });

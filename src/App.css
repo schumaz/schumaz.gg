@@ -1673,7 +1673,8 @@ img {
   min-width: 0;
 }
 
-.secondary-spell-btn {
+.secondary-spell-btn,
+.secondary-spell-pill {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1684,8 +1685,11 @@ img {
   border-radius: 9px;
   flex: 1;
   min-width: 0;
-  cursor: pointer;
   color: var(--text-primary);
+}
+
+.secondary-spell-btn {
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 

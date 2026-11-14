@@ -35,6 +35,34 @@ const mockMayhemBuild: ChampionBuild = {
   supports_runes: false,
 };
 
+const mockMultiPageBuild: ChampionBuild = {
+  ...mockNormalBuild,
+  rune_pages: [
+    {
+      primary_style_id: 8000,
+      sub_style_id: 8100,
+      primary_style_name: "Precisão",
+      sub_style_name: "Dominação",
+      selected_perk_ids: [8005, 9111, 9104, 8014, 8139, 8135, 5008, 5008, 5001],
+      perks: mockNormalBuild.perks,
+      play: 4200,
+      win: 2200,
+      pick_rate: 68.5,
+    },
+    {
+      primary_style_id: 8100,
+      sub_style_id: 8200,
+      primary_style_name: "Dominação",
+      sub_style_name: "Feitiçaria",
+      selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],
+      perks: mockNormalBuild.perks,
+      play: 1800,
+      win: 920,
+      pick_rate: 31.5,
+    },
+  ],
+};
+
 describe("RuneTree", () => {
   it("renders notice in left column when mode does not support runes (ARAM Mayhem)", () => {
     render(
@@ -82,5 +110,31 @@ describe("RuneTree", () => {
     expect(screen.getByTitle("Vida")).toBeInTheDocument();
     expect(screen.getAllByAltText("Força Adaptativa")).toHaveLength(2);
     expect(screen.getByAltText("Vida")).toBeInTheDocument();
+  });
+
+  it("uses Página labels instead of Opção labels in readOnly mode", () => {
+    const { rerender } = render(
+      <RuneTree
+        build={mockMultiPageBuild}
+        selectedRunePageIndex={0}
+        onSelectRunePage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Opção 1 (Mais Usada)")).toBeInTheDocument();
+    expect(screen.getByText("Opção 2")).toBeInTheDocument();
+
+    rerender(
+      <RuneTree
+        build={mockMultiPageBuild}
+        selectedRunePageIndex={0}
+        onSelectRunePage={vi.fn()}
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText("Página 1 (Mais Usada)")).toBeInTheDocument();
+    expect(screen.getByText("Página 2")).toBeInTheDocument();
+    expect(screen.queryByText("Opção 1 (Mais Usada)")).not.toBeInTheDocument();
   });
 });

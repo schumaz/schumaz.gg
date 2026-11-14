@@ -6,12 +6,14 @@ interface ItemBlocksProps {
   build: ChampionBuild;
   selectedBuildIndex: number;
   onSelectBuild: (index: number) => void;
+  readOnly?: boolean;
 }
 
 export function ItemBlocks({
   build,
   selectedBuildIndex,
   onSelectBuild,
+  readOnly = false,
 }: ItemBlocksProps) {
   const activeBuildOption =
     build.build_options && build.build_options.length > selectedBuildIndex
@@ -21,7 +23,9 @@ export function ItemBlocks({
   const activeBuildMetaParts: string[] = [];
   if (activeBuildOption) {
     if (typeof activeBuildOption.pick_rate === "number" && activeBuildOption.pick_rate > 0) {
-      activeBuildMetaParts.push(`${activeBuildOption.pick_rate.toFixed(1)}% escolha`);
+      activeBuildMetaParts.push(
+        `${activeBuildOption.pick_rate.toFixed(1)}% ${readOnly ? "uso" : "escolha"}`
+      );
     }
     if (activeBuildOption.play > 0) {
       activeBuildMetaParts.push(`${activeBuildOption.play.toLocaleString()} partidas`);
@@ -33,7 +37,7 @@ export function ItemBlocks({
     <section className="card item-blocks-preview" data-testid="item-blocks">
       <div className="item-blocks-header">
         <div className="item-blocks-title-row">
-          <h2>Build na Loja</h2>
+          <h2>{readOnly ? "Build Recomendada" : "Build na Loja"}</h2>
           {activeBuildMetaText && (
             <span className="item-blocks-meta-pill" data-testid="active-build-meta">
               {activeBuildMetaText}

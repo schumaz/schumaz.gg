@@ -188,7 +188,6 @@ describe("RankedTab UI", () => {
         buildLoading={false}
         buildError={null}
         orderedSpells={[]}
-        selectedSecondarySpellId={null}
         selectedRunePageIndex={0}
         selectedBuildIndex={0}
         onTierListFilterChange={onTierListFilterChange}
@@ -197,8 +196,6 @@ describe("RankedTab UI", () => {
         onBackToTierList={vi.fn()}
         onRetryTierList={vi.fn()}
         onRetryBuild={vi.fn()}
-        onSelectSecondarySpell={vi.fn()}
-        onInvertSpells={vi.fn()}
         onSelectRunePage={vi.fn()}
         onSelectBuild={vi.fn()}
       />
@@ -271,7 +268,6 @@ describe("RankedTab UI", () => {
         buildLoading={false}
         buildError={null}
         orderedSpells={[]}
-        selectedSecondarySpellId={null}
         selectedRunePageIndex={0}
         selectedBuildIndex={0}
         onTierListFilterChange={vi.fn()}
@@ -280,8 +276,6 @@ describe("RankedTab UI", () => {
         onBackToTierList={vi.fn()}
         onRetryTierList={vi.fn()}
         onRetryBuild={vi.fn()}
-        onSelectSecondarySpell={vi.fn()}
-        onInvertSpells={vi.fn()}
         onSelectRunePage={vi.fn()}
         onSelectBuild={vi.fn()}
       />
@@ -337,7 +331,6 @@ describe("RankedTab UI", () => {
         buildLoading={false}
         buildError={null}
         orderedSpells={[]}
-        selectedSecondarySpellId={null}
         selectedRunePageIndex={0}
         selectedBuildIndex={0}
         onTierListFilterChange={vi.fn()}
@@ -346,8 +339,6 @@ describe("RankedTab UI", () => {
         onBackToTierList={vi.fn()}
         onRetryTierList={vi.fn()}
         onRetryBuild={vi.fn()}
-        onSelectSecondarySpell={vi.fn()}
-        onInvertSpells={vi.fn()}
         onSelectRunePage={vi.fn()}
         onSelectBuild={vi.fn()}
       />
@@ -380,7 +371,6 @@ describe("RankedTab UI", () => {
         buildLoading={false}
         buildError={null}
         orderedSpells={[]}
-        selectedSecondarySpellId={null}
         selectedRunePageIndex={0}
         selectedBuildIndex={0}
         onTierListFilterChange={onTierListFilterChange}
@@ -389,8 +379,6 @@ describe("RankedTab UI", () => {
         onBackToTierList={vi.fn()}
         onRetryTierList={vi.fn()}
         onRetryBuild={vi.fn()}
-        onSelectSecondarySpell={vi.fn()}
-        onInvertSpells={vi.fn()}
         onSelectRunePage={vi.fn()}
         onSelectBuild={vi.fn()}
       />
@@ -413,7 +401,7 @@ describe("RankedTab UI", () => {
     expect(onTierListFilterChange).toHaveBeenCalledWith("patch", "16.22");
   });
 
-  it("renders Runes-identical build screen inside Ranked tab when a champion is selected", () => {
+  it("renders read-only consultation build screen inside Ranked tab when a champion is selected", () => {
     const onBackToTierList = vi.fn();
     const onDetailFilterChange = vi.fn();
 
@@ -429,7 +417,6 @@ describe("RankedTab UI", () => {
         buildLoading={false}
         buildError={null}
         orderedSpells={mockAhriBuild.spells}
-        selectedSecondarySpellId={null}
         selectedRunePageIndex={0}
         selectedBuildIndex={0}
         onTierListFilterChange={vi.fn()}
@@ -438,8 +425,6 @@ describe("RankedTab UI", () => {
         onBackToTierList={onBackToTierList}
         onRetryTierList={vi.fn()}
         onRetryBuild={vi.fn()}
-        onSelectSecondarySpell={vi.fn()}
-        onInvertSpells={vi.fn()}
         onSelectRunePage={vi.fn()}
         onSelectBuild={vi.fn()}
       />
@@ -451,6 +436,17 @@ describe("RankedTab UI", () => {
     expect(within(view).getByTestId("runes-tree")).toBeInTheDocument();
     expect(within(view).getByTestId("spells-card")).toBeInTheDocument();
     expect(within(view).getByTestId("item-blocks")).toBeInTheDocument();
+
+    // Consultation/read-only mode assertions (no Runas-only injection wording or controls)
+    expect(within(view).getByText("Feitiços que Pode Usar")).toBeInTheDocument();
+    expect(within(view).queryByText("Escolha de Segundo Feitiço")).not.toBeInTheDocument();
+    expect(within(view).queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
+    expect(within(view).getByTestId("sec-spell-info-14")).toBeInTheDocument();
+    expect(within(view).queryByTestId("sec-spell-btn-14")).not.toBeInTheDocument();
+    expect(within(view).queryByText("D")).not.toBeInTheDocument();
+    expect(within(view).queryByText("F")).not.toBeInTheDocument();
+    expect(within(view).getByText("Build Recomendada")).toBeInTheDocument();
+    expect(within(view).queryByText("Build na Loja")).not.toBeInTheDocument();
 
     fireEvent.click(within(view).getByTestId("ranked-back-btn"));
     expect(onBackToTierList).toHaveBeenCalledTimes(1);
@@ -521,5 +517,142 @@ describe("useRanked hook state and filter preservation", () => {
       lane: "all",
       patch: "16.22",
     });
+  });
+
+  it("switches rune pages and build options locally in Ranked without injecting anything into the game", async () => {
+    const mockMultiBuild: ChampionBuild_Serialize = {
+      ...mockAhriBuild,
+      rune_pages: [
+        {
+          primary_style_id: 8100,
+          sub_style_id: 8200,
+          primary_style_name: "Dominação",
+          primary_style_icon_url: "dom.png",
+          sub_style_name: "Feitiçaria",
+          sub_style_icon_url: "sorc.png",
+          selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],
+          perks: mockAhriBuild.perks,
+          play: 5000,
+          win: 2600,
+          pick_rate: 70.0,
+        },
+        {
+          primary_style_id: 8200,
+          sub_style_id: 8300,
+          primary_style_name: "Feitiçaria",
+          primary_style_icon_url: "sorc.png",
+          sub_style_name: "Inspiração",
+          sub_style_icon_url: "insp.png",
+          selected_perk_ids: [8229, 8226, 8210, 8237, 8304, 8345, 5008, 5008, 5001],
+          perks: [
+            { id: 8229, key: "ArcaneComet", name: "Cometa Arcano", icon_url: "comet.png" },
+            { id: 8226, key: "ManaflowBand", name: "Faixa", icon_url: "mana.png" },
+            { id: 8210, key: "Transcendence", name: "Transcendência", icon_url: "trans.png" },
+            { id: 8237, key: "Scorch", name: "Chamuscar", icon_url: "scorch.png" },
+            { id: 8304, key: "MagicalFootwear", name: "Calçados", icon_url: "boots.png" },
+            { id: 8345, key: "BiscuitDelivery", name: "Biscoito", icon_url: "biscuit.png" },
+            { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "af.png" },
+            { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "af.png" },
+            { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "hp.png" },
+          ],
+          play: 2000,
+          win: 1050,
+          pick_rate: 30.0,
+        },
+      ],
+      build_options: [
+        {
+          name: "Build 1 (Mais Feita)",
+          core_item_ids: [3118, 4645, 3089],
+          core_item_icon_urls: ["b1-1.png", "b1-2.png", "b1-3.png"],
+          final_item_ids: [3118, 4645, 3089, 3020, 3157, 3135],
+          final_item_icon_urls: ["b1-1.png", "b1-2.png", "b1-3.png", "b1-4.png", "b1-5.png", "b1-6.png"],
+          situational_item_ids: [3157],
+          situational_item_icon_urls: ["zhonya.png"],
+          play: 8000,
+          win: 4200,
+          pick_rate: 70.0,
+        },
+        {
+          name: "Build 2",
+          core_item_ids: [6655, 3157, 3089],
+          core_item_icon_urls: ["b2-1.png", "b2-2.png", "b2-3.png"],
+          final_item_ids: [6655, 3157, 3089, 3020, 3165, 3102],
+          final_item_icon_urls: ["b2-1.png", "b2-2.png", "b2-3.png", "b2-4.png", "b2-5.png", "b2-6.png"],
+          situational_item_ids: [3102],
+          situational_item_icon_urls: ["banshee.png"],
+          play: 3000,
+          win: 1600,
+          pick_rate: 30.0,
+        },
+      ],
+    };
+
+    vi.spyOn(commands, "getRankedTierList").mockResolvedValue(mockTierResponse);
+    vi.spyOn(commands, "getRankedChampionBuild").mockResolvedValue(mockMultiBuild);
+    const injectRunesSpy = vi.spyOn(commands, "injectRunePage");
+    const injectBuildSpy = vi.spyOn(commands, "injectItemBuild");
+    const injectSpellsSpy = vi.spyOn(commands, "injectSummonerSpells");
+    const updateFiltersSpy = vi.spyOn(commands, "updateBuildFilters");
+    const syncChampSpy = vi.spyOn(commands, "syncDisplayedChampion");
+    const syncPrefsSpy = vi.spyOn(commands, "syncUserPreferences");
+
+    function Harness() {
+      const ranked = useRanked(true, "D", true);
+      return (
+        <RankedTab
+          isActive={true}
+          filters={ranked.filters}
+          tierData={ranked.tierData}
+          tierLoading={ranked.tierLoading}
+          tierError={ranked.tierError}
+          selectedChampion={ranked.selectedChampion}
+          championBuild={ranked.championBuild}
+          buildLoading={ranked.buildLoading}
+          buildError={ranked.buildError}
+          orderedSpells={ranked.orderedSpells}
+          selectedRunePageIndex={ranked.selectedRunePageIndex}
+          selectedBuildIndex={ranked.selectedBuildIndex}
+          onTierListFilterChange={ranked.handleTierListFilterChange}
+          onDetailFilterChange={ranked.handleDetailFilterChange}
+          onSelectChampion={ranked.selectChampion}
+          onBackToTierList={ranked.clearSelectedChampion}
+          onRetryTierList={ranked.retryTierList}
+          onRetryBuild={ranked.retryChampionBuild}
+          onSelectRunePage={ranked.setSelectedRunePageIndex}
+          onSelectBuild={ranked.setSelectedBuildIndex}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("ranked-champ-mid-ahri")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("ranked-champ-mid-ahri"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("ranked-champion-detail")).toBeInTheDocument();
+      expect(screen.getByText("Eletrocutar")).toBeInTheDocument();
+      expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/70\.0% uso/i);
+    });
+
+    // Switch rune page -> displays Página 2 locally, zero LCU/game calls
+    fireEvent.click(screen.getByTestId("rune-page-btn-1"));
+    expect(screen.getByText("Cometa Arcano")).toBeInTheDocument();
+    expect(screen.queryByText("Eletrocutar")).not.toBeInTheDocument();
+
+    // Switch build option -> displays Build 2 locally, zero LCU/game calls
+    fireEvent.click(screen.getByTestId("build-opt-btn-1"));
+    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/30\.0% uso/i);
+
+    expect(injectRunesSpy).not.toHaveBeenCalled();
+    expect(injectBuildSpy).not.toHaveBeenCalled();
+    expect(injectSpellsSpy).not.toHaveBeenCalled();
+    expect(updateFiltersSpy).not.toHaveBeenCalled();
+    expect(syncChampSpy).not.toHaveBeenCalled();
+    expect(syncPrefsSpy).not.toHaveBeenCalled();
   });
 });

@@ -105,7 +105,6 @@ interface RankedTabProps {
   buildLoading: boolean;
   buildError: string | null;
   orderedSpells: SpellMetadata[];
-  selectedSecondarySpellId: number | null;
   selectedRunePageIndex: number;
   selectedBuildIndex: number;
   onTierListFilterChange: (
@@ -120,8 +119,6 @@ interface RankedTabProps {
   onBackToTierList: () => void;
   onRetryTierList: () => void;
   onRetryBuild: () => void;
-  onSelectSecondarySpell: (spellId: number) => void;
-  onInvertSpells: () => void;
   onSelectRunePage: (pageIndex: number) => void;
   onSelectBuild: (index: number) => void;
 }
@@ -204,7 +201,6 @@ export function RankedTab({
   buildLoading,
   buildError,
   orderedSpells,
-  selectedSecondarySpellId,
   selectedRunePageIndex,
   selectedBuildIndex,
   onTierListFilterChange,
@@ -213,8 +209,6 @@ export function RankedTab({
   onBackToTierList,
   onRetryTierList,
   onRetryBuild,
-  onSelectSecondarySpell,
-  onInvertSpells,
   onSelectRunePage,
   onSelectBuild,
 }: RankedTabProps) {
@@ -407,14 +401,14 @@ export function RankedTab({
                     build={championBuild}
                     selectedRunePageIndex={selectedRunePageIndex}
                     onSelectRunePage={onSelectRunePage}
+                    readOnly={true}
                   />
 
                   <SpellsBar
                     orderedSpells={orderedSpells}
                     spellChoices={championBuild.spell_choices}
-                    selectedSecondarySpellId={selectedSecondarySpellId}
-                    onInvertSpells={onInvertSpells}
-                    onSelectSecondarySpell={onSelectSecondarySpell}
+                    selectedSecondarySpellId={null}
+                    readOnly={true}
                   />
                 </div>
 
@@ -423,6 +417,7 @@ export function RankedTab({
                     build={championBuild}
                     selectedBuildIndex={selectedBuildIndex}
                     onSelectBuild={onSelectBuild}
+                    readOnly={true}
                   />
                 </div>
               </div>

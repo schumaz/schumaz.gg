@@ -30,6 +30,9 @@ describe("SpellsBar", () => {
 
     expect(screen.getByText("Flash")).toBeInTheDocument();
     expect(screen.getAllByText("Incendiar").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Escolha de Segundo Feitiço")).toBeInTheDocument();
+    expect(screen.getByText("D")).toBeInTheDocument();
+    expect(screen.getByText("F")).toBeInTheDocument();
 
     const invertBtn = screen.getByTestId("invert-spells-btn");
     fireEvent.click(invertBtn);
@@ -55,5 +58,30 @@ describe("SpellsBar", () => {
     fireEvent.click(teleportBtn);
 
     expect(handleSelectSecondary).toHaveBeenCalledWith(12);
+  });
+
+  it("renders read-only consultation UI in Ranked mode without D/F keys, invert button, or Runas choice wording", () => {
+    const { container } = render(
+      <SpellsBar
+        orderedSpells={mockSpells}
+        spellChoices={mockChoices}
+        selectedSecondarySpellId={null}
+        onInvertSpells={vi.fn()}
+        onSelectSecondarySpell={vi.fn()}
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText("Feitiços que Pode Usar")).toBeInTheDocument();
+    expect(screen.queryByText("Escolha de Segundo Feitiço")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
+    expect(container.querySelectorAll(".spell-key-indicator")).toHaveLength(0);
+    expect(screen.queryByText("D")).not.toBeInTheDocument();
+    expect(screen.queryByText("F")).not.toBeInTheDocument();
+
+    expect(screen.getByTestId("sec-spell-info-14")).toBeInTheDocument();
+    expect(screen.getByTestId("sec-spell-info-12")).toBeInTheDocument();
+    expect(screen.queryByTestId("sec-spell-btn-14")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("sec-spell-btn-12")).not.toBeInTheDocument();
   });
 });

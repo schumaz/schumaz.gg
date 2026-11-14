@@ -4,6 +4,7 @@ interface RuneTreeProps {
   build: ChampionBuild;
   selectedRunePageIndex: number;
   onSelectRunePage: (pageIndex: number) => void;
+  readOnly?: boolean;
 }
 
 function getSimplifiedShardName(id: number, fallbackName: string): string {
@@ -36,6 +37,7 @@ export function RuneTree({
   build,
   selectedRunePageIndex,
   onSelectRunePage,
+  readOnly = false,
 }: RuneTreeProps) {
   if (build.supports_runes === false) {
     return (
@@ -86,7 +88,13 @@ export function RuneTree({
               const isSelected = selectedRunePageIndex === idx;
               const keystone = page.perks && page.perks.length > 0 ? page.perks[0] : null;
               const subIcon = page.sub_style_icon_url;
-              const label = idx === 0 ? "Opção 1 (Mais Usada)" : `Opção ${idx + 1}`;
+              const label = readOnly
+                ? idx === 0
+                  ? "Página 1 (Mais Usada)"
+                  : `Página ${idx + 1}`
+                : idx === 0
+                  ? "Opção 1 (Mais Usada)"
+                  : `Opção ${idx + 1}`;
               return (
                 <button
                   key={`rune-page-${idx}`}
