@@ -1,6 +1,10 @@
 ﻿use super::super::models::{ItemBlock, ItemStatEntry};
 use super::classification::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+fn is_consumable_starter_id(id: i32) -> bool {
+    matches!(id, 2003 | 2031 | 2033 | 2055)
+}
 
 pub fn build_5_item_blocks(
     starter_entry: Option<ItemStatEntry>,
@@ -33,96 +37,163 @@ pub fn build_5_item_blocks_with_depth_lists(
     position: &str,
 ) -> Vec<ItemBlock> {
     // 1. Itens Iniciais:
-    // - Default (ADC, TOP, MID): #1 most played starter item from OP.GG list + Potion (2003 / 2031)
-    // - Jungle: #1 most played Jungle Pet (1101, 1102, 1103) + Potion (2003)
-    // - Support: Only Potion (2003 / 2031) since support quest item is pre-granted/bought
+    // - Support: Only Potion (2003 / 2031 / 2033) from the #1 most played starter entry
+    // - Jungle: #1 most played Jungle Pet (1101..=1103) + potion from its most played entry (if any)
+    // - Standard lanes & ARAM / ARAM Mayhem: Reflect faithfully the #1 most played starter
+    //   combination from OP.GG without forcing ARAM-exclusive items (2051) or mandatory potions.
     let norm_pos = position.to_lowercase();
     let is_support = norm_pos == "support" || norm_pos == "supp" || norm_pos == "utility";
     let is_jungle = norm_pos == "jungle" || norm_pos == "jng";
 
+    let mut sorted_starter_entries: Vec<(usize, &ItemStatEntry)> =
+        starter_entries.iter().enumerate().collect();
+    sorted_starter_entries.sort_by(|a, b| b.1.play.cmp(&a.1.play).then_with(|| a.0.cmp(&b.0)));
+
     let starter_ids: Vec<i32> = if is_support {
-        let mut potion_id = 2003;
-        for entry in &starter_entries {
-            for &id in &entry.ids {
-                if id == 2003 || id == 2031 || id == 2033 {
-                    potion_id = id;
-                    break;
-                }
-            }
-            if potion_id != 2003 {
-                break;
-            }
-        }
+        let potion_id = sorted_starter_entries
+            .first()
+            .and_then(|(_, entry)| {
+                entry
+                    .ids
+                    .iter()
+                    .copied()
+                    .find(|&id| matches!(id, 2003 | 2031 | 2033))
+            })
+            .unwrap_or(2003);
         vec![potion_id]
     } else if is_jungle {
-        let mut pet_counts: HashMap<i32, i64> = HashMap::new();
-        let mut potion_id = 2003;
-        for entry in &starter_entries {
+        let mut pet_counts: HashMap<i32, (i64, usize)> = HashMap::new();
+        let mut pet_seen = 0;
+        for (_, entry) in &sorted_starter_entries {
             for &id in &entry.ids {
                 if matches!(id, 1101..=1103) {
-                    *pet_counts.entry(id).or_insert(0) += entry.play.max(1);
-                } else if id == 2003 || id == 2031 || id == 2033 {
-                    potion_id = id;
-                }
-            }
-        }
-        let best_pet = pet_counts
-            .into_iter()
-            .max_by_key(|&(_, play)| play)
-            .map(|(id, _)| id)
-            .unwrap_or(1103);
-        vec![best_pet, potion_id]
-    } else {
-        // Standard lanes (ADC, TOP, MID, or fallback):
-        let mut starter_counts: HashMap<i32, (i64, usize)> = HashMap::new();
-        let mut seen_idx = 0;
-        let mut potion_id = 2003;
-        for entry in &starter_entries {
-            for &id in &entry.ids {
-                if id == 2003 || id == 2031 || id == 2033 {
-                    potion_id = id;
-                } else if !matches!(id, 1101..=1103) && !matches!(id, 3865..=3877) {
-                    let slot = starter_counts.entry(id).or_insert_with(|| {
-                        let i = seen_idx;
-                        seen_idx += 1;
+                    let slot = pet_counts.entry(id).or_insert_with(|| {
+                        let i = pet_seen;
+                        pet_seen += 1;
                         (0, i)
                     });
                     slot.0 += entry.play.max(1);
                 }
             }
         }
-        let mut sorted_starters: Vec<(i32, i64, usize)> = starter_counts
+        let mut sorted_pets: Vec<(i32, i64, usize)> = pet_counts
             .into_iter()
             .map(|(id, (p, idx))| (id, p, idx))
             .collect();
-        sorted_starters.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-        let best_starter = sorted_starters
-            .first()
-            .map(|(id, _, _)| *id)
-            .unwrap_or_else(|| if damage_type == "AP" { 1056 } else { 1055 });
-        if best_starter == 2033 {
-            vec![2033]
+        sorted_pets.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+        let best_pet = sorted_pets.first().map(|&(id, _, _)| id).unwrap_or(1103);
+
+        // Preserve the potion from the most-played starter entry containing the chosen pet
+        let top_pet_entry = sorted_starter_entries
+            .iter()
+            .find(|(_, e)| e.ids.contains(&best_pet))
+            .or_else(|| sorted_starter_entries.first());
+
+        if let Some((_, entry)) = top_pet_entry {
+            if let Some(&potion_id) = entry
+                .ids
+                .iter()
+                .find(|&&id| matches!(id, 2003 | 2031 | 2033))
+            {
+                vec![best_pet, potion_id]
+            } else {
+                vec![best_pet]
+            }
         } else {
-            vec![best_starter, potion_id]
+            vec![best_pet, 2003]
         }
+    } else if let Some((_, top_entry)) = sorted_starter_entries.first() {
+        let mut non_consumables: Vec<i32> = Vec::new();
+        let mut consumables: Vec<i32> = Vec::new();
+        for &id in &top_entry.ids {
+            if is_consumable_starter_id(id) {
+                if !consumables.contains(&id) {
+                    consumables.push(id);
+                }
+            } else if !matches!(id, 1101..=1103)
+                && !matches!(id, 3865..=3877)
+                && !non_consumables.contains(&id)
+            {
+                non_consumables.push(id);
+            }
+        }
+        let mut combined = non_consumables;
+        combined.extend(consumables);
+        if combined.is_empty() {
+            if damage_type == "AP" {
+                vec![1056, 2003]
+            } else {
+                vec![1055, 2003]
+            }
+        } else {
+            combined
+        }
+    } else if damage_type == "AP" {
+        vec![1056, 2003]
+    } else {
+        vec![1055, 2003]
     };
 
-    // Future-proof contextual sets directly from OP.GG structures:
-    let known_boots: std::collections::HashSet<i32> = boot_entries
+    // Resolve Tear upgrade upfront so contextual filtering uses normalized completed IDs
+    let all_entries_for_tear: Vec<ItemStatEntry> = candidate_entries
         .iter()
-        .flat_map(|e| e.ids.iter().copied())
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .cloned()
         .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_entries_for_tear, position, damage_type);
 
-    let known_starters: std::collections::HashSet<i32> = starter_entries
+    // Future-proof contextual sets directly from OP.GG structures:
+    let known_boots: HashSet<i32> = boot_entries
         .iter()
         .flat_map(|e| e.ids.iter().copied())
         .collect();
 
     let is_boot = |id: i32| -> bool { known_boots.contains(&id) || is_boot_item_dynamic(id) };
-    let is_starter = |id: i32| -> bool {
-        known_starters.contains(&id) || starter_ids.contains(&id) || is_starter_item(id)
-    };
     let is_comp = |id: i32| -> bool { is_component_item_dynamic(id) };
+
+    let known_core_or_depth_items: HashSet<i32> = candidate_entries
+        .iter()
+        .filter(|e| {
+            e.ids
+                .iter()
+                .filter(|&&id| !is_boot(id) && !is_starter_item(id) && !is_comp(id))
+                .count()
+                >= 2
+        })
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .flat_map(|e| e.ids.iter().copied())
+        .map(|id| {
+            if id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(id)
+            }
+        })
+        .collect();
+
+    // Only treat unknown items in `starter_entries` as starters if they are NOT boots,
+    // NOT components, NOT completed DataDragon items, and NOT core/depth items.
+    let known_starters: HashSet<i32> = starter_entries
+        .iter()
+        .flat_map(|e| e.ids.iter().copied())
+        .filter(|&id| {
+            let norm = if id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(id)
+            };
+            !is_boot(id)
+                && !is_comp(id)
+                && !is_completed_item_dynamic(id)
+                && !known_core_or_depth_items.contains(&norm)
+        })
+        .collect();
+
+    let is_starter = |id: i32| -> bool { known_starters.contains(&id) || is_starter_item(id) };
 
     // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
     let mut boot_map: HashMap<i32, (i64, usize)> = HashMap::new();
@@ -181,15 +252,6 @@ pub fn build_5_item_blocks_with_depth_lists(
         first_seen_index: usize,
     }
 
-    let all_entries_for_tear: Vec<ItemStatEntry> = candidate_entries
-        .iter()
-        .chain(fourth_entries.iter())
-        .chain(fifth_entries.iter())
-        .chain(sixth_entries.iter())
-        .cloned()
-        .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_entries_for_tear, position, damage_type);
-
     let mut item_map: HashMap<i32, (i64, usize)> = HashMap::new();
     let mut item_seen_counter = 0;
     for entry in candidate_entries
@@ -244,11 +306,7 @@ pub fn build_5_item_blocks_with_depth_lists(
             let non_boot_count = e
                 .ids
                 .iter()
-                .filter(|&&id| {
-                    !is_boot_item_dynamic(id)
-                        && !is_starter_item(id)
-                        && !is_component_item_dynamic(id)
-                })
+                .filter(|&&id| !is_boot(id) && !is_starter(id) && !is_comp(id))
                 .count();
             non_boot_count >= 2
         })
@@ -264,9 +322,9 @@ pub fn build_5_item_blocks_with_depth_lists(
                 normalize_tear_item_dynamic(id)
             };
             if clean_core.len() < 3
-                && !is_boot_item_dynamic(norm_id)
-                && !is_starter_item(norm_id)
-                && !is_component_item_dynamic(norm_id)
+                && !is_boot(norm_id)
+                && !is_starter(norm_id)
+                && !is_comp(norm_id)
                 && !clean_core.contains(&norm_id)
             {
                 clean_core.push(norm_id);
@@ -314,9 +372,9 @@ pub fn build_5_item_blocks_with_depth_lists(
                         normalize_tear_item_dynamic(id)
                     };
                     if !current_build.contains(&norm_id)
-                        && !is_component_item_dynamic(norm_id)
-                        && !is_starter_item(norm_id)
-                        && !is_boot_item_dynamic(norm_id)
+                        && !is_comp(norm_id)
+                        && !is_starter(norm_id)
+                        && !is_boot(norm_id)
                     {
                         return Some(norm_id);
                     }
@@ -337,9 +395,9 @@ pub fn build_5_item_blocks_with_depth_lists(
     for cand in &all_candidates {
         if final_build.len() < 6
             && !final_build.contains(&cand.id)
-            && !is_component_item_dynamic(cand.id)
-            && !is_starter_item(cand.id)
-            && !is_boot_item_dynamic(cand.id)
+            && !is_comp(cand.id)
+            && !is_starter(cand.id)
+            && !is_boot(cand.id)
         {
             final_build.push(cand.id);
         }
@@ -368,9 +426,9 @@ pub fn build_5_item_blocks_with_depth_lists(
             };
             !clean_core.contains(&norm_id)
                 && !final_build.contains(&norm_id)
-                && !is_component_item_dynamic(norm_id)
-                && !is_starter_item(norm_id)
-                && !is_boot_item_dynamic(norm_id)
+                && !is_comp(norm_id)
+                && !is_starter(norm_id)
+                && !is_boot(norm_id)
         })
         .collect();
     situational_candidates.sort_by(|a, b| {

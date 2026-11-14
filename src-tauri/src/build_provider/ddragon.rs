@@ -438,13 +438,15 @@ pub fn parse_ddragon_item_classifications(
                     evolved_fallbacks.insert(id, base_id);
                 }
 
+                let is_tear_completed = TEAR_COMPLETED_ITEMS.contains(&id);
+
                 if tags.contains(&"Boots") {
                     boots.insert(id);
                 }
-                if has_into {
+                if has_into && !tags.contains(&"Boots") && !is_tear_completed {
                     components.insert(id);
                 }
-                if !has_into && gold >= 1600 && !tags.contains(&"Boots") {
+                if (!has_into || is_tear_completed) && gold >= 1600 && !tags.contains(&"Boots") {
                     completed.insert(id);
                 }
             }

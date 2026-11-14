@@ -163,17 +163,26 @@ pub fn parse_opgg_analysis_payload_with_options(
     let ((spell1_id, spell2_id), spell_choice_ids) =
         extract_summoner_spell_choices(analysis, is_jungle);
 
-    let damage_type = analysis
-        .get("damage_type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("AP");
-
     // Extract item entries from JSON
-    let starter_entries = parse_json_item_entries(
-        analysis
-            .pointer("/items/starters")
-            .or_else(|| analysis.pointer("/starter_items")),
-    );
+    let starter_val = analysis
+        .pointer("/items/starters")
+        .or_else(|| analysis.pointer("/starter_items"));
+    let starter_entries = if let Some(arr) = starter_val.and_then(|v| v.as_array())
+        && !arr.is_empty()
+        && arr.iter().all(|x| x.is_i64())
+    {
+        vec![ItemStatEntry {
+            ids: arr
+                .iter()
+                .filter_map(|x| x.as_i64().map(|n| n as i32))
+                .collect(),
+            play: 1,
+            win: 0,
+            pick_rate: 0.0,
+        }]
+    } else {
+        parse_json_item_entries(starter_val)
+    };
 
     let boot_entries = parse_json_item_entries(
         analysis
@@ -200,6 +209,34 @@ pub fn parse_opgg_analysis_payload_with_options(
     }
     candidate_entries.extend(core_entries.clone());
 
+    let damage_type_owned: String =
+        if let Some(dt) = analysis.get("damage_type").and_then(|v| v.as_str()) {
+            dt.to_string()
+        } else {
+            let core_is_ad = core_entries
+                .first()
+                .map(|c| extract_core_archetype_tags(&c.ids).3)
+                .unwrap_or(false);
+            let core_is_ap = core_entries
+                .first()
+                .map(|c| extract_core_archetype_tags(&c.ids).4)
+                .unwrap_or(false);
+            if core_is_ad {
+                "AD".to_string()
+            } else if core_is_ap {
+                "AP".to_string()
+            } else if analysis
+                .pointer("/summary/roles/0/name")
+                .and_then(|v| v.as_str())
+                .is_some_and(|r| r.eq_ignore_ascii_case("MARKSMAN"))
+            {
+                "AD".to_string()
+            } else {
+                "AP".to_string()
+            }
+        };
+    let damage_type = damage_type_owned.as_str();
+
     let mut fourth_entries = parse_json_item_entries(
         analysis
             .pointer("/fourth_items")
@@ -217,15 +254,11 @@ pub fn parse_opgg_analysis_payload_with_options(
             .or_else(|| analysis.pointer("/items/sixth_items")),
     );
 
-    let mut other_entries = Vec::new();
-    other_entries.extend(parse_json_item_entries(
+    let other_entries = parse_json_item_entries(
         analysis
             .pointer("/items/situational")
             .or_else(|| analysis.pointer("/last_items")),
-    ));
-    other_entries.extend(fourth_entries.clone());
-    other_entries.extend(fifth_entries.clone());
-    other_entries.extend(sixth_entries.clone());
+    );
 
     for entry in other_entries {
         let filtered_ids: Vec<i32> = entry
@@ -273,6 +306,9 @@ pub fn parse_opgg_analysis_payload_with_options(
 
     let cand_ids: Vec<i32> = candidate_entries
         .iter()
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
         .flat_map(|e| e.ids.clone())
         .collect();
     let core_build_options = extract_top_core_build_options(&core_entries, &cand_ids, damage_type);
@@ -555,6 +591,7 @@ mod tests {
         assert_eq!(build.spell2_id, 14);
         assert_eq!(build.item_blocks.len(), 5);
         assert_eq!(build.item_blocks[0].title, "Itens Iniciais");
+        assert_eq!(build.item_blocks[0].item_ids, vec![1056, 2003]);
         assert_eq!(build.item_blocks[1].title, "Primeiros 3 Itens");
         // 3020 is a boot, so it was filtered out and filled with situational item 3157, ensuring 3 core non-boot items!
         assert_eq!(build.item_blocks[1].item_ids, vec![3285, 3089, 3157]);
@@ -617,5 +654,175 @@ mod tests {
             .expect("JSON with supports_runes: false and no runes should succeed");
         assert!(!build_from_flag.supports_runes);
         assert!(build_from_flag.selected_perk_ids.is_empty());
+    }
+
+    #[test]
+    fn test_real_opgg_aram_tristana_payload_blocks_options_and_spells() {
+        // Real OP.GG ARAM REST payload for Tristana (patch 16.22, emerald_plus, no `damage_type`)
+        // enriched with MCP `fourth_items` and `fifth_items` (MCP omits `sixth_items` in ARAM).
+        let rest_json = serde_json::json!({
+            "data": {
+                "summary": {
+                    "id": 18,
+                    "average_stats": { "play": 3627, "win_rate": 0.542046, "pick_rate": 0.091103 },
+                    "positions": null,
+                    "roles": [
+                        { "name": "MARKSMAN", "stats": { "win_rate": 0.536839, "role_rate": 0.981104, "play": 3271, "win": 1756 } }
+                    ]
+                },
+                "summoner_spells": [
+                    { "ids": [4, 7], "win": 599, "play": 1125, "pick_rate": 0.3358 },
+                    { "ids": [4, 21], "win": 404, "play": 695, "pick_rate": 0.2075 },
+                    { "ids": [4, 6], "win": 370, "play": 678, "pick_rate": 0.2024 },
+                    { "ids": [4, 32], "win": 172, "play": 330, "pick_rate": 0.0985 },
+                    { "ids": [1, 4], "win": 126, "play": 236, "pick_rate": 0.0704 }
+                ],
+                "starter_items": [
+                    { "ids": [1038, 2003, 2003], "play": 1397, "win": 745, "pick_rate": 0.415 },
+                    { "ids": [1038], "play": 398, "win": 222, "pick_rate": 0.1182 },
+                    { "ids": [1042, 3006], "play": 251, "win": 124, "pick_rate": 0.0746 },
+                    { "ids": [2031, 3051], "play": 121, "win": 69, "pick_rate": 0.0359 },
+                    { "ids": [1001, 2003, 2003, 3134], "play": 67, "win": 36, "pick_rate": 0.0199 },
+                    { "ids": [1042, 2003, 3006], "play": 66, "win": 34, "pick_rate": 0.0196 }
+                ],
+                "boots": [
+                    { "ids": [3006], "play": 2640, "win": 1415, "pick_rate": 0.8585 },
+                    { "ids": [3008], "play": 264, "win": 166, "pick_rate": 0.0859 },
+                    { "ids": [3111], "play": 124, "win": 62, "pick_rate": 0.0403 },
+                    { "ids": [3047], "play": 42, "win": 26, "pick_rate": 0.0137 },
+                    { "ids": [3009], "play": 4, "win": 3, "pick_rate": 0.0013 }
+                ],
+                "core_items": [
+                    { "ids": [3032, 6675, 3031], "play": 598, "win": 329, "pick_rate": 0.2025 },
+                    { "ids": [3032, 3031, 6675], "play": 292, "win": 179, "pick_rate": 0.0989 },
+                    { "ids": [3032, 3031, 3036], "play": 210, "win": 120, "pick_rate": 0.0711 },
+                    { "ids": [3032, 6675, 3036], "play": 167, "win": 90, "pick_rate": 0.0566 },
+                    { "ids": [3032, 6676, 3031], "play": 113, "win": 65, "pick_rate": 0.0383 },
+                    { "ids": [6676, 6675, 3031], "play": 95, "win": 59, "pick_rate": 0.0322 },
+                    { "ids": [3032, 6676, 3036], "play": 52, "win": 28, "pick_rate": 0.0176 },
+                    { "ids": [6676, 3031, 3036], "play": 46, "win": 26, "pick_rate": 0.0156 },
+                    { "ids": [6676, 3031, 6675], "play": 45, "win": 26, "pick_rate": 0.0152 },
+                    { "ids": [3032, 3031, 3033], "play": 41, "win": 25, "pick_rate": 0.0139 },
+                    { "ids": [3032, 6676, 6675], "play": 39, "win": 19, "pick_rate": 0.0132 },
+                    { "ids": [6672, 6675, 3031], "play": 37, "win": 26, "pick_rate": 0.0125 },
+                    { "ids": [3032, 6675, 3033], "play": 37, "win": 17, "pick_rate": 0.0125 },
+                    { "ids": [3032, 3031, 3072], "play": 33, "win": 21, "pick_rate": 0.0112 },
+                    { "ids": [6676, 6675, 3036], "play": 30, "win": 14, "pick_rate": 0.0102 }
+                ],
+                "fourth_items": [
+                    { "ids": [3036], "play": 593, "win": 346, "pick_rate": 0.29 },
+                    { "ids": [3072], "play": 360, "win": 200, "pick_rate": 0.17 },
+                    { "ids": [3031], "play": 283, "win": 159, "pick_rate": 0.14 }
+                ],
+                "fifth_items": [
+                    { "ids": [3072], "play": 255, "win": 160, "pick_rate": 0.29 },
+                    { "ids": [3153], "play": 138, "win": 87, "pick_rate": 0.16 },
+                    { "ids": [3036], "play": 95, "win": 59, "pick_rate": 0.11 }
+                ],
+                "last_items": [
+                    { "ids": [3031], "play": 2613, "win": 1438, "pick_rate": 0.7496 },
+                    { "ids": [3032], "play": 2448, "win": 1317, "pick_rate": 0.7022 },
+                    { "ids": [6675], "play": 2056, "win": 1124, "pick_rate": 0.5898 },
+                    { "ids": [3036], "play": 1439, "win": 822, "pick_rate": 0.4128 },
+                    { "ids": [6676], "play": 1007, "win": 551, "pick_rate": 0.2889 },
+                    { "ids": [3072], "play": 848, "win": 500, "pick_rate": 0.2433 },
+                    { "ids": [3153], "play": 528, "win": 322, "pick_rate": 0.1515 },
+                    { "ids": [6672], "play": 429, "win": 239, "pick_rate": 0.1231 },
+                    { "ids": [1038], "play": 408, "win": 224, "pick_rate": 0.117 },
+                    { "ids": [3094], "play": 274, "win": 136, "pick_rate": 0.0786 },
+                    { "ids": [3033], "play": 245, "win": 125, "pick_rate": 0.0703 },
+                    { "ids": [2523], "play": 132, "win": 72, "pick_rate": 0.0379 },
+                    { "ids": [3046], "play": 113, "win": 65, "pick_rate": 0.0324 },
+                    { "ids": [3085], "play": 110, "win": 63, "pick_rate": 0.0316 },
+                    { "ids": [6673], "play": 91, "win": 46, "pick_rate": 0.0261 },
+                    { "ids": [3139], "play": 88, "win": 52, "pick_rate": 0.0252 }
+                ],
+                "runes": [
+                    {
+                        "id": 8008,
+                        "primary_page_id": 8000,
+                        "primary_rune_ids": [8008, 9111, 9104, 8014],
+                        "secondary_page_id": 8100,
+                        "secondary_rune_ids": [8135, 8139],
+                        "stat_mod_ids": [5005, 5008, 5001],
+                        "play": 1882,
+                        "win": 1010,
+                        "pick_rate": 0.5402
+                    },
+                    {
+                        "id": 9923,
+                        "primary_page_id": 8100,
+                        "primary_rune_ids": [9923, 8139, 8140, 8135],
+                        "secondary_page_id": 8000,
+                        "secondary_rune_ids": [9104, 9111],
+                        "stat_mod_ids": [5005, 5008, 5001],
+                        "play": 359,
+                        "win": 196,
+                        "pick_rate": 0.103
+                    }
+                ]
+            }
+        });
+
+        let aram_build = parse_opgg_analysis_payload(&rest_json, 18, "Tristana")
+            .expect("Real Tristana ARAM payload should parse");
+
+        // Summoner spells: Flash + Heal (4, 7) and top secondary choices [7, 21]
+        assert_eq!(aram_build.spell1_id, 4);
+        assert_eq!(aram_build.spell2_id, 7);
+        assert_eq!(
+            aram_build
+                .spell_choices
+                .iter()
+                .map(|s| s.id)
+                .collect::<Vec<_>>(),
+            vec![7, 21]
+        );
+
+        // 5 Item Blocks aligned with OP.GG:
+        assert_eq!(aram_build.item_blocks.len(), 5);
+        assert_eq!(aram_build.item_blocks[0].item_ids, vec![1038, 2003]);
+        assert_eq!(aram_build.item_blocks[1].item_ids, vec![3032, 6675, 3031]);
+        assert_eq!(aram_build.item_blocks[2].item_ids, vec![3006, 3008, 3111]);
+        assert_eq!(
+            aram_build.item_blocks[3].item_ids,
+            vec![3032, 6675, 3031, 3036, 3072, 6676]
+        );
+        assert_eq!(
+            aram_build.item_blocks[4].item_ids,
+            vec![3153, 6672, 3033, 3094, 2523, 3046]
+        );
+        assert!(!aram_build.item_blocks[4].item_ids.contains(&1038));
+
+        // Unified build options aligned with Core + Final (MCP + last_items) + Situational:
+        assert_eq!(aram_build.build_options.len(), 3);
+        assert_eq!(
+            aram_build.build_options[0].core_item_ids,
+            vec![3032, 6675, 3031]
+        );
+        assert_eq!(
+            aram_build.build_options[0].final_item_ids,
+            vec![3032, 6675, 3031, 3036, 3072, 6676]
+        );
+        assert_eq!(
+            aram_build.build_options[0].situational_item_ids,
+            vec![3153, 6672, 3033, 3094, 2523, 3046]
+        );
+        assert_eq!(
+            aram_build.build_options[1].core_item_ids,
+            vec![3032, 3031, 6675]
+        );
+        assert_eq!(
+            aram_build.build_options[2].core_item_ids,
+            vec![3032, 3031, 3036]
+        );
+
+        // Same real payload parsed with `supports_runes = false` (ARAM Mayhem)
+        let mayhem_build =
+            parse_opgg_analysis_payload_with_options(&rest_json, 18, "Tristana", false)
+                .expect("Real Tristana ARAM Mayhem payload should parse");
+        assert!(!mayhem_build.supports_runes);
+        assert_eq!(mayhem_build.item_blocks, aram_build.item_blocks);
+        assert_eq!(mayhem_build.build_options, aram_build.build_options);
     }
 }

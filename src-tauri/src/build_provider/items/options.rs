@@ -9,40 +9,59 @@ pub fn build_cohesive_final_build_for_core(
     fifth_entries: &[ItemStatEntry],
     sixth_entries: &[ItemStatEntry],
     candidate_entries: &[ItemStatEntry],
-    _damage_type: &str,
+    damage_type: &str,
 ) -> Vec<i32> {
     let mut build_6 = core_items.to_vec();
     let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
         extract_core_archetype_tags(core_items);
 
-    let pick_best_item_for_slot = |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
-        let mut play_by_item: HashMap<i32, i64> = HashMap::new();
-        let mut order_seen: HashMap<i32, usize> = HashMap::new();
-        let mut idx = 0;
-        for entry in entries {
-            for &id in &entry.ids {
-                let norm_id = normalize_tear_item_dynamic(id);
-                if !current_build.contains(&norm_id)
-                    && !is_boot_item_dynamic(norm_id)
-                    && !is_starter_item(norm_id)
-                    && !is_component_item_dynamic(norm_id)
-                {
-                    let affinity = compute_item_affinity_score(norm_id, &core_tags, core_is_pure_ad, core_is_pure_ap);
-                    if affinity > -500_000 {
-                        *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
-                        order_seen.entry(norm_id).or_insert(idx);
-                        idx += 1;
+    let all_for_tear: Vec<ItemStatEntry> = fourth_entries
+        .iter()
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .chain(candidate_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, "", damage_type);
+
+    let pick_best_item_for_slot =
+        |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
+            let mut play_by_item: HashMap<i32, i64> = HashMap::new();
+            let mut order_seen: HashMap<i32, usize> = HashMap::new();
+            let mut idx = 0;
+            for entry in entries {
+                for &id in &entry.ids {
+                    let norm_id = if id == 3070 {
+                        tear_upgrade
+                    } else {
+                        normalize_tear_item_dynamic(id)
+                    };
+                    if !current_build.contains(&norm_id)
+                        && !is_boot_item_dynamic(norm_id)
+                        && !is_starter_item(norm_id)
+                        && !is_component_item_dynamic(norm_id)
+                    {
+                        let affinity = compute_item_affinity_score(
+                            norm_id,
+                            &core_tags,
+                            core_is_pure_ad,
+                            core_is_pure_ap,
+                        );
+                        if affinity > -500_000 {
+                            *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
+                            order_seen.entry(norm_id).or_insert(idx);
+                            idx += 1;
+                        }
                     }
                 }
             }
-        }
-        let mut candidates: Vec<(i32, i64, usize)> = play_by_item
-            .into_iter()
-            .map(|(id, play)| (id, play, *order_seen.get(&id).unwrap_or(&0)))
-            .collect();
-        candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-        candidates.first().map(|&(id, _, _)| id)
-    };
+            let mut candidates: Vec<(i32, i64, usize)> = play_by_item
+                .into_iter()
+                .map(|(id, play)| (id, play, *order_seen.get(&id).unwrap_or(&0)))
+                .collect();
+            candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+            candidates.first().map(|&(id, _, _)| id)
+        };
 
     // Sequential slot selection:
     // Slot 4: #1 most played compatible item from fourth_entries
@@ -71,13 +90,22 @@ pub fn build_cohesive_final_build_for_core(
         let mut f_idx = 0;
         for entry in all_remaining_entries {
             for &id in &entry.ids {
-                let norm_id = normalize_tear_item_dynamic(id);
+                let norm_id = if id == 3070 {
+                    tear_upgrade
+                } else {
+                    normalize_tear_item_dynamic(id)
+                };
                 if !build_6.contains(&norm_id)
                     && !is_boot_item_dynamic(norm_id)
                     && !is_starter_item(norm_id)
                     && !is_component_item_dynamic(norm_id)
                 {
-                    let affinity = compute_item_affinity_score(norm_id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+                    let affinity = compute_item_affinity_score(
+                        norm_id,
+                        &core_tags,
+                        core_is_pure_ad,
+                        core_is_pure_ap,
+                    );
                     if affinity > -500_000 {
                         *fallback_play.entry(norm_id).or_insert(0) += entry.play.max(1);
                         fallback_seen.entry(norm_id).or_insert(f_idx);
@@ -114,10 +142,20 @@ pub fn build_situational_items_for_option(
     candidate_entries: &[ItemStatEntry],
     extra_entries: &[ItemStatEntry],
     general_situational: &[i32],
-    _damage_type: &str,
+    damage_type: &str,
 ) -> Vec<i32> {
     let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
         extract_core_archetype_tags(core_items);
+
+    let all_for_tear: Vec<ItemStatEntry> = fourth_entries
+        .iter()
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .chain(candidate_entries.iter())
+        .chain(extra_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, "", damage_type);
 
     let all_entries = fourth_entries
         .iter()
@@ -132,7 +170,11 @@ pub fn build_situational_items_for_option(
 
     for entry in all_entries {
         for &id in &entry.ids {
-            let norm_id = normalize_tear_item_dynamic(id);
+            let norm_id = if id == 3070 {
+                tear_upgrade
+            } else {
+                normalize_tear_item_dynamic(id)
+            };
             if !core_items.contains(&norm_id)
                 && !final_items.contains(&norm_id)
                 && !is_boot_item_dynamic(norm_id)
@@ -148,7 +190,11 @@ pub fn build_situational_items_for_option(
 
     // Include items from general_situational as candidate pool if not already present
     for &id in general_situational {
-        let norm_id = normalize_tear_item_dynamic(id);
+        let norm_id = if id == 3070 {
+            tear_upgrade
+        } else {
+            normalize_tear_item_dynamic(id)
+        };
         if !core_items.contains(&norm_id)
             && !final_items.contains(&norm_id)
             && !is_boot_item_dynamic(norm_id)
@@ -163,7 +209,8 @@ pub fn build_situational_items_for_option(
 
     let mut candidates: Vec<(i32, i64, usize)> = Vec::new();
     for (id, play) in play_by_item {
-        let affinity = compute_item_affinity_score(id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+        let affinity =
+            compute_item_affinity_score(id, &core_tags, core_is_pure_ad, core_is_pure_ap);
         if affinity > -500_000 {
             let seen = *first_seen.get(&id).unwrap_or(&0);
             candidates.push((id, play, seen));
@@ -191,7 +238,10 @@ pub fn build_unified_build_options(
     damage_type: &str,
     _position: &str,
 ) -> Vec<UnifiedBuildOption> {
-    let cand_ids: Vec<i32> = candidate_entries.iter().flat_map(|e| e.ids.clone()).collect();
+    let cand_ids: Vec<i32> = candidate_entries
+        .iter()
+        .flat_map(|e| e.ids.clone())
+        .collect();
     let core_opts = extract_top_core_build_options(core_entries, &cand_ids, damage_type);
 
     let mut unified_options = Vec::new();
@@ -284,14 +334,19 @@ pub fn extract_top_core_build_options(
                 items.push(norm_id);
             }
         }
-        // If combo had only 2 items, fill 3rd from top candidates
+        // If combo had only 2 items, fill 3rd from top candidates (excluding boots/starters/components)
         for &cand in all_candidates {
             let norm_cand = if cand == 3070 {
                 tear_upgrade
             } else {
                 normalize_tear_item_dynamic(cand)
             };
-            if items.len() < 3 && !items.contains(&norm_cand) {
+            if items.len() < 3
+                && !items.contains(&norm_cand)
+                && !is_boot_item_dynamic(norm_cand)
+                && !is_starter_item(norm_cand)
+                && !is_component_item_dynamic(norm_cand)
+            {
                 items.push(norm_cand);
             }
         }
@@ -320,7 +375,11 @@ pub fn extract_top_core_build_options(
         } else {
             normalize_tear_item_dynamic(c)
         };
-        if !pool.contains(&norm_c) {
+        if !pool.contains(&norm_c)
+            && !is_boot_item_dynamic(norm_c)
+            && !is_starter_item(norm_c)
+            && !is_component_item_dynamic(norm_c)
+        {
             pool.push(norm_c);
         }
     }
@@ -513,7 +572,6 @@ pub fn build_3_final_build_options(
     options.truncate(3);
     options
 }
-
 
 #[cfg(test)]
 #[path = "options_tests.rs"]

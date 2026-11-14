@@ -51,6 +51,17 @@ pub fn is_component_item_dynamic(id: i32) -> bool {
     is_component_item(id)
 }
 
+/// Dynamically checks whether an item is a completed legendary item using Riot DataDragon cache.
+pub fn is_completed_item_dynamic(id: i32) -> bool {
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && cache.completed.contains(&id)
+    {
+        return true;
+    }
+    false
+}
+
 /// Normalizes an evolved item (like Muramana, Seraph's Embrace, Fimbulwinter, Diadem of Songs) to its purchasable base.
 pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
     if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
@@ -136,11 +147,13 @@ pub fn normalize_item_ids_dedup(ids: &[i32]) -> Vec<i32> {
     result
 }
 
-
 pub fn is_component_item(id: i32) -> bool {
     matches!(
         id,
         1001 // Boots of Speed
+        | 1004 // Faerie Charm
+        | 1006 // Rejuvenation Bead
+        | 1011 // Giant's Belt
         | 1018 // Cloak of Agility
         | 1026 // Blasting Wand
         | 1027 // Sapphire Crystal
@@ -177,7 +190,9 @@ pub fn is_component_item(id: i32) -> bool {
         | 3133 // Caulfield's Warhammer
         | 3134 // Serrated Dirk
         | 3140 // Quicksilver Sash
+        | 3144 // Scout's Slingshot
         | 3145 // Hextech Alternator
+        | 3147 // Haunting Guise
         | 3155 // Hexdrinker
         | 3211 // Spectre's Cowl
         | 3801 // Crystalline Bracer
@@ -190,7 +205,7 @@ pub fn is_component_item(id: i32) -> bool {
 pub fn is_starter_item(id: i32) -> bool {
     matches!(
         id,
-        1054 | 1055 | 1056 | 1082 | 1083 | 1101..=1103 | 2003 | 2031 | 2033 | 2051 | 2055 | 2138 | 2139 | 2140 | 3112 | 3184 | 3865..=3877
+        1054 | 1055 | 1056 | 1082 | 1083 | 1086 | 1101..=1103 | 2003 | 2031 | 2033 | 2051 | 2055 | 2138 | 2139 | 2140 | 3112 | 3177 | 3184 | 3865..=3877
     )
 }
 
@@ -200,7 +215,7 @@ pub fn is_boot_item(item_id: i32) -> bool {
         1001 // Boots
         | 2422 // Slightly Magical Footwear
         | 3006 // Berserker's Greaves
-        | 3008 // Symbiotic Soles / Synchronized Souls
+        | 3008 // Gluttonous Greaves / Symbiotic Soles
         | 3009 // Boots of Swiftness
         | 3010 // Symbiotic Soles
         | 3013 // Synchronized Souls (empowered)
@@ -209,10 +224,9 @@ pub fn is_boot_item(item_id: i32) -> bool {
         | 3111 // Mercury's Treads
         | 3117 // Boots of Mobility
         | 3158 // Ionian Boots of Lucidity
-        | 3170..=3177 // Tier 3 / Wild Rift / Arena boots / Zephyr
+        | 3170..=3176 // Tier 3 boots (Swiftmarch, Crimson Lucidity, Gunmetal Greaves, etc.)
     )
 }
-
 
 #[cfg(test)]
 mod tests {

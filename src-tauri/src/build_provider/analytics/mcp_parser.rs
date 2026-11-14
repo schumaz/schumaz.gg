@@ -331,9 +331,13 @@ pub fn parse_opgg_mcp_text_with_options(
     normalize_entries(&mut fourth_entries);
     normalize_entries(&mut fifth_entries);
     normalize_entries(&mut sixth_entries);
+    normalize_entries(&mut last_entries);
 
     let cand_ids: Vec<i32> = candidate_entries
         .iter()
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
         .flat_map(|e| e.ids.clone())
         .collect();
     let core_build_options =
@@ -364,7 +368,7 @@ pub fn parse_opgg_mcp_text_with_options(
         &fifth_entries,
         &sixth_entries,
         &candidate_entries,
-        &last_entries,
+        &[],
         &general_situational,
         damage_type,
         position,

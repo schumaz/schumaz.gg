@@ -1,6 +1,6 @@
 ﻿use super::*;
 use crate::build_provider::*;
-    
+
 #[test]
 fn test_build_ordering_strictly_by_play_count() {
     // Item 3118 (Malignance): 10,000 games, 5,100 wins (51.0% win rate)
@@ -500,4 +500,330 @@ fn test_boots_ranking_yunara_with_synchronized_souls() {
     assert!(is_boot_item(3008));
     assert!(is_boot_item(3010));
     assert!(is_boot_item(3013));
+}
+
+#[test]
+fn test_aram_starter_preserves_top_potion_and_allows_no_potion_combos() {
+    // 1. Tristana ARAM: #1 [1038, 2003, 2003] (play 1397) vs secondary [1038] (398),
+    //    [1042, 3006] (251), [2031, 3051] (121), [2051, 2003] (80).
+    //    Must select [1038, 2003] without letting secondary 2031 overwrite potion or forcing 2051.
+    let tristana_starters = vec![
+        ItemStatEntry {
+            ids: vec![2051, 2003],
+            play: 80,
+            win: 40,
+            pick_rate: 0.02,
+        },
+        ItemStatEntry {
+            ids: vec![1038, 2003, 2003],
+            play: 1397,
+            win: 745,
+            pick_rate: 0.415,
+        },
+        ItemStatEntry {
+            ids: vec![1038],
+            play: 398,
+            win: 222,
+            pick_rate: 0.118,
+        },
+        ItemStatEntry {
+            ids: vec![1042, 3006],
+            play: 251,
+            win: 124,
+            pick_rate: 0.075,
+        },
+        ItemStatEntry {
+            ids: vec![2031, 3051],
+            play: 121,
+            win: 69,
+            pick_rate: 0.036,
+        },
+    ];
+    let trist_blocks = build_5_item_blocks_with_depth_lists(
+        tristana_starters,
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AD",
+        "",
+    );
+    assert_eq!(trist_blocks[0].item_ids, vec![1038, 2003]);
+
+    // 2. Solo B.F. Sword [1038] without potion must NOT force 2003
+    let solo_bf = build_5_item_blocks_with_depth_lists(
+        vec![
+            ItemStatEntry {
+                ids: vec![1038],
+                play: 900,
+                win: 500,
+                pick_rate: 0.5,
+            },
+            ItemStatEntry {
+                ids: vec![1038, 2003],
+                play: 200,
+                win: 100,
+                pick_rate: 0.1,
+            },
+        ],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AD",
+        "",
+    );
+    assert_eq!(solo_bf[0].item_ids, vec![1038]);
+
+    // 3. Two components without potion [1037, 1042] must preserve both without adding 2003
+    let two_components = build_5_item_blocks_with_depth_lists(
+        vec![ItemStatEntry {
+            ids: vec![1037, 1042],
+            play: 1200,
+            win: 650,
+            pick_rate: 0.4,
+        }],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AD",
+        "",
+    );
+    assert_eq!(two_components[0].item_ids, vec![1037, 1042]);
+
+    // 4. ARAM exclusive starter [2051] / [3112] without consumables must NOT force 2003
+    let horn_only = build_5_item_blocks_with_depth_lists(
+        vec![ItemStatEntry {
+            ids: vec![2051],
+            play: 1500,
+            win: 820,
+            pick_rate: 0.5,
+        }],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AD",
+        "",
+    );
+    assert_eq!(horn_only[0].item_ids, vec![2051]);
+
+    let orb_only = build_5_item_blocks_with_depth_lists(
+        vec![ItemStatEntry {
+            ids: vec![3112],
+            play: 1500,
+            win: 820,
+            pick_rate: 0.5,
+        }],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AP",
+        "",
+    );
+    assert_eq!(orb_only[0].item_ids, vec![3112]);
+
+    // 5. OP.GG numeric sorting puts consumables first: [2031, 3802] -> [3802, 2031]
+    //    and [2003, 2003, 3057, 3070] -> [3057, 3070, 2003]
+    let ahri_blocks = build_5_item_blocks_with_depth_lists(
+        vec![ItemStatEntry {
+            ids: vec![2031, 3802],
+            play: 2000,
+            win: 1100,
+            pick_rate: 0.5,
+        }],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AP",
+        "",
+    );
+    assert_eq!(ahri_blocks[0].item_ids, vec![3802, 2031]);
+
+    let ezreal_blocks = build_5_item_blocks_with_depth_lists(
+        vec![ItemStatEntry {
+            ids: vec![2003, 2003, 3057, 3070],
+            play: 2000,
+            win: 1100,
+            pick_rate: 0.5,
+        }],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AD",
+        "",
+    );
+    assert_eq!(ezreal_blocks[0].item_ids, vec![3057, 3070, 2003]);
+}
+
+#[test]
+fn test_starter_entries_with_boots_and_completed_items_are_not_filtered_from_other_blocks() {
+    let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+    let ddragon_items_json = serde_json::json!({
+        "data": {
+            "1042": { "name": "Dagger", "into": ["3006"], "gold": { "total": 250 } },
+            "3006": { "name": "Berserker's Greaves", "tags": ["Boots"], "into": ["3172"], "gold": { "total": 1100 } },
+            "3008": { "name": "Gluttonous Greaves", "tags": ["Boots"], "gold": { "total": 1000 } },
+            "3111": { "name": "Mercury's Treads", "tags": ["Boots"], "into": ["3173"], "gold": { "total": 1200 } },
+            "3032": { "name": "Yun Tal Wildarrows", "gold": { "total": 3000 } },
+            "6675": { "name": "Navori Flickerblade", "gold": { "total": 2650 } },
+            "3031": { "name": "Infinity Edge", "gold": { "total": 3450 } },
+            "3036": { "name": "Lord Dominik's Regards", "gold": { "total": 3100 } },
+            "3072": { "name": "Bloodthirster", "gold": { "total": 3400 } },
+            "6676": { "name": "The Collector", "gold": { "total": 3000 } },
+            "3153": { "name": "Blade of the Ruined King", "gold": { "total": 3200 } }
+        }
+    });
+    set_dynamic_item_classifications(parse_ddragon_item_classifications(&ddragon_items_json));
+
+    let starters = vec![
+        ItemStatEntry {
+            ids: vec![1042, 3006],
+            play: 1500,
+            win: 800,
+            pick_rate: 0.45,
+        },
+        ItemStatEntry {
+            ids: vec![3032], // edge-case completed item present in starter_entries
+            play: 100,
+            win: 55,
+            pick_rate: 0.03,
+        },
+    ];
+    let boots = vec![
+        ItemStatEntry {
+            ids: vec![3006],
+            play: 2640,
+            win: 1415,
+            pick_rate: 0.85,
+        },
+        ItemStatEntry {
+            ids: vec![3008],
+            play: 264,
+            win: 166,
+            pick_rate: 0.08,
+        },
+        ItemStatEntry {
+            ids: vec![3111],
+            play: 124,
+            win: 62,
+            pick_rate: 0.04,
+        },
+    ];
+    let candidates = vec![
+        ItemStatEntry {
+            ids: vec![3032, 6675, 3031],
+            play: 598,
+            win: 329,
+            pick_rate: 0.20,
+        },
+        ItemStatEntry {
+            ids: vec![6676],
+            play: 1007,
+            win: 551,
+            pick_rate: 0.28,
+        },
+        ItemStatEntry {
+            ids: vec![3153],
+            play: 528,
+            win: 322,
+            pick_rate: 0.15,
+        },
+    ];
+
+    let blocks = build_5_item_blocks_with_depth_lists(
+        starters,
+        boots,
+        candidates,
+        vec![ItemStatEntry {
+            ids: vec![3036],
+            play: 593,
+            win: 346,
+            pick_rate: 0.29,
+        }],
+        vec![ItemStatEntry {
+            ids: vec![3072],
+            play: 255,
+            win: 160,
+            pick_rate: 0.29,
+        }],
+        vec![],
+        "AD",
+        "",
+    );
+
+    // [1042, 3006] is preserved as starter without forcing a potion
+    assert_eq!(blocks[0].item_ids, vec![1042, 3006]);
+    // 3032 was NOT filtered out as a starter from Core / Build Final
+    assert_eq!(blocks[1].item_ids, vec![3032, 6675, 3031]);
+    // 3006 was NOT filtered out as a starter from 3 Botas Mais Feitas
+    assert_eq!(blocks[2].item_ids, vec![3006, 3008, 3111]);
+    assert_eq!(blocks[3].item_ids, vec![3032, 6675, 3031, 3036, 3072, 6676]);
+    assert!(blocks[4].item_ids.contains(&3153));
+}
+
+#[test]
+fn test_jungle_and_support_starter_preserve_top_entry_potion() {
+    // Support: #1 has no potion [3865], #2 has [3865, 2031] -> must NOT leak 2031 from #2
+    let supp_no_pot_first = build_5_item_blocks_with_depth_lists(
+        vec![
+            ItemStatEntry {
+                ids: vec![3865],
+                play: 50000,
+                win: 25000,
+                pick_rate: 0.8,
+            },
+            ItemStatEntry {
+                ids: vec![3865, 2031],
+                play: 5000,
+                win: 2500,
+                pick_rate: 0.1,
+            },
+        ],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AP",
+        "support",
+    );
+    assert_eq!(supp_no_pot_first[0].item_ids, vec![2003]);
+
+    // Jungle: #1 [1102] without potion -> keeps only [1102] without forcing 2003 or leaking #2's 2031
+    let jng_no_pot_first = build_5_item_blocks_with_depth_lists(
+        vec![
+            ItemStatEntry {
+                ids: vec![1102],
+                play: 50000,
+                win: 25000,
+                pick_rate: 0.8,
+            },
+            ItemStatEntry {
+                ids: vec![1102, 2031],
+                play: 5000,
+                win: 2500,
+                pick_rate: 0.1,
+            },
+        ],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        "AD",
+        "jungle",
+    );
+    assert_eq!(jng_no_pot_first[0].item_ids, vec![1102]);
 }
