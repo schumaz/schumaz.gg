@@ -1628,6 +1628,18 @@ img {
   color: var(--accent-primary-hover);
 }
 
+.dock-icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: saturate(0.75) brightness(0.9);
+}
+
+.dock-btn:hover .dock-icon-img,
+.dock-btn.active .dock-icon-img {
+  filter: none;
+}
+
 /* Secondary Spell Choices Selector */
 .secondary-spell-selector {
   display: flex;
@@ -2587,13 +2599,21 @@ img {
 }
 
 /* Top 3 Masteries */
+[data-testid="top-masteries-card"] {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .mastery-list {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .mastery-row {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3395,4 +3415,780 @@ img {
   background-color: rgba(239, 68, 68, 0.28);
   border-color: #ef4444;
   color: #ffffff;
+}
+
+/* =========================================================
+   ARAM & ARAM Mayhem Tab (Dark Amethyst Original Design)
+   ========================================================= */
+
+.aram-chooser-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  gap: 22px;
+  overflow-y: auto;
+}
+
+.aram-chooser-header {
+  text-align: center;
+  max-width: 480px;
+}
+
+.aram-chooser-title {
+  margin: 0 0 6px 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.aram-chooser-subtitle {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.aram-chooser-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 280px));
+  gap: 14px;
+  width: 100%;
+  justify-content: center;
+}
+
+.aram-choice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.16s ease,
+    box-shadow 0.2s ease;
+}
+
+.aram-choice-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-border);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(124, 58, 237, 0.18);
+}
+
+.aram-choice-card.is-saved {
+  border-color: var(--accent-border);
+  background: linear-gradient(160deg, rgba(124, 58, 237, 0.12), var(--bg-card) 65%);
+}
+
+.aram-choice-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aram-choice-icon {
+  width: 44px;
+  height: 44px;
+  padding: 5px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+
+.aram-choice-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.aram-choice-icon.is-mayhem {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent-primary-hover);
+}
+
+.aram-saved-pill {
+  padding: 2px 9px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+}
+
+.aram-choice-name {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.aram-choice-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Main ARAM Tab Viewport */
+.aram-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.aram-toolbar-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.aram-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.aram-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+  flex-shrink: 0;
+}
+
+.aram-mode-badge.is-mayhem {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent-primary-hover);
+}
+
+.aram-toolbar-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.aram-count-pill {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+}
+
+.aram-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.aram-search-wrap.is-full {
+  width: 100%;
+}
+
+.aram-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.aram-search-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px 0 30px;
+  border-radius: 9px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.aram-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.aram-search-input:focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.16);
+}
+
+/* Classic ARAM List */
+.aram-classic-list-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.aram-classic-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.aram-classic-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aram-classic-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+}
+
+.aram-rank-num {
+  width: 34px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.aram-champ-frame {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.aram-champ-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
+.aram-champ-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aram-classic-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.aram-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.aram-stat-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.68rem;
+}
+
+.aram-stat-val {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.aram-stat-val.is-high {
+  color: var(--accent-success);
+}
+
+.aram-stat-val.is-low {
+  color: var(--accent-danger);
+}
+
+.aram-tier-pill {
+  min-width: 50px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.aram-tier-pill.tier-op {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+}
+
+.aram-tier-pill.tier-1 {
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid rgba(96, 165, 250, 0.55);
+  color: #93c5fd;
+}
+
+.aram-tier-pill.tier-2 {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(74, 222, 128, 0.48);
+  color: #86efac;
+}
+
+.aram-tier-pill.tier-3 {
+  background: rgba(234, 179, 8, 0.2);
+  border: 1px solid rgba(250, 204, 21, 0.48);
+  color: #fde047;
+}
+
+.aram-tier-pill.tier-4 {
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  color: #cbd5e1;
+}
+
+.aram-tier-pill.tier-5 {
+  background: rgba(180, 83, 9, 0.22);
+  border: 1px solid rgba(217, 119, 6, 0.45);
+  color: #fdba74;
+}
+
+/* ARAM Mayhem Split Layout */
+.aram-mayhem-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 0.85fr 1.35fr;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.aram-mayhem-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  margin-bottom: 0;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.aram-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.aram-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+}
+
+.aram-panel-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.aram-scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.aram-mayhem-champ-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aram-mayhem-champ-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+}
+
+.aram-mayhem-champ-row.selected {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+}
+
+/* Mayhem Augments Panel */
+.aram-augments-hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aram-hero-frame {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.aram-hero-frame::after {
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+.aram-hero-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
+.aram-hero-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.aram-hero-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.aram-augments-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aram-rarity-filter {
+  flex: 1;
+  min-width: 240px;
+  max-width: none;
+  padding: 3px;
+}
+
+.aram-rarity-filter .segment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  min-width: 0;
+  font-size: 0.76rem;
+  font-family: inherit;
+}
+
+.aram-rarity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.aram-rarity-dot.dot-silver {
+  background: #cbd5e1;
+}
+
+.aram-rarity-dot.dot-gold {
+  background: linear-gradient(135deg, #f3e6cb, #c8aa6e 55%, #8b6936);
+  box-shadow: 0 0 6px rgba(200, 170, 110, 0.5);
+}
+
+.aram-rarity-dot.dot-prismatic {
+  background: linear-gradient(135deg, #f472b6, #a78bfa, #38bdf8);
+}
+
+.aram-aug-search {
+  width: 175px;
+}
+
+.aram-augment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aram-augment-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+}
+
+.aram-augment-icon-frame {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.aram-augment-icon-frame.rarity-silver {
+  border-color: rgba(203, 213, 225, 0.45);
+  background: rgba(203, 213, 225, 0.08);
+}
+
+.aram-augment-icon-frame.rarity-gold {
+  border-color: rgba(210, 179, 122, 0.78);
+  background: linear-gradient(155deg, rgba(235, 212, 168, 0.16), rgba(9, 22, 26, 0.94) 55%, rgba(162, 126, 70, 0.18));
+  box-shadow: inset 0 0 0 1px rgba(240, 224, 190, 0.2), 0 0 10px rgba(200, 170, 110, 0.14);
+}
+
+.aram-augment-icon-frame.rarity-prismatic {
+  border-color: rgba(192, 132, 252, 0.58);
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.14), rgba(124, 58, 237, 0.18));
+}
+
+.aram-augment-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.aram-aug-tier-badge {
+  width: 24px;
+  height: 24px;
+  margin-top: 6px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.aram-aug-tier-badge.aug-tier-s {
+  background: rgba(124, 58, 237, 0.26);
+  border: 1px solid rgba(167, 139, 250, 0.6);
+  color: #ede9fe;
+}
+
+.aram-aug-tier-badge.aug-tier-a {
+  background: rgba(52, 211, 153, 0.18);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  color: #6ee7b7;
+}
+
+.aram-aug-tier-badge.aug-tier-b {
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+}
+
+.aram-aug-tier-badge.aug-tier-c {
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fcd34d;
+}
+
+.aram-aug-tier-badge.aug-tier-low {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.aram-augment-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.aram-augment-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aram-augment-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.aram-rarity-tag {
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aram-rarity-tag.rarity-silver {
+  background: rgba(203, 213, 225, 0.12);
+  color: #e2e8f0;
+}
+
+.aram-rarity-tag.rarity-gold {
+  background: linear-gradient(180deg, rgba(229, 203, 160, 0.18), rgba(146, 112, 62, 0.18));
+  border: 1px solid rgba(200, 170, 110, 0.52);
+  color: #f0e0be;
+}
+
+.aram-rarity-tag.rarity-prismatic {
+  background: rgba(168, 85, 247, 0.2);
+  color: #e9d5ff;
+}
+
+.aram-rarity-tag.rarity-neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+.aram-aug-pick {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.aram-augment-desc {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Shared Loading / Error / Empty States */
+.aram-state-box {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding: 16px;
+}
+
+.aram-spinner {
+  width: 24px;
+  height: 24px;
+}
+
+.aram-error-text {
+  color: var(--accent-danger);
+}
+
+.aram-retry-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aram-retry-btn:hover {
+  background: rgba(124, 58, 237, 0.28);
+}
+
+@media (max-width: 860px) {
+  .aram-chooser-grid {
+    grid-template-columns: 1fr;
+    max-width: 320px;
+  }
+
+  .aram-mayhem-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 0.9fr 1.1fr;
+  }
+
+  .aram-aug-search {
+    width: 100%;
+  }
 }

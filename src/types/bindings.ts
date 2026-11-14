@@ -27,6 +27,10 @@ export const commands = {
 	injectRunePage: (championId: number, championName: string, pageIndex: number, primaryStyleId: number, subStyleId: number, selectedPerkIds: number[]) => __TAURI_INVOKE<null>("inject_rune_page", { championId, championName, pageIndex, primaryStyleId, subStyleId, selectedPerkIds }),
 	/**  Tauri command to immediately update and re-inject item sets into the LoL client shop. */
 	injectItemBuild: (championId: number, queueId: number | null, buildIndex: number | null, coreIndex: number | null, finalIndex: number | null) => __TAURI_INVOKE<null>("inject_item_build", { championId, queueId, buildIndex, coreIndex, finalIndex }),
+	/**  Tauri command to fetch ARAM or ARAM Mayhem champion tier list. */
+	getAramTierList: (mode: AramMode) => __TAURI_INVOKE<AramChampionRank_Serialize[]>("get_aram_tier_list", { mode }),
+	/**  Tauri command to fetch ARAM Mayhem augments for a specific champion key. */
+	getAramMayhemAugments: (championKey: string) => __TAURI_INVOKE<AramAugmentEntry_Serialize[]>("get_aram_mayhem_augments", { championKey }),
 };
 
 /** Events */
@@ -44,6 +48,56 @@ export const events = {
 };
 
 /* Types */
+export type AramAugmentEntry = AramAugmentEntry_Serialize | AramAugmentEntry_Deserialize;
+
+export type AramAugmentEntry_Deserialize = {
+	id: number,
+	name: string,
+	tier: number,
+	rarity?: number | null,
+	performance: number | null,
+	popular: number | null,
+	icon_url: string,
+	desc: string,
+};
+
+export type AramAugmentEntry_Serialize = {
+	id: number,
+	name: string,
+	tier: number,
+	rarity: number | null,
+	performance: number | null,
+	popular: number | null,
+	icon_url: string,
+	desc: string,
+};
+
+export type AramChampionRank = AramChampionRank_Serialize | AramChampionRank_Deserialize;
+
+export type AramChampionRank_Deserialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	tier: number,
+	rank: number,
+	win_rate?: number | null,
+	pick_rate?: number | null,
+};
+
+export type AramChampionRank_Serialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	tier: number,
+	rank: number,
+	win_rate: number | null,
+	pick_rate: number | null,
+};
+
+export type AramMode = "aram" | "aram_mayhem";
+
 export type BuildInjected = InjectionReport;
 
 export type ChampSelectEnded = null;

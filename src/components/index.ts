@@ -10,3 +10,4 @@ export * from "./ItemBlocks";
 export * from "./SettingsTab";
 export * from "./IdleState";
 export * from "./NavigationDock";
+export * from "./AramTab";

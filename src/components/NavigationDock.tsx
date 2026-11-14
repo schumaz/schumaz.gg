@@ -3,9 +3,13 @@ import { ActiveTab } from "../types";
 interface NavigationDockProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
+  onAramClick?: () => void;
 }
 
-export function NavigationDock({ activeTab, onTabChange }: NavigationDockProps) {
+const ARAM_DOCK_ICON_URL =
+  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/aram/img/game-select-icon-active.png";
+
+export function NavigationDock({ activeTab, onTabChange, onAramClick }: NavigationDockProps) {
   return (
     <nav className="floating-dock" aria-label="Navegação Principal">
       <button
@@ -53,6 +57,28 @@ export function NavigationDock({ activeTab, onTabChange }: NavigationDockProps) 
           <polyline points="2 12 12 17 22 12" />
         </svg>
         <span>Runas</span>
+      </button>
+
+      <button
+        type="button"
+        className={`dock-btn ${activeTab === "aram" ? "active" : ""}`}
+        onClick={() => {
+          if (onAramClick) {
+            onAramClick();
+          } else {
+            onTabChange("aram");
+          }
+        }}
+        aria-current={activeTab === "aram" ? "page" : undefined}
+      >
+        <img
+          src={ARAM_DOCK_ICON_URL}
+          alt=""
+          className="dock-icon dock-icon-img"
+          width={18}
+          height={18}
+        />
+        <span>Aram</span>
       </button>
 
       <button

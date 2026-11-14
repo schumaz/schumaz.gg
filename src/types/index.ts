@@ -1,6 +1,9 @@
-export type ActiveTab = "profile" | "runes" | "settings";
+export type ActiveTab = "profile" | "runes" | "aram" | "settings";
 
 export type {
+  AramAugmentEntry,
+  AramChampionRank,
+  AramMode,
   BuildInjected,
   ChampSelectEnded,
   ChampSelectReconciled,
@@ -44,3 +47,4 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";
+export const ARAM_SUBMODE_STORAGE_KEY = "schumaz_aram_submode";

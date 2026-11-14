@@ -5,6 +5,7 @@ import { ActiveTab, FlashKeyPreference, commands } from "./types";
 import { profileBlurPercentToPx, usePreferences } from "./hooks/usePreferences";
 import { useLcuEvents } from "./hooks/useLcuEvents";
 import { usePlayerProfile } from "./hooks/usePlayerProfile";
+import { useAram } from "./hooks/useAram";
 import { computeOrderedSpells } from "./utils/spells";
 import {
   StatusDock,
@@ -16,6 +17,7 @@ import {
   SettingsTab,
   IdleState,
   NavigationDock,
+  AramTab,
 } from "./components";
 
 // Re-export all types and utilities for seamless backward compatibility
@@ -75,6 +77,9 @@ function App() {
     onMatchEnded: () => setActiveTab("profile"),
   });
 
+  const currentChampionId = champSelect?.champion_id ?? build?.champion_id ?? null;
+  const aram = useAram(activeTab === "aram", currentChampionId);
+
   const {
     profile,
     profileLoading,
@@ -104,6 +109,12 @@ function App() {
   const handleInvertSpells = async () => {
     const nextFlashKey: FlashKeyPreference = preferences.flashKey === "D" ? "F" : "D";
     updatePreference("flashKey", nextFlashKey);
+  };
+
+  const handleAramDockClick = () => {
+    const wasAlreadyOnAram = activeTab === "aram";
+    setActiveTab("aram");
+    aram.handleAramDockClick(wasAlreadyOnAram);
   };
 
   return (
@@ -202,7 +213,25 @@ function App() {
           )}
         </div>
 
-        {/* View 3: "Configurações" Tab (Settings & Preferences) */}
+        {/* View 3: "Aram" Tab (ARAM & ARAM Mayhem) */}
+        <AramTab
+          isActive={activeTab === "aram"}
+          savedMode={aram.savedMode}
+          showChooser={aram.showChooser}
+          tierLists={aram.tierLists}
+          tierLoading={aram.tierLoading}
+          tierErrors={aram.tierErrors}
+          selectedChampionKey={aram.selectedChampionKey}
+          augmentsByChampion={aram.augmentsByChampion}
+          augmentsLoading={aram.augmentsLoading}
+          augmentsError={aram.augmentsError}
+          onSelectMode={aram.selectMode}
+          onSelectChampion={aram.selectChampion}
+          onRetryTierList={aram.retryTierList}
+          onRetryAugments={aram.retryAugments}
+        />
+
+        {/* View 4: "Configurações" Tab (Settings & Preferences) */}
         <SettingsTab
           preferences={preferences}
           onUpdatePreference={updatePreference}
@@ -215,7 +244,11 @@ function App() {
       </div>
 
       {/* Bottom Navigation Dock */}
-      <NavigationDock activeTab={activeTab} onTabChange={setActiveTab} />
+      <NavigationDock
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onAramClick={handleAramDockClick}
+      />
     </main>
   );
 }

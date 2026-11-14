@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import App, { ChampionBuild } from "./App";
 import { invoke } from "@tauri-apps/api/core";
@@ -302,21 +302,23 @@ describe("App Component", () => {
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
-  it("renders the floating bottom dock with 3 navigation tabs in order: Perfil, Runas and Configurações", () => {
+  it("renders the floating bottom dock with 4 navigation tabs in order: Perfil, Runas, Aram and Configurações", () => {
     render(<App />);
     const dockNav = screen.getByRole("navigation", { name: /navegação principal/i });
     expect(dockNav).toBeInTheDocument();
 
     const buttons = Array.from(dockNav.querySelectorAll("button"));
-    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Perfil", "Runas", "Configurações"]);
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Perfil", "Runas", "Aram", "Configurações"]);
 
     const profileBtn = screen.getByRole("button", { name: /^perfil$/i });
     const runesBtn = screen.getByRole("button", { name: /^runas$/i });
+    const aramBtn = screen.getByRole("button", { name: /^aram$/i });
     const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
 
     // Perfil tab is active by default
     expect(profileBtn).toHaveAttribute("aria-current", "page");
     expect(runesBtn).not.toHaveAttribute("aria-current");
+    expect(aramBtn).not.toHaveAttribute("aria-current");
     expect(settingsBtn).not.toHaveAttribute("aria-current");
   });
 
