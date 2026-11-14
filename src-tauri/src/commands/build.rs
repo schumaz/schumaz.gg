@@ -27,12 +27,14 @@ pub async fn update_build_filters(
 ) -> Result<models::ChampionBuild, String> {
     let http_client = reqwest::Client::new();
     let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
+    let is_aram = q_id == ws_listener::QUEUE_ARAM || q_id == ws_listener::QUEUE_ARAM_MAYHEM;
+    let effective_position = if is_aram { None } else { position.as_deref() };
 
     let build = build_provider::get_recommended_build_with_filters(
         &http_client,
         champion_id,
         q_id,
-        position.as_deref(),
+        effective_position,
         tier.as_deref(),
         region.as_deref(),
         patch.as_deref(),

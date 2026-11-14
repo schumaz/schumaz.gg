@@ -4,7 +4,7 @@ use super::super::fallback::{
 };
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
-use super::rest_parser::parse_opgg_analysis_payload;
+use super::rest_parser::parse_opgg_analysis_payload_with_options;
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
 pub const OPGG_REST_API_BASE: &str = "https://lol-api-champion.op.gg/api";
@@ -16,6 +16,9 @@ pub async fn fetch_opgg_champion_analysis(
     queue_name: &str,
 ) -> Result<serde_json::Value, String> {
     let formatted_champ = champion_key_to_opgg_name(champion_name);
+    // NOTE: OP.GG MCP `lol_get_champion_analysis` schema strictly requires `position`
+    // (`top|mid|jungle|adc|support`) even when `game_mode == "aram"` (omitting it or passing
+    // "none" fails with JSON-RPC -32600).
     let payload = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -88,27 +91,37 @@ pub async fn get_recommended_build_with_endpoint(
         .unwrap_or("Unknown");
 
     let queue_param = opgg_queue_param_from_id(queue_id);
+    let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-            Ok(json_res) => match parse_opgg_analysis_payload(&json_res, champion_id, champ_name) {
+            Ok(json_res) => match parse_opgg_analysis_payload_with_options(
+                &json_res,
+                champion_id,
+                champ_name,
+                supports_runes,
+            ) {
                 Ok(build) => build,
                 Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
             },
             Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
         };
 
-    build.supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
+    if queue_param == "aram" {
+        build.active_position.clear();
+    }
+    build.supports_runes = supports_runes;
     enrich_build_with_ddragon(&mut build, ddragon_cache);
     build
 }
 
 /// Fetches available patch versions from the OP.GG REST API.
-pub async fn fetch_opgg_versions(client: &reqwest::Client, region: &str) -> Vec<String> {
-    let url = format!(
-        "{}/{}/champions/ranked/versions",
-        OPGG_REST_API_BASE, region
-    );
+pub async fn fetch_opgg_versions_from_base(
+    client: &reqwest::Client,
+    rest_base: &str,
+    region: &str,
+) -> Vec<String> {
+    let url = format!("{}/{}/champions/ranked/versions", rest_base, region);
     if let Ok(res) = client.get(&url).send().await
         && let Ok(json) = res.json::<serde_json::Value>().await
         && let Some(arr) = json.get("data").and_then(|d| d.as_array())
@@ -124,19 +137,59 @@ pub async fn fetch_opgg_versions(client: &reqwest::Client, region: &str) -> Vec<
     vec!["16.22".to_string(), "16.21".to_string()]
 }
 
+/// Fetches available patch versions from the OP.GG REST API.
+pub async fn fetch_opgg_versions(client: &reqwest::Client, region: &str) -> Vec<String> {
+    fetch_opgg_versions_from_base(client, OPGG_REST_API_BASE, region).await
+}
+
 /// Fetches champion build analysis from the OP.GG REST API with full filter parameters.
+/// When `mode == "aram"` or `position` is `None`/empty, uses `"none"` because the OP.GG REST
+/// route `/{region}/champions/{mode}/{champion_id}/{position}` requires a path segment.
 pub async fn fetch_opgg_rest_champion_analysis(
     client: &reqwest::Client,
     region: &str,
     mode: &str,
     champion_id: i32,
-    position: &str,
+    position: Option<&str>,
     tier: &str,
     version: Option<&str>,
 ) -> Result<serde_json::Value, String> {
+    fetch_opgg_rest_champion_analysis_from_base(
+        client,
+        OPGG_REST_API_BASE,
+        region,
+        mode,
+        champion_id,
+        position,
+        tier,
+        version,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn fetch_opgg_rest_champion_analysis_from_base(
+    client: &reqwest::Client,
+    rest_base: &str,
+    region: &str,
+    mode: &str,
+    champion_id: i32,
+    position: Option<&str>,
+    tier: &str,
+    version: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let pos_segment = if mode.eq_ignore_ascii_case("aram") {
+        "none"
+    } else {
+        match position {
+            Some(p) if !p.trim().is_empty() => p.trim(),
+            _ => "none",
+        }
+    };
+
     let mut url = format!(
         "{}/{}/champions/{}/{}/{}?tier={}",
-        OPGG_REST_API_BASE, region, mode, champion_id, position, tier
+        rest_base, region, mode, champion_id, pos_segment, tier
     );
     if let Some(v) = version
         && !v.trim().is_empty()
@@ -171,10 +224,21 @@ pub async fn fetch_opgg_mcp_depth_items(
     endpoint_url: &str,
     champion_name: &str,
     game_mode: &str,
-    position: &str,
+    position: Option<&str>,
     tier: &str,
 ) -> Result<(Vec<ItemStatEntry>, Vec<ItemStatEntry>, Vec<ItemStatEntry>), String> {
     let formatted_champ = champion_key_to_opgg_name(champion_name);
+    // OP.GG MCP `lol_get_champion_analysis` strictly requires `position` in its schema
+    // (`top|mid|jungle|adc|support`) even for `game_mode == "aram"` (omitting it or passing
+    // "none" fails with JSON-RPC -32600, while any valid enum value returns global ARAM data).
+    let mcp_position = if game_mode.eq_ignore_ascii_case("aram") {
+        "mid"
+    } else {
+        match position {
+            Some(p) if !p.trim().is_empty() => p.trim(),
+            _ => "mid",
+        }
+    };
     let payload = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -184,7 +248,7 @@ pub async fn fetch_opgg_mcp_depth_items(
             "arguments": {
                 "game_mode": game_mode,
                 "champion": formatted_champ,
-                "position": position,
+                "position": mcp_position,
                 "tier": tier,
                 "desired_output_fields": [
                     "data.fourth_items[].{ids[],play,win,pick_rate}",
@@ -229,4 +293,41 @@ pub async fn fetch_opgg_mcp_depth_items(
         }
     }
     Ok((fourth, fifth, sixth))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_fetch_opgg_rest_uses_none_for_aram_ignoring_position() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/champions/aram/103/none"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": { "ok": true }
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let res = fetch_opgg_rest_champion_analysis_from_base(
+            &client,
+            &mock_server.uri(),
+            "global",
+            "aram",
+            103,
+            Some("top"),
+            "emerald_plus",
+            Some("16.22"),
+        )
+        .await;
+
+        assert!(res.is_ok(), "ARAM REST call should hit /aram/103/none");
+        assert_eq!(res.unwrap()["data"]["ok"], serde_json::json!(true));
+    }
 }

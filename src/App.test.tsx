@@ -211,6 +211,21 @@ vi.mock("@tauri-apps/api/core", () => ({
     }
 
     if (cmd === "get_recommended_build_for_champion") {
+      if (args?.queueId === 2400) {
+        return Promise.resolve({
+          ...mockAhriBuild,
+          active_position: "",
+          supports_runes: false,
+          rune_pages: [],
+        });
+      }
+      if (args?.queueId === 450) {
+        return Promise.resolve({
+          ...mockAhriBuild,
+          active_position: "",
+          supports_runes: true,
+        });
+      }
       return Promise.resolve(mockAhriBuild);
     }
 
@@ -843,6 +858,7 @@ describe("App Component", () => {
     expect(buildOpt0).not.toHaveClass("active");
     expect(invoke).toHaveBeenCalledWith("inject_item_build", {
       championId: 103,
+      queueId: 420,
       buildIndex: 1,
       coreIndex: 1,
       finalIndex: 1,
@@ -901,5 +917,129 @@ describe("App Component", () => {
 
     // Now Item 3116 should be rendered in the Situational block
     expect(screen.getByAltText("Item 3116")).toBeInTheDocument();
+  });
+
+  it("hides Rota selector, omits position in filter updates, and forwards active queueId to inject_item_build in ARAM (450)", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 450,
+          queue_mode: "Aram",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({
+        payload: {
+          ...mockAhriBuild,
+          active_position: "",
+          supports_runes: true,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("champ-filters-bar")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("ARAM (Howling Abyss)")).toBeInTheDocument();
+    expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
+
+    const tierSelect = screen.getByTestId("filter-tier") as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(tierSelect, { target: { value: "diamond_plus" } });
+    });
+
+    expect(invoke).toHaveBeenCalledWith("update_build_filters", {
+      championId: 103,
+      queueId: 450,
+      position: null,
+      tier: "diamond_plus",
+      region: "global",
+      patch: "16.22",
+    });
+
+    const buildOpt1 = screen.getByTestId("build-opt-btn-1");
+    await act(async () => {
+      fireEvent.click(buildOpt1);
+    });
+
+    expect(invoke).toHaveBeenCalledWith("inject_item_build", {
+      championId: 103,
+      queueId: 450,
+      buildIndex: 1,
+      coreIndex: 1,
+      finalIndex: 1,
+    });
+  });
+
+  it("hides Rota selector and runes, omits position in filter updates, and forwards queueId 2400 in ARAM Mayhem", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+    });
+
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 2400,
+          queue_mode: "AramMayhem",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({
+        payload: {
+          ...mockAhriBuild,
+          active_position: "",
+          supports_runes: false,
+          rune_pages: [],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("champ-filters-bar")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("ARAM Mayhem (Howling Abyss)")).toBeInTheDocument();
+    expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("rune-pages-selector")).not.toBeInTheDocument();
+
+    const tierSelect = screen.getByTestId("filter-tier") as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(tierSelect, { target: { value: "master_plus" } });
+    });
+
+    expect(invoke).toHaveBeenCalledWith("update_build_filters", {
+      championId: 103,
+      queueId: 2400,
+      position: null,
+      tier: "master_plus",
+      region: "global",
+      patch: "16.22",
+    });
+
+    const buildOpt1 = screen.getByTestId("build-opt-btn-1");
+    await act(async () => {
+      fireEvent.click(buildOpt1);
+    });
+
+    expect(invoke).toHaveBeenCalledWith("inject_item_build", {
+      championId: 103,
+      queueId: 2400,
+      buildIndex: 1,
+      coreIndex: 1,
+      finalIndex: 1,
+    });
   });
 });

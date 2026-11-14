@@ -17,7 +17,7 @@ const mockBuild: ChampionBuild = {
 };
 
 describe("FiltersHeader", () => {
-  it("renders ARAM Mayhem badge when queue_mode is AramMayhem", () => {
+  it("renders ARAM Mayhem badge and hides Rota selector when queue_mode is AramMayhem", () => {
     const mockChampSelect: ChampSelectedPayload = {
       champion_id: 103,
       queue_id: 2400,
@@ -35,9 +35,14 @@ describe("FiltersHeader", () => {
     );
 
     expect(screen.getByText("ARAM Mayhem (Howling Abyss)")).toBeInTheDocument();
+    expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Rota:")).not.toBeInTheDocument();
+    expect(screen.getByTestId("filter-tier")).toBeInTheDocument();
+    expect(screen.getByTestId("filter-region")).toBeInTheDocument();
+    expect(screen.getByTestId("filter-patch")).toBeInTheDocument();
   });
 
-  it("renders traditional ARAM badge when queue_mode is Aram", () => {
+  it("renders traditional ARAM badge and hides Rota selector when queue_mode is Aram", () => {
     const mockChampSelect: ChampSelectedPayload = {
       champion_id: 103,
       queue_id: 450,
@@ -55,5 +60,28 @@ describe("FiltersHeader", () => {
     );
 
     expect(screen.getByText("ARAM (Howling Abyss)")).toBeInTheDocument();
+    expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Rota:")).not.toBeInTheDocument();
+  });
+
+  it("renders Rota selector when queue_mode is SummonersRift", () => {
+    const mockChampSelect: ChampSelectedPayload = {
+      champion_id: 103,
+      queue_id: 420,
+      queue_mode: "SummonersRift",
+      locked_in: true,
+    };
+
+    render(
+      <FiltersHeader
+        build={{ ...mockBuild, active_position: "mid" }}
+        champSelect={mockChampSelect}
+        loading={false}
+        onFilterChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("filter-position")).toBeInTheDocument();
+    expect(screen.getByLabelText("Rota:")).toBeInTheDocument();
   });
 });

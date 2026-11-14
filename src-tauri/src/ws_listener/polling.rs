@@ -50,7 +50,11 @@ async fn handle_session_transition(
                     } else {
                         payload.queue_id
                     };
-                    let assigned_pos = payload.assigned_position.clone();
+                    let assigned_pos = if q_id == QUEUE_ARAM || q_id == QUEUE_ARAM_MAYHEM {
+                        None
+                    } else {
+                        payload.assigned_position.clone()
+                    };
 
                     tokio::spawn(async move {
                         let Ok(conn) = crate::lcu_connector::LcuConnection::connect() else {

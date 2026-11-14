@@ -16,6 +16,13 @@ export function FiltersHeader({
   loading,
   onFilterChange,
 }: FiltersHeaderProps) {
+  const isAram =
+    champSelect?.queue_mode === "Aram" ||
+    champSelect?.queue_mode === "AramMayhem" ||
+    champSelect?.queue_id === 450 ||
+    champSelect?.queue_id === 2400 ||
+    build.supports_runes === false;
+
   const patchOptions =
     build?.available_patches && build.available_patches.length > 0
       ? build.available_patches
@@ -79,7 +86,7 @@ export function FiltersHeader({
         </div>
       </div>
 
-      {/* 4 Filters: Elo Base, Rota, Servidor, Patch */}
+      {/* Filters: Elo Base, Rota (SR only), Servidor, Patch */}
       <div className="champ-filters-bar" data-testid="champ-filters-bar">
         <div className="filter-group">
           <label htmlFor="filter-tier" className="filter-label">
@@ -107,25 +114,27 @@ export function FiltersHeader({
           </select>
         </div>
 
-        <div className="filter-group">
-          <label htmlFor="filter-position" className="filter-label">
-            Rota:
-          </label>
-          <select
-            id="filter-position"
-            data-testid="filter-position"
-            className="filter-select"
-            value={build.active_position || "mid"}
-            disabled={loading}
-            onChange={(e) => onFilterChange("position", e.target.value)}
-          >
-            <option value="top">Topo</option>
-            <option value="jungle">Selva</option>
-            <option value="mid">Meio</option>
-            <option value="adc">Atirador (Bot)</option>
-            <option value="support">Suporte</option>
-          </select>
-        </div>
+        {!isAram && (
+          <div className="filter-group">
+            <label htmlFor="filter-position" className="filter-label">
+              Rota:
+            </label>
+            <select
+              id="filter-position"
+              data-testid="filter-position"
+              className="filter-select"
+              value={build.active_position || "mid"}
+              disabled={loading}
+              onChange={(e) => onFilterChange("position", e.target.value)}
+            >
+              <option value="top">Topo</option>
+              <option value="jungle">Selva</option>
+              <option value="mid">Meio</option>
+              <option value="adc">Atirador (Bot)</option>
+              <option value="support">Suporte</option>
+            </select>
+          </div>
+        )}
 
         <div className="filter-group">
           <label htmlFor="filter-region" className="filter-label">

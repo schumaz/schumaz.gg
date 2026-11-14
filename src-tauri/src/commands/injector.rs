@@ -1,4 +1,19 @@
-use crate::{build_provider, lcu_connector, lcu_injector, models};
+use crate::{build_provider, lcu_connector, lcu_injector, models, ws_listener};
+
+/// Resolves the active queue ID for item build injection without hardcoding 420.
+pub fn normalize_item_build_queue_id(
+    provided_queue_id: Option<i32>,
+    lcu_queue_id: Option<i32>,
+) -> i32 {
+    match provided_queue_id {
+        Some(q) if q > 0 => q,
+        Some(_) => ws_listener::QUEUE_SOLO_DUO,
+        None => match lcu_queue_id {
+            Some(q) if q > 0 => q,
+            _ => ws_listener::QUEUE_SOLO_DUO,
+        },
+    }
+}
 
 /// Tauri command to immediately inject a specific chosen rune page into the LoL client.
 #[tauri::command]
@@ -52,6 +67,7 @@ pub async fn inject_summoner_spells(
 #[specta::specta]
 pub async fn inject_item_build(
     champion_id: i32,
+    queue_id: Option<i32>,
     build_index: Option<usize>,
     core_index: Option<usize>,
     final_index: Option<usize>,
@@ -73,8 +89,16 @@ pub async fn inject_item_build(
         .await
         .map_err(|e| format!("Falha ao obter invocador: {}", e))?;
 
+    let lcu_queue_id = if queue_id.is_none() {
+        conn.get_current_queue_id().await.ok()
+    } else {
+        None
+    };
+    let resolved_queue_id = normalize_item_build_queue_id(queue_id, lcu_queue_id);
+
     let client = reqwest::Client::new();
-    let build = build_provider::get_recommended_build(&client, champion_id, 420).await?;
+    let build =
+        build_provider::get_recommended_build(&client, champion_id, resolved_queue_id).await?;
 
     lcu_injector::inject_item_sets(&conn, summoner.summoner_id, &build).await
 }
@@ -84,4 +108,20 @@ pub async fn inject_item_build(
 #[specta::specta]
 pub fn sync_user_preferences(preferences: models::UserPreferences) {
     lcu_injector::set_user_preferences(preferences);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_item_build_queue_id_respects_active_queue() {
+        assert_eq!(normalize_item_build_queue_id(Some(450), None), 450);
+        assert_eq!(normalize_item_build_queue_id(Some(2400), None), 2400);
+        assert_eq!(normalize_item_build_queue_id(Some(440), None), 440);
+        assert_eq!(normalize_item_build_queue_id(Some(-1), None), 420);
+        assert_eq!(normalize_item_build_queue_id(None, Some(450)), 450);
+        assert_eq!(normalize_item_build_queue_id(None, Some(2400)), 2400);
+        assert_eq!(normalize_item_build_queue_id(None, None), 420);
+    }
 }

@@ -26,7 +26,13 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
   ) => {
     if (!build) return;
     const champId = champSelect?.champion_id || build.champion_id;
-    const qId = champSelect?.queue_id || 420;
+    const qId = champSelect?.queue_id || (build.supports_runes === false ? 2400 : 420);
+    const isAram =
+      champSelect?.queue_mode === "Aram" ||
+      champSelect?.queue_mode === "AramMayhem" ||
+      qId === 450 ||
+      qId === 2400 ||
+      build.supports_runes === false;
 
     setLoading(true);
     setErrorMsg(null);
@@ -34,7 +40,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
       const updatedBuild = await commands.updateBuildFilters(
         champId,
         qId,
-        filterType === "position" ? value : (build.active_position || null),
+        isAram ? null : filterType === "position" ? value : (build.active_position || null),
         filterType === "tier" ? value : (build.active_tier || null),
         filterType === "region" ? value : (build.active_region || null),
         filterType === "patch" ? value : (build.active_patch || null)
@@ -96,10 +102,16 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
 
           // Fetch recommended build for selected champion if not already received
           try {
-            if (event.payload.assigned_position) {
+            const qId = event.payload.queue_id || 420;
+            const isAram =
+              event.payload.queue_mode === "Aram" ||
+              event.payload.queue_mode === "AramMayhem" ||
+              qId === 450 ||
+              qId === 2400;
+            if (!isAram && event.payload.assigned_position) {
               const recommended = await commands.updateBuildFilters(
                 event.payload.champion_id,
-                event.payload.queue_id || 420,
+                qId,
                 event.payload.assigned_position,
                 null,
                 null,
@@ -118,7 +130,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
             } else {
               const recommended = await commands.getRecommendedBuildForChampion(
                 event.payload.champion_id,
-                event.payload.queue_id || 420
+                qId
               );
               if (recommended) {
                 setBuild((prev) => {
@@ -223,8 +235,10 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
   const handleSelectBuild = async (index: number) => {
     if (!build?.build_options || index >= build.build_options.length) return;
     setSelectedBuildIndex(index);
+    const activeQueueId =
+      champSelect?.queue_id ?? (build.supports_runes === false ? 2400 : null);
     try {
-      await commands.injectItemBuild(build.champion_id, index, index, index);
+      await commands.injectItemBuild(build.champion_id, activeQueueId, index, index, index);
     } catch (e) {
       console.warn("Failed to inject chosen unified build:", e);
     }

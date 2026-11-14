@@ -19,7 +19,7 @@ export const commands = {
 	/**  Tauri command to immediately inject a specific chosen rune page into the LoL client. */
 	injectRunePage: (championId: number, championName: string, pageIndex: number, primaryStyleId: number, subStyleId: number, selectedPerkIds: number[]) => __TAURI_INVOKE<null>("inject_rune_page", { championId, championName, pageIndex, primaryStyleId, subStyleId, selectedPerkIds }),
 	/**  Tauri command to immediately update and re-inject item sets into the LoL client shop. */
-	injectItemBuild: (championId: number, buildIndex: number | null, coreIndex: number | null, finalIndex: number | null) => __TAURI_INVOKE<null>("inject_item_build", { championId, buildIndex, coreIndex, finalIndex }),
+	injectItemBuild: (championId: number, queueId: number | null, buildIndex: number | null, coreIndex: number | null, finalIndex: number | null) => __TAURI_INVOKE<null>("inject_item_build", { championId, queueId, buildIndex, coreIndex, finalIndex }),
 };
 
 /** Events */

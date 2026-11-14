@@ -1,27 +1,53 @@
-use super::mcp_parser::parse_opgg_mcp_text;
-use super::super::spells::extract_summoner_spell_choices;
-use super::mcp_extractors::parse_json_item_entries;
 use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, RunePageOption, SpellMetadata};
 use super::super::runes::extract_top_rune_pages;
+use super::super::spells::extract_summoner_spell_choices;
+use super::mcp_extractors::parse_json_item_entries;
+use super::mcp_parser::parse_opgg_mcp_text_with_options;
 
 pub fn parse_opgg_analysis_payload(
     opgg_json: &serde_json::Value,
     champion_id: i32,
     champion_name: &str,
 ) -> Result<ChampionBuild, String> {
+    parse_opgg_analysis_payload_with_options(opgg_json, champion_id, champion_name, true)
+}
+
+pub fn parse_opgg_analysis_payload_with_options(
+    opgg_json: &serde_json::Value,
+    champion_id: i32,
+    champion_name: &str,
+    supports_runes: bool,
+) -> Result<ChampionBuild, String> {
+    let json_supports_runes = opgg_json
+        .get("supports_runes")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
     // If the response is wrapped in MCP content text (e.g. result.content[0].text), use text parser!
     if let Some(text) = opgg_json
         .pointer("/result/content/0/text")
         .and_then(|v| v.as_str())
     {
-        return parse_opgg_mcp_text(text, champion_id, champion_name);
+        return parse_opgg_mcp_text_with_options(
+            text,
+            champion_id,
+            champion_name,
+            supports_runes && json_supports_runes,
+        );
     }
 
     let analysis = opgg_json
         .get("data")
         .or_else(|| opgg_json.pointer("/result/data"))
         .unwrap_or(opgg_json);
+
+    let effective_supports_runes = supports_runes
+        && json_supports_runes
+        && analysis
+            .get("supports_runes")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
 
     let raw_win_rate = analysis
         .get("win_rate")
@@ -51,24 +77,22 @@ pub fn parse_opgg_analysis_payload(
         raw_pick_rate
     };
 
-    // Extract rune styles and perks
-    let mut primary_style_id = analysis
+    // Extract rune styles and perks (optional when supports_runes == false, e.g. ARAM Mayhem)
+    let primary_style_opt = analysis
         .pointer("/runes/primary_style_id")
         .or_else(|| analysis.pointer("/runes/primary_page_id"))
         .or_else(|| analysis.pointer("/runes/0/primary_page_id"))
         .and_then(|v| v.as_i64())
-        .ok_or_else(|| "Missing primary_style_id in OP.GG runes".to_string())?
-        as i32;
+        .map(|v| v as i32);
 
-    let mut sub_style_id = analysis
+    let sub_style_opt = analysis
         .pointer("/runes/sub_style_id")
         .or_else(|| analysis.pointer("/runes/secondary_page_id"))
         .or_else(|| analysis.pointer("/runes/0/secondary_page_id"))
         .and_then(|v| v.as_i64())
-        .ok_or_else(|| "Missing sub_style_id in OP.GG runes".to_string())?
-        as i32;
+        .map(|v| v as i32);
 
-    let mut selected_perk_ids = Vec::with_capacity(9);
+    let mut extracted_perk_ids = Vec::with_capacity(9);
 
     if let Some(primary_perks) = analysis
         .pointer("/runes/primary_perk_ids")
@@ -77,7 +101,7 @@ pub fn parse_opgg_analysis_payload(
     {
         for perk in primary_perks {
             if let Some(id) = perk.as_i64() {
-                selected_perk_ids.push(id as i32);
+                extracted_perk_ids.push(id as i32);
             }
         }
     }
@@ -89,7 +113,7 @@ pub fn parse_opgg_analysis_payload(
     {
         for perk in sub_perks {
             if let Some(id) = perk.as_i64() {
-                selected_perk_ids.push(id as i32);
+                extracted_perk_ids.push(id as i32);
             }
         }
     }
@@ -101,17 +125,31 @@ pub fn parse_opgg_analysis_payload(
     {
         for shard in stat_shards {
             if let Some(id) = shard.as_i64() {
-                selected_perk_ids.push(id as i32);
+                extracted_perk_ids.push(id as i32);
             }
         }
     }
 
-    if selected_perk_ids.len() != 9 {
-        return Err(format!(
-            "Invalid perk count in OP.GG payload: expected 9 perks, found {}",
-            selected_perk_ids.len()
-        ));
-    }
+    let (mut primary_style_id, mut sub_style_id, mut selected_perk_ids) =
+        if effective_supports_runes {
+            let p_id = primary_style_opt
+                .ok_or_else(|| "Missing primary_style_id in OP.GG runes".to_string())?;
+            let s_id =
+                sub_style_opt.ok_or_else(|| "Missing sub_style_id in OP.GG runes".to_string())?;
+            if extracted_perk_ids.len() != 9 {
+                return Err(format!(
+                    "Invalid perk count in OP.GG payload: expected 9 perks, found {}",
+                    extracted_perk_ids.len()
+                ));
+            }
+            (p_id, s_id, extracted_perk_ids)
+        } else if let (Some(p_id), Some(s_id)) = (primary_style_opt, sub_style_opt)
+            && extracted_perk_ids.len() == 9
+        {
+            (p_id, s_id, extracted_perk_ids)
+        } else {
+            (0, 0, Vec::new())
+        };
 
     let is_jungle = analysis
         .get("position")
@@ -213,9 +251,8 @@ pub fn parse_opgg_analysis_payload(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let all_for_tear: Vec<ItemStatEntry> = core_entries
+    let all_for_tear: Vec<ItemStatEntry> = candidate_entries
         .iter()
-        .chain(candidate_entries.iter())
         .chain(fourth_entries.iter())
         .chain(fifth_entries.iter())
         .chain(sixth_entries.iter())
@@ -254,7 +291,10 @@ pub fn parse_opgg_analysis_payload(
         damage_type,
         position,
     );
-    let general_situational = item_blocks.get(4).map(|b| b.item_ids.clone()).unwrap_or_default();
+    let general_situational = item_blocks
+        .get(4)
+        .map(|b| b.item_ids.clone())
+        .unwrap_or_default();
 
     let build_options = build_unified_build_options(
         &core_entries,
@@ -287,15 +327,19 @@ pub fn parse_opgg_analysis_payload(
 
     let mut top_rune_pages = extract_top_rune_pages(analysis);
     if top_rune_pages.is_empty() {
-        top_rune_pages.push(RunePageOption {
-            primary_style_id,
-            sub_style_id,
-            selected_perk_ids: selected_perk_ids.clone(),
-            play: 1,
-            win: 1,
-            pick_rate: 1.0,
-            ..Default::default()
-        });
+        if effective_supports_runes
+            || (primary_style_id > 0 && sub_style_id > 0 && selected_perk_ids.len() == 9)
+        {
+            top_rune_pages.push(RunePageOption {
+                primary_style_id,
+                sub_style_id,
+                selected_perk_ids: selected_perk_ids.clone(),
+                play: 1,
+                win: 1,
+                pick_rate: 1.0,
+                ..Default::default()
+            });
+        }
     } else {
         let first = &top_rune_pages[0];
         primary_style_id = first.primary_style_id;
@@ -319,6 +363,7 @@ pub fn parse_opgg_analysis_payload(
         build_options,
         core_build_options,
         final_build_options,
+        supports_runes: effective_supports_runes,
         ..Default::default()
     })
 }
@@ -326,7 +371,7 @@ pub fn parse_opgg_analysis_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_core_builds_and_separate_fourth_fifth_sixth_lists_yunara() {
         // Mirrors the exact OP.GG Yunara tables from the user's screenshot:
@@ -523,5 +568,54 @@ mod tests {
             assert!(!build.item_blocks[3].item_ids.contains(&item));
             assert!(!is_boot_item(item));
         }
+    }
+
+    #[test]
+    fn test_parse_opgg_analysis_allows_missing_runes_when_supports_runes_is_false() {
+        let mayhem_json = serde_json::json!({
+            "data": {
+                "damage_type": "AD",
+                "summary": { "average_stats": { "win_rate": 0.52, "pick_rate": 0.08 } },
+                "runes": [],
+                "summoner_spells": [
+                    { "ids": [4, 7], "play": 32000, "win": 17000 }
+                ],
+                "starter_items": [
+                    { "ids": [1038, 2003], "play": 27000, "win": 14400 }
+                ],
+                "boots": [
+                    { "ids": [3006], "play": 40000, "win": 21000 }
+                ],
+                "core_items": [
+                    { "ids": [3032, 6675, 3031], "play": 18000, "win": 9500 }
+                ],
+                "last_items": [
+                    { "ids": [3036], "play": 15000, "win": 8000 }
+                ]
+            }
+        });
+
+        // When supports_runes == true, missing runes should still return Err
+        assert!(parse_opgg_analysis_payload(&mayhem_json, 18, "Tristana").is_err());
+
+        // When supports_runes == false (ARAM Mayhem), missing runes must succeed!
+        let build = parse_opgg_analysis_payload_with_options(&mayhem_json, 18, "Tristana", false)
+            .expect("ARAM Mayhem payload without runes should parse successfully");
+        assert!(!build.supports_runes);
+        assert_eq!(build.primary_style_id, 0);
+        assert_eq!(build.sub_style_id, 0);
+        assert!(build.selected_perk_ids.is_empty());
+        assert!(build.rune_pages.is_empty());
+        assert_eq!(build.spell1_id, 4);
+        assert_eq!(build.spell2_id, 7);
+        assert_eq!(build.active_position, "");
+
+        // Also supports `supports_runes: false` directly inside the JSON payload
+        let mut json_with_flag = mayhem_json.clone();
+        json_with_flag["data"]["supports_runes"] = serde_json::json!(false);
+        let build_from_flag = parse_opgg_analysis_payload(&json_with_flag, 18, "Tristana")
+            .expect("JSON with supports_runes: false and no runes should succeed");
+        assert!(!build_from_flag.supports_runes);
+        assert!(build_from_flag.selected_perk_ids.is_empty());
     }
 }

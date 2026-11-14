@@ -1,13 +1,23 @@
 ﻿use super::super::items::*;
-use super::super::models::{ChampionBuild, ItemStatEntry, RunePageOption, SpellMetadata};
+use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
 use super::super::runes::extract_all_mcp_runes;
 use super::mcp_extractors::{extract_all_core_items_from_text, extract_mcp_grouped_item_lists};
 
-/// Parses OP.GG MCP text output into a ChampionBuild.
+/// Parses OP.GG MCP text output into a ChampionBuild (requiring valid runes).
 pub fn parse_opgg_mcp_text(
     text: &str,
     champion_id: i32,
     champion_name: &str,
+) -> Result<ChampionBuild, String> {
+    parse_opgg_mcp_text_with_options(text, champion_id, champion_name, true)
+}
+
+/// Parses OP.GG MCP text output into a ChampionBuild with configurable rune requirement.
+pub fn parse_opgg_mcp_text_with_options(
+    text: &str,
+    champion_id: i32,
+    champion_name: &str,
+    supports_runes: bool,
 ) -> Result<ChampionBuild, String> {
     // 1. Extract win_rate and pick_rate: AverageStats(...)
     let mut win_rate = 50.0;
@@ -79,82 +89,23 @@ pub fn parse_opgg_mcp_text(
         }
     }
 
-    // 2. Extract Runes: Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])
-    let runes_idx = text
-        .find("Runes(")
-        .ok_or_else(|| "Missing Runes block in OP.GG text".to_string())?;
-    let after_runes = &text[runes_idx + 6..];
-
-    // Find primary style id
-    let comma1 = after_runes
-        .find(',')
-        .ok_or_else(|| "Invalid Runes format".to_string())?;
-    let mut primary_style_id: i32 = after_runes[..comma1]
-        .trim()
-        .parse()
-        .map_err(|e| format!("Invalid primary style id: {}", e))?;
-
-    // Primary perks array: [ ... ]
-    let p_open = after_runes
-        .find('[')
-        .ok_or_else(|| "Missing primary perks [".to_string())?;
-    let p_close = after_runes
-        .find(']')
-        .ok_or_else(|| "Missing primary perks ]".to_string())?;
-    let primary_perks: Vec<i32> = after_runes[p_open + 1..p_close]
-        .split(',')
-        .filter_map(|s| s.trim().parse::<i32>().ok())
-        .collect();
-
-    let after_primary = &after_runes[p_close + 1..];
-    let after_primary_trim =
-        after_primary.trim_start_matches(|c: char| c == ',' || c.is_whitespace());
-
-    // Sub style id
-    let comma2 = after_primary_trim
-        .find(',')
-        .ok_or_else(|| "Invalid sub style format".to_string())?;
-    let mut sub_style_id: i32 = after_primary_trim[..comma2]
-        .trim()
-        .parse()
-        .map_err(|e| format!("Invalid sub style id: {}", e))?;
-
-    // Secondary perks array: [ ... ]
-    let s_open = after_primary_trim
-        .find('[')
-        .ok_or_else(|| "Missing secondary perks [".to_string())?;
-    let s_close = after_primary_trim
-        .find(']')
-        .ok_or_else(|| "Missing secondary perks ]".to_string())?;
-    let secondary_perks: Vec<i32> = after_primary_trim[s_open + 1..s_close]
-        .split(',')
-        .filter_map(|s| s.trim().parse::<i32>().ok())
-        .collect();
-
-    // Stat mods array: [ ... ]
-    let after_sec = &after_primary_trim[s_close + 1..];
-    let m_open = after_sec
-        .find('[')
-        .ok_or_else(|| "Missing stat mods [".to_string())?;
-    let m_close = after_sec
-        .find(']')
-        .ok_or_else(|| "Missing stat mods ]".to_string())?;
-    let stat_mods: Vec<i32> = after_sec[m_open + 1..m_close]
-        .split(',')
-        .filter_map(|s| s.trim().parse::<i32>().ok())
-        .collect();
-
-    let mut selected_perk_ids = Vec::with_capacity(9);
-    selected_perk_ids.extend(primary_perks);
-    selected_perk_ids.extend(secondary_perks);
-    selected_perk_ids.extend(stat_mods);
-
-    if selected_perk_ids.len() != 9 {
-        return Err(format!(
-            "Expected 9 perks, extracted {}",
-            selected_perk_ids.len()
-        ));
-    }
+    // 2. Extract Runes (supports both legacy `Runes(8100,...)` and OP.GG MCP `Runes(id,8100,"Domination",...)`)
+    let top_rune_pages = extract_all_mcp_runes(text);
+    let (primary_style_id, sub_style_id, selected_perk_ids) =
+        if let Some(first) = top_rune_pages.first() {
+            (
+                first.primary_style_id,
+                first.sub_style_id,
+                first.selected_perk_ids.clone(),
+            )
+        } else if supports_runes {
+            if !text.contains("Runes(") {
+                return Err("Missing Runes block in OP.GG text".to_string());
+            }
+            return Err("Invalid Runes format in OP.GG text".to_string());
+        } else {
+            (0, 0, Vec::new())
+        };
 
     // 3. Extract all CoreItems entries with stats
     let all_entries = extract_all_core_items_from_text(text);
@@ -333,7 +284,10 @@ pub fn parse_opgg_mcp_text(
         damage_type,
         position,
     );
-    let general_situational = item_blocks.get(4).map(|b| b.item_ids.clone()).unwrap_or_default();
+    let general_situational = item_blocks
+        .get(4)
+        .map(|b| b.item_ids.clone())
+        .unwrap_or_default();
 
     let build_options = build_unified_build_options(
         &candidate_entries,
@@ -361,24 +315,6 @@ pub fn parse_opgg_mcp_text(
         icon_url: String::new(),
     }];
 
-    let mut top_rune_pages = extract_all_mcp_runes(text);
-    if top_rune_pages.is_empty() {
-        top_rune_pages.push(RunePageOption {
-            primary_style_id,
-            sub_style_id,
-            selected_perk_ids: selected_perk_ids.clone(),
-            play: 1,
-            win: 1,
-            pick_rate: 1.0,
-            ..Default::default()
-        });
-    } else {
-        let first = &top_rune_pages[0];
-        primary_style_id = first.primary_style_id;
-        sub_style_id = first.sub_style_id;
-        selected_perk_ids = first.selected_perk_ids.clone();
-    }
-
     Ok(ChampionBuild {
         champion_id,
         champion_name: champion_name.to_string(),
@@ -395,6 +331,7 @@ pub fn parse_opgg_mcp_text(
         build_options,
         core_build_options,
         final_build_options,
+        supports_runes,
         ..Default::default()
     })
 }
