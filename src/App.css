@@ -35,6 +35,14 @@
   --accent-warning: #fbbf24;
   --accent-danger: #f87171;
 
+  /* Centralized Status Pill Tokens (consistent across all tabs) */
+  --status-badge-blur: 16px;
+  --status-badge-glass-bg: rgba(19, 20, 26, 0.48);
+  --status-badge-connected-tint: rgba(48, 209, 88, 0.1);
+  --status-badge-connected-border: rgba(48, 209, 88, 0.35);
+  --status-badge-disconnected-tint: rgba(255, 159, 10, 0.1);
+  --status-badge-disconnected-border: rgba(255, 159, 10, 0.35);
+
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -134,13 +142,17 @@ img {
 }
 
 .status-badge {
+  --status-badge-tint: transparent;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
   border-radius: 9999px;
   font-size: 0.82rem;
-  background-color: var(--bg-surface);
+  background-color: var(--status-badge-glass-bg);
+  background-image: linear-gradient(var(--status-badge-tint), var(--status-badge-tint));
+  backdrop-filter: blur(var(--status-badge-blur));
+  -webkit-backdrop-filter: blur(var(--status-badge-blur));
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   transition: border-color 0.2s ease, background-color 0.2s ease;
@@ -151,13 +163,13 @@ img {
 }
 
 .status-badge.connected {
-  border-color: rgba(48, 209, 88, 0.35);
-  background-color: rgba(48, 209, 88, 0.08);
+  --status-badge-tint: var(--status-badge-connected-tint);
+  border-color: var(--status-badge-connected-border);
 }
 
 .status-badge.disconnected {
-  border-color: rgba(255, 159, 10, 0.35);
-  background-color: rgba(255, 159, 10, 0.08);
+  --status-badge-tint: var(--status-badge-disconnected-tint);
+  border-color: var(--status-badge-disconnected-border);
 }
 
 .dot {
@@ -1842,14 +1854,9 @@ img {
 }
 
 [data-testid="view-profile"] .card,
-.container.profile-active .status-badge,
 .container.profile-active .floating-dock {
   backdrop-filter: blur(var(--profile-ui-blur, 16px));
   -webkit-backdrop-filter: blur(var(--profile-ui-blur, 16px));
-}
-
-.container.profile-active .status-badge {
-  background-color: rgba(19, 20, 26, 0.38);
 }
 
 .container.profile-active .floating-dock {
