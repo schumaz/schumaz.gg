@@ -306,51 +306,8 @@ export function ProfileTab({
 
           {/* Main 2-Column Split Area */}
           <div className="profile-split-grid">
-            {/* Left Column: Top 3 Masteries + Win/Loss Chart & Recent Form */}
+            {/* Left Column: Win/Loss Chart & Recent Form + Top 3 Masteries */}
             <div className="profile-col profile-col-left">
-              <section className="card profile-section-card" data-testid="top-masteries-card" style={glassBlurStyle}>
-                <div className="profile-card-header">
-                  <h3>Top 3 Maestrias</h3>
-                  <span className="profile-card-subtitle">Maiores pontuações</span>
-                </div>
-
-                {profile && profile.top_masteries.length > 0 ? (
-                  <div className="mastery-list">
-                    {profile.top_masteries.map((mastery, idx) => (
-                      <div
-                        key={mastery.champion_id}
-                        className="mastery-row"
-                        data-testid={`mastery-item-${idx + 1}`}
-                      >
-                        <span className={`mastery-rank rank-${idx + 1}`}>#{idx + 1}</span>
-                        {mastery.champion_icon_url ? (
-                          <div className="dd-icon-frame mastery-champ-frame">
-                            <img
-                              src={mastery.champion_icon_url}
-                              alt={mastery.champion_name}
-                              className="mastery-champ-icon"
-                            />
-                          </div>
-                        ) : (
-                          <div className="mastery-champ-placeholder">
-                            {mastery.champion_name.charAt(0)}
-                          </div>
-                        )}
-                        <div className="mastery-info">
-                          <span className="mastery-champ-name">{mastery.champion_name}</span>
-                          <span className="mastery-points">
-                            {formatPoints(mastery.champion_points)} pts
-                          </span>
-                        </div>
-                        <span className="mastery-level-pill">Nv. {mastery.champion_level}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted">Nenhuma maestria encontrada.</p>
-                )}
-              </section>
-
               <section className="card profile-section-card" data-testid="winloss-chart-card" style={glassBlurStyle}>
                 <div className="profile-card-header">
                   <h3>Desempenho Win / Loss</h3>
@@ -467,6 +424,50 @@ export function ProfileTab({
                   <p className="text-muted">Sem partidas para o filtro selecionado.</p>
                 )}
               </section>
+
+              <section className="card profile-section-card" data-testid="top-masteries-card" style={glassBlurStyle}>
+                <div className="profile-card-header">
+                  <h3>Top 3 Maestrias</h3>
+                  <span className="profile-card-subtitle">Maiores pontuações</span>
+                </div>
+
+                {profile && profile.top_masteries.length > 0 ? (
+                  <div className="mastery-list">
+                    {profile.top_masteries.map((mastery, idx) => (
+                      <div
+                        key={mastery.champion_id}
+                        className="mastery-row"
+                        data-testid={`mastery-item-${idx + 1}`}
+                      >
+                        <span className={`mastery-rank rank-${idx + 1}`}>#{idx + 1}</span>
+                        {mastery.champion_icon_url ? (
+                          <div className="dd-icon-frame mastery-champ-frame">
+                            <img
+                              src={mastery.champion_icon_url}
+                              alt={mastery.champion_name}
+                              className="mastery-champ-icon"
+                            />
+                          </div>
+                        ) : (
+                          <div className="mastery-champ-placeholder">
+                            {mastery.champion_name.charAt(0)}
+                          </div>
+                        )}
+                        <div className="mastery-info">
+                          <span className="mastery-champ-name">{mastery.champion_name}</span>
+                          <span className="mastery-points">
+                            {formatPoints(mastery.champion_points)} pts
+                          </span>
+                        </div>
+                        <span className="mastery-level-pill">Nv. {mastery.champion_level}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted">Nenhuma maestria encontrada.</p>
+                )}
+              </section>
+
             </div>
 
             {/* Right Column: Mode Filters + Scrollable Last 10 Matches */}
