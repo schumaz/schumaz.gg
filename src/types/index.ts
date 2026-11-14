@@ -3,6 +3,8 @@ export type ActiveTab = "runes" | "settings";
 export type {
   BuildInjected,
   ChampSelectEnded,
+  ChampSelectReconciled,
+  ChampSelectReconciledPayload,
   ChampSelected,
   ChampSelectedPayload,
   ChampionBuild,

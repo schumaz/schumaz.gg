@@ -6,14 +6,23 @@ use std::time::Duration;
 use tauri_specta::Event as SpectaEvent;
 
 use super::extract::*;
+use super::reconcile::*;
+use crate::lcu_injector::AppliedInjectionState;
 use crate::models;
 
-/// Coordinates asynchronous Champ Select build/injection tasks so rapid champion switches
-/// or session exits immediately cancel stale work and prevent out-of-order LCU writes.
+#[derive(Default)]
+struct FinalizationTimerSlot {
+    deadline: Option<tokio::time::Instant>,
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+/// Coordinates asynchronous Champ Select build/injection tasks so rapid champion switches,
+/// finalization timers, or session exits immediately cancel stale work and prevent out-of-order LCU writes.
 #[derive(Clone, Default)]
-pub(crate) struct ChampSelectCoordinator {
+pub struct ChampSelectCoordinator {
     selection_seq: Arc<AtomicU64>,
     active_inject_task: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    finalization_timer: Arc<tokio::sync::Mutex<FinalizationTimerSlot>>,
 }
 
 impl ChampSelectCoordinator {
@@ -32,6 +41,45 @@ impl ChampSelectCoordinator {
         if let Some(handle) = guard.take() {
             handle.abort();
         }
+    }
+
+    pub(crate) async fn cancel_finalization_timer(&self) {
+        let mut slot = self.finalization_timer.lock().await;
+        slot.deadline = None;
+        if let Some(handle) = slot.handle.take() {
+            handle.abort();
+        }
+    }
+
+    pub(crate) async fn schedule_finalization_timer<F, Fut>(&self, delay: Duration, make_task: F)
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let desired_deadline = tokio::time::Instant::now() + delay;
+        let mut slot = self.finalization_timer.lock().await;
+
+        if let (Some(existing_deadline), Some(existing_handle)) =
+            (slot.deadline, slot.handle.as_ref())
+            && !existing_handle.is_finished()
+        {
+            let diff = desired_deadline.saturating_duration_since(existing_deadline)
+                + existing_deadline.saturating_duration_since(desired_deadline);
+            if diff <= Duration::from_millis(1200) {
+                return;
+            }
+        }
+
+        if let Some(prev) = slot.handle.take() {
+            prev.abort();
+        }
+
+        slot.deadline = Some(desired_deadline);
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            make_task().await;
+        });
+        slot.handle = Some(handle);
     }
 
     pub(crate) async fn spawn_latest<F, Fut>(&self, make_task: F) -> u64
@@ -64,147 +112,217 @@ impl irelia::ws::ErrorHandler for ReconnectingErrorHandler {
     }
 }
 
+async fn trigger_live_reconciliation(
+    handle: &tauri::AppHandle,
+    state_ref: &Arc<tokio::sync::Mutex<ChampSelectSessionState>>,
+    reconcile_lock: &Arc<tokio::sync::Mutex<()>>,
+    q_ref: &Arc<AtomicI32>,
+    coordinator: &ChampSelectCoordinator,
+) {
+    let Ok(conn) = crate::lcu_connector::LcuConnection::connect() else {
+        return;
+    };
+    let gateway = LiveLcuReconcileGateway {
+        conn: Arc::new(conn),
+        coordinator: coordinator.clone(),
+    };
+    let emitter = TauriReconcileEmitter {
+        handle: handle.clone(),
+    };
+    let prefs = crate::lcu_injector::get_user_preferences();
+    let _ =
+        reconcile_final_session(&gateway, &emitter, state_ref, reconcile_lock, q_ref, &prefs).await;
+}
+
+async fn process_session_timer(
+    handle: &tauri::AppHandle,
+    session_json: &serde_json::Value,
+    state_ref: &Arc<tokio::sync::Mutex<ChampSelectSessionState>>,
+    reconcile_lock: &Arc<tokio::sync::Mutex<()>>,
+    q_ref: &Arc<AtomicI32>,
+    coordinator: &ChampSelectCoordinator,
+) {
+    let Some(timer) = extract_champ_select_timer(session_json) else {
+        coordinator.cancel_finalization_timer().await;
+        return;
+    };
+
+    match evaluate_finalization_window(&timer, FINALIZATION_SAFETY_WINDOW_MS) {
+        FinalizationAction::TriggerNow => {
+            coordinator.cancel_finalization_timer().await;
+            trigger_live_reconciliation(handle, state_ref, reconcile_lock, q_ref, coordinator)
+                .await;
+        }
+        FinalizationAction::ScheduleAfter(delay) => {
+            let h = handle.clone();
+            let s_ref = Arc::clone(state_ref);
+            let r_lock = Arc::clone(reconcile_lock);
+            let q = Arc::clone(q_ref);
+            let coord = coordinator.clone();
+            coordinator
+                .schedule_finalization_timer(delay, move || async move {
+                    trigger_live_reconciliation(&h, &s_ref, &r_lock, &q, &coord).await;
+                })
+                .await;
+        }
+        FinalizationAction::NotApplicable => {
+            coordinator.cancel_finalization_timer().await;
+            let mut guard = state_ref.lock().await;
+            guard.reconciled_champion_id = None;
+        }
+    }
+}
+
 /// Dispatches session state changes and triggers automated build injection when applicable.
 async fn handle_session_transition(
     handle: &tauri::AppHandle,
     transition: WsSessionTransition,
-    last_payload_ref: &Arc<tokio::sync::Mutex<Option<ChampSelectedPayload>>>,
+    state_ref: &Arc<tokio::sync::Mutex<ChampSelectSessionState>>,
     q_ref: &Arc<AtomicI32>,
     coordinator: &ChampSelectCoordinator,
 ) {
     match transition {
         WsSessionTransition::Active(payload) => {
-            let mut last_guard = last_payload_ref.lock().await;
-            let current_opt = Some(payload.clone());
-            if should_emit_champ_select(&last_guard, &current_opt) {
-                let champion_changed = last_guard
-                    .as_ref()
-                    .is_some_and(|prev| prev.champion_id != payload.champion_id);
-                if champion_changed {
-                    crate::lcu_injector::clear_champion_selections();
-                    coordinator.cancel_pending().await;
+            let should_spawn = {
+                let mut state_guard = state_ref.lock().await;
+                let current_opt = Some(payload.clone());
+                if should_emit_champ_select(&state_guard.last_payload, &current_opt) {
+                    let champion_changed = state_guard
+                        .last_payload
+                        .as_ref()
+                        .is_some_and(|prev| prev.champion_id != payload.champion_id);
+                    if champion_changed {
+                        crate::lcu_injector::clear_champion_selections();
+                        coordinator.cancel_pending().await;
+                    }
+                    let _ = models::ChampSelected(payload.clone()).emit(handle);
+                    state_guard.record_processed(payload.clone());
+                    payload.locked_in || payload.queue_mode == QueueMode::PracticeTool
+                } else {
+                    false
                 }
-                let _ = models::ChampSelected(payload.clone()).emit(handle);
-                *last_guard = current_opt;
+            };
 
-                // Automatically fetch recommended build and inject when locked in or in Practice Tool
-                if payload.locked_in || payload.queue_mode == QueueMode::PracticeTool {
-                    let handle_for_inject = handle.clone();
-                    let champ_id = payload.champion_id;
-                    let q_id = if payload.queue_id == 0 || payload.queue_id == QUEUE_PRACTICE_TOOL {
-                        QUEUE_SOLO_DUO
-                    } else {
-                        payload.queue_id
-                    };
-                    let assigned_pos = if q_id == QUEUE_ARAM || q_id == QUEUE_ARAM_MAYHEM {
-                        None
-                    } else {
-                        payload.assigned_position.clone()
-                    };
+            if should_spawn {
+                let handle_for_inject = handle.clone();
+                let state_for_inject = Arc::clone(state_ref);
+                let champ_id = payload.champion_id;
+                let q_id = resolve_effective_build_queue_id(&payload);
+                let assigned_pos = resolve_effective_build_position(&payload, q_id);
 
-                    coordinator
-                        .spawn_latest(move |my_seq, seq_guard| async move {
-                            let conn_opt = crate::lcu_connector::LcuConnection::connect()
-                                .ok()
-                                .map(Arc::new);
-                            let Some(conn) = conn_opt else {
-                                return;
+                coordinator
+                    .spawn_latest(move |my_seq, seq_guard| async move {
+                        let conn_opt = crate::lcu_connector::LcuConnection::connect()
+                            .ok()
+                            .map(Arc::new);
+                        let Some(conn) = conn_opt else {
+                            return;
+                        };
+
+                        let http_client = crate::build_provider::shared_http_client();
+                        let (fast_tx, fast_rx) = tokio::sync::oneshot::channel::<
+                            crate::build_provider::FastSpellRecommendation,
+                        >();
+
+                        let summoner_conn = Arc::clone(&conn);
+                        let summoner_fut =
+                            async move { summoner_conn.get_current_summoner().await.ok() };
+
+                        let spell_conn = Arc::clone(&conn);
+                        let spell_seq_guard = seq_guard.clone();
+                        let fast_spell_fut = async move {
+                            let Ok(fast) = fast_rx.await else {
+                                return false;
                             };
-
-                            let http_client = crate::build_provider::shared_http_client();
-                            let (fast_tx, fast_rx) = tokio::sync::oneshot::channel::<
-                                crate::build_provider::FastSpellRecommendation,
-                            >();
-
-                            // 1. Fetch current summoner concurrently with OP.GG build fetch
-                            let summoner_conn = Arc::clone(&conn);
-                            let summoner_fut =
-                                async move { summoner_conn.get_current_summoner().await.ok() };
-
-                            // 2. Fast-path spell injection: patches LCU as soon as fast OP.GG REST resolves,
-                            // without waiting for slow MCP depth items, get_current_summoner, or runes.
-                            let spell_conn = Arc::clone(&conn);
-                            let spell_seq_guard = seq_guard.clone();
-                            let fast_spell_fut = async move {
-                                let Ok(fast) = fast_rx.await else {
-                                    return false;
-                                };
-                                if !spell_seq_guard.is_current(my_seq) {
-                                    return false;
-                                }
-                                let prefs = crate::lcu_injector::get_user_preferences();
-                                if !prefs.auto_inject_spells {
-                                    return false;
-                                }
-                                crate::lcu_injector::inject_spells_pair(
-                                    &spell_conn,
-                                    fast.champion_id,
-                                    fast.spell1_id,
-                                    fast.spell2_id,
-                                    fast.is_jungle,
-                                    prefs.flash_key,
-                                )
-                                .await
-                                .is_ok()
-                            };
-
-                            // 3. Full build retrieval (REST + concurrent bounded MCP depth items)
-                            let build_fut =
-                                crate::build_provider::get_recommended_build_with_filters_and_fast_spells(
-                                    http_client,
-                                    champ_id,
-                                    q_id,
-                                    assigned_pos.as_deref(),
-                                    None,
-                                    None,
-                                    None,
-                                    Some(fast_tx),
-                                );
-
-                            let (summoner_opt, spells_already_injected, build_res) =
-                                tokio::join!(summoner_fut, fast_spell_fut, build_fut);
-
-                            if !seq_guard.is_current(my_seq) {
-                                return;
+                            if !spell_seq_guard.is_current(my_seq) {
+                                return false;
                             }
-
-                            let Ok(build) = build_res else {
-                                return;
-                            };
-
-                            let _ = models::RecommendedBuild(build.clone()).emit(&handle_for_inject);
-
-                            let Some(summoner) = summoner_opt else {
-                                return;
-                            };
-
-                            if !seq_guard.is_current(my_seq) {
-                                return;
+                            let prefs = crate::lcu_injector::get_user_preferences();
+                            if !prefs.auto_inject_spells {
+                                return false;
                             }
-
-                            let report = crate::lcu_injector::inject_champion_build_with_options(
-                                &conn,
-                                summoner.summoner_id,
-                                &build,
-                                spells_already_injected,
+                            crate::lcu_injector::inject_spells_pair(
+                                &spell_conn,
+                                fast.champion_id,
+                                fast.spell1_id,
+                                fast.spell2_id,
+                                fast.is_jungle,
+                                prefs.flash_key,
                             )
-                            .await;
+                            .await
+                            .is_ok()
+                        };
 
+                        let build_fut =
+                            crate::build_provider::get_recommended_build_with_filters_and_fast_spells(
+                                http_client,
+                                champ_id,
+                                q_id,
+                                assigned_pos.as_deref(),
+                                None,
+                                None,
+                                None,
+                                Some(fast_tx),
+                            );
+
+                        let (summoner_opt, spells_already_injected, build_res) =
+                            tokio::join!(summoner_fut, fast_spell_fut, build_fut);
+
+                        if !seq_guard.is_current(my_seq) {
+                            return;
+                        }
+
+                        let Ok(build) = build_res else {
+                            return;
+                        };
+
+                        {
+                            let mut guard = state_for_inject.lock().await;
                             if seq_guard.is_current(my_seq) {
-                                let _ = models::BuildInjected(report).emit(&handle_for_inject);
+                                guard.last_build = Some(build.clone());
                             }
-                        })
+                        }
+
+                        let _ = models::RecommendedBuild(build.clone()).emit(&handle_for_inject);
+
+                        let Some(summoner) = summoner_opt else {
+                            return;
+                        };
+
+                        if !seq_guard.is_current(my_seq) {
+                            return;
+                        }
+
+                        let report = crate::lcu_injector::inject_champion_build_with_options(
+                            &conn,
+                            summoner.summoner_id,
+                            &build,
+                            spells_already_injected,
+                        )
                         .await;
-                }
+
+                        if seq_guard.is_current(my_seq) {
+                            let applied = AppliedInjectionState::from_report(q_id, &build, &report);
+                            {
+                                let mut guard = state_for_inject.lock().await;
+                                if seq_guard.is_current(my_seq) {
+                                    guard.record_build_and_applied(build.clone(), applied);
+                                }
+                            }
+                            let _ = models::BuildInjected(report).emit(&handle_for_inject);
+                        }
+                    })
+                    .await;
             }
         }
         WsSessionTransition::Ended => {
             coordinator.cancel_pending().await;
-            let mut last_guard = last_payload_ref.lock().await;
-            if last_guard.is_some() {
+            coordinator.cancel_finalization_timer().await;
+            let mut state_guard = state_ref.lock().await;
+            if state_guard.last_payload.is_some() {
                 let _ = models::ChampSelectEnded.emit(handle);
-                *last_guard = None;
             }
+            state_guard.reset_session();
             q_ref.store(0, Ordering::Relaxed);
         }
         WsSessionTransition::NoChampionSelected => {}
@@ -214,15 +332,16 @@ async fn handle_session_transition(
 /// Starts the WebSocket listener and fallback polling task to observe Champion Select events in real time.
 pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
     let active_queue_id = Arc::new(AtomicI32::new(0));
-    let last_payload: Arc<tokio::sync::Mutex<Option<ChampSelectedPayload>>> =
-        Arc::new(tokio::sync::Mutex::new(None));
+    let session_state = shared_session_state();
+    let reconcile_lock = shared_reconcile_lock();
     let coordinator = ChampSelectCoordinator::default();
 
-    // Fallback sync loop: Ensures Champion Select (especially Practice Tool) is detected
-    // even if the WebSocket missed an event, was mid-reconnection, or client was opened later.
+    // Fallback sync loop: ensures Champion Select and FINALIZATION timer countdowns are observed
+    // even if WebSocket does not emit per-second timer ticks or missed an event.
     let fallback_handle = app_handle.clone();
     let fallback_q_ref = Arc::clone(&active_queue_id);
-    let fallback_last_ref = Arc::clone(&last_payload);
+    let fallback_state_ref = Arc::clone(&session_state);
+    let fallback_reconcile_lock = Arc::clone(&reconcile_lock);
     let fallback_coord = coordinator.clone();
 
     tokio::spawn(async move {
@@ -248,7 +367,17 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                     handle_session_transition(
                         &fallback_handle,
                         transition,
-                        &fallback_last_ref,
+                        &fallback_state_ref,
+                        &fallback_q_ref,
+                        &fallback_coord,
+                    )
+                    .await;
+
+                    process_session_timer(
+                        &fallback_handle,
+                        &session_json,
+                        &fallback_state_ref,
+                        &fallback_reconcile_lock,
                         &fallback_q_ref,
                         &fallback_coord,
                     )
@@ -256,11 +385,12 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                 }
                 Ok(None) => {
                     fallback_coord.cancel_pending().await;
-                    let mut last_guard = fallback_last_ref.lock().await;
-                    if last_guard.is_some() {
+                    fallback_coord.cancel_finalization_timer().await;
+                    let mut state_guard = fallback_state_ref.lock().await;
+                    if state_guard.last_payload.is_some() {
                         let _ = models::ChampSelectEnded.emit(&fallback_handle);
-                        *last_guard = None;
                     }
+                    state_guard.reset_session();
                     fallback_q_ref.store(0, Ordering::Relaxed);
                 }
                 Err(_) => {}
@@ -272,7 +402,8 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
     let mut ws = LcuWebSocket::new_with_error_handler(ReconnectingErrorHandler);
     let ws_handle = app_handle.clone();
     let ws_q_ref = Arc::clone(&active_queue_id);
-    let ws_last_ref = Arc::clone(&last_payload);
+    let ws_state_ref = Arc::clone(&session_state);
+    let ws_reconcile_lock = Arc::clone(&reconcile_lock);
     let ws_coord = coordinator.clone();
 
     ws.subscribe(
@@ -280,7 +411,8 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
         move |event: &Event| {
             let handle = ws_handle.clone();
             let q_ref = Arc::clone(&ws_q_ref);
-            let last_payload_ref = Arc::clone(&ws_last_ref);
+            let state_ref = Arc::clone(&ws_state_ref);
+            let r_lock = Arc::clone(&ws_reconcile_lock);
             let coord = ws_coord.clone();
 
             let event_type = event.2.event_type.clone();
@@ -300,8 +432,13 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
                 }
 
                 let transition = evaluate_ws_event(&event_type, &data, current_q);
-                handle_session_transition(&handle, transition, &last_payload_ref, &q_ref, &coord)
-                    .await;
+                let is_active = matches!(transition, WsSessionTransition::Active(_));
+                handle_session_transition(&handle, transition, &state_ref, &q_ref, &coord).await;
+
+                if is_active {
+                    process_session_timer(&handle, &data, &state_ref, &r_lock, &q_ref, &coord)
+                        .await;
+                }
             });
         },
     );
@@ -330,7 +467,6 @@ mod tests {
             })
             .await;
 
-        // Simulate rapid champion switch before task 1 finishes
         let c2 = Arc::clone(&completed);
         let seq2 = coord
             .spawn_latest(move |my_seq, seq_guard| async move {

@@ -1,4 +1,4 @@
-use crate::{lcu_connector, models};
+use crate::{lcu_connector, models, ws_listener};
 
 #[tauri::command]
 #[specta::specta]
@@ -17,4 +17,12 @@ pub async fn get_summoner_status() -> Result<Option<models::SummonerInfo>, Strin
         },
         Err(_) => Ok(None),
     }
+}
+
+/// Syncs the champion ID currently displayed in the frontend UI to backend session state
+/// so final Champ Select reconciliation can detect UI/backend divergence.
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_displayed_champion(champion_id: Option<i32>) {
+    ws_listener::set_ui_displayed_champion(champion_id).await;
 }

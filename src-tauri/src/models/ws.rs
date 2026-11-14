@@ -43,3 +43,12 @@ pub struct ChampSelectedPayload {
     #[serde(default)]
     pub assigned_position: Option<String>,
 }
+
+/// Payload emitted when final Champ Select reconciliation runs near timer expiration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct ChampSelectReconciledPayload {
+    pub champ_selected: ChampSelectedPayload,
+    #[serde(default)]
+    pub build: Option<crate::models::ChampionBuild>,
+    pub champion_diverged: bool,
+}

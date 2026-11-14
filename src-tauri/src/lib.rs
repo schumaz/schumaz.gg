@@ -15,6 +15,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_recommended_build_for_champion,
             commands::update_build_filters,
             commands::get_summoner_status,
+            commands::sync_displayed_champion,
             commands::sync_user_preferences,
             commands::inject_summoner_spells,
             commands::inject_rune_page,
@@ -26,7 +27,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             models::ChampSelected,
             models::ChampSelectEnded,
             models::RecommendedBuild,
-            models::BuildInjected
+            models::BuildInjected,
+            models::ChampSelectReconciled
         ])
         .dangerously_cast_bigints_to_number()
 }

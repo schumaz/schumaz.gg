@@ -21,7 +21,21 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const activeChampIdRef = useRef<number | null>(null);
+  const buildRef = useRef<ChampionBuild | null>(null);
   const latestFetchSeqRef = useRef(0);
+  const prevSyncedChampRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    buildRef.current = build;
+  }, [build]);
+
+  useEffect(() => {
+    const displayedId = champSelect?.champion_id ?? build?.champion_id ?? null;
+    if (prevSyncedChampRef.current !== displayedId) {
+      prevSyncedChampRef.current = displayedId;
+      commands.syncDisplayedChampion(displayedId).catch(() => {});
+    }
+  }, [champSelect?.champion_id, build?.champion_id]);
 
   const handleFilterChange = async (
     filterType: "position" | "tier" | "region" | "patch",
@@ -50,6 +64,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
         filterType === "patch" ? value : (build.active_patch || null)
       );
       if (updatedBuild && latestFetchSeqRef.current === fetchSeq) {
+        buildRef.current = updatedBuild;
         setBuild(updatedBuild);
       }
     } catch (err: unknown) {
@@ -83,6 +98,48 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     let unlistenChampSelected: (() => void) | undefined;
     let unlistenChampSelectEnded: (() => void) | undefined;
     let unlistenBuild: (() => void) | undefined;
+    let unlistenReconciled: (() => void) | undefined;
+
+    const fetchBuildForPayload = async (payload: ChampSelectedPayload, fetchSeq: number) => {
+      try {
+        const qId = payload.queue_id || 420;
+        const isAram =
+          payload.queue_mode === "Aram" ||
+          payload.queue_mode === "AramMayhem" ||
+          qId === 450 ||
+          qId === 2400;
+
+        const recommended =
+          !isAram && payload.assigned_position
+            ? await commands.updateBuildFilters(
+                payload.champion_id,
+                qId,
+                payload.assigned_position,
+                null,
+                null,
+                null
+              )
+            : await commands.getRecommendedBuildForChampion(payload.champion_id, qId);
+
+        if (
+          recommended &&
+          latestFetchSeqRef.current === fetchSeq &&
+          activeChampIdRef.current === payload.champion_id
+        ) {
+          buildRef.current = recommended;
+          setBuild((prev) => {
+            if (prev?.champion_id !== recommended.champion_id) {
+              setSelectedSecondarySpellId(null);
+              setSelectedRunePageIndex(0);
+              setSelectedBuildIndex(0);
+            }
+            return recommended;
+          });
+        }
+      } catch {
+        // Ignore background fetch error, ws_listener will emit recommended-build
+      }
+    };
 
     const setupListeners = async () => {
       try {
@@ -93,6 +150,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
 
         unlistenDisconnected = await events.lcuDisconnected.listen(() => {
           activeChampIdRef.current = null;
+          buildRef.current = null;
           latestFetchSeqRef.current += 1;
           setSummoner(null);
           setChampSelect(null);
@@ -113,64 +171,12 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
             return event.payload;
           });
 
-          // Fetch recommended build for selected champion if not already received
-          try {
-            const qId = event.payload.queue_id || 420;
-            const isAram =
-              event.payload.queue_mode === "Aram" ||
-              event.payload.queue_mode === "AramMayhem" ||
-              qId === 450 ||
-              qId === 2400;
-            if (!isAram && event.payload.assigned_position) {
-              const recommended = await commands.updateBuildFilters(
-                event.payload.champion_id,
-                qId,
-                event.payload.assigned_position,
-                null,
-                null,
-                null
-              );
-              if (
-                recommended &&
-                latestFetchSeqRef.current === fetchSeq &&
-                activeChampIdRef.current === event.payload.champion_id
-              ) {
-                setBuild((prev) => {
-                  if (prev?.champion_id !== recommended.champion_id) {
-                    setSelectedSecondarySpellId(null);
-                    setSelectedRunePageIndex(0);
-                    setSelectedBuildIndex(0);
-                  }
-                  return recommended;
-                });
-              }
-            } else {
-              const recommended = await commands.getRecommendedBuildForChampion(
-                event.payload.champion_id,
-                qId
-              );
-              if (
-                recommended &&
-                latestFetchSeqRef.current === fetchSeq &&
-                activeChampIdRef.current === event.payload.champion_id
-              ) {
-                setBuild((prev) => {
-                  if (prev?.champion_id !== recommended.champion_id) {
-                    setSelectedSecondarySpellId(null);
-                    setSelectedRunePageIndex(0);
-                    setSelectedBuildIndex(0);
-                  }
-                  return recommended;
-                });
-              }
-            }
-          } catch {
-            // Ignore background fetch error, ws_listener will emit recommended-build
-          }
+          await fetchBuildForPayload(event.payload, fetchSeq);
         });
 
         unlistenChampSelectEnded = await events.champSelectEnded.listen(() => {
           activeChampIdRef.current = null;
+          buildRef.current = null;
           latestFetchSeqRef.current += 1;
           setChampSelect(null);
           setBuild(null);
@@ -187,6 +193,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
           ) {
             return;
           }
+          buildRef.current = event.payload;
           setBuild((prev) => {
             if (prev?.champion_id !== event.payload.champion_id) {
               setSelectedSecondarySpellId(null);
@@ -195,6 +202,46 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
             }
             return event.payload;
           });
+        });
+
+        unlistenReconciled = await events.champSelectReconciled.listen(async (event) => {
+          const { champ_selected, build: reconciledBuild } = event.payload;
+          const currentDisplayedChampId =
+            activeChampIdRef.current ?? buildRef.current?.champion_id ?? null;
+          const champDiverged = currentDisplayedChampId !== champ_selected.champion_id;
+
+          activeChampIdRef.current = champ_selected.champion_id;
+
+          if (champDiverged) {
+            const fetchSeq = ++latestFetchSeqRef.current;
+            setSpellsInverted(false);
+            setSelectedSecondarySpellId(null);
+            setSelectedRunePageIndex(0);
+            setSelectedBuildIndex(0);
+            setChampSelect(champ_selected);
+
+            if (
+              reconciledBuild &&
+              reconciledBuild.champion_id === champ_selected.champion_id
+            ) {
+              buildRef.current = reconciledBuild;
+              setBuild(reconciledBuild);
+            } else {
+              await fetchBuildForPayload(champ_selected, fetchSeq);
+            }
+            return;
+          }
+
+          // Same champion: keep manual UI selections intact and only fill build if missing.
+          setChampSelect(champ_selected);
+          if (
+            reconciledBuild &&
+            reconciledBuild.champion_id === champ_selected.champion_id &&
+            (!buildRef.current || buildRef.current.champion_id !== champ_selected.champion_id)
+          ) {
+            buildRef.current = reconciledBuild;
+            setBuild(reconciledBuild);
+          }
         });
       } catch (e) {
         console.warn("Tauri event listener setup skipped or running in test mode:", e);
@@ -209,6 +256,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
       if (unlistenChampSelected) unlistenChampSelected();
       if (unlistenChampSelectEnded) unlistenChampSelectEnded();
       if (unlistenBuild) unlistenBuild();
+      if (unlistenReconciled) unlistenReconciled();
     };
   }, []);
 

@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri_specta::Event;
 
-use super::{ChampSelectedPayload, ChampionBuild, InjectionReport, SummonerInfo};
+use super::{
+    ChampSelectReconciledPayload, ChampSelectedPayload, ChampionBuild, InjectionReport,
+    SummonerInfo,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 pub struct LcuConnected(pub SummonerInfo);
@@ -21,3 +24,6 @@ pub struct RecommendedBuild(pub ChampionBuild);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 pub struct BuildInjected(pub InjectionReport);
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct ChampSelectReconciled(pub ChampSelectReconciledPayload);

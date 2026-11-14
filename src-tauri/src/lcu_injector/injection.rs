@@ -6,6 +6,111 @@ pub const PERKS_CURRENT_PAGE_ENDPOINT: &str = "/lol-perks/v1/currentpage";
 pub const PERKS_PAGES_ENDPOINT: &str = "/lol-perks/v1/pages";
 pub const CHAMP_SELECT_MY_SELECTION_ENDPOINT: &str = "/lol-champ-select/v1/session/my-selection";
 
+/// Resolved injection targets for a build according to game mode support and user preferences.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InjectionTargets {
+    pub runes: bool,
+    pub spells: bool,
+    pub items: bool,
+}
+
+/// Determines which build components should be injected for a build and user preferences.
+/// Modes without rune support (e.g. ARAM Mayhem) never target runes.
+pub fn plan_safety_injection(build: &ChampionBuild, prefs: &UserPreferences) -> InjectionTargets {
+    InjectionTargets {
+        runes: prefs.auto_inject_runes && build.supports_runes,
+        spells: prefs.auto_inject_spells,
+        items: prefs.auto_inject_items,
+    }
+}
+
+/// Tracks the latest injection outcome actually applied to the LCU client.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedInjectionState {
+    pub champion_id: i32,
+    pub queue_id: i32,
+    pub supports_runes: bool,
+    pub runes_injected: bool,
+    pub spells_injected: bool,
+    pub items_injected: bool,
+}
+
+impl AppliedInjectionState {
+    pub fn from_report(queue_id: i32, build: &ChampionBuild, report: &InjectionReport) -> Self {
+        Self {
+            champion_id: build.champion_id,
+            queue_id,
+            supports_runes: build.supports_runes,
+            runes_injected: report.runes_injected,
+            spells_injected: report.spells_injected,
+            items_injected: report.items_injected,
+        }
+    }
+
+    /// Returns true when the applied state matches the target champion, mode rune support,
+    /// and every injection category enabled in user preferences succeeded.
+    pub fn matches_expected(
+        &self,
+        champion_id: i32,
+        queue_id: i32,
+        build: &ChampionBuild,
+        prefs: &UserPreferences,
+    ) -> bool {
+        if self.champion_id != champion_id
+            || self.queue_id != queue_id
+            || self.supports_runes != build.supports_runes
+        {
+            return false;
+        }
+        let targets = plan_safety_injection(build, prefs);
+        (!targets.runes || self.runes_injected)
+            && (!targets.spells || self.spells_injected)
+            && (!targets.items || self.items_injected)
+    }
+}
+
+/// Abstraction over LCU injection operations so orchestration and mode support can be unit-tested.
+pub trait SafetyInjectionSink: Send + Sync {
+    fn inject_runes_for_build(
+        &self,
+        build: &ChampionBuild,
+    ) -> impl std::future::Future<Output = Result<(), String>> + Send;
+
+    fn inject_spells_for_build(
+        &self,
+        build: &ChampionBuild,
+        flash_key: FlashKeyPreference,
+    ) -> impl std::future::Future<Output = Result<(), String>> + Send;
+
+    fn inject_items_for_build(
+        &self,
+        summoner_id: u64,
+        build: &ChampionBuild,
+    ) -> impl std::future::Future<Output = Result<(), String>> + Send;
+}
+
+impl SafetyInjectionSink for crate::lcu_connector::LcuConnection {
+    async fn inject_runes_for_build(&self, build: &ChampionBuild) -> Result<(), String> {
+        inject_runes(self, build).await
+    }
+
+    async fn inject_spells_for_build(
+        &self,
+        build: &ChampionBuild,
+        flash_key: FlashKeyPreference,
+    ) -> Result<(), String> {
+        inject_spells(self, build, flash_key).await
+    }
+
+    async fn inject_items_for_build(
+        &self,
+        summoner_id: u64,
+        build: &ChampionBuild,
+    ) -> Result<(), String> {
+        inject_item_sets(self, summoner_id, build).await
+    }
+}
+
 /// Injects rune page into the LCU. Reuses and overwrites the single schumaz.gg rune page across matches
 /// instead of creating a new page every match.
 pub async fn inject_rune_payload(
@@ -179,30 +284,31 @@ pub async fn inject_item_sets(
     Ok(())
 }
 
-/// High-level orchestrator injecting runes, summoner spells, and item sets concurrently while
-/// respecting user preferences and optionally skipping spell patching when already fast-injected.
-pub async fn inject_champion_build_with_options(
-    conn: &crate::lcu_connector::LcuConnection,
+/// Executes concurrent injection of runes, summoner spells, and item sets against any
+/// `SafetyInjectionSink`, respecting mode rune support and explicit preferences.
+pub async fn inject_champion_build_with_sink(
+    sink: &impl SafetyInjectionSink,
     summoner_id: u64,
     build: &ChampionBuild,
     spells_already_injected: bool,
+    prefs: &UserPreferences,
 ) -> InjectionReport {
-    let prefs = get_user_preferences();
+    let targets = plan_safety_injection(build, prefs);
 
     let runes_fut = async {
-        if prefs.auto_inject_runes && build.supports_runes {
-            Some(inject_runes(conn, build).await)
+        if targets.runes {
+            Some(sink.inject_runes_for_build(build).await)
         } else {
             None
         }
     };
 
     let spells_fut = async {
-        if prefs.auto_inject_spells {
+        if targets.spells {
             if spells_already_injected {
                 Some(Ok(()))
             } else {
-                Some(inject_spells(conn, build, prefs.flash_key).await)
+                Some(sink.inject_spells_for_build(build, prefs.flash_key).await)
             }
         } else {
             None
@@ -210,8 +316,8 @@ pub async fn inject_champion_build_with_options(
     };
 
     let items_fut = async {
-        if prefs.auto_inject_items {
-            Some(inject_item_sets(conn, summoner_id, build).await)
+        if targets.items {
+            Some(sink.inject_items_for_build(summoner_id, build).await)
         } else {
             None
         }
@@ -261,6 +367,44 @@ pub async fn inject_champion_build_with_options(
     }
 }
 
+/// High-level orchestrator injecting runes, summoner spells, and item sets concurrently while
+/// respecting user preferences and optionally skipping spell patching when already fast-injected.
+pub async fn inject_champion_build_with_options(
+    conn: &crate::lcu_connector::LcuConnection,
+    summoner_id: u64,
+    build: &ChampionBuild,
+    spells_already_injected: bool,
+) -> InjectionReport {
+    let prefs = get_user_preferences();
+    inject_champion_build_with_sink(conn, summoner_id, build, spells_already_injected, &prefs).await
+}
+
+/// Performs a full safety re-injection before match load using an injectable sink,
+/// forcing spell re-patching (`spells_already_injected = false`) while preserving manual selections.
+pub async fn safety_reinject_build_with_sink(
+    sink: &impl SafetyInjectionSink,
+    summoner_id: u64,
+    queue_id: i32,
+    build: &ChampionBuild,
+    prefs: &UserPreferences,
+) -> (InjectionReport, AppliedInjectionState) {
+    let report = inject_champion_build_with_sink(sink, summoner_id, build, false, prefs).await;
+    let applied = AppliedInjectionState::from_report(queue_id, build, &report);
+    (report, applied)
+}
+
+/// Performs a full safety re-injection into the live LCU before match load without skipping spells,
+/// respecting mode rune support (e.g. ARAM Mayhem skips runes) and preserving manual ChampionSelections.
+pub async fn safety_reinject_build(
+    conn: &crate::lcu_connector::LcuConnection,
+    summoner_id: u64,
+    queue_id: i32,
+    build: &ChampionBuild,
+) -> (InjectionReport, AppliedInjectionState) {
+    let prefs = get_user_preferences();
+    safety_reinject_build_with_sink(conn, summoner_id, queue_id, build, &prefs).await
+}
+
 /// High-level orchestrator injecting runes, summoner spells, and item sets respecting user preferences.
 /// Produces a comprehensive report of all injection outcomes.
 pub async fn inject_champion_build(
@@ -272,87 +416,5 @@ pub async fn inject_champion_build(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_injection_report_serialization() {
-        let report = InjectionReport {
-            champion_name: "Ahri".to_string(),
-            runes_injected: true,
-            spells_injected: true,
-            items_injected: false,
-            message: "Runas injetadas | Feitiços injetados".to_string(),
-        };
-
-        let json = serde_json::to_string(&report).unwrap();
-        let parsed: InjectionReport = serde_json::from_str(&json).unwrap();
-        assert_eq!(report, parsed);
-    }
-
-    #[test]
-    fn test_resolve_injection_spell_pair_all_modes_and_numeric_opgg_order() {
-        clear_champion_selections();
-
-        // ARAM / SR non-jungle with numerically-ordered OP.GG pairs [1, 4], [3, 4], [32, 4]
-        let build_cleanse = ChampionBuild {
-            champion_id: 18,
-            spell1_id: 1,
-            spell2_id: 4,
-            active_position: "".to_string(),
-            ..Default::default()
-        };
-        assert_eq!(
-            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::D),
-            (4, 1)
-        );
-        assert_eq!(
-            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::F),
-            (1, 4)
-        );
-
-        let build_mark = ChampionBuild {
-            champion_id: 103,
-            spell1_id: 32,
-            spell2_id: 4,
-            active_position: "".to_string(),
-            ..Default::default()
-        };
-        assert_eq!(
-            resolve_injection_spell_pair(&build_mark, FlashKeyPreference::D),
-            (4, 32)
-        );
-        assert_eq!(
-            resolve_injection_spell_pair(&build_mark, FlashKeyPreference::F),
-            (32, 4)
-        );
-
-        // Selecting an alternative secondary spell in ARAM preserves Flash slot preference
-        set_selected_secondary_spell(18, 21); // Barrier
-        assert_eq!(
-            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::D),
-            (4, 21)
-        );
-        assert_eq!(
-            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::F),
-            (21, 4)
-        );
-
-        // Jungle mode preserves Smite (11) when secondary companion spell changes
-        clear_champion_selections();
-        let build_jungle = ChampionBuild {
-            champion_id: 120,
-            spell1_id: 4,
-            spell2_id: 11,
-            active_position: "jungle".to_string(),
-            ..Default::default()
-        };
-        set_selected_secondary_spell(120, 6); // Ghost
-        assert_eq!(
-            resolve_injection_spell_pair(&build_jungle, FlashKeyPreference::D),
-            (6, 11)
-        );
-
-        clear_champion_selections();
-    }
-}
+#[path = "injection_tests.rs"]
+mod tests;

@@ -12,6 +12,11 @@ export const commands = {
 	updateBuildFilters: (championId: number, queueId: number | null, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("update_build_filters", { championId, queueId, position, tier, region, patch }),
 	/**  Tauri command to fetch the current summoner status if the client is connected. */
 	getSummonerStatus: () => __TAURI_INVOKE<SummonerInfo_Serialize | null>("get_summoner_status"),
+	/**
+	 *  Syncs the champion ID currently displayed in the frontend UI to backend session state
+	 *  so final Champ Select reconciliation can detect UI/backend divergence.
+	 */
+	syncDisplayedChampion: (championId: number | null) => __TAURI_INVOKE<void>("sync_displayed_champion", { championId }),
 	/**  Tauri command to sync user preferences from the frontend to the backend engine. */
 	syncUserPreferences: (preferences: UserPreferences) => __TAURI_INVOKE<void>("sync_user_preferences", { preferences }),
 	/**  Tauri command to immediately inject only summoner spells into an active Champ Select session. */
@@ -26,6 +31,7 @@ export const commands = {
 export const events = {
 	buildInjected: makeEvent<BuildInjected, BuildInjected>("build-injected"),
 	champSelectEnded: makeEvent<ChampSelectEnded, ChampSelectEnded>("champ-select-ended"),
+	champSelectReconciled: makeEvent<ChampSelectReconciled_Serialize, ChampSelectReconciled_Deserialize>("champ-select-reconciled"),
 	champSelected: makeEvent<ChampSelected_Serialize, ChampSelected_Deserialize>("champ-selected"),
 	lcuConnected: makeEvent<LcuConnected_Serialize, LcuConnected_Deserialize>("lcu-connected"),
 	lcuDisconnected: makeEvent<LcuDisconnected, LcuDisconnected>("lcu-disconnected"),
@@ -36,6 +42,29 @@ export const events = {
 export type BuildInjected = InjectionReport;
 
 export type ChampSelectEnded = null;
+
+export type ChampSelectReconciled = ChampSelectReconciled_Serialize | ChampSelectReconciled_Deserialize;
+
+/**  Payload emitted when final Champ Select reconciliation runs near timer expiration. */
+export type ChampSelectReconciledPayload = ChampSelectReconciledPayload_Serialize | ChampSelectReconciledPayload_Deserialize;
+
+/**  Payload emitted when final Champ Select reconciliation runs near timer expiration. */
+export type ChampSelectReconciledPayload_Deserialize = {
+	champ_selected: ChampSelectedPayload_Deserialize,
+	build?: ChampionBuild_Deserialize | null,
+	champion_diverged: boolean,
+};
+
+/**  Payload emitted when final Champ Select reconciliation runs near timer expiration. */
+export type ChampSelectReconciledPayload_Serialize = {
+	champ_selected: ChampSelectedPayload_Serialize,
+	build: ChampionBuild_Serialize | null,
+	champion_diverged: boolean,
+};
+
+export type ChampSelectReconciled_Deserialize = ChampSelectReconciledPayload_Deserialize;
+
+export type ChampSelectReconciled_Serialize = ChampSelectReconciledPayload_Serialize;
 
 export type ChampSelected = ChampSelected_Serialize | ChampSelected_Deserialize;
 

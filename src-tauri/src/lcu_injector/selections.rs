@@ -12,6 +12,9 @@ pub struct ChampionSelections {
 
 static CHAMPION_SELECTIONS: OnceLock<RwLock<Option<ChampionSelections>>> = OnceLock::new();
 
+#[cfg(test)]
+pub(crate) static TEST_SELECTIONS_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 fn get_selections_lock() -> &'static RwLock<Option<ChampionSelections>> {
     CHAMPION_SELECTIONS.get_or_init(|| RwLock::new(None))
 }
@@ -66,8 +69,6 @@ pub fn set_selected_secondary_spell(champion_id: i32, spell_id: i32) {
     }
 }
 
-
-
 pub fn set_selected_build(champion_id: i32, build_index: usize) {
     if let Ok(mut guard) = get_selections_lock().write() {
         let current = guard.get_or_insert_with(|| ChampionSelections {
@@ -92,6 +93,7 @@ pub fn set_selected_build(champion_id: i32, build_index: usize) {
         }
     }
 }
+
 pub fn set_selected_core_build(champion_id: i32, core_index: usize) {
     if let Ok(mut guard) = get_selections_lock().write() {
         let current = guard.get_or_insert_with(|| ChampionSelections {
@@ -164,6 +166,7 @@ mod tests {
 
     #[test]
     fn test_champion_selections_lock_in_persistence() {
+        let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
         clear_champion_selections();
         assert_eq!(get_champion_selections(103), None);
 

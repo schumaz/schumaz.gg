@@ -13,6 +13,9 @@ fn test_build_spells_payload_with_flash_preference() {
 
 #[test]
 fn test_build_rune_page_payload_validates_and_formats_correctly() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
+    clear_champion_selections();
+
     let valid_build = ChampionBuild {
         champion_id: 103,
         champion_name: "Ahri".to_string(),
@@ -107,6 +110,9 @@ fn test_extract_deletable_rune_page_id_respects_riot_preset_pages() {
 
 #[test]
 fn test_build_item_sets_payload_structure() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
+    clear_champion_selections();
+
     let build = ChampionBuild {
         champion_id: 222,
         champion_name: "Jinx".to_string(),
@@ -180,6 +186,7 @@ fn test_build_item_sets_payload_structure() {
 
 #[test]
 fn test_build_rune_page_payload_respects_champion_selections() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
     clear_champion_selections();
     let mut build = ChampionBuild {
         champion_id: 103,
@@ -225,6 +232,7 @@ fn test_build_rune_page_payload_respects_champion_selections() {
 
 #[test]
 fn test_build_item_sets_payload_respects_unified_build_selection() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
     clear_champion_selections();
     let build = ChampionBuild {
         champion_id: 103,
@@ -299,6 +307,7 @@ fn test_build_item_sets_payload_respects_unified_build_selection() {
 
 #[test]
 fn test_build_item_sets_payload_respects_core_and_final_selections() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
     clear_champion_selections();
     let build = ChampionBuild {
         champion_id: 103,
@@ -326,12 +335,24 @@ fn test_build_item_sets_payload_respects_core_and_final_selections() {
             },
         ],
         core_build_options: vec![
-            crate::build_provider::ItemBuildOption { item_ids: vec![3118, 4645, 3089], ..Default::default() },
-            crate::build_provider::ItemBuildOption { item_ids: vec![3118, 3157, 3089], ..Default::default() },
+            crate::build_provider::ItemBuildOption {
+                item_ids: vec![3118, 4645, 3089],
+                ..Default::default()
+            },
+            crate::build_provider::ItemBuildOption {
+                item_ids: vec![3118, 3157, 3089],
+                ..Default::default()
+            },
         ],
         final_build_options: vec![
-            crate::build_provider::ItemBuildOption { item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629], ..Default::default() },
-            crate::build_provider::ItemBuildOption { item_ids: vec![3118, 3157, 3089, 4645, 3135, 3102], ..Default::default() },
+            crate::build_provider::ItemBuildOption {
+                item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
+                ..Default::default()
+            },
+            crate::build_provider::ItemBuildOption {
+                item_ids: vec![3118, 3157, 3089, 4645, 3135, 3102],
+                ..Default::default()
+            },
         ],
         ..Default::default()
     };

@@ -48,6 +48,14 @@ pub async fn update_build_filters(
         && let Ok(summoner) = conn.get_current_summoner().await
     {
         let report = lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
+        let effective_q = if q_id == 0 || q_id == ws_listener::QUEUE_PRACTICE_TOOL {
+            ws_listener::QUEUE_SOLO_DUO
+        } else {
+            q_id
+        };
+        let applied =
+            lcu_injector::AppliedInjectionState::from_report(effective_q, &build, &report);
+        ws_listener::record_filter_updated_build(build.clone(), applied).await;
         let _ = models::BuildInjected(report).emit(&app_handle);
     }
 

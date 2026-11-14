@@ -19,7 +19,34 @@ const baseBuild: ChampionBuild = {
   sub_style_name: "Dominação",
   sub_style_icon_url: "domination.png",
   perks: [],
-  rune_pages: [],
+  rune_pages: [
+    {
+      primary_style_id: 8000,
+      sub_style_id: 8100,
+      selected_perk_ids: [8005, 9111, 9104, 8014, 8139, 8135, 5005, 5008, 5001],
+      play: 100,
+      win: 55,
+      pick_rate: 60,
+      primary_style_name: "Precisão",
+      primary_style_icon_url: "precision.png",
+      sub_style_name: "Dominação",
+      sub_style_icon_url: "domination.png",
+      perks: [],
+    },
+    {
+      primary_style_id: 8000,
+      sub_style_id: 8200,
+      selected_perk_ids: [8008, 9111, 9104, 8014, 8233, 8236, 5005, 5008, 5001],
+      play: 50,
+      win: 28,
+      pick_rate: 30,
+      primary_style_name: "Precisão",
+      primary_style_icon_url: "precision.png",
+      sub_style_name: "Feitiçaria",
+      sub_style_icon_url: "sorcery.png",
+      perks: [],
+    },
+  ],
   spell_choices: [
     { id: 7, name: "Curar", icon_url: "heal.png" },
     { id: 21, name: "Barreira", icon_url: "barrier.png" },
@@ -28,7 +55,32 @@ const baseBuild: ChampionBuild = {
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 7, name: "Curar", icon_url: "heal.png" },
   ],
-  build_options: [],
+  build_options: [
+    {
+      name: "Padrão",
+      core_item_ids: [3032, 6675, 3031],
+      core_item_icon_urls: [],
+      final_item_ids: [3032, 6675, 3031, 3094, 3036, 3026],
+      final_item_icon_urls: [],
+      situational_item_ids: [],
+      situational_item_icon_urls: [],
+      play: 100,
+      win: 54,
+      pick_rate: 55,
+    },
+    {
+      name: "Alternativa",
+      core_item_ids: [3031, 3046, 3036],
+      core_item_icon_urls: [],
+      final_item_ids: [3031, 3046, 3036, 3072, 3026, 3153],
+      final_item_icon_urls: [],
+      situational_item_ids: [],
+      situational_item_icon_urls: [],
+      play: 40,
+      win: 22,
+      pick_rate: 25,
+    },
+  ],
   core_build_options: [],
   final_build_options: [],
   item_blocks: [],
@@ -44,10 +96,15 @@ const baseBuild: ChampionBuild = {
 let listeners: Record<string, (event: { payload: unknown }) => void> = {};
 let resolveTristana!: (value: ChampionBuild) => void;
 let resolveAhri!: (value: ChampionBuild) => void;
+let syncedDisplayedChampions: Array<number | null> = [];
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockImplementation((cmd: string, args?: { championId?: number }) => {
+  invoke: vi.fn().mockImplementation((cmd: string, args?: { championId?: number | null }) => {
     if (cmd === "get_summoner_status") {
+      return Promise.resolve(null);
+    }
+    if (cmd === "sync_displayed_champion") {
+      syncedDisplayedChampions.push(args?.championId ?? null);
       return Promise.resolve(null);
     }
     if (cmd === "get_recommended_build_for_champion") {
@@ -75,9 +132,10 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-describe("useLcuEvents rapid champion switch and ARAM spells", () => {
+describe("useLcuEvents rapid champion switch, finalization reconciliation and ARAM spells", () => {
   beforeEach(() => {
     listeners = {};
+    syncedDisplayedChampions = [];
   });
 
   it("ignores stale build responses and late recommended-build events after rapid champion switching", async () => {
@@ -141,5 +199,123 @@ describe("useLcuEvents rapid champion switch and ARAM spells", () => {
     // Must remain on Ahri (103), never reverted to Tristana (18)
     expect(result.current.build?.champion_id).toBe(103);
     expect(result.current.build?.champion_name).toBe("Ahri");
+    expect(syncedDisplayedChampions).toContain(103);
+  });
+
+  it("synchronizes UI and clears old selections when final reconciliation detects champion divergence", async () => {
+    const { result } = renderHook(() => useLcuEvents("D"));
+
+    await waitFor(() => {
+      expect(listeners["champ-selected"]).toBeDefined();
+      expect(listeners["champ-select-reconciled"]).toBeDefined();
+    });
+
+    await act(async () => {
+      listeners["champ-selected"]({
+        payload: {
+          champion_id: 18,
+          queue_id: 450,
+          queue_mode: "Aram",
+          locked_in: true,
+        },
+      });
+      resolveTristana({ ...baseBuild, supports_runes: true });
+    });
+
+    await act(async () => {
+      await result.current.handleSelectSecondarySpell(21);
+      await result.current.handleSelectRunePage(1);
+      await result.current.handleSelectBuild(1);
+      result.current.setSpellsInverted(true);
+    });
+
+    expect(result.current.selectedSecondarySpellId).toBe(21);
+    expect(result.current.selectedRunePageIndex).toBe(1);
+    expect(result.current.selectedBuildIndex).toBe(1);
+    expect(result.current.spellsInverted).toBe(true);
+
+    const ahriBuild: ChampionBuild = {
+      ...baseBuild,
+      champion_id: 103,
+      champion_name: "Ahri",
+      spell1_id: 4,
+      spell2_id: 32,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png" },
+        { id: 32, name: "Marca", icon_url: "snowball.png" },
+      ],
+      supports_runes: true,
+    };
+
+    await act(async () => {
+      listeners["champ-select-reconciled"]({
+        payload: {
+          champ_selected: {
+            champion_id: 103,
+            queue_id: 450,
+            queue_mode: "Aram",
+            locked_in: true,
+          },
+          build: ahriBuild,
+          champion_diverged: true,
+        },
+      });
+    });
+
+    expect(result.current.champSelect?.champion_id).toBe(103);
+    expect(result.current.build?.champion_id).toBe(103);
+    expect(result.current.selectedSecondarySpellId).toBeNull();
+    expect(result.current.selectedRunePageIndex).toBe(0);
+    expect(result.current.selectedBuildIndex).toBe(0);
+    expect(result.current.spellsInverted).toBe(false);
+    expect(syncedDisplayedChampions).toContain(103);
+  });
+
+  it("preserves manual selections on final reconciliation when champion matches in ARAM Mayhem", async () => {
+    const { result } = renderHook(() => useLcuEvents("D"));
+
+    await waitFor(() => {
+      expect(listeners["champ-selected"]).toBeDefined();
+      expect(listeners["champ-select-reconciled"]).toBeDefined();
+    });
+
+    await act(async () => {
+      listeners["champ-selected"]({
+        payload: {
+          champion_id: 18,
+          queue_id: 2400,
+          queue_mode: "AramMayhem",
+          locked_in: true,
+        },
+      });
+      resolveTristana({ ...baseBuild, supports_runes: false });
+    });
+
+    await act(async () => {
+      await result.current.handleSelectSecondarySpell(21);
+      await result.current.handleSelectBuild(1);
+      result.current.setSpellsInverted(true);
+    });
+
+    await act(async () => {
+      listeners["champ-select-reconciled"]({
+        payload: {
+          champ_selected: {
+            champion_id: 18,
+            queue_id: 2400,
+            queue_mode: "AramMayhem",
+            locked_in: true,
+          },
+          build: { ...baseBuild, supports_runes: false },
+          champion_diverged: false,
+        },
+      });
+    });
+
+    expect(result.current.champSelect?.champion_id).toBe(18);
+    expect(result.current.build?.supports_runes).toBe(false);
+    expect(result.current.selectedSecondarySpellId).toBe(21);
+    expect(result.current.selectedBuildIndex).toBe(1);
+    expect(result.current.spellsInverted).toBe(true);
   });
 });
