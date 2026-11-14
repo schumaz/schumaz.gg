@@ -9,7 +9,7 @@ import {
 } from "../types";
 import { RankedFilters } from "../hooks/useRanked";
 import { getChampionTierClass, getChampionTierLabel } from "./AramTab";
-import { FilterDropdown } from "./FilterDropdown";
+import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
 import {
   FiltersHeader,
   REGION_OPTIONS,
@@ -19,6 +19,7 @@ import {
 } from "./FiltersHeader";
 import { ItemBlocks } from "./ItemBlocks";
 import { RuneTree } from "./RuneTree";
+import { SearchInput } from "./SearchInput";
 import { SpellsBar } from "./SpellsBar";
 
 const CDRAGON_POSITION_SVG_BASE =
@@ -54,6 +55,44 @@ export const LANE_META: Record<RankedLane, { label: string; shortLabel: string; 
       iconUrl: `${CDRAGON_POSITION_SVG_BASE}/position-utility-light.svg`,
     },
   };
+
+export const CHAMPION_TIER_FILTER_OPTIONS: FilterDropdownOption[] = [
+  {
+    value: "all",
+    label: "Todos",
+    icon: <span className="ranked-tier-filter-dot tier-all" />,
+  },
+  {
+    value: "0",
+    label: "OP",
+    icon: <span className="ranked-tier-filter-dot tier-op" />,
+  },
+  {
+    value: "1",
+    label: "Tier 1",
+    icon: <span className="ranked-tier-filter-dot tier-1" />,
+  },
+  {
+    value: "2",
+    label: "Tier 2",
+    icon: <span className="ranked-tier-filter-dot tier-2" />,
+  },
+  {
+    value: "3",
+    label: "Tier 3",
+    icon: <span className="ranked-tier-filter-dot tier-3" />,
+  },
+  {
+    value: "4",
+    label: "Tier 4",
+    icon: <span className="ranked-tier-filter-dot tier-4" />,
+  },
+  {
+    value: "5",
+    label: "Tier 5",
+    icon: <span className="ranked-tier-filter-dot tier-5" />,
+  },
+];
 
 interface RankedTabProps {
   isActive: boolean;
@@ -180,6 +219,7 @@ export function RankedTab({
   onSelectBuild,
 }: RankedTabProps) {
   const [search, setSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState<string>("all");
   const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
 
   const {
@@ -207,12 +247,15 @@ export function RankedTab({
       if (filters.lane !== "all" && c.lane !== filters.lane) {
         return false;
       }
+      if (tierFilter !== "all" && String(Math.max(0, c.tier)) !== tierFilter) {
+        return false;
+      }
       if (query && !normalizeSearch(c.name).includes(query)) {
         return false;
       }
       return true;
     });
-  }, [tierData?.champions, filters.lane, search]);
+  }, [tierData?.champions, filters.lane, tierFilter, search]);
 
   const tierGroups = useMemo(() => {
     return groupByTier(filteredChampions, isAllLanes ? "all" : "lane");
@@ -226,7 +269,10 @@ export function RankedTab({
       : `${getChampionTierLabel(selectedChampion.tier)} · #${selectedChampion.rank} ${LANE_META[selectedChampion.lane].shortLabel}`
     : "Consulta Ranqueada";
 
-  const renderTierGroups = (groups: Array<{ tier: number; items: RankedChampionEntry[] }>, scopeKey: string) => {
+  const renderTierGroups = (
+    groups: Array<{ tier: number; items: RankedChampionEntry[] }>,
+    scopeKey: string
+  ) => {
     let runningGlobalRank = 0;
     return groups.map((group) => (
       <div
@@ -285,8 +331,13 @@ export function RankedTab({
                       }
                       data-testid={`ranked-champ-lane-${champ.lane}-${champ.key}`}
                     >
-                      {buildIconImg(laneInfo.iconUrl, "ranked-champ-lane-icon")}
-                      <span>{laneInfo.shortLabel}</span>
+                      <span className="ranked-lane-icon-box" aria-hidden="true">
+                        {buildIconImg(
+                          laneInfo.iconUrl,
+                          `ranked-champ-lane-icon lane-${champ.lane}`
+                        )}
+                      </span>
+                      <span className="ranked-champ-lane-text">{laneInfo.shortLabel}</span>
                     </span>
                   )}
 
@@ -434,50 +485,35 @@ export function RankedTab({
         </div>
       ) : (
         <div className="ranked-layout" data-testid="ranked-tierlist-view">
-          {/* Header card: Title + Elo, Servidor, Patch (+ 48h protection) + Lane pill bar */}
+          {/* Header card: Big Branding Title + Right Accessories + Elo/Servidor/Patch + Lane & Tier Filters */}
           <section className="card ranked-toolbar-card" data-testid="ranked-filters-card">
             <div className="ranked-toolbar-top">
-              <div className="aram-toolbar-left">
-                <span className="ranked-mode-badge">Ranqueada</span>
-                <span className="aram-toolbar-title">Tier List</span>
-                {tierData && (
-                  <span className="aram-count-pill">
-                    {filteredChampions.length}{" "}
-                    {isAllLanes ? "entradas" : filteredChampions.length === 1 ? "campeão" : "campeões"}
-                  </span>
-                )}
-                {isPatchProtectionActive && (
-                  <span
-                    className="badge badge-warning badge-stat patch-fallback-badge"
-                    title={protectionTooltipText}
-                    data-testid="ranked-patch-fallback-badge"
-                  >
-                    🛡️ Volume Protegido ({activePatchValue})
-                    {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
-                  </span>
-                )}
+              <div className="ranked-hero-left">
+                <h2 className="page-hero-title">Tier List</h2>
               </div>
 
-              <div className="aram-search-wrap">
-                <svg
-                  className="aram-search-icon"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="text"
-                  className="aram-search-input"
-                  placeholder="Buscar campeão..."
+              <div className="ranked-hero-right">
+                <div className="ranked-hero-badges">
+                  {isPatchProtectionActive && (
+                    <span
+                      className="badge badge-warning badge-stat patch-fallback-badge"
+                      title={protectionTooltipText}
+                      data-testid="ranked-patch-fallback-badge"
+                    >
+                      🛡️ Volume Protegido ({activePatchValue})
+                      {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
+                    </span>
+                  )}
+                  <span className="ranked-mode-badge">Ranqueada</span>
+                </div>
+
+                <SearchInput
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  aria-label="Buscar campeão na Ranqueada"
+                  onChange={setSearch}
+                  placeholder="Buscar campeão..."
+                  ariaLabel="Buscar campeão na Ranqueada"
+                  clearAriaLabel="Limpar busca na Ranqueada"
+                  testId="ranked-toolbar-search-wrap"
                 />
               </div>
             </div>
@@ -581,42 +617,70 @@ export function RankedTab({
               </div>
             </div>
 
-            {/* Lane Separation Tabs (single source of truth for lane filtering) */}
-            <div
-              className="ranked-lane-tabs"
-              role="group"
-              aria-label="Filtrar por rota"
-              data-testid="ranked-lane-tabs"
-            >
-              <button
-                type="button"
-                className={`ranked-lane-pill ${filters.lane === "all" ? "active" : ""}`}
-                onClick={() => onTierListFilterChange("position", "all")}
-                data-testid="ranked-lane-tab-all"
+            {/* Lane Separation Tabs + Pipe + Tier Filter Menu */}
+            <div className="ranked-lane-tabs-row">
+              <div
+                className="ranked-lane-tabs"
+                role="group"
+                aria-label="Filtrar por rota"
+                data-testid="ranked-lane-tabs"
               >
-                <span>Todas as Rotas</span>
-              </button>
-              {LANE_ORDER.map((lane) => {
-                const meta = LANE_META[lane];
-                const isSelected = filters.lane === lane;
-                return (
-                  <button
-                    key={lane}
-                    type="button"
-                    className={`ranked-lane-pill ${isSelected ? "active" : ""}`}
-                    onClick={() => onTierListFilterChange("position", lane)}
-                    data-testid={`ranked-lane-tab-${lane}`}
-                  >
-                    {buildIconImg(meta.iconUrl, "ranked-lane-pill-icon")}
-                    <span>{meta.shortLabel}</span>
-                  </button>
-                );
-              })}
+                <button
+                  type="button"
+                  className={`ranked-lane-pill ${filters.lane === "all" ? "active" : ""}`}
+                  onClick={() => onTierListFilterChange("position", "all")}
+                  data-testid="ranked-lane-tab-all"
+                >
+                  <span>Todas as Rotas</span>
+                </button>
+                {LANE_ORDER.map((lane) => {
+                  const meta = LANE_META[lane];
+                  const isSelected = filters.lane === lane;
+                  return (
+                    <button
+                      key={lane}
+                      type="button"
+                      className={`ranked-lane-pill ${isSelected ? "active" : ""}`}
+                      onClick={() => onTierListFilterChange("position", lane)}
+                      data-testid={`ranked-lane-tab-${lane}`}
+                    >
+                      <span className="ranked-lane-icon-box" aria-hidden="true">
+                        {buildIconImg(meta.iconUrl, `ranked-lane-pill-icon lane-${lane}`)}
+                      </span>
+                      <span>{meta.shortLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <span className="ranked-tabs-pipe" aria-hidden="true">
+                |
+              </span>
+
+              <div className="filter-group ranked-tier-filter-group">
+                <label
+                  id="ranked-filter-champ-tier-label"
+                  htmlFor="ranked-filter-champ-tier"
+                  className="filter-label"
+                >
+                  Tier:
+                </label>
+                <FilterDropdown
+                  id="ranked-filter-champ-tier"
+                  labelId="ranked-filter-champ-tier-label"
+                  testId="ranked-filter-champ-tier"
+                  value={tierFilter}
+                  options={CHAMPION_TIER_FILTER_OPTIONS}
+                  disabled={tierLoading && !tierData}
+                  onChange={setTierFilter}
+                />
+              </div>
             </div>
           </section>
 
-          {/* Main Tier List Container: unified cross-lane OP list in "all" mode, or single-lane list */}
+          {/* Main Tier List Container */}
           <div className="card ranked-list-card">
+
             {tierLoading && !tierData ? (
               <div className="aram-state-box">
                 <div className="spinner aram-spinner" />
@@ -638,7 +702,9 @@ export function RankedTab({
                 <span>
                   {search.trim()
                     ? `Nenhum campeão encontrado para "${search}".`
-                    : "Nenhum dado ranqueado disponível para esses filtros."}
+                    : tierFilter !== "all"
+                      ? "Nenhum campeão encontrado para o tier selecionado."
+                      : "Nenhum dado ranqueado disponível para esses filtros."}
                 </span>
               </div>
             ) : (
@@ -661,10 +727,6 @@ export function RankedTab({
                           {buildIconImg(activeLaneMeta.iconUrl, "ranked-lane-section-icon")}
                           <h3 className="ranked-lane-section-title">{activeLaneMeta.label}</h3>
                         </div>
-                        <span className="aram-count-pill">
-                          {filteredChampions.length}{" "}
-                          {filteredChampions.length === 1 ? "campeão" : "campeões"}
-                        </span>
                       </header>
 
                       <div className="ranked-tier-groups">

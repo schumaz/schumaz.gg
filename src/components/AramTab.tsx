@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { AramAugmentEntry, AramChampionRank, AramMode } from "../types";
+import { SearchInput } from "./SearchInput";
 
 export type AugmentRarityFilter = "all" | 1 | 4 | 8;
 
@@ -233,33 +234,18 @@ export function AramTab({
         <div className="aram-layout" data-testid="aram-classic-view">
           <div className="card aram-toolbar-card">
             <div className="aram-toolbar-left">
-              <span className="aram-mode-badge">ARAM</span>
-              <span className="aram-toolbar-title">Ranking de Campeões</span>
-              {currentChampions.length > 0 && (
-                <span className="aram-count-pill">{filteredAramChampions.length} campeões</span>
-              )}
+              <h2 className="page-hero-title">Ranking de Campeões</h2>
             </div>
 
-            <div className="aram-search-wrap">
-              <svg
-                className="aram-search-icon"
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="text"
-                className="aram-search-input"
-                placeholder="Buscar campeão..."
+            <div className="aram-hero-right">
+              <span className="aram-mode-badge">ARAM</span>
+
+              <SearchInput
                 value={aramSearch}
-                onChange={(e) => setAramSearch(e.target.value)}
-                aria-label="Buscar campeão no ARAM"
+                onChange={setAramSearch}
+                placeholder="Buscar campeão..."
+                ariaLabel="Buscar campeão no ARAM"
+                clearAriaLabel="Limpar busca de campeão no ARAM"
               />
             </div>
           </div>
@@ -336,35 +322,21 @@ export function AramTab({
       ) : (
         <div className="aram-layout" data-testid="aram-mayhem-view">
           <div className="aram-mayhem-grid">
-            {/* Left Column: Ranked Champions */}
+            {/* Left Column: Ranked Champions for Augment Lookup */}
             <section className="card aram-mayhem-col aram-mayhem-champions-col">
               <div className="aram-panel-header">
                 <div className="aram-panel-title-row">
-                  <h3 className="aram-panel-title">Campeões</h3>
+                  <h2 className="aram-mayhem-hero-title">Cartinhas</h2>
                   <span className="aram-mode-badge is-mayhem">ARAM Mayhem</span>
                 </div>
-                <div className="aram-search-wrap is-full">
-                  <svg
-                    className="aram-search-icon"
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  <input
-                    type="text"
-                    className="aram-search-input"
-                    placeholder="Buscar campeão..."
-                    value={mayhemChampSearch}
-                    onChange={(e) => setMayhemChampSearch(e.target.value)}
-                    aria-label="Buscar campeão no ARAM Mayhem"
-                  />
-                </div>
+                <SearchInput
+                  value={mayhemChampSearch}
+                  onChange={setMayhemChampSearch}
+                  placeholder="Buscar campeão..."
+                  ariaLabel="Buscar campeão no ARAM Mayhem"
+                  clearAriaLabel="Limpar busca de campeão no ARAM Mayhem"
+                  className="is-full"
+                />
               </div>
 
               <div className="aram-scroll-body" data-testid="aram-mayhem-champions-list">
@@ -448,7 +420,7 @@ export function AramTab({
                       </div>
                       {selectedChampion && (
                         <span
-                          className={`aram-tier-pill ${getChampionTierClass(
+                          className={`aram-tier-pill aram-hero-rank-pill ${getChampionTierClass(
                             selectedChampion.tier
                           )}`}
                         >
@@ -483,28 +455,14 @@ export function AramTab({
                         ))}
                       </div>
 
-                      <div className="aram-search-wrap aram-aug-search">
-                        <svg
-                          className="aram-search-icon"
-                          viewBox="0 0 24 24"
-                          width="14"
-                          height="14"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <circle cx="11" cy="11" r="8" />
-                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                        <input
-                          type="text"
-                          className="aram-search-input"
-                          placeholder="Buscar cartinha..."
-                          value={augmentSearch}
-                          onChange={(e) => setAugmentSearch(e.target.value)}
-                          aria-label="Buscar cartinha"
-                        />
-                      </div>
+                      <SearchInput
+                        value={augmentSearch}
+                        onChange={setAugmentSearch}
+                        placeholder="Buscar cartinha..."
+                        ariaLabel="Buscar cartinha"
+                        clearAriaLabel="Limpar busca de cartinha"
+                        className="aram-aug-search"
+                      />
                     </div>
                   </div>
 

@@ -203,7 +203,7 @@ describe("AramTab UI", () => {
     expect(mayhemBtn.querySelector("img")).toHaveAttribute("src", LEAGUE_ARAM_MAYHEM_ICON_URL);
   });
 
-  it("renders classic ARAM champions sorted by rank and filters by search", () => {
+  it("renders classic ARAM with unified branding, ARAM badge on the right, no champion count pill, and filters by search", () => {
     render(
       <AramTab
         isActive={true}
@@ -223,6 +223,19 @@ describe("AramTab UI", () => {
       />
     );
 
+    const classicView = screen.getByTestId("aram-classic-view");
+    const heroHeading = within(classicView).getByRole("heading", { name: "Ranking de Campeões" });
+    expect(heroHeading).toHaveClass("page-hero-title");
+
+    // ARAM badge moved to the right container alongside the search input
+    const rightContainer = classicView.querySelector(".aram-hero-right") as HTMLElement;
+    expect(rightContainer).toBeTruthy();
+    expect(within(rightContainer).getByText("ARAM")).toHaveClass("aram-mode-badge");
+    expect(within(rightContainer).getByLabelText("Buscar campeão no ARAM")).toBeInTheDocument();
+
+    // Champion count pill removed
+    expect(within(classicView).queryByText(/2 campeões/i)).not.toBeInTheDocument();
+
     const list = screen.getByTestId("aram-classic-list");
     expect(within(list).getByText("Swain")).toBeInTheDocument();
     expect(within(list).getByText("Miss Fortune")).toBeInTheDocument();
@@ -230,14 +243,19 @@ describe("AramTab UI", () => {
     expect(within(list).getByText("Tier 1")).toHaveClass("tier-1");
     expect(list.querySelectorAll(".dd-icon-frame.aram-champ-frame .aram-champ-avatar")).toHaveLength(2);
 
+    expect(screen.queryByLabelText("Limpar busca de campeão no ARAM")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar campeão no ARAM"), {
       target: { value: "miss" },
     });
     expect(within(list).queryByText("Swain")).not.toBeInTheDocument();
     expect(within(list).getByText("Miss Fortune")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Limpar busca de campeão no ARAM"));
+    expect(screen.getByLabelText("Buscar campeão no ARAM")).toHaveValue("");
+    expect(within(list).getByText("Swain")).toBeInTheDocument();
   });
 
-  it("orders ARAM Mayhem augments best-to-worst and filters by Prata, Ouro, Prismática and search", () => {
+  it("orders ARAM Mayhem augments best-to-worst, shows explicit Cartinhas branding title, and filters by rarity and search", () => {
     render(
       <AramTab
         isActive={true}
@@ -257,13 +275,19 @@ describe("AramTab UI", () => {
       />
     );
 
+    const mayhemView = screen.getByTestId("aram-mayhem-view");
+    const cartinhasHeading = within(mayhemView).getByRole("heading", { name: "Cartinhas" });
+    expect(cartinhasHeading).toHaveClass("aram-mayhem-hero-title");
+    expect(
+      within(mayhemView).queryByText("Busque o campeão para ver as cartinhas")
+    ).not.toBeInTheDocument();
+
     const tfRow = screen.getByTestId("mayhem-champ-twistedfate");
     expect(within(tfRow).getByText("OP")).toHaveClass("tier-op");
     expect(tfRow.querySelector(".dd-icon-frame.aram-champ-frame .aram-champ-avatar")).toBeTruthy();
     const ahriRow = screen.getByTestId("mayhem-champ-ahri");
     expect(within(ahriRow).getByText("Tier 1")).toHaveClass("tier-1");
 
-    const mayhemView = screen.getByTestId("aram-mayhem-view");
     expect(mayhemView.querySelector(".dd-icon-frame.aram-hero-frame .aram-hero-avatar")).toBeTruthy();
 
     const augList = screen.getByTestId("aram-augments-list");
@@ -292,12 +316,24 @@ describe("AramTab UI", () => {
     expect(within(augList).getByText("Conjuração Ecoante")).toBeInTheDocument();
     expect(within(augList).queryByText("Coice")).not.toBeInTheDocument();
 
-    // Back to Todas + search
+    // Back to Todas + search + clear X buttons in both Mayhem inputs
     fireEvent.click(screen.getByRole("button", { name: "Todas" }));
+    expect(screen.queryByLabelText("Limpar busca de cartinha")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar cartinha"), {
       target: { value: "coice" },
     });
     expect(within(augList).getByText("Coice")).toBeInTheDocument();
     expect(within(augList).queryByText("Conjuração Ecoante")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Limpar busca de cartinha"));
+    expect(screen.getByLabelText("Buscar cartinha")).toHaveValue("");
+    expect(within(augList).getByText("Conjuração Ecoante")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Buscar campeão no ARAM Mayhem"), {
+      target: { value: "ahri" },
+    });
+    expect(screen.queryByTestId("mayhem-champ-twistedfate")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Limpar busca de campeão no ARAM Mayhem"));
+    expect(screen.getByLabelText("Buscar campeão no ARAM Mayhem")).toHaveValue("");
+    expect(screen.getByTestId("mayhem-champ-twistedfate")).toBeInTheDocument();
   });
 });

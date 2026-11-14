@@ -9,5 +9,6 @@ export * from "./ItemBlocks";
 export * from "./SettingsTab";
 export * from "./IdleState";
 export * from "./NavigationDock";
+export * from "./SearchInput";
 export * from "./AramTab";
 export * from "./RankedTab";

@@ -458,12 +458,15 @@ img {
   color: var(--accent-primary);
 }
 
+.card .page-hero-title,
+.page-hero-title,
 .champ-hero-card .champ-name,
 .champ-name {
   margin: 0;
   font-size: clamp(2.65rem, 5.05vw, 4.4rem);
   font-weight: 800;
-  line-height: 0.94;
+  line-height: 1.05;
+  padding-bottom: 2px;
   letter-spacing: -0.035em;
   color: var(--text-primary);
   min-width: 0;
@@ -3564,8 +3567,10 @@ img {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(10, 10, 10, 0.9));
+  border: 1px solid var(--border-highlight);
+  padding: 12px 16px;
   margin-bottom: 0;
   flex-shrink: 0;
 }
@@ -3573,16 +3578,25 @@ img {
 .aram-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  flex: 1;
   min-width: 0;
+}
+
+.aram-hero-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .aram-mode-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 9px;
-  border-radius: 8px;
-  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.04em;
@@ -3651,9 +3665,41 @@ img {
   color: var(--text-muted);
 }
 
+.aram-search-input.has-clear {
+  padding-right: 30px;
+}
+
 .aram-search-input:focus {
   border-color: var(--accent-border);
   box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.16);
+}
+
+.aram-search-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.aram-search-clear:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.aram-search-clear:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-border);
+  color: var(--text-primary);
 }
 
 /* Classic ARAM List */
@@ -3737,24 +3783,31 @@ img {
 .aram-stat-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: space-between;
+  gap: 6px;
+  width: 86px;
+  min-width: 86px;
   padding: 2px 8px;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-subtle);
   font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .aram-stat-label {
   color: var(--text-muted);
   font-weight: 600;
   font-size: 0.68rem;
+  flex-shrink: 0;
 }
 
 .aram-stat-val {
   color: var(--text-secondary);
   font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .aram-stat-val.is-high {
@@ -3766,7 +3819,11 @@ img {
 }
 
 .aram-tier-pill {
-  min-width: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  min-width: 58px;
   text-align: center;
   padding: 2px 8px;
   border-radius: 7px;
@@ -3774,6 +3831,12 @@ img {
   font-weight: 700;
   letter-spacing: 0.02em;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.aram-tier-pill.aram-hero-rank-pill {
+  width: auto;
+  min-width: 58px;
 }
 
 .aram-tier-pill.tier-op {
@@ -3841,10 +3904,33 @@ img {
 
 .aram-panel-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   min-height: 38px;
+}
+
+.aram-mayhem-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.card .aram-mayhem-hero-title,
+.aram-mayhem-hero-title {
+  margin: 0;
+  font-size: clamp(2.4rem, 4.8vw, 4.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  padding-bottom: 2px;
+  letter-spacing: -0.035em;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aram-panel-title {
