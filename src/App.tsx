@@ -1,4 +1,4 @@
-﻿import { CSSProperties, useEffect, useState } from "react";
+import { CSSProperties, useEffect, useRef, useState } from "react";
 import "./App.css";
 
 import { ActiveTab, FlashKeyPreference, commands } from "./types";
@@ -6,6 +6,7 @@ import { profileBlurPercentToPx, usePreferences } from "./hooks/usePreferences";
 import { useLcuEvents } from "./hooks/useLcuEvents";
 import { usePlayerProfile } from "./hooks/usePlayerProfile";
 import { useAram } from "./hooks/useAram";
+import { useRanked } from "./hooks/useRanked";
 import { computeOrderedSpells } from "./utils/spells";
 import {
   StatusDock,
@@ -18,6 +19,7 @@ import {
   IdleState,
   NavigationDock,
   AramTab,
+  RankedTab,
 } from "./components";
 
 // Re-export all types and utilities for seamless backward compatibility
@@ -28,6 +30,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
   const [splashFallbackUsed, setSplashFallbackUsed] = useState(false);
   const [splashBroken, setSplashBroken] = useState(false);
+
+  const rankedPatchChangeRef = useRef<(() => void) | null>(null);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
     const reordered = computeOrderedSpells(
@@ -46,6 +50,7 @@ function App() {
     if (build) {
       handleFilterChange("patch", "");
     }
+    rankedPatchChangeRef.current?.();
   };
 
   const {
@@ -79,6 +84,15 @@ function App() {
 
   const currentChampionId = champSelect?.champion_id ?? build?.champion_id ?? null;
   const aram = useAram(activeTab === "aram", currentChampionId);
+  const ranked = useRanked(
+    activeTab === "ranked",
+    preferences.flashKey,
+    preferences.patch48hProtection ?? true
+  );
+
+  useEffect(() => {
+    rankedPatchChangeRef.current = ranked.handlePatchProtectionChange;
+  }, [ranked.handlePatchProtectionChange]);
 
   const {
     profile,
@@ -115,6 +129,14 @@ function App() {
     const wasAlreadyOnAram = activeTab === "aram";
     setActiveTab("aram");
     aram.handleAramDockClick(wasAlreadyOnAram);
+  };
+
+  const handleRankedDockClick = () => {
+    const wasAlreadyOnRanked = activeTab === "ranked";
+    setActiveTab("ranked");
+    if (wasAlreadyOnRanked && ranked.selectedChampion) {
+      ranked.clearSelectedChampion();
+    }
   };
 
   return (
@@ -213,7 +235,34 @@ function App() {
           )}
         </div>
 
-        {/* View 3: "Aram" Tab (ARAM & ARAM Mayhem) */}
+        {/* View 3: "Ranqueada" Tab (Tier List + Champion Build Detail) */}
+        <RankedTab
+          isActive={activeTab === "ranked"}
+          filters={ranked.filters}
+          tierData={ranked.tierData}
+          tierLoading={ranked.tierLoading}
+          tierError={ranked.tierError}
+          selectedChampion={ranked.selectedChampion}
+          championBuild={ranked.championBuild}
+          buildLoading={ranked.buildLoading}
+          buildError={ranked.buildError}
+          orderedSpells={ranked.orderedSpells}
+          selectedSecondarySpellId={ranked.selectedSecondarySpellId}
+          selectedRunePageIndex={ranked.selectedRunePageIndex}
+          selectedBuildIndex={ranked.selectedBuildIndex}
+          onTierListFilterChange={ranked.handleTierListFilterChange}
+          onDetailFilterChange={ranked.handleDetailFilterChange}
+          onSelectChampion={ranked.selectChampion}
+          onBackToTierList={ranked.clearSelectedChampion}
+          onRetryTierList={ranked.retryTierList}
+          onRetryBuild={ranked.retryChampionBuild}
+          onSelectSecondarySpell={ranked.setSelectedSecondarySpellId}
+          onInvertSpells={handleInvertSpells}
+          onSelectRunePage={ranked.setSelectedRunePageIndex}
+          onSelectBuild={ranked.setSelectedBuildIndex}
+        />
+
+        {/* View 4: "Aram" Tab (ARAM & ARAM Mayhem) */}
         <AramTab
           isActive={activeTab === "aram"}
           savedMode={aram.savedMode}
@@ -231,7 +280,7 @@ function App() {
           onRetryAugments={aram.retryAugments}
         />
 
-        {/* View 4: "Configurações" Tab (Settings & Preferences) */}
+        {/* View 5: "Configurações" Tab (Settings & Preferences) */}
         <SettingsTab
           preferences={preferences}
           onUpdatePreference={updatePreference}
@@ -247,6 +296,7 @@ function App() {
       <NavigationDock
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onRankedClick={handleRankedDockClick}
         onAramClick={handleAramDockClick}
       />
     </main>

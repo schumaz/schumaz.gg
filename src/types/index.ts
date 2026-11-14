@@ -1,4 +1,4 @@
-export type ActiveTab = "profile" | "runes" | "aram" | "settings";
+export type ActiveTab = "profile" | "runes" | "ranked" | "aram" | "settings";
 
 export type {
   AramAugmentEntry,
@@ -23,7 +23,10 @@ export type {
   PlayerProfile,
   ProfileRefreshRequested,
   QueueMode,
+  RankedChampionEntry,
+  RankedLane,
   RankedQueueStats,
+  RankedTierListResponse,
   RecentMatchInfo,
   RecommendedBuild,
   RuneMetadata,
@@ -48,3 +51,4 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 
 export const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";
 export const ARAM_SUBMODE_STORAGE_KEY = "schumaz_aram_submode";
+export const RANKED_FILTERS_STORAGE_KEY = "schumaz_ranked_filters";

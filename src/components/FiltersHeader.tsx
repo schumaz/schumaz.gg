@@ -11,6 +11,9 @@ interface FiltersHeaderProps {
     filterType: "position" | "tier" | "region" | "patch",
     value: string
   ) => void;
+  onBackToTierList?: () => void;
+  statusTagText?: string;
+  queueModeLabel?: string;
 }
 
 const CDRAGON_MINI_CRESTS_BASE =
@@ -18,7 +21,7 @@ const CDRAGON_MINI_CRESTS_BASE =
 const CDRAGON_POSITION_SVG_BASE =
   "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/svg";
 
-function buildIconImg(src: string, className = "filter-option-icon") {
+export function buildIconImg(src: string, className = "filter-option-icon") {
   return (
     <img
       src={src}
@@ -217,26 +220,17 @@ export const REGION_OPTIONS: FilterDropdownOption[] = [
   },
 ];
 
-export function FiltersHeader({
-  build,
-  champSelect,
-  loading,
-  onFilterChange,
-}: FiltersHeaderProps) {
-  const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
-
-  const isAram =
-    champSelect?.queue_mode === "Aram" ||
-    champSelect?.queue_mode === "AramMayhem" ||
-    champSelect?.queue_id === 450 ||
-    champSelect?.queue_id === 2400 ||
-    build.supports_runes === false;
-
+export function computePatchUiMeta(params: {
+  activePatch?: string | null;
+  availablePatches?: string[] | null;
+  patchFallbackApplied?: boolean | null;
+  remainingHours?: number | null;
+}) {
   const patchOptions =
-    build?.available_patches && build.available_patches.length > 0
-      ? build.available_patches
-      : build?.active_patch
-      ? [build.active_patch]
+    params.availablePatches && params.availablePatches.length > 0
+      ? params.availablePatches
+      : params.activePatch
+      ? [params.activePatch]
       : ["16.22", "16.21"];
 
   const patchDropdownOptions: FilterDropdownOption[] = patchOptions.map((p, idx) => ({
@@ -244,17 +238,17 @@ export function FiltersHeader({
     label: idx === 0 ? `Patch ${p} (Mais atual)` : `Patch ${p}`,
   }));
 
-  const hasKnownLatest = Boolean(build?.available_patches && build.available_patches.length > 0);
+  const hasKnownLatest = Boolean(params.availablePatches && params.availablePatches.length > 0);
   const latestPatch = patchOptions[0];
   const isPatchProtectionActive = Boolean(
-    build.patch_fallback_applied && (!hasKnownLatest || build.active_patch !== latestPatch)
+    params.patchFallbackApplied && (!hasKnownLatest || params.activePatch !== latestPatch)
   );
 
   const remainingHours =
     isPatchProtectionActive &&
-    typeof build.patch_protection_remaining_hours === "number" &&
-    build.patch_protection_remaining_hours > 0
-      ? build.patch_protection_remaining_hours
+    typeof params.remainingHours === "number" &&
+    params.remainingHours > 0
+      ? params.remainingHours
       : null;
 
   const remainingHoursShort =
@@ -271,10 +265,91 @@ export function FiltersHeader({
         } para liberar o acesso automático ao patch mais novo.`
       : "O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava.";
 
+  return {
+    patchOptions,
+    patchDropdownOptions,
+    isPatchProtectionActive,
+    remainingHoursShort,
+    protectionTooltipText,
+  };
+}
+
+export function FiltersHeader({
+  build,
+  champSelect,
+  loading,
+  onFilterChange,
+  onBackToTierList,
+  statusTagText,
+  queueModeLabel,
+}: FiltersHeaderProps) {
+  const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
+
+  const isAram =
+    champSelect?.queue_mode === "Aram" ||
+    champSelect?.queue_mode === "AramMayhem" ||
+    champSelect?.queue_id === 450 ||
+    champSelect?.queue_id === 2400 ||
+    build.supports_runes === false;
+
+  const {
+    patchOptions,
+    patchDropdownOptions,
+    isPatchProtectionActive,
+    remainingHoursShort,
+    protectionTooltipText,
+  } = computePatchUiMeta({
+    activePatch: build?.active_patch,
+    availablePatches: build?.available_patches,
+    patchFallbackApplied: build?.patch_fallback_applied,
+    remainingHours: build?.patch_protection_remaining_hours,
+  });
+
+  const resolvedTagText =
+    statusTagText ?? (champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)");
+  const resolvedTagClass = statusTagText
+    ? "tag hovering"
+    : `tag ${champSelect?.locked_in ? "locked" : "hovering"}`;
+
+  const resolvedQueueLabel =
+    queueModeLabel ??
+    (champSelect?.queue_mode === "AramMayhem"
+      ? "ARAM Mayhem (Howling Abyss)"
+      : champSelect?.queue_mode === "Aram"
+      ? "ARAM (Howling Abyss)"
+      : champSelect?.queue_mode === "PracticeTool"
+      ? "Modo Treino (Build Ranqueada)"
+      : "Summoner's Rift (Ranqueada / Normal)");
+
   return (
     <section className="card champ-hero-card" data-testid="champ-hero">
       <div className="champ-hero-top">
         <div className="champ-hero-left">
+          {onBackToTierList && (
+            <button
+              type="button"
+              className="ranked-back-btn"
+              data-testid="ranked-back-btn"
+              onClick={onBackToTierList}
+              title="Voltar para Tier List Ranqueada"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              <span>Voltar</span>
+            </button>
+          )}
+
           {build.champion_icon_url ? (
             <div className="dd-icon-frame champ-avatar-frame">
               <img
@@ -298,20 +373,10 @@ export function FiltersHeader({
         </div>
 
         <div className="champ-hero-right">
-          <span className={`tag ${champSelect?.locked_in ? "locked" : "hovering"}`}>
-            {champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
-          </span>
+          <span className={resolvedTagClass}>{resolvedTagText}</span>
 
           <div className="champ-meta-row">
-            <span className="badge-meta">
-              {champSelect?.queue_mode === "AramMayhem"
-                ? "ARAM Mayhem (Howling Abyss)"
-                : champSelect?.queue_mode === "Aram"
-                ? "ARAM (Howling Abyss)"
-                : champSelect?.queue_mode === "PracticeTool"
-                ? "Modo Treino (Build Ranqueada)"
-                : "Summoner's Rift (Ranqueada / Normal)"}
-            </span>
+            <span className="badge-meta">{resolvedQueueLabel}</span>
             {(build.pick_rate ?? 0) > 0 && (
               <span className="badge badge-neutral badge-stat">
                 {(build.pick_rate ?? 0).toFixed(1)}% Pick Rate

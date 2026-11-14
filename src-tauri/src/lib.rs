@@ -31,7 +31,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::inject_rune_page,
             commands::inject_item_build,
             commands::get_aram_tier_list,
-            commands::get_aram_mayhem_augments
+            commands::get_aram_mayhem_augments,
+            commands::get_ranked_tier_list,
+            commands::get_ranked_champion_build
         ])
         .events(collect_events![
             models::LcuConnected,

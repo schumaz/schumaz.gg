@@ -1,0 +1,324 @@
+/* ============================================================
+   Ranked Tab (Tier List + Build Detalhada)
+   ============================================================ */
+.ranked-layout,
+.ranked-detail-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.ranked-toolbar-card {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.ranked-toolbar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ranked-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+  flex-shrink: 0;
+}
+
+.ranked-filters-bar {
+  padding-top: 8px;
+}
+
+/* Lane Separation Bar */
+.ranked-lane-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ranked-lane-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.ranked-lane-pill:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-highlight);
+  color: var(--text-primary);
+}
+
+.ranked-lane-pill.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.2);
+}
+
+.ranked-lane-pill-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  display: block;
+  opacity: 0.85;
+}
+
+.ranked-lane-pill.active .ranked-lane-pill-icon {
+  opacity: 1;
+}
+
+/* Main Scrollable List Card */
+.ranked-list-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.ranked-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 4px;
+}
+
+/* Lane Separation Sections */
+.ranked-lane-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ranked-lane-section-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(19, 20, 26, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-highlight);
+}
+
+.ranked-lane-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ranked-lane-section-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+}
+
+.ranked-lane-section-title {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Tier Grouping (OP, Tier 1, Tier 2...) */
+.ranked-tier-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 4px;
+}
+
+.ranked-tier-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ranked-tier-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.ranked-tier-group-count {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.ranked-tier-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ranked-champ-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.ranked-champ-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-border);
+}
+
+.ranked-champ-row:active {
+  transform: scale(0.996);
+}
+
+.ranked-champ-row:focus-visible {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.ranked-champ-lane-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 82px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.ranked-champ-lane-icon {
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+  display: block;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+/* Back Button in Detail View (matches FiltersHeader hero) */
+.ranked-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 6px 7px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.ranked-back-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-highlight);
+  color: var(--text-primary);
+}
+
+.ranked-back-btn:focus-visible {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+/* Loading / Error Fallback Card in Detail View */
+.ranked-detail-state-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  margin-bottom: 0;
+}
+
+.ranked-detail-fallback-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ranked-detail-champ-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ranked-detail-champ-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}

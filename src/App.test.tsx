@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import App, { ChampionBuild } from "./App";
 import { invoke } from "@tauri-apps/api/core";
@@ -302,13 +302,13 @@ describe("App Component", () => {
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
-  it("renders the floating bottom dock with 4 navigation tabs in order: Perfil, Runas, Aram and Configurações", () => {
+  it("renders the floating bottom dock with 5 navigation tabs in order: Perfil, Runas, Ranqueada, Aram and Configurações", () => {
     render(<App />);
     const dockNav = screen.getByRole("navigation", { name: /navegação principal/i });
     expect(dockNav).toBeInTheDocument();
 
     const buttons = Array.from(dockNav.querySelectorAll("button"));
-    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Perfil", "Runas", "Aram", "Configurações"]);
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Perfil", "Runas", "Ranqueada", "Aram", "Configurações"]);
 
     const profileBtn = screen.getByRole("button", { name: /^perfil$/i });
     const runesBtn = screen.getByRole("button", { name: /^runas$/i });

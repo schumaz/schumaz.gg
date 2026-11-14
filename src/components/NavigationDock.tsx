@@ -3,13 +3,19 @@ import { ActiveTab } from "../types";
 interface NavigationDockProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
+  onRankedClick?: () => void;
   onAramClick?: () => void;
 }
 
 const ARAM_DOCK_ICON_URL =
   "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/aram/img/game-select-icon-active.png";
 
-export function NavigationDock({ activeTab, onTabChange, onAramClick }: NavigationDockProps) {
+export function NavigationDock({
+  activeTab,
+  onTabChange,
+  onRankedClick,
+  onAramClick,
+}: NavigationDockProps) {
   return (
     <nav className="floating-dock" aria-label="Navegação Principal">
       <button
@@ -57,6 +63,39 @@ export function NavigationDock({ activeTab, onTabChange, onAramClick }: Navigati
           <polyline points="2 12 12 17 22 12" />
         </svg>
         <span>Runas</span>
+      </button>
+
+      <button
+        type="button"
+        className={`dock-btn ${activeTab === "ranked" ? "active" : ""}`}
+        onClick={() => {
+          if (onRankedClick) {
+            onRankedClick();
+          } else {
+            onTabChange("ranked");
+          }
+        }}
+        aria-current={activeTab === "ranked" ? "page" : undefined}
+      >
+        <svg
+          className="dock-icon"
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+          <path d="M4 22h16" />
+          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+        </svg>
+        <span>Ranqueada</span>
       </button>
 
       <button

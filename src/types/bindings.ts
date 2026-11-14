@@ -31,6 +31,13 @@ export const commands = {
 	getAramTierList: (mode: AramMode) => __TAURI_INVOKE<AramChampionRank_Serialize[]>("get_aram_tier_list", { mode }),
 	/**  Tauri command to fetch ARAM Mayhem augments for a specific champion key. */
 	getAramMayhemAugments: (championKey: string) => __TAURI_INVOKE<AramAugmentEntry_Serialize[]>("get_aram_mayhem_augments", { championKey }),
+	/**  Tauri command to fetch Ranked Summoner's Rift tier list filtered by region, elo tier, and patch. */
+	getRankedTierList: (region: string | null, tier: string | null, patch: string | null) => __TAURI_INVOKE<RankedTierListResponse_Serialize>("get_ranked_tier_list", { region, tier, patch }),
+	/**
+	 *  Tauri command to fetch a read-only champion build preview for the Ranked browser tab
+	 *  without emitting Champ Select events or injecting into LCU.
+	 */
+	getRankedChampionBuild: (championId: number, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_ranked_champion_build", { championId, position, tier, region, patch }),
 };
 
 /** Events */
@@ -328,6 +335,40 @@ export type ProfileRefreshRequested = null;
 /**  Game queue classifications. */
 export type QueueMode = "SummonersRift" | "Aram" | "AramMayhem" | "PracticeTool" | "Other";
 
+export type RankedChampionEntry = RankedChampionEntry_Serialize | RankedChampionEntry_Deserialize;
+
+export type RankedChampionEntry_Deserialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	lane: RankedLane,
+	tier: number,
+	rank: number,
+	overall_rank: number,
+	win_rate?: number | null,
+	pick_rate?: number | null,
+	ban_rate?: number | null,
+	role_rate?: number | null,
+};
+
+export type RankedChampionEntry_Serialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	lane: RankedLane,
+	tier: number,
+	rank: number,
+	overall_rank: number,
+	win_rate: number | null,
+	pick_rate: number | null,
+	ban_rate: number | null,
+	role_rate: number | null,
+};
+
+export type RankedLane = "top" | "jungle" | "mid" | "adc" | "support";
+
 /**  Ranked queue summary (Solo/Duo or Flex) from `/lol-ranked/v1/current-ranked-stats`. */
 export type RankedQueueStats = {
 	queue_type: string,
@@ -338,6 +379,28 @@ export type RankedQueueStats = {
 	league_points: number,
 	wins: number,
 	losses: number,
+};
+
+export type RankedTierListResponse = RankedTierListResponse_Serialize | RankedTierListResponse_Deserialize;
+
+export type RankedTierListResponse_Deserialize = {
+	region: string,
+	tier: string,
+	active_patch: string,
+	available_patches: string[],
+	patch_fallback_applied: boolean,
+	patch_protection_remaining_hours?: number | null,
+	champions: RankedChampionEntry_Deserialize[],
+};
+
+export type RankedTierListResponse_Serialize = {
+	region: string,
+	tier: string,
+	active_patch: string,
+	available_patches: string[],
+	patch_fallback_applied: boolean,
+	patch_protection_remaining_hours: number | null,
+	champions: RankedChampionEntry_Serialize[],
 };
 
 /**  Individual recent match entry from LCU match history (Practice Tool strictly excluded). */
