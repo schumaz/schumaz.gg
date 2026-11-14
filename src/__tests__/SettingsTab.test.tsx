@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SettingsTab } from "../components/SettingsTab";
+import { SettingsTab, isBlurSliderDisabled } from "../components/SettingsTab";
 import { DEFAULT_PREFERENCES } from "../types";
 
 describe("SettingsTab", () => {
@@ -62,9 +62,11 @@ describe("SettingsTab", () => {
     expect(slider.min).toBe("0");
     expect(slider.max).toBe("100");
     expect(slider.value).toBe("10");
+    expect(slider).toBeEnabled();
 
     const valueBtn = screen.getByTestId("profile-blur-value");
     expect(valueBtn).toHaveTextContent("10%");
+    expect(valueBtn).toBeEnabled();
 
     // Slider change works
     fireEvent.change(slider, { target: { value: "80" } });
@@ -99,5 +101,71 @@ describe("SettingsTab", () => {
       "settings-subgroup-flash",
       "settings-subgroup-auto-inject",
     ]);
+  });
+
+  it("blocks blur slider and percentage editing when Fundo Visível is unchecked", () => {
+    expect(isBlurSliderDisabled(false)).toBe(true);
+    expect(isBlurSliderDisabled(true)).toBe(false);
+
+    const handleBlurChange = vi.fn();
+
+    const { rerender } = render(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={vi.fn()}
+        profileBlur={25}
+        onProfileBlurChange={handleBlurChange}
+        wallpaperVisible={false}
+        onWallpaperVisibleChange={vi.fn()}
+      />
+    );
+
+    const slider = screen.getByTestId("profile-blur-slider") as HTMLInputElement;
+    const valueBtn = screen.getByTestId("profile-blur-value");
+
+    expect(slider).toBeDisabled();
+    expect(valueBtn).toBeDisabled();
+    expect(
+      screen.getByText("Ative a opção Fundo Visível para ajustar o desfoque.")
+    ).toBeInTheDocument();
+
+    // Even if a change event is dispatched, the guard prevents updating blur
+    fireEvent.change(slider, { target: { value: "70" } });
+    fireEvent.click(valueBtn);
+    expect(handleBlurChange).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("profile-blur-input")).not.toBeInTheDocument();
+
+    // Re-enabling Fundo Visível unlocks the slider and exits/allows editing cleanly
+    rerender(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={vi.fn()}
+        profileBlur={25}
+        onProfileBlurChange={handleBlurChange}
+        wallpaperVisible={true}
+        onWallpaperVisibleChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("profile-blur-slider")).toBeEnabled();
+    expect(screen.getByTestId("profile-blur-value")).toBeEnabled();
+
+    // Start editing while visible, then uncheck Fundo Visível -> edit closes cleanly
+    fireEvent.click(screen.getByTestId("profile-blur-value"));
+    expect(screen.getByTestId("profile-blur-input")).toBeInTheDocument();
+
+    rerender(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={vi.fn()}
+        profileBlur={25}
+        onProfileBlurChange={handleBlurChange}
+        wallpaperVisible={false}
+        onWallpaperVisibleChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId("profile-blur-input")).not.toBeInTheDocument();
+    expect(screen.getByTestId("profile-blur-slider")).toBeDisabled();
   });
 });

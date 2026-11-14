@@ -2,6 +2,10 @@
 import { UserPreferences } from "../types";
 import { clampProfileBlur } from "../hooks/usePreferences";
 
+export function isBlurSliderDisabled(wallpaperVisible: boolean): boolean {
+  return !wallpaperVisible;
+}
+
 interface SettingsTabProps {
   preferences: UserPreferences;
   onUpdatePreference: <K extends keyof UserPreferences>(
@@ -28,6 +32,7 @@ export function SettingsTab({
   const [draftBlur, setDraftBlur] = useState(String(profileBlur));
   const blurInputRef = useRef<HTMLInputElement | null>(null);
   const originalBlurRef = useRef(profileBlur);
+  const blurDisabled = isBlurSliderDisabled(wallpaperVisible);
 
   useEffect(() => {
     if (!isEditingBlur) {
@@ -36,35 +41,54 @@ export function SettingsTab({
   }, [profileBlur, isEditingBlur]);
 
   useEffect(() => {
+    if (blurDisabled && isEditingBlur) {
+      setIsEditingBlur(false);
+      setDraftBlur(String(profileBlur));
+    }
+  }, [blurDisabled, isEditingBlur, profileBlur]);
+
+  useEffect(() => {
     if (isEditingBlur) {
       blurInputRef.current?.focus();
       blurInputRef.current?.select();
     }
   }, [isEditingBlur]);
 
+  const handleProfileBlurChange = (nextBlur: number) => {
+    if (blurDisabled) return;
+    onProfileBlurChange?.(nextBlur);
+  };
+
   const startEditingBlur = () => {
+    if (blurDisabled) return;
     originalBlurRef.current = profileBlur;
     setDraftBlur(String(profileBlur));
     setIsEditingBlur(true);
   };
 
   const commitBlurDraft = () => {
+    if (blurDisabled) {
+      setIsEditingBlur(false);
+      return;
+    }
     const trimmed = draftBlur.trim();
     if (trimmed === "") {
-      onProfileBlurChange?.(0);
+      handleProfileBlurChange(0);
     } else {
       const parsed = Number(trimmed);
       if (Number.isFinite(parsed)) {
-        onProfileBlurChange?.(clampProfileBlur(parsed));
+        handleProfileBlurChange(clampProfileBlur(parsed));
       } else {
-        onProfileBlurChange?.(originalBlurRef.current);
+        handleProfileBlurChange(originalBlurRef.current);
       }
     }
     setIsEditingBlur(false);
   };
 
   const cancelBlurEdit = () => {
-    onProfileBlurChange?.(originalBlurRef.current);
+    if (!blurDisabled) {
+      handleProfileBlurChange(originalBlurRef.current);
+    }
     setDraftBlur(String(originalBlurRef.current));
     setIsEditingBlur(false);
   };
@@ -89,11 +113,16 @@ export function SettingsTab({
             </div>
 
             <div className="settings-list">
-              <div className="settings-item settings-slider-item">
+              <div
+                className={`settings-item settings-slider-item ${blurDisabled ? "is-disabled" : ""}`}
+                aria-disabled={blurDisabled}
+              >
                 <div className="settings-item-text">
                   <span className="settings-item-title">Nível de Desfoque (Blur)</span>
                   <span className="settings-item-desc">
-                    Deslize ou clique no número para digitar entre 0% e 100%.
+                    {blurDisabled
+                      ? "Ative a opção Fundo Visível para ajustar o desfoque."
+                      : "Deslize ou clique no número para digitar entre 0% e 100%."}
                   </span>
                 </div>
                 <div className="settings-slider-control">
@@ -103,12 +132,18 @@ export function SettingsTab({
                     max={100}
                     step={1}
                     value={profileBlur}
-                    onChange={(e) => onProfileBlurChange?.(Number(e.target.value))}
+                    disabled={blurDisabled}
+                    onChange={(e) => handleProfileBlurChange(Number(e.target.value))}
                     className="blur-range-slider"
+                    title={
+                      blurDisabled
+                        ? "Ative a opção Fundo Visível para ajustar o desfoque"
+                        : undefined
+                    }
                     aria-label="Nível de Desfoque da Interface do Perfil"
                     data-testid="profile-blur-slider"
                   />
-                  {isEditingBlur ? (
+                  {isEditingBlur && !blurDisabled ? (
                     <div className="slider-value-edit-wrap" data-testid="profile-blur-edit">
                       <input
                         ref={blurInputRef}
@@ -123,7 +158,7 @@ export function SettingsTab({
                           if (raw.trim() !== "") {
                             const parsed = Number(raw);
                             if (Number.isFinite(parsed)) {
-                              onProfileBlurChange?.(clampProfileBlur(parsed));
+                              handleProfileBlurChange(clampProfileBlur(parsed));
                             }
                           }
                         }}
@@ -146,7 +181,12 @@ export function SettingsTab({
                       type="button"
                       className="slider-value-badge slider-value-btn"
                       onClick={startEditingBlur}
-                      title="Clique para digitar o valor"
+                      disabled={blurDisabled}
+                      title={
+                        blurDisabled
+                          ? "Ative a opção Fundo Visível para ajustar o desfoque"
+                          : "Clique para digitar o valor"
+                      }
                       aria-label="Editar nível de desfoque em porcentagem"
                       data-testid="profile-blur-value"
                     >
