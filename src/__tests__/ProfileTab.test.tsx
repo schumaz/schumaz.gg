@@ -134,8 +134,8 @@ describe("ProfileTab Component", () => {
     expect(screen.getByText(/Aguardando Cliente do LoL/i)).toBeInTheDocument();
   });
 
-  it("renders summoner icon, level, ranked stats, top 3 masteries, 10 matches, and omits wallpaper skin name text", () => {
-    render(
+  it("renders summoner icon, level, ranked stats with crest icons on the right, top 3 masteries, 10 matches, and omits wallpaper skin name text", () => {
+    const { container } = render(
       <ProfileTab
         summoner={mockSummoner}
         profile={mockProfile}
@@ -145,7 +145,7 @@ describe("ProfileTab Component", () => {
       />
     );
 
-    // Identity
+    // Identity (player name beside avatar, without ranked row nested inside identity)
     expect(screen.getByText("Schuma")).toBeInTheDocument();
     expect(screen.getByText("#BR1")).toBeInTheDocument();
     expect(screen.getByTestId("profile-level")).toHaveTextContent("Nv. 350");
@@ -154,12 +154,41 @@ describe("ProfileTab Component", () => {
       mockProfile.profile_icon_url
     );
 
+    const identityEl = container.querySelector(".profile-identity")!;
+    const heroRightEl = container.querySelector(".profile-hero-right")!;
+    const rankedRow = screen.getByTestId("profile-ranked-row");
+    expect(identityEl).not.toContainElement(rankedRow);
+    expect(heroRightEl).toContainElement(rankedRow);
+
     // Must NOT display background skin name text
     expect(screen.queryByText(/Ahri Florescer Espiritual/i)).not.toBeInTheDocument();
 
-    // Ranked stats
-    expect(screen.getByTestId("ranked-pill-RANKED_SOLO_5x5")).toHaveTextContent("Esmeralda II");
-    expect(screen.getByTestId("ranked-pill-RANKED_FLEX_SR")).toHaveTextContent("Sem Ranque");
+    // Ranked stats with rank crest icons
+    const soloCard = screen.getByTestId("ranked-pill-RANKED_SOLO_5x5");
+    expect(soloCard).toHaveTextContent("Solo/Duo");
+    expect(soloCard).toHaveTextContent("Esmeralda II");
+    expect(soloCard).toHaveTextContent("67 PDL · 52V 44D (54%)");
+    const soloImg = soloCard.querySelector("img")!;
+    expect(soloImg).toHaveAttribute(
+      "src",
+      "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/images/emerald.png"
+    );
+
+    // Image error falls back to ranked-mini-crests SVG
+    fireEvent.error(soloImg);
+    expect(soloImg).toHaveAttribute(
+      "src",
+      "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/emerald.svg"
+    );
+
+    const flexCard = screen.getByTestId("ranked-pill-RANKED_FLEX_SR");
+    expect(flexCard).toHaveTextContent("Flex");
+    expect(flexCard).toHaveTextContent("Sem Ranque");
+    const flexImg = flexCard.querySelector("img")!;
+    expect(flexImg).toHaveAttribute(
+      "src",
+      "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/images/unranked.png"
+    );
 
     // Top 3 masteries
     expect(screen.getByTestId("mastery-item-1")).toHaveTextContent("Ahri");

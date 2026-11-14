@@ -13,6 +13,38 @@ interface ProfileTabProps {
   isActive?: boolean;
 }
 
+const CDRAGON_RANKED_EMBLEM_BASE =
+  "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/images";
+const CDRAGON_RANKED_MINI_CRESTS_BASE =
+  "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests";
+
+const VALID_RANK_TIERS = new Set([
+  "iron",
+  "bronze",
+  "silver",
+  "gold",
+  "platinum",
+  "emerald",
+  "diamond",
+  "master",
+  "grandmaster",
+  "challenger",
+  "unranked",
+]);
+
+function normalizeRankTierKey(tier: string): string {
+  const normalized = tier.trim().toLowerCase();
+  return VALID_RANK_TIERS.has(normalized) ? normalized : "unranked";
+}
+
+function getRankedCrestUrl(tier: string): string {
+  return `${CDRAGON_RANKED_EMBLEM_BASE}/${normalizeRankTierKey(tier)}.png`;
+}
+
+function getRankedMiniCrestUrl(tier: string): string {
+  return `${CDRAGON_RANKED_MINI_CRESTS_BASE}/${normalizeRankTierKey(tier)}.svg`;
+}
+
 function formatPoints(points: number): string {
   return points.toLocaleString("pt-BR");
 }
@@ -245,61 +277,84 @@ export function ProfileTab({
                   </span>
                 </div>
 
-                <div className="profile-name-block">
-                  <div className="profile-riot-id">
-                    <h2
-                      className="profile-summoner-name"
-                      title={`${summoner.gameName || summoner.displayName}${summoner.tagLine ? `#${summoner.tagLine}` : ""}`}
-                    >
-                      {summoner.gameName || summoner.displayName}
-                    </h2>
-                    {summoner.tagLine && (
-                      <span className="profile-tagline">#{summoner.tagLine}</span>
-                    )}
-                  </div>
+                <div className="profile-riot-id">
+                  <h2
+                    className="profile-summoner-name"
+                    title={`${summoner.gameName || summoner.displayName}${summoner.tagLine ? `#${summoner.tagLine}` : ""}`}
+                  >
+                    {summoner.gameName || summoner.displayName}
+                  </h2>
+                  {summoner.tagLine && (
+                    <span className="profile-tagline">#{summoner.tagLine}</span>
+                  )}
+                </div>
+              </div>
 
-                  {/* Idea 1: Ranked Queue Cards (Solo/Duo & Flex) */}
+              <div className="profile-hero-right">
+                {profile?.ranked_stats && profile.ranked_stats.length > 0 && (
                   <div className="profile-ranked-row" data-testid="profile-ranked-row">
-                    {(profile?.ranked_stats ?? []).map((rank) => {
+                    {profile.ranked_stats.map((rank) => {
                       const isUnranked = rank.tier === "UNRANKED";
                       const totalRanked = rank.wins + rank.losses;
                       const rankedWr =
                         totalRanked > 0 ? Math.round((rank.wins / totalRanked) * 100) : 0;
+                      const rankDisplay = isUnranked
+                        ? "Sem Ranque"
+                        : `${rank.tier_label}${rank.division ? ` ${rank.division}` : ""}`;
 
                       return (
                         <div
                           key={rank.queue_type}
                           className={`ranked-pill ${isUnranked ? "unranked" : ""}`}
                           data-testid={`ranked-pill-${rank.queue_type}`}
+                          title={
+                            isUnranked
+                              ? `${rank.queue_label}: Sem Ranque`
+                              : `${rank.queue_label}: ${rankDisplay} — ${rank.league_points} PDL · ${rank.wins}V ${rank.losses}D (${rankedWr}%)`
+                          }
                         >
-                          <span className="ranked-queue-label">{rank.queue_label}</span>
-                          <span className="ranked-tier-text">
-                            {isUnranked
-                              ? "Sem Ranque"
-                              : `${rank.tier_label}${rank.division ? ` ${rank.division}` : ""}`}
-                          </span>
-                          {!isUnranked && (
-                            <span className="ranked-lp-meta">
-                              {rank.league_points} PDL · {rank.wins}V {rank.losses}D ({rankedWr}%)
-                            </span>
-                          )}
+                          <div className="ranked-crest-wrap">
+                            <img
+                              src={getRankedCrestUrl(rank.tier)}
+                              alt={`Ícone do ranque ${rank.queue_label}: ${rankDisplay}`}
+                              className={`ranked-crest-img ${isUnranked ? "unranked" : ""}`}
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                if (!img.dataset.fallbackUsed) {
+                                  img.dataset.fallbackUsed = "1";
+                                  img.src = getRankedMiniCrestUrl(rank.tier);
+                                } else {
+                                  img.style.display = "none";
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="ranked-info">
+                            <span className="ranked-queue-label">{rank.queue_label}</span>
+                            <span className="ranked-tier-text">{rankDisplay}</span>
+                            {!isUnranked && (
+                              <span className="ranked-lp-meta">
+                                {rank.league_points} PDL · {rank.wins}V {rank.losses}D ({rankedWr}%)
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
-                </div>
-              </div>
+                )}
 
-              <div className="profile-hero-actions">
-                <button
-                  type="button"
-                  className="profile-action-btn primary"
-                  data-testid="refresh-profile-btn"
-                  onClick={onRefresh}
-                  disabled={loading || refreshCooldownSecs > 0}
-                >
-                  {refreshBtnLabel}
-                </button>
+                <div className="profile-hero-actions">
+                  <button
+                    type="button"
+                    className="profile-action-btn primary"
+                    data-testid="refresh-profile-btn"
+                    onClick={onRefresh}
+                    disabled={loading || refreshCooldownSecs > 0}
+                  >
+                    {refreshBtnLabel}
+                  </button>
+                </div>
               </div>
             </div>
           </section>
