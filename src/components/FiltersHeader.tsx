@@ -51,39 +51,40 @@ export function FiltersHeader({
             </div>
           )}
 
-          <div className="champ-hero-details">
-            <div className="champ-hero-title-row">
-              <h2 className="champ-name">{build.champion_name}</h2>
-              <span className={`tag ${champSelect?.locked_in ? "locked" : "hovering"}`}>
-                {champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
-              </span>
-            </div>
+          <h2 className="champ-name" title={build.champion_name}>
+            {build.champion_name}
+          </h2>
+        </div>
 
-            <div className="champ-meta-row">
-              <span className="badge-meta">
-                {champSelect?.queue_mode === "AramMayhem"
-                  ? "ARAM Mayhem (Howling Abyss)"
-                  : champSelect?.queue_mode === "Aram"
-                  ? "ARAM (Howling Abyss)"
-                  : champSelect?.queue_mode === "PracticeTool"
-                  ? "Modo Treino (Build Ranqueada)"
-                  : "Summoner's Rift (Ranqueada / Normal)"}
+        <div className="champ-hero-right">
+          <span className={`tag ${champSelect?.locked_in ? "locked" : "hovering"}`}>
+            {champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)"}
+          </span>
+
+          <div className="champ-meta-row">
+            <span className="badge-meta">
+              {champSelect?.queue_mode === "AramMayhem"
+                ? "ARAM Mayhem (Howling Abyss)"
+                : champSelect?.queue_mode === "Aram"
+                ? "ARAM (Howling Abyss)"
+                : champSelect?.queue_mode === "PracticeTool"
+                ? "Modo Treino (Build Ranqueada)"
+                : "Summoner's Rift (Ranqueada / Normal)"}
+            </span>
+            {(build.pick_rate ?? 0) > 0 && (
+              <span className="badge badge-neutral badge-stat">
+                {(build.pick_rate ?? 0).toFixed(1)}% Pick Rate
               </span>
-              {(build.pick_rate ?? 0) > 0 && (
-                <span className="badge badge-neutral badge-stat">
-                  {(build.pick_rate ?? 0).toFixed(1)}% Pick Rate
-                </span>
-              )}
-              {build.patch_fallback_applied && (
-                <span
-                  className="badge badge-warning badge-stat patch-fallback-badge"
-                  title="Patch recente (<48h). Usando dados consolidados do patch anterior."
-                  data-testid="patch-fallback-badge"
-                >
-                  🛡️ Volume Protegido ({build.active_patch})
-                </span>
-              )}
-            </div>
+            )}
+            {build.patch_fallback_applied && (
+              <span
+                className="badge badge-warning badge-stat patch-fallback-badge"
+                title="Patch recente (<48h). Usando dados consolidados do patch anterior."
+                data-testid="patch-fallback-badge"
+              >
+                🛡️ Volume Protegido ({build.active_patch})
+              </span>
+            )}
           </div>
         </div>
       </div>

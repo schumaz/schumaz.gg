@@ -247,7 +247,10 @@ export function ProfileTab({
 
                 <div className="profile-name-block">
                   <div className="profile-riot-id">
-                    <h2 className="profile-summoner-name">
+                    <h2
+                      className="profile-summoner-name"
+                      title={`${summoner.gameName || summoner.displayName}${summoner.tagLine ? `#${summoner.tagLine}` : ""}`}
+                    >
                       {summoner.gameName || summoner.displayName}
                     </h2>
                     {summoner.tagLine && (
