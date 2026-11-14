@@ -15,7 +15,7 @@ export function ItemBlocks({
   return (
     <section className="card item-blocks-preview" data-testid="item-blocks">
       <div className="item-blocks-header">
-        <h2>Build Recomendada na Loja</h2>
+        <h2>Build na Loja</h2>
         <BuildSelector
           buildOptions={build.build_options}
           selectedBuildIndex={selectedBuildIndex}
@@ -67,10 +67,13 @@ export function ItemBlocks({
             activeIcons = build.final_build_options[selectedBuildIndex].item_icon_urls;
           }
 
+          const blockSpanClass =
+            isFinalBlock || isSituationalBlock ? "block-span-full" : "block-span-third";
+
           return (
-            <div key={block.title || bIndex} className="block-item">
+            <div key={block.title || bIndex} className={`block-item ${blockSpanClass}`}>
               <div className="block-header-row">
-                <h4>
+                <h4 title={`${bIndex + 1}. ${block.title}`}>
                   {bIndex + 1}. {block.title}
                 </h4>
               </div>

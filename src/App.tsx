@@ -172,9 +172,7 @@ function App() {
                     selectedRunePageIndex={selectedRunePageIndex}
                     onSelectRunePage={handleSelectRunePage}
                   />
-                </div>
 
-                <div className="dashboard-col dashboard-col-right">
                   <SpellsBar
                     orderedSpells={orderedSpells}
                     spellChoices={build.spell_choices}
@@ -182,7 +180,9 @@ function App() {
                     onInvertSpells={handleInvertSpells}
                     onSelectSecondarySpell={handleSelectSecondarySpell}
                   />
+                </div>
 
+                <div className="dashboard-col dashboard-col-right">
                   <ItemBlocks
                     build={build}
                     selectedBuildIndex={selectedBuildIndex}

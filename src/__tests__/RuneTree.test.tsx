@@ -66,4 +66,21 @@ describe("RuneTree", () => {
     expect(screen.getByText("Dominação")).toBeInTheDocument();
     expect(screen.getByText("Pressione o Ataque")).toBeInTheDocument();
   });
+
+  it("renders simplified stat shard labels with icons and full tooltip names", () => {
+    render(
+      <RuneTree
+        build={mockNormalBuild}
+        selectedRunePageIndex={0}
+        onSelectRunePage={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByText("Adaptativa")).toHaveLength(2);
+    expect(screen.getByText("Vida Esc.")).toBeInTheDocument();
+    expect(screen.getAllByTitle("Força Adaptativa")).toHaveLength(2);
+    expect(screen.getByTitle("Vida")).toBeInTheDocument();
+    expect(screen.getAllByAltText("Força Adaptativa")).toHaveLength(2);
+    expect(screen.getByAltText("Vida")).toBeInTheDocument();
+  });
 });

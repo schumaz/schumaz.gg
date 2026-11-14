@@ -6,6 +6,32 @@ interface RuneTreeProps {
   onSelectRunePage: (pageIndex: number) => void;
 }
 
+function getSimplifiedShardName(id: number, fallbackName: string): string {
+  switch (id) {
+    case 5008:
+      return "Adaptativa";
+    case 5005:
+      return "Vel. Atq.";
+    case 5007:
+      return "Acel. Hab.";
+    case 5002:
+      return "Armadura";
+    case 5003:
+      return "Res. Mágica";
+    case 5001:
+    case 5013:
+      return "Vida Esc.";
+    case 5010:
+      return "Vel. Mov.";
+    case 5011:
+      return "Vida";
+    case 5012:
+      return "Tenacidade";
+    default:
+      return fallbackName;
+  }
+}
+
 export function RuneTree({
   build,
   selectedRunePageIndex,
@@ -55,10 +81,6 @@ export function RuneTree({
     <section className="card runes-tree-card" data-testid="runes-tree">
       {build.rune_pages && build.rune_pages.length > 1 && (
         <div className="rune-pages-selector" data-testid="rune-pages-selector">
-          <div className="rune-pages-selector-header">
-            <span className="rune-pages-selector-title">Páginas de Runas</span>
-            <span className="rune-pages-selector-desc">Escolha entre as mais jogadas</span>
-          </div>
           <div className="rune-pages-options">
             {build.rune_pages.map((page, idx) => {
               const isSelected = selectedRunePageIndex === idx;
@@ -72,6 +94,7 @@ export function RuneTree({
                   className={`rune-page-btn ${isSelected ? "active" : ""}`}
                   data-testid={`rune-page-btn-${idx}`}
                   onClick={() => onSelectRunePage(idx)}
+                  title={label}
                 >
                   <div className="rune-page-btn-icons">
                     {keystone?.icon_url && (
@@ -177,7 +200,9 @@ export function RuneTree({
                   {shard.icon_url && (
                     <img src={shard.icon_url} alt={shard.name} className="shard-icon" />
                   )}
-                  <span className="shard-name">{shard.name}</span>
+                  <span className="shard-name">
+                    {getSimplifiedShardName(shard.id, shard.name)}
+                  </span>
                 </div>
               ))}
             </div>

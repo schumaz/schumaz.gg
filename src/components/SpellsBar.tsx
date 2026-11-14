@@ -29,70 +29,71 @@ export function SpellsBar({
           <span className="invert-spells-icon">⇄</span> Inverter Feitiços
         </button>
       </div>
-      <p className="card-desc">Feitiços recomendados adaptados para a fila atual.</p>
 
-      <div className="spells-list">
-        {orderedSpells && orderedSpells.length >= 2 ? (
-          orderedSpells.map((spell, index) => (
-            <div key={`spell-${index}-${spell.id}`} className="spell-item">
-              <span className="spell-key-indicator">{index === 0 ? "D" : "F"}</span>
-              {spell.icon_url && (
-                <div className="dd-icon-frame spell-icon-frame">
-                  <img src={spell.icon_url} alt={spell.name} className="spell-icon" />
+      <div className="spells-content-row">
+        <div className="spells-list">
+          {orderedSpells && orderedSpells.length >= 2 ? (
+            orderedSpells.map((spell, index) => (
+              <div key={`spell-${index}-${spell.id}`} className="spell-item">
+                <span className="spell-key-indicator">{index === 0 ? "D" : "F"}</span>
+                {spell.icon_url && (
+                  <div className="dd-icon-frame spell-icon-frame">
+                    <img src={spell.icon_url} alt={spell.name} className="spell-icon" />
+                  </div>
+                )}
+                <div className="spell-info">
+                  <span className="spell-name">{spell.name}</span>
                 </div>
-              )}
-              <div className="spell-info">
-                <span className="spell-name">{spell.name}</span>
+              </div>
+            ))
+          ) : (
+            <div className="spells-fallback">
+              <div className="spell-item">
+                <span className="spell-key-indicator">D</span>
+                <span className="spell-name">Feitiço 1</span>
+              </div>
+              <div className="spell-item">
+                <span className="spell-key-indicator">F</span>
+                <span className="spell-name">Feitiço 2</span>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="spells-fallback">
-            <div className="spell-item">
-              <span className="spell-key-indicator">D</span>
-              <span className="spell-name">Feitiço 1</span>
-            </div>
-            <div className="spell-item">
-              <span className="spell-key-indicator">F</span>
-              <span className="spell-name">Feitiço 2</span>
+          )}
+        </div>
+
+        {spellChoices && spellChoices.length > 0 && (
+          <div className="secondary-spell-selector" data-testid="secondary-spell-selector">
+            <h4 className="secondary-spell-title">Escolha de Segundo Feitiço</h4>
+            <div className="secondary-spell-options">
+              {spellChoices.map((choice, idx) => {
+                const currentSecondaryId =
+                  selectedSecondarySpellId ?? spellChoices[0]?.id;
+                const isSelected = currentSecondaryId === choice.id;
+                return (
+                  <button
+                    key={`sec-spell-${choice.id}-${idx}`}
+                    type="button"
+                    className={`secondary-spell-btn ${isSelected ? "active" : ""}`}
+                    data-testid={`sec-spell-btn-${choice.id}`}
+                    onClick={() => onSelectSecondarySpell(choice.id)}
+                    title={idx === 0 ? "Mais Usado" : "Segundo Mais Usado"}
+                  >
+                    {choice.icon_url && (
+                      <div className="dd-icon-frame secondary-spell-frame">
+                        <img
+                          src={choice.icon_url}
+                          alt={choice.name}
+                          className="secondary-spell-icon"
+                        />
+                      </div>
+                    )}
+                    <span className="secondary-spell-name">{choice.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
-
-      {spellChoices && spellChoices.length > 0 && (
-        <div className="secondary-spell-selector" data-testid="secondary-spell-selector">
-          <h4 className="secondary-spell-title">Escolha de Segundo Feitiço</h4>
-          <div className="secondary-spell-options">
-            {spellChoices.map((choice, idx) => {
-              const currentSecondaryId =
-                selectedSecondarySpellId ?? spellChoices[0]?.id;
-              const isSelected = currentSecondaryId === choice.id;
-              return (
-                <button
-                  key={`sec-spell-${choice.id}-${idx}`}
-                  type="button"
-                  className={`secondary-spell-btn ${isSelected ? "active" : ""}`}
-                  data-testid={`sec-spell-btn-${choice.id}`}
-                  onClick={() => onSelectSecondarySpell(choice.id)}
-                  title={idx === 0 ? "Mais Usado" : "Segundo Mais Usado"}
-                >
-                  {choice.icon_url && (
-                    <div className="dd-icon-frame secondary-spell-frame">
-                      <img
-                        src={choice.icon_url}
-                        alt={choice.name}
-                        className="secondary-spell-icon"
-                      />
-                    </div>
-                  )}
-                  <span className="secondary-spell-name">{choice.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </section>
   );
 }
