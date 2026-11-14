@@ -123,6 +123,24 @@ pub fn should_emit_champ_select(
     last_payload != current_payload
 }
 
+/// Returns `true` when the player transitions into a locked-in champion state
+/// (or swaps/trades into a different locked-in champion) across any queue/mode.
+/// Hovering (`locked_in == false`) and metadata-only updates for an already locked
+/// champion return `false` so the taskbar alert fires only on actual lock-ins/swaps.
+pub fn should_request_lock_in_attention(
+    prev_payload: Option<&ChampSelectedPayload>,
+    next_payload: &ChampSelectedPayload,
+) -> bool {
+    if !next_payload.locked_in {
+        return false;
+    }
+
+    match prev_payload {
+        None => true,
+        Some(prev) => !prev.locked_in || prev.champion_id != next_payload.champion_id,
+    }
+}
+
 /// Pure parser function to extract the selected `championId` and `locked_in` status.
 ///
 /// Precedence:

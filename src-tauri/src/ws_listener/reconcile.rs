@@ -220,6 +220,7 @@ pub trait ReconcileEventEmitter: Send + Sync {
     fn emit_champ_select_reconciled(&self, payload: ChampSelectReconciledPayload);
     fn emit_build_injected(&self, report: InjectionReport);
     fn emit_champ_select_ended(&self);
+    fn request_lock_in_attention(&self);
 }
 
 pub struct TauriReconcileEmitter {
@@ -245,6 +246,10 @@ impl ReconcileEventEmitter for TauriReconcileEmitter {
 
     fn emit_champ_select_ended(&self) {
         let _ = models::ChampSelectEnded.emit(&self.handle);
+    }
+
+    fn request_lock_in_attention(&self) {
+        crate::request_taskbar_attention(&self.handle);
     }
 }
 
@@ -403,17 +408,22 @@ where
         .safety_reinject(summoner_id, build_q_id, &build)
         .await;
 
-    {
+    let should_notify_lock = {
         let mut guard = state_ref.lock().await;
+        let notify = should_request_lock_in_attention(guard.last_payload.as_ref(), &actual);
         guard.last_payload = Some(actual.clone());
         guard.last_build = Some(build.clone());
         guard.last_applied = Some(applied);
         guard.reconciled_champion_id = Some(actual.champion_id);
-    }
+        notify
+    };
 
     if champion_diverged {
         emitter.emit_champ_selected(actual.clone());
         emitter.emit_recommended_build(build.clone());
+    }
+    if should_notify_lock {
+        emitter.request_lock_in_attention();
     }
     emitter.emit_champ_select_reconciled(ChampSelectReconciledPayload {
         champ_selected: actual.clone(),
@@ -431,4 +441,4 @@ where
 
 #[cfg(test)]
 #[path = "reconcile_tests.rs"]
-mod tests;
+pub mod tests;

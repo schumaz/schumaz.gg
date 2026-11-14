@@ -112,6 +112,98 @@ fn test_should_emit_champ_select_deduplicates_timer_ticks() {
 }
 
 #[test]
+fn test_should_request_lock_in_attention_across_modes_and_transitions() {
+    let draft_hover = ChampSelectedPayload {
+        champion_id: 103,
+        queue_id: 420,
+        queue_mode: QueueMode::SummonersRift,
+        locked_in: false,
+        assigned_position: Some("mid".to_string()),
+    };
+    let draft_locked = ChampSelectedPayload {
+        locked_in: true,
+        ..draft_hover.clone()
+    };
+    let draft_locked_metadata_update = ChampSelectedPayload {
+        assigned_position: Some("top".to_string()),
+        ..draft_locked.clone()
+    };
+    let draft_traded = ChampSelectedPayload {
+        champion_id: 157,
+        ..draft_locked.clone()
+    };
+
+    // Hovering never triggers taskbar flash
+    assert!(!should_request_lock_in_attention(None, &draft_hover));
+    assert!(!should_request_lock_in_attention(
+        Some(&draft_hover),
+        &draft_hover
+    ));
+
+    // Locking in (from hover or directly) triggers taskbar flash
+    assert!(should_request_lock_in_attention(
+        Some(&draft_hover),
+        &draft_locked
+    ));
+    assert!(should_request_lock_in_attention(None, &draft_locked));
+
+    // Same locked champion with metadata/polling update must not re-trigger flash
+    assert!(!should_request_lock_in_attention(
+        Some(&draft_locked),
+        &draft_locked
+    ));
+    assert!(!should_request_lock_in_attention(
+        Some(&draft_locked),
+        &draft_locked_metadata_update
+    ));
+
+    // Trading/swapping into a different locked champion triggers flash
+    assert!(should_request_lock_in_attention(
+        Some(&draft_locked),
+        &draft_traded
+    ));
+
+    // Practice Tool: hovering does not flash, locking in does
+    let practice_hover = ChampSelectedPayload {
+        champion_id: 103,
+        queue_id: QUEUE_PRACTICE_TOOL,
+        queue_mode: QueueMode::PracticeTool,
+        locked_in: false,
+        assigned_position: None,
+    };
+    let practice_locked = ChampSelectedPayload {
+        locked_in: true,
+        ..practice_hover.clone()
+    };
+    assert!(!should_request_lock_in_attention(None, &practice_hover));
+    assert!(should_request_lock_in_attention(
+        Some(&practice_hover),
+        &practice_locked
+    ));
+
+    // ARAM / ARAM Mayhem: entering and bench-swapping trigger flash
+    let aram_initial = ChampSelectedPayload {
+        champion_id: 222,
+        queue_id: QUEUE_ARAM,
+        queue_mode: QueueMode::Aram,
+        locked_in: true,
+        assigned_position: None,
+    };
+    let aram_mayhem_swapped = ChampSelectedPayload {
+        champion_id: 18,
+        queue_id: QUEUE_ARAM_MAYHEM,
+        queue_mode: QueueMode::AramMayhem,
+        locked_in: true,
+        assigned_position: None,
+    };
+    assert!(should_request_lock_in_attention(None, &aram_initial));
+    assert!(should_request_lock_in_attention(
+        Some(&aram_initial),
+        &aram_mayhem_swapped
+    ));
+}
+
+#[test]
 fn test_extract_champ_select_timer_and_finalization_window() {
     let session_early = serde_json::json!({
         "timer": {

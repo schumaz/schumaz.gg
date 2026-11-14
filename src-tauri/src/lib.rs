@@ -7,7 +7,15 @@ pub mod profile_provider;
 pub mod ws_listener;
 
 use specta_typescript::Typescript;
+use tauri::Manager;
 use tauri_specta::{Builder, collect_commands, collect_events};
+
+/// Flashes the Windows taskbar icon continuously until the user clicks/focuses the window.
+pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+    }
+}
 
 pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
@@ -56,6 +64,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Focused(true)) {
+                let _ = window.request_user_attention(None);
+            }
+        })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

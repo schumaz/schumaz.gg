@@ -67,6 +67,7 @@ impl FinalReconcileGateway for MockGateway {
 struct MockEmitter {
     events: tokio::sync::Mutex<Vec<String>>,
     reconciled_payloads: tokio::sync::Mutex<Vec<ChampSelectReconciledPayload>>,
+    attention_requests: AtomicUsize,
 }
 
 impl ReconcileEventEmitter for MockEmitter {
@@ -104,6 +105,10 @@ impl ReconcileEventEmitter for MockEmitter {
         if let Ok(mut guard) = self.events.try_lock() {
             guard.push("champ-select-ended".to_string());
         }
+    }
+
+    fn request_lock_in_attention(&self) {
+        self.attention_requests.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -168,6 +173,7 @@ async fn test_reconcile_detects_champion_divergence_after_rapid_aram_bench_swap(
     );
     assert_eq!(gateway.cleared_count.load(Ordering::SeqCst), 1);
     assert_eq!(gateway.cancelled_count.load(Ordering::SeqCst), 1);
+    assert_eq!(emitter.attention_requests.load(Ordering::SeqCst), 1);
     assert_eq!(
         gateway.reinject_calls.lock().await.as_slice(),
         &[(222, QUEUE_ARAM, true)]
@@ -251,8 +257,9 @@ async fn test_reconcile_same_champion_preserves_selections_and_respects_aram_may
             cleared_selections: false,
         }
     );
-    // Must preserve manual selections when champion did not diverge
+    // Must preserve manual selections when champion did not diverge and must not re-flash taskbar
     assert_eq!(gateway.cleared_count.load(Ordering::SeqCst), 0);
+    assert_eq!(emitter.attention_requests.load(Ordering::SeqCst), 0);
     assert_eq!(
         gateway.reinject_calls.lock().await.as_slice(),
         &[(103, QUEUE_ARAM_MAYHEM, false)]
@@ -264,6 +271,7 @@ async fn test_reconcile_same_champion_preserves_selections_and_respects_aram_may
         .unwrap();
     assert_eq!(second, FinalReconcileOutcome::AlreadyReconciled);
     assert_eq!(gateway.reinject_calls.lock().await.len(), 1);
+    assert_eq!(emitter.attention_requests.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -326,8 +334,9 @@ async fn test_reconcile_detects_ui_only_divergence_and_resyncs_without_clearing_
             cleared_selections: false,
         }
     );
-    // Selections belong to Yasuo (backend already moved to Yasuo), so don't wipe them
+    // Selections belong to Yasuo (backend already moved to Yasuo), so don't wipe them or re-flash taskbar
     assert_eq!(gateway.cleared_count.load(Ordering::SeqCst), 0);
+    assert_eq!(emitter.attention_requests.load(Ordering::SeqCst), 0);
     assert_eq!(
         gateway.reinject_calls.lock().await.as_slice(),
         &[(157, QUEUE_SOLO_DUO, true)]

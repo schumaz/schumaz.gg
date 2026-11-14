@@ -273,10 +273,14 @@ async fn handle_session_transition(
 ) {
     match transition {
         WsSessionTransition::Active(payload) => {
-            let should_spawn = {
+            let (should_spawn, should_notify_lock) = {
                 let mut state_guard = state_ref.lock().await;
                 let current_opt = Some(payload.clone());
                 if should_emit_champ_select(&state_guard.last_payload, &current_opt) {
+                    let notify_lock = should_request_lock_in_attention(
+                        state_guard.last_payload.as_ref(),
+                        &payload,
+                    );
                     let champion_changed = state_guard
                         .last_payload
                         .as_ref()
@@ -287,11 +291,18 @@ async fn handle_session_transition(
                     }
                     let _ = models::ChampSelected(payload.clone()).emit(handle);
                     state_guard.record_processed(payload.clone());
-                    payload.locked_in || payload.queue_mode == QueueMode::PracticeTool
+                    (
+                        payload.locked_in || payload.queue_mode == QueueMode::PracticeTool,
+                        notify_lock,
+                    )
                 } else {
-                    false
+                    (false, false)
                 }
             };
+
+            if should_notify_lock {
+                crate::request_taskbar_attention(handle);
+            }
 
             if should_spawn {
                 let handle_for_inject = handle.clone();
