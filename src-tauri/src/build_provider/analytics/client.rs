@@ -5,9 +5,36 @@ use super::super::fallback::{
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
 use super::rest_parser::parse_opgg_analysis_payload_with_options;
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
+use std::time::{Duration, Instant};
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
 pub const OPGG_REST_API_BASE: &str = "https://lol-api-champion.op.gg/api";
+
+type VersionsCacheMap = HashMap<String, (Instant, Vec<String>)>;
+
+static SHARED_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static OPGG_VERSIONS_CACHE: OnceLock<RwLock<VersionsCacheMap>> = OnceLock::new();
+
+const VERSIONS_CACHE_TTL: Duration = Duration::from_secs(600);
+
+/// Returns a shared, connection-pooled `reqwest::Client` with bounded timeouts.
+pub fn shared_http_client() -> &'static reqwest::Client {
+    SHARED_HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(8)
+            .connect_timeout(Duration::from_secs(3))
+            .timeout(Duration::from_secs(10))
+            .tcp_keepalive(Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
+
+fn get_versions_cache() -> &'static RwLock<VersionsCacheMap> {
+    OPGG_VERSIONS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
 
 pub async fn fetch_opgg_champion_analysis(
     client: &reqwest::Client,
@@ -115,12 +142,20 @@ pub async fn get_recommended_build_with_endpoint(
     build
 }
 
-/// Fetches available patch versions from the OP.GG REST API.
+/// Fetches available patch versions from the OP.GG REST API with in-memory TTL caching.
 pub async fn fetch_opgg_versions_from_base(
     client: &reqwest::Client,
     rest_base: &str,
     region: &str,
 ) -> Vec<String> {
+    let cache_key = format!("{}:{}", rest_base, region);
+    if let Ok(guard) = get_versions_cache().read()
+        && let Some((ts, cached)) = guard.get(&cache_key)
+        && ts.elapsed() < VERSIONS_CACHE_TTL
+    {
+        return cached.clone();
+    }
+
     let url = format!("{}/{}/champions/ranked/versions", rest_base, region);
     if let Ok(res) = client.get(&url).send().await
         && let Ok(json) = res.json::<serde_json::Value>().await
@@ -131,6 +166,9 @@ pub async fn fetch_opgg_versions_from_base(
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect();
         if !vers.is_empty() {
+            if let Ok(mut guard) = get_versions_cache().write() {
+                guard.insert(cache_key, (Instant::now(), vers.clone()));
+            }
             return vers;
         }
     }

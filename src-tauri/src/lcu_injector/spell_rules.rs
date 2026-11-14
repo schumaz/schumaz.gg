@@ -95,6 +95,43 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_flash_key_preference_aram_and_numeric_opgg_pairs() {
+        // OP.GG numerically ordered [1, 4] (Cleanse + Flash) and [3, 4] (Exhaust + Flash)
+        assert_eq!(
+            apply_flash_key_preference(1, 4, FlashKeyPreference::D),
+            (4, 1)
+        );
+        assert_eq!(
+            apply_flash_key_preference(3, 4, FlashKeyPreference::D),
+            (4, 3)
+        );
+        assert_eq!(
+            apply_flash_key_preference(1, 4, FlashKeyPreference::F),
+            (1, 4)
+        );
+
+        // ARAM Mark (32) + Flash (4) must never leave Mark in slot 1 when Flash is on D
+        assert_eq!(
+            apply_flash_key_preference(32, 4, FlashKeyPreference::D),
+            (4, 32)
+        );
+        assert_eq!(
+            apply_flash_key_preference(4, 32, FlashKeyPreference::F),
+            (32, 4)
+        );
+
+        // ARAM Tristana Heal (7) / Barrier (21) + Flash (4)
+        assert_eq!(
+            apply_flash_key_preference(4, 7, FlashKeyPreference::D),
+            (4, 7)
+        );
+        assert_eq!(
+            apply_flash_key_preference(4, 7, FlashKeyPreference::F),
+            (7, 4)
+        );
+    }
+
+    #[test]
     fn test_apply_flash_key_preference_without_flash_preserves_order() {
         // Neither spell is Flash (e.g. Teleport 12 + Ignite 14) -> order preserved
         assert_eq!(

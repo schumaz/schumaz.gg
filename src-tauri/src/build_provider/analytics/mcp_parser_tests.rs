@@ -129,3 +129,34 @@ fn test_parse_opgg_mcp_text_with_tree_names_without_class_header_and_optional_ma
     assert!(!mayhem_build.supports_runes);
     assert!(mayhem_build.selected_perk_ids.is_empty());
 }
+
+#[test]
+fn test_parse_opgg_mcp_text_aram_tristana_multiple_spells_and_numeric_order() {
+    let text_tristana_aram = "class LolGetChampionAnalysis: data\nclass Data: summary,damage_type,core_items,boots,starter_items,summoner_spells\nclass SummonerSpells: ids,win,play\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(50000,0.53,0.09)),\"AD\",CoreItems([3032,6675,3031],5000,2700,0.2),CoreItems([3006],10000,5300,0.5),CoreItems([1038,2003],8000,4200,0.4),[SummonerSpells([4,21],9500,18000),SummonerSpells([4,7],17000,32000),SummonerSpells([32,4],2500,5000)]))";
+    let build = parse_opgg_mcp_text_with_options(text_tristana_aram, 18, "Tristana", false).expect(
+        "Parsing Tristana ARAM Mayhem MCP payload with multiple SummonerSpells should succeed",
+    );
+
+    // Most-played pair is Flash (4) + Heal (7) (play=32000), secondary choice is Barrier (21) (play=18000)
+    assert_eq!(build.spell1_id, 4);
+    assert_eq!(build.spell2_id, 7);
+    assert_eq!(
+        build.spell_choices.iter().map(|s| s.id).collect::<Vec<_>>(),
+        vec![7, 21]
+    );
+
+    // Numerically-ordered pair [3, 4] (Exhaust + Flash) normalizes Flash into spell1_id
+    let text_numeric_order = "class LolGetChampionAnalysis: data\nclass SummonerSpells: ids,play,win\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(50000,0.53,0.09)),\"AP\",CoreItems([6655,4646,4645],5000,2700,0.2),CoreItems([3020],10000,5300,0.5),CoreItems([3802,2003],8000,4200,0.4),[SummonerSpells([3,4],25000,13000),SummonerSpells([1,4],12000,6200)]))";
+    let numeric_build = parse_opgg_mcp_text_with_options(text_numeric_order, 103, "Ahri", false)
+        .expect("Parsing numeric-ordered MCP spells should succeed");
+    assert_eq!(numeric_build.spell1_id, 4);
+    assert_eq!(numeric_build.spell2_id, 3);
+    assert_eq!(
+        numeric_build
+            .spell_choices
+            .iter()
+            .map(|s| s.id)
+            .collect::<Vec<_>>(),
+        vec![3, 1]
+    );
+}

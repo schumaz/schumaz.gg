@@ -96,9 +96,9 @@ pub async fn inject_item_build(
     };
     let resolved_queue_id = normalize_item_build_queue_id(queue_id, lcu_queue_id);
 
-    let client = reqwest::Client::new();
+    let client = build_provider::shared_http_client();
     let build =
-        build_provider::get_recommended_build(&client, champion_id, resolved_queue_id).await?;
+        build_provider::get_recommended_build(client, champion_id, resolved_queue_id).await?;
 
     lcu_injector::inject_item_sets(&conn, summoner.summoner_id, &build).await
 }

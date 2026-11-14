@@ -1,9 +1,11 @@
 ﻿use super::items::*;
 use super::models::*;
+use crate::lcu_injector::FlashKeyPreference;
 use std::collections::HashMap;
 
 pub const DDRAGON_BASE_URL: &str = "https://ddragon.leagueoflegends.com";
-pub static DDRAGON_CACHE: tokio::sync::OnceCell<DataDragonCache> = tokio::sync::OnceCell::const_new();
+pub static DDRAGON_CACHE: tokio::sync::OnceCell<DataDragonCache> =
+    tokio::sync::OnceCell::const_new();
 
 /// Returns metadata for a known stat shard ID if valid.
 pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
@@ -64,18 +66,19 @@ pub fn resolve_rune_metadata(runes_map: &HashMap<i32, RuneMetadata>, perk_id: i3
     }
 }
 
-/// Resolves summoner spell metadata and official Riot CDN icon.
+/// Resolves summoner spell metadata and official Riot CDN icon (official PT-BR fallback).
 pub fn get_spell_metadata(version: &str, spell_id: i32) -> SpellMetadata {
     let (name, icon_name) = match spell_id {
         4 => ("Flash", "SummonerFlash"),
         14 => ("Incendiar", "SummonerDot"),
-        12 => ("Teletransporte", "SummonerTeleport"),
+        12 => ("Teleporte", "SummonerTeleport"),
         11 => ("Golpear", "SummonerSmite"),
         7 => ("Curar", "SummonerHeal"),
         21 => ("Barreira", "SummonerBarrier"),
         3 => ("Exaustão", "SummonerExhaust"),
         6 => ("Fantasma", "SummonerHaste"),
         1 => ("Purificar", "SummonerBoost"),
+        13 => ("Clareza", "SummonerMana"),
         32 => ("Marca", "SummonerSnowball"),
         _ => ("Feitiço", "SummonerFlash"),
     };
@@ -89,8 +92,124 @@ pub fn get_spell_metadata(version: &str, spell_id: i32) -> SpellMetadata {
     }
 }
 
-/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items).
-pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCache) {
+/// Resolves summoner spell metadata preferring DataDragon `pt_BR/summoner.json` when available,
+/// falling back to the built-in official PT-BR catalog.
+pub fn resolve_spell_metadata(cache: &DataDragonCache, spell_id: i32) -> SpellMetadata {
+    if let Some(meta) = cache.spells.get(&spell_id) {
+        return meta.clone();
+    }
+    get_spell_metadata(&cache.version, spell_id)
+}
+
+/// Parses DataDragon `pt_BR/summoner.json` into a lookup map keyed by numeric spell ID.
+pub fn parse_ddragon_summoners(
+    summoners_json: &serde_json::Value,
+    version: &str,
+) -> Result<HashMap<i32, SpellMetadata>, String> {
+    let data_map = summoners_json
+        .get("data")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| "Missing 'data' object in DataDragon summoner.json".to_string())?;
+
+    let mut map = HashMap::with_capacity(data_map.len());
+    for (fallback_id, spell_data) in data_map {
+        let key_str = spell_data.get("key").and_then(|k| k.as_str()).unwrap_or("");
+        if let Ok(spell_id) = key_str.parse::<i32>() {
+            let name = spell_data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(fallback_id);
+            let image_full = spell_data
+                .pointer("/image/full")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("{}.png", fallback_id));
+
+            map.insert(
+                spell_id,
+                SpellMetadata {
+                    id: spell_id,
+                    name: name.to_string(),
+                    icon_url: format!(
+                        "https://ddragon.leagueoflegends.com/cdn/{}/img/spell/{}",
+                        version, image_full
+                    ),
+                },
+            );
+        }
+    }
+
+    Ok(map)
+}
+
+/// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots
+/// and enriches `spells` and `spell_choices` using DataDragon cache.
+pub fn apply_build_spells_with_preference(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    flash_key: FlashKeyPreference,
+) {
+    let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
+    let (s1, s2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
+        build.spell1_id,
+        build.spell2_id,
+        flash_key,
+        is_jungle,
+    );
+    build.spell1_id = s1;
+    build.spell2_id = s2;
+
+    build.spells = vec![
+        resolve_spell_metadata(cache, build.spell1_id),
+        resolve_spell_metadata(cache, build.spell2_id),
+    ];
+
+    if build.spell_choices.is_empty() {
+        let non_primary = if is_jungle {
+            if build.spell1_id == 11 {
+                build.spell2_id
+            } else {
+                build.spell1_id
+            }
+        } else if build.spell1_id == 4 {
+            build.spell2_id
+        } else {
+            build.spell1_id
+        };
+        let second_alt = if is_jungle {
+            if non_primary == 4 { 6 } else { 4 }
+        } else if non_primary == 21 {
+            3
+        } else if non_primary == 7 {
+            21
+        } else if non_primary == 32 {
+            7
+        } else if non_primary == 14 {
+            12
+        } else {
+            14
+        };
+        build.spell_choices = vec![
+            resolve_spell_metadata(cache, non_primary),
+            resolve_spell_metadata(cache, second_alt),
+        ];
+    } else {
+        build.spell_choices = build
+            .spell_choices
+            .iter()
+            .map(|s| resolve_spell_metadata(cache, s.id))
+            .collect();
+    }
+}
+
+/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items)
+/// using an explicit `FlashKeyPreference`.
+pub fn enrich_build_with_ddragon_with_flash_key(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    flash_key: FlashKeyPreference,
+) {
     if let Some(champ) = cache.champions.get(&build.champion_id) {
         build.champion_icon_url = champ.icon_url.clone();
         if build.champion_name.is_empty() || build.champion_name == "Unknown" {
@@ -134,61 +253,7 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
             .collect();
     }
 
-    // If position is jungle, ensure Smite (11) is placed in the build's spells
-    if build.active_position.eq_ignore_ascii_case("jungle") {
-        let prefs = crate::lcu_injector::get_user_preferences();
-        let (s1, s2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
-            build.spell1_id,
-            build.spell2_id,
-            prefs.flash_key,
-            true,
-        );
-        build.spell1_id = s1;
-        build.spell2_id = s2;
-    }
-
-    build.spells = vec![
-        get_spell_metadata(&cache.version, build.spell1_id),
-        get_spell_metadata(&cache.version, build.spell2_id),
-    ];
-
-    if build.spell_choices.is_empty() {
-        let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
-        let non_primary = if is_jungle {
-            if build.spell1_id == 11 {
-                build.spell2_id
-            } else {
-                build.spell1_id
-            }
-        } else {
-            if build.spell1_id == 4 {
-                build.spell2_id
-            } else {
-                build.spell1_id
-            }
-        };
-        let second_alt = if is_jungle {
-            if non_primary == 4 { 6 } else { 4 }
-        } else {
-            if non_primary == 21 {
-                3
-            } else if non_primary == 14 {
-                12
-            } else {
-                14
-            }
-        };
-        build.spell_choices = vec![
-            get_spell_metadata(&cache.version, non_primary),
-            get_spell_metadata(&cache.version, second_alt),
-        ];
-    } else {
-        build.spell_choices = build
-            .spell_choices
-            .iter()
-            .map(|s| get_spell_metadata(&cache.version, s.id))
-            .collect();
-    }
+    apply_build_spells_with_preference(build, cache, flash_key);
 
     for block in &mut build.item_blocks {
         block.item_icon_urls = block
@@ -261,6 +326,12 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
             })
             .collect();
     }
+}
+
+/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items).
+pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCache) {
+    let prefs = crate::lcu_injector::get_user_preferences();
+    enrich_build_with_ddragon_with_flash_key(build, cache, prefs.flash_key);
 }
 
 /// Parses the latest DataDragon version string from `/api/versions.json`.
@@ -525,46 +596,66 @@ pub async fn load_ddragon_cache_from_base_url(
 
     let version = parse_latest_ddragon_version(&versions_res)?;
 
-    // 2. Fetch champions
+    // 2. Fetch champions, runes, items, and summoner spells concurrently in pt_BR
     let champions_url = format!("{}/cdn/{}/data/pt_BR/champion.json", base_url, version);
-    let champions_res: serde_json::Value = client
-        .get(&champions_url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch champion.json: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse champion.json: {}", e))?;
-
-    let champions = parse_all_ddragon_champions(&champions_res, &version)?;
-
-    // 3. Fetch runes
     let runes_url = format!("{}/cdn/{}/data/pt_BR/runesReforged.json", base_url, version);
-    let runes_res: serde_json::Value = client
-        .get(&runes_url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch runesReforged.json: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse runesReforged.json: {}", e))?;
-
-    let runes = parse_ddragon_runes(&runes_res)?;
-
-    // 4. Dynamically fetch and index item.json for future-proof patch adaptation (fail-safe)
     let items_url = format!("{}/cdn/{}/data/pt_BR/item.json", base_url, version);
-    if let Ok(res) = client.get(&items_url).send().await
-        && res.status().is_success()
-        && let Ok(items_res) = res.json::<serde_json::Value>().await
-    {
-        let classification = parse_ddragon_item_classifications(&items_res);
-        set_dynamic_item_classifications(classification);
-    }
+    let summoners_url = format!("{}/cdn/{}/data/pt_BR/summoner.json", base_url, version);
+
+    let champions_fut = async {
+        client
+            .get(&champions_url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch champion.json: {}", e))?
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| format!("Failed to parse champion.json: {}", e))
+    };
+
+    let runes_fut = async {
+        client
+            .get(&runes_url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch runesReforged.json: {}", e))?
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| format!("Failed to parse runesReforged.json: {}", e))
+    };
+
+    let items_fut = async {
+        if let Ok(res) = client.get(&items_url).send().await
+            && res.status().is_success()
+            && let Ok(items_res) = res.json::<serde_json::Value>().await
+        {
+            let classification = parse_ddragon_item_classifications(&items_res);
+            set_dynamic_item_classifications(classification);
+        }
+    };
+
+    let summoners_fut = async {
+        if let Ok(res) = client.get(&summoners_url).send().await
+            && res.status().is_success()
+            && let Ok(summoners_res) = res.json::<serde_json::Value>().await
+            && let Ok(parsed_spells) = parse_ddragon_summoners(&summoners_res, &version)
+        {
+            return parsed_spells;
+        }
+        HashMap::new()
+    };
+
+    let (champions_res, runes_res, (), spells) =
+        tokio::join!(champions_fut, runes_fut, items_fut, summoners_fut);
+
+    let champions = parse_all_ddragon_champions(&champions_res?, &version)?;
+    let runes = parse_ddragon_runes(&runes_res?)?;
 
     Ok(DataDragonCache {
         version,
         champions,
         runes,
+        spells,
     })
 }
 
@@ -578,7 +669,6 @@ pub async fn get_or_init_ddragon_cache(
         })
         .await
 }
-
 
 #[cfg(test)]
 #[path = "ddragon_tests.rs"]

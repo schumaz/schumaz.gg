@@ -66,6 +66,16 @@ pub fn run() {
                 ws_listener::start_ws_listener(ws_handle).await;
             });
 
+            // Background task 3: Pre-warm DataDragon cache and OP.GG versions on startup
+            // so the first Champion Select has zero cold-start network latency.
+            tauri::async_runtime::spawn(async move {
+                let client = build_provider::shared_http_client();
+                let _ = tokio::join!(
+                    build_provider::get_or_init_ddragon_cache(client),
+                    build_provider::fetch_opgg_versions(client, "global"),
+                );
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

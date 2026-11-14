@@ -16,6 +16,56 @@ pub use patch::*;
 pub use runes::*;
 pub use spells::*;
 
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FastSpellRecommendation {
+    pub champion_id: i32,
+    pub spell1_id: i32,
+    pub spell2_id: i32,
+    pub is_jungle: bool,
+}
+
+const BUILD_CACHE_TTL: Duration = Duration::from_secs(600);
+const MCP_DEPTH_TIMEOUT: Duration = Duration::from_millis(2500);
+
+static BUILD_CACHE: OnceLock<RwLock<HashMap<String, (Instant, ChampionBuild)>>> = OnceLock::new();
+
+fn get_build_cache() -> &'static RwLock<HashMap<String, (Instant, ChampionBuild)>> {
+    BUILD_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn extract_fast_spells_from_rest(
+    json_res: &serde_json::Value,
+    champion_id: i32,
+    is_jungle: bool,
+) -> Option<FastSpellRecommendation> {
+    let analysis = json_res
+        .get("data")
+        .or_else(|| json_res.pointer("/result/data"))
+        .unwrap_or(json_res);
+    let has_spells = analysis
+        .get("summoner_spells")
+        .or_else(|| analysis.get("spells"))
+        .is_some();
+    if !has_spells {
+        return None;
+    }
+    let ((s1, s2), _) = extract_summoner_spell_choices(analysis, is_jungle);
+    if s1 > 0 && s2 > 0 && s1 != s2 {
+        Some(FastSpellRecommendation {
+            champion_id,
+            spell1_id: s1,
+            spell2_id: s2,
+            is_jungle,
+        })
+    } else {
+        None
+    }
+}
+
 pub async fn get_recommended_build_with_filters(
     client: &reqwest::Client,
     champion_id: i32,
@@ -25,8 +75,32 @@ pub async fn get_recommended_build_with_filters(
     region: Option<&str>,
     patch: Option<&str>,
 ) -> Result<ChampionBuild, String> {
+    get_recommended_build_with_filters_and_fast_spells(
+        client,
+        champion_id,
+        queue_id,
+        position,
+        tier,
+        region,
+        patch,
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn get_recommended_build_with_filters_and_fast_spells(
+    client: &reqwest::Client,
+    champion_id: i32,
+    queue_id: i32,
+    position: Option<&str>,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+    fast_spells_tx: Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
+) -> Result<ChampionBuild, String> {
     let ddragon_cache = get_or_init_ddragon_cache(client).await?;
-    get_recommended_build_with_filters_and_endpoints(
+    get_recommended_build_with_filters_and_endpoints_internal(
         client,
         champion_id,
         queue_id,
@@ -37,6 +111,7 @@ pub async fn get_recommended_build_with_filters(
         ddragon_cache,
         OPGG_REST_API_BASE,
         OPGG_MCP_ENDPOINT,
+        fast_spells_tx,
     )
     .await
 }
@@ -54,6 +129,36 @@ pub async fn get_recommended_build_with_filters_and_endpoints(
     rest_base: &str,
     mcp_endpoint: &str,
 ) -> Result<ChampionBuild, String> {
+    get_recommended_build_with_filters_and_endpoints_internal(
+        client,
+        champion_id,
+        queue_id,
+        position,
+        tier,
+        region,
+        patch,
+        ddragon_cache,
+        rest_base,
+        mcp_endpoint,
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn get_recommended_build_with_filters_and_endpoints_internal(
+    client: &reqwest::Client,
+    champion_id: i32,
+    queue_id: i32,
+    position: Option<&str>,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+    ddragon_cache: &DataDragonCache,
+    rest_base: &str,
+    mcp_endpoint: &str,
+    mut fast_spells_tx: Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
+) -> Result<ChampionBuild, String> {
     let champ_name = ddragon_cache
         .champions
         .get(&champion_id)
@@ -66,14 +171,48 @@ pub async fn get_recommended_build_with_filters_and_endpoints(
     let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
     let target_region = region.unwrap_or("global");
     let target_tier = tier.unwrap_or("emerald_plus");
+    let pos_cache_key = if is_aram {
+        ""
+    } else {
+        position.unwrap_or("").trim()
+    };
+    let build_cache_key = format!(
+        "{}:{}:{}:{}:{}:{}:{}:{}",
+        rest_base,
+        mcp_endpoint,
+        champion_id,
+        queue_id,
+        pos_cache_key,
+        target_tier,
+        target_region,
+        patch.unwrap_or("").trim()
+    );
 
-    // 1. Fetch available versions for region
+    if let Ok(guard) = get_build_cache().read()
+        && let Some((ts, cached)) = guard.get(&build_cache_key)
+        && ts.elapsed() < BUILD_CACHE_TTL
+    {
+        let mut build = cached.clone();
+        let prefs = crate::lcu_injector::get_user_preferences();
+        apply_build_spells_with_preference(&mut build, ddragon_cache, prefs.flash_key);
+        if let Some(tx) = fast_spells_tx.take() {
+            let _ = tx.send(FastSpellRecommendation {
+                champion_id,
+                spell1_id: build.spell1_id,
+                spell2_id: build.spell2_id,
+                is_jungle: build.active_position.eq_ignore_ascii_case("jungle"),
+            });
+        }
+        return Ok(build);
+    }
+
+    // 1. Fetch available versions for region (cached in memory after first fetch)
     let available_versions = fetch_opgg_versions_from_base(client, rest_base, target_region).await;
 
-    // 2. Determine effective patch (2-day volume protection rule)
+    // 2. Determine initial effective patch
     let (mut effective_patch, mut patch_fallback_applied) = if let Some(p) = patch {
         if !p.trim().is_empty() {
-            (p.to_string(), false)
+            (p.trim().to_string(), false)
         } else {
             (
                 available_versions.first().cloned().unwrap_or_default(),
@@ -110,15 +249,98 @@ pub async fn get_recommended_build_with_filters_and_endpoints(
         };
         Some(resolved)
     };
+    let is_jungle = target_position
+        .as_deref()
+        .is_some_and(|p| p.eq_ignore_ascii_case("jungle"));
 
     let now_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // If user did not manually specify a patch, inspect the latest patch's created_at
-    if (patch.is_none() || patch.unwrap_or("").is_empty())
-        && let Ok(probe_json) = fetch_opgg_rest_champion_analysis_from_base(
+    // 3. Start slow MCP depth item enrichment concurrently with a bounded timeout so it never
+    //    blocks fast REST spell resolution or stalls Champ Select updates.
+    let mcp_client = client.clone();
+    let mcp_url = mcp_endpoint.to_string();
+    let mcp_champ = champ_name.to_string();
+    let mcp_mode = mode.to_string();
+    let mcp_pos = target_position.clone();
+    let mcp_tier = target_tier.to_string();
+    let mcp_depth_handle = tokio::spawn(async move {
+        tokio::time::timeout(
+            MCP_DEPTH_TIMEOUT,
+            fetch_opgg_mcp_depth_items(
+                &mcp_client,
+                &mcp_url,
+                &mcp_champ,
+                &mcp_mode,
+                mcp_pos.as_deref(),
+                &mcp_tier,
+            ),
+        )
+        .await
+        .ok()
+        .and_then(|res| res.ok())
+    });
+
+    // 4. Fetch REST analysis (single request when latest patch is mature; avoids duplicate fetch)
+    let rest_res = if patch.is_none() || patch.unwrap_or("").trim().is_empty() {
+        let probe_res = fetch_opgg_rest_champion_analysis_from_base(
+            client,
+            rest_base,
+            target_region,
+            mode,
+            champion_id,
+            target_position.as_deref(),
+            target_tier,
+            Some(&effective_patch),
+        )
+        .await;
+
+        match probe_res {
+            Ok(probe_json) => {
+                let created_at_iso = probe_json
+                    .pointer("/data/trends/win/0/created_at")
+                    .and_then(|v| v.as_str());
+                let prev_patch_created_at_iso = probe_json
+                    .pointer("/data/trends/win/1/created_at")
+                    .and_then(|v| v.as_str());
+                let play_count = probe_json
+                    .pointer("/data/summary/average_stats/play")
+                    .or_else(|| probe_json.pointer("/data/average_stats/play"))
+                    .and_then(|v| v.as_u64());
+
+                let (chosen_patch, fallback) = select_effective_patch_with_volume(
+                    &available_versions,
+                    created_at_iso,
+                    prev_patch_created_at_iso,
+                    play_count,
+                    now_unix,
+                    None,
+                );
+                effective_patch = chosen_patch;
+                patch_fallback_applied = fallback;
+
+                if fallback {
+                    fetch_opgg_rest_champion_analysis_from_base(
+                        client,
+                        rest_base,
+                        target_region,
+                        mode,
+                        champion_id,
+                        target_position.as_deref(),
+                        target_tier,
+                        Some(&effective_patch),
+                    )
+                    .await
+                } else {
+                    Ok(probe_json)
+                }
+            }
+            Err(e) => Err(e),
+        }
+    } else {
+        fetch_opgg_rest_champion_analysis_from_base(
             client,
             rest_base,
             target_region,
@@ -129,50 +351,17 @@ pub async fn get_recommended_build_with_filters_and_endpoints(
             Some(&effective_patch),
         )
         .await
-    {
-        let created_at_iso = probe_json
-            .pointer("/data/trends/win/0/created_at")
-            .and_then(|v| v.as_str());
-        let prev_patch_created_at_iso = probe_json
-            .pointer("/data/trends/win/1/created_at")
-            .and_then(|v| v.as_str());
-        let play_count = probe_json
-            .pointer("/data/summary/average_stats/play")
-            .or_else(|| probe_json.pointer("/data/average_stats/play"))
-            .and_then(|v| v.as_u64());
+    };
 
-        let (chosen_patch, fallback) = select_effective_patch_with_volume(
-            &available_versions,
-            created_at_iso,
-            prev_patch_created_at_iso,
-            play_count,
-            now_unix,
-            None,
-        );
-        effective_patch = chosen_patch;
-        patch_fallback_applied = fallback;
+    // Emit fast spell recommendation IMMEDIATELY upon REST completion before awaiting MCP depth items!
+    if let Ok(ref json_res) = rest_res
+        && let Some(fast) = extract_fast_spells_from_rest(json_res, champion_id, is_jungle)
+        && let Some(tx) = fast_spells_tx.take()
+    {
+        let _ = tx.send(fast);
     }
 
-    // 3. Fetch build with effective patch (and enrich with MCP fourth/fifth/sixth item lists)
-    let mcp_depth_fut = fetch_opgg_mcp_depth_items(
-        client,
-        mcp_endpoint,
-        champ_name,
-        mode,
-        target_position.as_deref(),
-        target_tier,
-    );
-    let rest_fut = fetch_opgg_rest_champion_analysis_from_base(
-        client,
-        rest_base,
-        target_region,
-        mode,
-        champion_id,
-        target_position.as_deref(),
-        target_tier,
-        Some(&effective_patch),
-    );
-    let (rest_res, mcp_depth_res) = tokio::join!(rest_fut, mcp_depth_fut);
+    let mcp_depth_opt = mcp_depth_handle.await.ok().flatten();
 
     let mut build = match rest_res {
         Ok(mut json_res) => {
@@ -181,7 +370,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints(
             {
                 data_obj.insert("position".to_string(), serde_json::json!(pos));
             }
-            if let Ok((fourth, fifth, sixth)) = mcp_depth_res
+            if let Some((fourth, fifth, sixth)) = mcp_depth_opt
                 && let Some(data_obj) = json_res.get_mut("data").and_then(|d| d.as_object_mut())
             {
                 let to_json_arr = |entries: Vec<ItemStatEntry>| -> serde_json::Value {
@@ -249,6 +438,20 @@ pub async fn get_recommended_build_with_filters_and_endpoints(
     build.supports_runes = supports_runes;
 
     enrich_build_with_ddragon(&mut build, ddragon_cache);
+
+    if let Some(tx) = fast_spells_tx.take() {
+        let _ = tx.send(FastSpellRecommendation {
+            champion_id,
+            spell1_id: build.spell1_id,
+            spell2_id: build.spell2_id,
+            is_jungle,
+        });
+    }
+
+    if let Ok(mut guard) = get_build_cache().write() {
+        guard.insert(build_cache_key, (Instant::now(), build.clone()));
+    }
+
     Ok(build)
 }
 
@@ -292,6 +495,7 @@ mod tests {
             version: "16.22.1".to_string(),
             champions,
             runes: HashMap::new(),
+            spells: HashMap::new(),
         }
     }
 
@@ -343,7 +547,11 @@ mod tests {
                     "damage_type": "AD",
                     "summary": { "average_stats": { "win_rate": 0.53, "pick_rate": 0.08, "play": 50000 } },
                     "runes": [],
-                    "summoner_spells": [{ "ids": [4, 7], "play": 32000, "win": 17000 }],
+                    "summoner_spells": [
+                        { "ids": [4, 7], "play": 32000, "win": 17000 },
+                        { "ids": [4, 21], "play": 18000, "win": 9500 },
+                        { "ids": [4, 32], "play": 5000, "win": 2500 }
+                    ],
                     "starter_items": [{ "ids": [1038, 2003], "play": 27000, "win": 14400 }],
                     "boots": [{ "ids": [3006], "play": 40000, "win": 21000 }],
                     "core_items": [{ "ids": [3032, 6675, 3031], "play": 18000, "win": 9500 }],
@@ -419,6 +627,14 @@ mod tests {
         assert!(!mayhem_build.supports_runes);
         assert_eq!(mayhem_build.spell1_id, 4);
         assert_eq!(mayhem_build.spell2_id, 7);
+        assert_eq!(
+            mayhem_build
+                .spell_choices
+                .iter()
+                .map(|s| s.id)
+                .collect::<Vec<_>>(),
+            vec![7, 21]
+        );
 
         // Classic ARAM (450): even with incoming position Some("mid"), it is ignored, runes are supported, active_position == ""
         let aram_build = get_recommended_build_with_filters_and_endpoints(
@@ -440,5 +656,116 @@ mod tests {
         assert!(aram_build.supports_runes);
         assert_eq!(aram_build.primary_style_id, 8100);
         assert_eq!(aram_build.sub_style_id, 8200);
+    }
+
+    #[tokio::test]
+    async fn test_fast_spells_channel_resolves_without_waiting_for_slow_mcp_and_avoids_duplicate_rest()
+     {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": ["16.22", "16.21"]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // REST should only be called ONCE (reusing probe response when patch fallback is not needed)
+        Mock::given(method("GET"))
+            .and(path("/global/champions/aram/18/none"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "damage_type": "AD",
+                    "summary": { "average_stats": { "win_rate": 0.53, "pick_rate": 0.08, "play": 50000 } },
+                    "runes": [{
+                        "primary_page_id": 8000,
+                        "secondary_page_id": 8100,
+                        "primary_rune_ids": [8008, 9111, 9104, 8014],
+                        "secondary_rune_ids": [8139, 8135],
+                        "stat_mod_ids": [5005, 5008, 5001],
+                        "play": 30000,
+                        "win": 16000
+                    }],
+                    "summoner_spells": [
+                        { "ids": [4, 7], "play": 35000, "win": 18500 },
+                        { "ids": [4, 21], "play": 18000, "win": 9500 }
+                    ],
+                    "starter_items": [{ "ids": [1038, 2003], "play": 27000, "win": 14400 }],
+                    "boots": [{ "ids": [3006], "play": 40000, "win": 21000 }],
+                    "core_items": [{ "ids": [3032, 6675, 3031], "play": 18000, "win": 9500 }],
+                    "last_items": [{ "ids": [3036], "play": 15000, "win": 8000 }]
+                }
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // Simulate a slow MCP endpoint (1200ms latency)
+        Mock::given(method("POST"))
+            .and(path("/mcp"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(1200))
+                    .set_body_json(serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "result": {
+                            "content": [{
+                                "type": "text",
+                                "text": "class LolGetChampionAnalysis: data\nclass Data: fourth_items\nLolGetChampionAnalysis(Data([FourthItem([3036],579,335,0.29)]))"
+                            }]
+                        }
+                    })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let cache = test_ddragon_cache();
+        let mcp_url = format!("{}/mcp", mock_server.uri());
+        let base_uri = mock_server.uri();
+        let (fast_tx, fast_rx) = tokio::sync::oneshot::channel();
+
+        let started = Instant::now();
+        let build_handle = tokio::spawn(async move {
+            get_recommended_build_with_filters_and_endpoints_internal(
+                &client,
+                18,
+                crate::ws_listener::QUEUE_ARAM,
+                None,
+                None,
+                None,
+                None,
+                &cache,
+                &base_uri,
+                &mcp_url,
+                Some(fast_tx),
+            )
+            .await
+        });
+
+        let fast_spells = fast_rx
+            .await
+            .expect("Fast spell channel should receive spells");
+        let fast_elapsed = started.elapsed();
+
+        assert_eq!(fast_spells.champion_id, 18);
+        assert_eq!(fast_spells.spell1_id, 4);
+        assert_eq!(fast_spells.spell2_id, 7);
+        assert!(!fast_spells.is_jungle);
+        assert!(
+            fast_elapsed < Duration::from_millis(600),
+            "Fast spells took {:?}, should NOT block on 1200ms MCP request!",
+            fast_elapsed
+        );
+
+        let build = build_handle
+            .await
+            .unwrap()
+            .expect("Full build should still complete");
+        assert_eq!(build.spell1_id, 4);
+        assert_eq!(build.spell2_id, 7);
     }
 }

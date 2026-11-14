@@ -1,7 +1,100 @@
 ﻿use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
 use super::super::runes::extract_all_mcp_runes;
+use super::super::spells::extract_summoner_spell_choices;
 use super::mcp_extractors::{extract_all_core_items_from_text, extract_mcp_grouped_item_lists};
+
+/// Extracts all `SummonerSpells(...)` entries from OP.GG MCP text into a JSON array
+/// compatible with `extract_summoner_spell_choices`.
+fn extract_mcp_summoner_spell_entries(
+    text: &str,
+    all_entries: &[ItemStatEntry],
+) -> serde_json::Value {
+    let spell_fields: Vec<&str> = if let Some(def_idx) = text.find("class SummonerSpells:") {
+        let line_rest = &text[def_idx + 21..];
+        let end_line = line_rest.find('\n').unwrap_or(line_rest.len());
+        line_rest[..end_line]
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let play_after_ids_idx = spell_fields
+        .iter()
+        .filter(|&&f| f != "ids" && f != "ids_names")
+        .position(|&f| f == "play");
+
+    let mut spell_combos: Vec<serde_json::Value> = Vec::new();
+    let mut search_slice = text;
+    while let Some(ss_idx) = search_slice.find("SummonerSpells(") {
+        let after_ss = &search_slice[ss_idx + 15..];
+        let Some((o, c)) = after_ss
+            .find('[')
+            .zip(after_ss.find(']'))
+            .filter(|(open, close)| open < close)
+        else {
+            break;
+        };
+
+        let ids: Vec<i32> = after_ss[o + 1..c]
+            .split(',')
+            .filter_map(|s| s.trim().parse::<i32>().ok())
+            .collect();
+
+        let rest_after_bracket = &after_ss[c + 1..];
+        let mut play = 1i64;
+        if let Some(close_paren) = rest_after_bracket.find(')') {
+            let stats_nums: Vec<i64> = rest_after_bracket[..close_paren]
+                .trim_start_matches(',')
+                .split(',')
+                .filter_map(|s| s.trim().parse::<i64>().ok())
+                .collect();
+            if let Some(idx) = play_after_ids_idx
+                && let Some(&p) = stats_nums.get(idx)
+            {
+                play = p;
+            } else if stats_nums.len() >= 2 {
+                // Without explicit header, OP.GG MCP typically emits (win, play) where play >= win
+                play = stats_nums[0].max(stats_nums[1]);
+            } else if let Some(&p) = stats_nums.first() {
+                play = p;
+            }
+            search_slice = &rest_after_bracket[close_paren + 1..];
+        } else {
+            search_slice = rest_after_bracket;
+        }
+
+        if ids.len() >= 2 {
+            spell_combos.push(serde_json::json!({
+                "ids": [ids[0], ids[1]],
+                "play": play
+            }));
+        }
+    }
+
+    if spell_combos.is_empty() {
+        for entry in all_entries {
+            if entry.ids.len() == 2
+                && is_known_summoner_spell_id(entry.ids[0])
+                && is_known_summoner_spell_id(entry.ids[1])
+            {
+                spell_combos.push(serde_json::json!({
+                    "ids": [entry.ids[0], entry.ids[1]],
+                    "play": entry.play
+                }));
+            }
+        }
+    }
+
+    serde_json::json!({ "summoner_spells": spell_combos })
+}
+
+fn is_known_summoner_spell_id(id: i32) -> bool {
+    matches!(id, 1 | 3 | 4 | 6 | 7 | 11 | 12 | 13 | 14 | 21 | 32)
+}
 
 /// Parses OP.GG MCP text output into a ChampionBuild (requiring valid runes).
 pub fn parse_opgg_mcp_text(
@@ -110,43 +203,27 @@ pub fn parse_opgg_mcp_text_with_options(
     // 3. Extract all CoreItems entries with stats
     let all_entries = extract_all_core_items_from_text(text);
 
-    // 4. Extract summoner spells
-    let mut spell1_id = 4;
-    let mut spell2_id = 14;
-    if let Some(ss_idx) = text.find("SummonerSpells(") {
-        let after_ss = &text[ss_idx + 15..];
-        let maybe_brackets = after_ss
-            .find('[')
-            .zip(after_ss.find(']'))
-            .filter(|(open, close)| open < close);
-        if let Some((o, c)) = maybe_brackets {
-            let ids: Vec<i32> = after_ss[o + 1..c]
-                .split(',')
-                .filter_map(|s| s.trim().parse::<i32>().ok())
-                .collect();
-            if ids.len() >= 2 {
-                spell1_id = ids[0];
-                spell2_id = ids[1];
-            }
-        }
+    let position = if text.contains("\"position\": \"jungle\"") || text.contains("\"jungle\"") {
+        "jungle"
+    } else if text.contains("\"position\": \"support\"") || text.contains("\"support\"") {
+        "support"
     } else {
-        for entry in &all_entries {
-            if entry.ids.len() == 2
-                && matches!(entry.ids[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32)
-            {
-                spell1_id = entry.ids[0];
-                spell2_id = entry.ids[1];
-                break;
-            }
-        }
-    }
+        ""
+    };
+    let is_jungle = position.eq_ignore_ascii_case("jungle");
+
+    // 4. Extract summoner spells via shared extract_summoner_spell_choices
+    let spells_json = extract_mcp_summoner_spell_entries(text, &all_entries);
+    let ((spell1_id, spell2_id), spell_choice_ids) =
+        extract_summoner_spell_choices(&spells_json, is_jungle);
 
     // Filter out spell arrays from items entries
     let item_candidate_entries: Vec<ItemStatEntry> = all_entries
         .into_iter()
         .filter(|entry| {
             !(entry.ids.len() == 2
-                && matches!(entry.ids[0], 4 | 14 | 12 | 7 | 21 | 11 | 6 | 3 | 1 | 32))
+                && is_known_summoner_spell_id(entry.ids[0])
+                && is_known_summoner_spell_id(entry.ids[1]))
         })
         .collect();
 
@@ -236,14 +313,6 @@ pub fn parse_opgg_mcp_text_with_options(
         }
     }
 
-    let position = if text.contains("\"position\": \"jungle\"") || text.contains("\"jungle\"") {
-        "jungle"
-    } else if text.contains("\"position\": \"support\"") || text.contains("\"support\"") {
-        "support"
-    } else {
-        ""
-    };
-
     let all_for_tear: Vec<ItemStatEntry> = candidate_entries
         .iter()
         .chain(fourth_entries.iter())
@@ -309,11 +378,14 @@ pub fn parse_opgg_mcp_text_with_options(
         damage_type,
     );
 
-    let spell_choices = vec![SpellMetadata {
-        id: spell2_id,
-        name: String::new(),
-        icon_url: String::new(),
-    }];
+    let spell_choices = spell_choice_ids
+        .into_iter()
+        .map(|id| SpellMetadata {
+            id,
+            name: String::new(),
+            icon_url: String::new(),
+        })
+        .collect();
 
     Ok(ChampionBuild {
         champion_id,
@@ -336,7 +408,6 @@ pub fn parse_opgg_mcp_text_with_options(
     })
 }
 
-/// Extracts the top summoner spells and the 2 most popular choices for the secondary spell slot
 #[cfg(test)]
 #[path = "mcp_parser_tests.rs"]
 mod tests;

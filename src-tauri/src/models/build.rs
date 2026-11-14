@@ -62,12 +62,14 @@ pub struct RunePageOption {
     pub perks: Vec<RuneMetadata>,
 }
 
-/// In-memory cache holding champion and rune metadata from DataDragon.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+/// In-memory cache holding champion, rune, and summoner spell metadata from DataDragon.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct DataDragonCache {
     pub version: String,
     pub champions: HashMap<i32, ChampionMetadata>,
     pub runes: HashMap<i32, RuneMetadata>,
+    #[serde(default)]
+    pub spells: HashMap<i32, SpellMetadata>,
 }
 
 /// Complete unified build archetype (Core 3 + matching 6-item Final Build).

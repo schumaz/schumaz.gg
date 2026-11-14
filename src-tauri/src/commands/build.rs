@@ -8,9 +8,9 @@ pub async fn get_recommended_build_for_champion(
     champion_id: i32,
     queue_id: Option<i32>,
 ) -> Result<models::ChampionBuild, String> {
-    let http_client = reqwest::Client::new();
+    let http_client = build_provider::shared_http_client();
     let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
-    build_provider::get_recommended_build(&http_client, champion_id, q_id).await
+    build_provider::get_recommended_build(http_client, champion_id, q_id).await
 }
 
 /// Tauri command to update build filters (position, tier, region, patch) and re-inject if connected.
@@ -25,13 +25,13 @@ pub async fn update_build_filters(
     patch: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<models::ChampionBuild, String> {
-    let http_client = reqwest::Client::new();
+    let http_client = build_provider::shared_http_client();
     let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
     let is_aram = q_id == ws_listener::QUEUE_ARAM || q_id == ws_listener::QUEUE_ARAM_MAYHEM;
     let effective_position = if is_aram { None } else { position.as_deref() };
 
     let build = build_provider::get_recommended_build_with_filters(
-        &http_client,
+        http_client,
         champion_id,
         q_id,
         effective_position,

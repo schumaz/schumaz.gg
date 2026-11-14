@@ -78,20 +78,30 @@ pub async fn inject_specific_rune_page(
     inject_rune_payload(conn, &payload).await
 }
 
-/// Injects summoner spells into the active Champion Select session adapting to the Flash key preference
-/// and mandatory Jungle Smite rules.
-pub async fn inject_spells(
-    conn: &crate::lcu_connector::LcuConnection,
-    build: &ChampionBuild,
+/// Resolves the final `(spell1Id, spell2Id)` pair to inject for a champion, applying
+/// user secondary spell selections, mandatory Jungle Smite rules, and Flash key preference (D vs F)
+/// across all game modes (Summoner's Rift, ARAM, ARAM Mayhem, Practice Tool).
+pub fn resolve_injection_spell_pair_from_raw(
+    champion_id: i32,
+    spell1_id: i32,
+    spell2_id: i32,
+    is_jungle: bool,
     flash_key: FlashKeyPreference,
-) -> Result<(), String> {
-    let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
-    let (mut s1, mut s2) = (build.spell1_id, build.spell2_id);
+) -> (i32, i32) {
+    let (mut s1, mut s2) = (spell1_id, spell2_id);
 
-    if let Some(sel) = get_champion_selections(build.champion_id)
+    if let Some(sel) = get_champion_selections(champion_id)
         && let Some(sec_spell) = sel.secondary_spell_id
     {
-        if s1 == SPELL_FLASH_ID {
+        if is_jungle {
+            if s1 == SPELL_SMITE_ID {
+                s2 = sec_spell;
+            } else if s2 == SPELL_SMITE_ID {
+                s1 = sec_spell;
+            } else {
+                s2 = sec_spell;
+            }
+        } else if s1 == SPELL_FLASH_ID {
             s2 = sec_spell;
         } else if s2 == SPELL_FLASH_ID {
             s1 = sec_spell;
@@ -100,9 +110,62 @@ pub async fn inject_spells(
         }
     }
 
-    let payload = build_spells_payload_with_jungle_and_preference(s1, s2, flash_key, is_jungle)?;
+    apply_jungle_smite_and_flash_preference(s1, s2, flash_key, is_jungle)
+}
+
+/// Resolves the final `(spell1Id, spell2Id)` pair to inject from a `ChampionBuild`.
+pub fn resolve_injection_spell_pair(
+    build: &ChampionBuild,
+    flash_key: FlashKeyPreference,
+) -> (i32, i32) {
+    let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
+    resolve_injection_spell_pair_from_raw(
+        build.champion_id,
+        build.spell1_id,
+        build.spell2_id,
+        is_jungle,
+        flash_key,
+    )
+}
+
+/// Fast-path spell injection directly from raw spell IDs without requiring full build enrichment.
+pub async fn inject_spells_pair(
+    conn: &crate::lcu_connector::LcuConnection,
+    champion_id: i32,
+    spell1_id: i32,
+    spell2_id: i32,
+    is_jungle: bool,
+    flash_key: FlashKeyPreference,
+) -> Result<(), String> {
+    let (final_s1, final_s2) = resolve_injection_spell_pair_from_raw(
+        champion_id,
+        spell1_id,
+        spell2_id,
+        is_jungle,
+        flash_key,
+    );
+    let payload = build_spells_payload(final_s1, final_s2)?;
     conn.patch_summoner_spells(&payload).await?;
     Ok(())
+}
+
+/// Injects summoner spells into the active Champion Select session adapting to the Flash key preference
+/// and mandatory Jungle Smite rules.
+pub async fn inject_spells(
+    conn: &crate::lcu_connector::LcuConnection,
+    build: &ChampionBuild,
+    flash_key: FlashKeyPreference,
+) -> Result<(), String> {
+    let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
+    inject_spells_pair(
+        conn,
+        build.champion_id,
+        build.spell1_id,
+        build.spell2_id,
+        is_jungle,
+        flash_key,
+    )
+    .await
 }
 
 /// Injects custom item sets for the summoner into the game client shop.
@@ -116,32 +179,45 @@ pub async fn inject_item_sets(
     Ok(())
 }
 
-/// High-level orchestrator injecting runes, summoner spells, and item sets respecting user preferences.
-/// Produces a comprehensive report of all injection outcomes.
-pub async fn inject_champion_build(
+/// High-level orchestrator injecting runes, summoner spells, and item sets concurrently while
+/// respecting user preferences and optionally skipping spell patching when already fast-injected.
+pub async fn inject_champion_build_with_options(
     conn: &crate::lcu_connector::LcuConnection,
     summoner_id: u64,
     build: &ChampionBuild,
+    spells_already_injected: bool,
 ) -> InjectionReport {
     let prefs = get_user_preferences();
 
-    let runes_res = if prefs.auto_inject_runes && build.supports_runes {
-        Some(inject_runes(conn, build).await)
-    } else {
-        None
+    let runes_fut = async {
+        if prefs.auto_inject_runes && build.supports_runes {
+            Some(inject_runes(conn, build).await)
+        } else {
+            None
+        }
     };
 
-    let spells_res = if prefs.auto_inject_spells {
-        Some(inject_spells(conn, build, prefs.flash_key).await)
-    } else {
-        None
+    let spells_fut = async {
+        if prefs.auto_inject_spells {
+            if spells_already_injected {
+                Some(Ok(()))
+            } else {
+                Some(inject_spells(conn, build, prefs.flash_key).await)
+            }
+        } else {
+            None
+        }
     };
 
-    let items_res = if prefs.auto_inject_items {
-        Some(inject_item_sets(conn, summoner_id, build).await)
-    } else {
-        None
+    let items_fut = async {
+        if prefs.auto_inject_items {
+            Some(inject_item_sets(conn, summoner_id, build).await)
+        } else {
+            None
+        }
     };
+
+    let (runes_res, spells_res, items_res) = tokio::join!(runes_fut, spells_fut, items_fut);
 
     let runes_ok = runes_res.as_ref().is_some_and(|r| r.is_ok());
     let spells_ok = spells_res.as_ref().is_some_and(|r| r.is_ok());
@@ -185,6 +261,16 @@ pub async fn inject_champion_build(
     }
 }
 
+/// High-level orchestrator injecting runes, summoner spells, and item sets respecting user preferences.
+/// Produces a comprehensive report of all injection outcomes.
+pub async fn inject_champion_build(
+    conn: &crate::lcu_connector::LcuConnection,
+    summoner_id: u64,
+    build: &ChampionBuild,
+) -> InjectionReport {
+    inject_champion_build_with_options(conn, summoner_id, build, false).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +288,71 @@ mod tests {
         let json = serde_json::to_string(&report).unwrap();
         let parsed: InjectionReport = serde_json::from_str(&json).unwrap();
         assert_eq!(report, parsed);
+    }
+
+    #[test]
+    fn test_resolve_injection_spell_pair_all_modes_and_numeric_opgg_order() {
+        clear_champion_selections();
+
+        // ARAM / SR non-jungle with numerically-ordered OP.GG pairs [1, 4], [3, 4], [32, 4]
+        let build_cleanse = ChampionBuild {
+            champion_id: 18,
+            spell1_id: 1,
+            spell2_id: 4,
+            active_position: "".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::D),
+            (4, 1)
+        );
+        assert_eq!(
+            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::F),
+            (1, 4)
+        );
+
+        let build_mark = ChampionBuild {
+            champion_id: 103,
+            spell1_id: 32,
+            spell2_id: 4,
+            active_position: "".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_injection_spell_pair(&build_mark, FlashKeyPreference::D),
+            (4, 32)
+        );
+        assert_eq!(
+            resolve_injection_spell_pair(&build_mark, FlashKeyPreference::F),
+            (32, 4)
+        );
+
+        // Selecting an alternative secondary spell in ARAM preserves Flash slot preference
+        set_selected_secondary_spell(18, 21); // Barrier
+        assert_eq!(
+            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::D),
+            (4, 21)
+        );
+        assert_eq!(
+            resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::F),
+            (21, 4)
+        );
+
+        // Jungle mode preserves Smite (11) when secondary companion spell changes
+        clear_champion_selections();
+        let build_jungle = ChampionBuild {
+            champion_id: 120,
+            spell1_id: 4,
+            spell2_id: 11,
+            active_position: "jungle".to_string(),
+            ..Default::default()
+        };
+        set_selected_secondary_spell(120, 6); // Ghost
+        assert_eq!(
+            resolve_injection_spell_pair(&build_jungle, FlashKeyPreference::D),
+            (6, 11)
+        );
+
+        clear_champion_selections();
     }
 }

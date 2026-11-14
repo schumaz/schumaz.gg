@@ -186,7 +186,7 @@ impl LcuConnection {
     }
 
     /// Updates summoner spells via PATCH /lol-champ-select/v1/session/my-selection.
-    /// Retries up to 3 times if champ select session is transitioning (e.g. Practice Tool initialization).
+    /// Retries up to 5 times with 200ms backoff if champ select session is transitioning.
     pub async fn patch_summoner_spells(&self, payload: &serde_json::Value) -> Result<(), String> {
         let mut last_err = String::new();
         for attempt in 1..=5 {
@@ -210,7 +210,7 @@ impl LcuConnection {
                     }
                     last_err = format!("Error patching summoner spells: {}", err_str);
                     if attempt < 5 && (err_str.contains("404") || err_str.contains("NotFound")) {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                         continue;
                     }
                     break;

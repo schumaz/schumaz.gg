@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChampionBuild,
   ChampSelectedPayload,
@@ -20,6 +20,9 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const activeChampIdRef = useRef<number | null>(null);
+  const latestFetchSeqRef = useRef(0);
+
   const handleFilterChange = async (
     filterType: "position" | "tier" | "region" | "patch",
     value: string
@@ -34,6 +37,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
       qId === 2400 ||
       build.supports_runes === false;
 
+    const fetchSeq = ++latestFetchSeqRef.current;
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -45,18 +49,22 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
         filterType === "region" ? value : (build.active_region || null),
         filterType === "patch" ? value : (build.active_patch || null)
       );
-      if (updatedBuild) {
+      if (updatedBuild && latestFetchSeqRef.current === fetchSeq) {
         setBuild(updatedBuild);
       }
     } catch (err: unknown) {
       console.error("Falha ao atualizar filtros da build:", err);
-      setErrorMsg(
-        typeof err === "string"
-          ? err
-          : "Erro ao carregar build com os filtros selecionados."
-      );
+      if (latestFetchSeqRef.current === fetchSeq) {
+        setErrorMsg(
+          typeof err === "string"
+            ? err
+            : "Erro ao carregar build com os filtros selecionados."
+        );
+      }
     } finally {
-      setLoading(false);
+      if (latestFetchSeqRef.current === fetchSeq) {
+        setLoading(false);
+      }
     }
   };
 
@@ -84,12 +92,17 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
         });
 
         unlistenDisconnected = await events.lcuDisconnected.listen(() => {
+          activeChampIdRef.current = null;
+          latestFetchSeqRef.current += 1;
           setSummoner(null);
           setChampSelect(null);
           setBuild(null);
         });
 
         unlistenChampSelected = await events.champSelected.listen(async (event) => {
+          activeChampIdRef.current = event.payload.champion_id;
+          const fetchSeq = ++latestFetchSeqRef.current;
+
           setChampSelect((prev) => {
             if (prev?.champion_id !== event.payload.champion_id) {
               setSpellsInverted(false);
@@ -117,7 +130,11 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
                 null,
                 null
               );
-              if (recommended) {
+              if (
+                recommended &&
+                latestFetchSeqRef.current === fetchSeq &&
+                activeChampIdRef.current === event.payload.champion_id
+              ) {
                 setBuild((prev) => {
                   if (prev?.champion_id !== recommended.champion_id) {
                     setSelectedSecondarySpellId(null);
@@ -132,7 +149,11 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
                 event.payload.champion_id,
                 qId
               );
-              if (recommended) {
+              if (
+                recommended &&
+                latestFetchSeqRef.current === fetchSeq &&
+                activeChampIdRef.current === event.payload.champion_id
+              ) {
                 setBuild((prev) => {
                   if (prev?.champion_id !== recommended.champion_id) {
                     setSelectedSecondarySpellId(null);
@@ -149,6 +170,8 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
         });
 
         unlistenChampSelectEnded = await events.champSelectEnded.listen(() => {
+          activeChampIdRef.current = null;
+          latestFetchSeqRef.current += 1;
           setChampSelect(null);
           setBuild(null);
           setSpellsInverted(false);
@@ -158,6 +181,12 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
         });
 
         unlistenBuild = await events.recommendedBuild.listen((event) => {
+          if (
+            activeChampIdRef.current !== null &&
+            activeChampIdRef.current !== event.payload.champion_id
+          ) {
+            return;
+          }
           setBuild((prev) => {
             if (prev?.champion_id !== event.payload.champion_id) {
               setSelectedSecondarySpellId(null);
