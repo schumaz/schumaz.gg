@@ -29,15 +29,19 @@ export function BuildSelector({
             <span className="build-pill-name">{opt.name}</span>
             <div className="build-pill-icons">
               {opt.core_item_icon_urls?.map((iconUrl, iconIdx) => (
-                <img
+                <span
                   key={`core-icon-${optIdx}-${iconIdx}`}
-                  src={iconUrl}
-                  alt={`Item ${opt.core_item_ids[iconIdx]}`}
-                  className="build-pill-mini-icon"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
-                />
+                  className="dd-icon-frame build-pill-mini-frame"
+                >
+                  <img
+                    src={iconUrl}
+                    alt={`Item ${opt.core_item_ids[iconIdx]}`}
+                    className="build-pill-mini-icon"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                </span>
               ))}
             </div>
           </button>

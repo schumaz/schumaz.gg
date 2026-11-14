@@ -35,14 +35,16 @@ export function FiltersHeader({
       <div className="champ-hero-top">
         <div className="champ-hero-left">
           {build.champion_icon_url ? (
-            <img
-              src={build.champion_icon_url}
-              alt={build.champion_name}
-              className="champ-avatar"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = "none";
-              }}
-            />
+            <div className="dd-icon-frame champ-avatar-frame">
+              <img
+                src={build.champion_icon_url}
+                alt={build.champion_name}
+                className="champ-avatar"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+            </div>
           ) : (
             <div className="champ-avatar-placeholder">
               {build.champion_name.slice(0, 2).toUpperCase()}

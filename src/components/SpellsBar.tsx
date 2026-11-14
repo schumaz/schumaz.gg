@@ -37,7 +37,9 @@ export function SpellsBar({
             <div key={`spell-${index}-${spell.id}`} className="spell-item">
               <span className="spell-key-indicator">{index === 0 ? "D" : "F"}</span>
               {spell.icon_url && (
-                <img src={spell.icon_url} alt={spell.name} className="spell-icon" />
+                <div className="dd-icon-frame spell-icon-frame">
+                  <img src={spell.icon_url} alt={spell.name} className="spell-icon" />
+                </div>
               )}
               <div className="spell-info">
                 <span className="spell-name">{spell.name}</span>
@@ -76,11 +78,13 @@ export function SpellsBar({
                   title={idx === 0 ? "Mais Usado" : "Segundo Mais Usado"}
                 >
                   {choice.icon_url && (
-                    <img
-                      src={choice.icon_url}
-                      alt={choice.name}
-                      className="secondary-spell-icon"
-                    />
+                    <div className="dd-icon-frame secondary-spell-frame">
+                      <img
+                        src={choice.icon_url}
+                        alt={choice.name}
+                        className="secondary-spell-icon"
+                      />
+                    </div>
                   )}
                   <span className="secondary-spell-name">{choice.name}</span>
                 </button>

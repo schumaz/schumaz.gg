@@ -228,11 +228,13 @@ export function ProfileTab({
               <div className="profile-identity">
                 <div className="profile-avatar-wrap">
                   {profile?.profile_icon_url ? (
-                    <img
-                      src={profile.profile_icon_url}
-                      alt="Ícone do Invocador"
-                      className="profile-avatar-img"
-                    />
+                    <div className="dd-icon-frame profile-avatar-frame">
+                      <img
+                        src={profile.profile_icon_url}
+                        alt="Ícone do Invocador"
+                        className="profile-avatar-img"
+                      />
+                    </div>
                   ) : (
                     <div className="profile-avatar-placeholder">
                       {(summoner.gameName || summoner.displayName || "?").charAt(0).toUpperCase()}
@@ -319,11 +321,13 @@ export function ProfileTab({
                       >
                         <span className={`mastery-rank rank-${idx + 1}`}>#{idx + 1}</span>
                         {mastery.champion_icon_url ? (
-                          <img
-                            src={mastery.champion_icon_url}
-                            alt={mastery.champion_name}
-                            className="mastery-champ-icon"
-                          />
+                          <div className="dd-icon-frame mastery-champ-frame">
+                            <img
+                              src={mastery.champion_icon_url}
+                              alt={mastery.champion_name}
+                              className="mastery-champ-icon"
+                            />
+                          </div>
                         ) : (
                           <div className="mastery-champ-placeholder">
                             {mastery.champion_name.charAt(0)}
@@ -414,11 +418,13 @@ export function ProfileTab({
                             data-testid="highlighted-champion"
                           >
                             {highlightedChampion.icon && (
-                              <img
-                                src={highlightedChampion.icon}
-                                alt={highlightedChampion.name}
-                                className="highlighted-champ-icon"
-                              />
+                              <div className="dd-icon-frame highlighted-champ-frame">
+                                <img
+                                  src={highlightedChampion.icon}
+                                  alt={highlightedChampion.name}
+                                  className="highlighted-champ-icon"
+                                />
+                              </div>
                             )}
                             <div className="highlighted-champ-text">
                               <span className="highlighted-label">Destaque</span>
@@ -527,11 +533,13 @@ export function ProfileTab({
                           >
                             <div className="match-champ-col">
                               {match.champion_icon_url ? (
-                                <img
-                                  src={match.champion_icon_url}
-                                  alt={match.champion_name}
-                                  className="match-champ-icon"
-                                />
+                                <div className="dd-icon-frame match-champ-frame">
+                                  <img
+                                    src={match.champion_icon_url}
+                                    alt={match.champion_name}
+                                    className="match-champ-icon"
+                                  />
+                                </div>
                               ) : (
                                 <div className="match-champ-placeholder">
                                   {match.champion_name.charAt(0)}
@@ -539,18 +547,22 @@ export function ProfileTab({
                               )}
                               <div className="match-spells-col">
                                 {match.spell1_icon_url && (
-                                  <img
-                                    src={match.spell1_icon_url}
-                                    alt="Feitiço 1"
-                                    className="match-spell-icon"
-                                  />
+                                  <div className="dd-icon-frame match-spell-frame">
+                                    <img
+                                      src={match.spell1_icon_url}
+                                      alt="Feitiço 1"
+                                      className="match-spell-icon"
+                                    />
+                                  </div>
                                 )}
                                 {match.spell2_icon_url && (
-                                  <img
-                                    src={match.spell2_icon_url}
-                                    alt="Feitiço 2"
-                                    className="match-spell-icon"
-                                  />
+                                  <div className="dd-icon-frame match-spell-frame">
+                                    <img
+                                      src={match.spell2_icon_url}
+                                      alt="Feitiço 2"
+                                      className="match-spell-icon"
+                                    />
+                                  </div>
                                 )}
                               </div>
                             </div>

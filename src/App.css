@@ -379,13 +379,43 @@ img {
   flex: 1;
 }
 
-.champ-avatar {
+/* Shared DataDragon Clipping Frame (removes baked-in dark PNG borders & subpixel gaps) */
+.dd-icon-frame {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  background-color: var(--bg-input);
+}
+
+.dd-icon-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.champ-avatar-frame {
   width: 68px;
   height: 68px;
   border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+}
+
+.champ-avatar-frame::after {
+  box-shadow: inset 0 0 0 1.5px var(--border-highlight);
+}
+
+.champ-avatar {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 2px solid var(--border-highlight);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  display: block;
+  transform: scale(1.16);
 }
 
 .champ-avatar-placeholder {
@@ -772,11 +802,18 @@ img {
   color: var(--accent-primary);
 }
 
-.spell-icon {
+.spell-icon-frame {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  border: 1px solid var(--border-highlight);
+}
+
+.spell-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.08);
 }
 
 .spell-info {
@@ -832,27 +869,42 @@ img {
 }
 
 .item-icon-box {
+  position: relative;
   width: 40px;
   height: 40px;
   border-radius: 8px;
   background-color: var(--bg-card);
-  border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease;
+}
+
+.item-icon-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  transition: box-shadow 0.15s ease;
 }
 
 .item-icon-box:hover {
   transform: translateY(-2px);
-  border-color: var(--accent-primary);
+}
+
+.item-icon-box:hover::after {
+  box-shadow: inset 0 0 0 1.5px var(--accent-primary);
 }
 
 .shop-item-icon {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  transform: scale(1.08);
 }
 
 .item-id-fallback {
@@ -1268,11 +1320,18 @@ img {
   box-shadow: 0 0 10px var(--accent-subtle);
 }
 
-.secondary-spell-icon {
+.secondary-spell-frame {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--border-subtle);
+}
+
+.secondary-spell-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.08);
 }
 
 .secondary-spell-name {
@@ -1499,13 +1558,18 @@ img {
   gap: 3px;
 }
 
-.build-pill-mini-icon {
+.build-pill-mini-frame {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.build-pill-mini-icon {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  background-color: #121214;
+  display: block;
+  transform: scale(1.08);
 }
 
 /* ARAM Mayhem Mode Card & Notice */
@@ -1782,14 +1846,31 @@ img {
   flex-shrink: 0;
 }
 
-.profile-avatar-img,
+.profile-avatar-frame {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+}
+
+.profile-avatar-frame::after {
+  box-shadow: inset 0 0 0 1.5px var(--accent-border);
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.06);
+}
+
 .profile-avatar-placeholder {
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  object-fit: cover;
-  border: 2px solid var(--accent-border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  border: 1.5px solid var(--accent-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
   background-color: var(--bg-surface);
 }
 
@@ -2052,12 +2133,24 @@ img {
   color: #d97706;
 }
 
-.mastery-champ-icon,
+.mastery-champ-frame {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.mastery-champ-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
 .mastery-champ-placeholder {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  object-fit: cover;
   border: 1px solid var(--border-highlight);
   flex-shrink: 0;
   background-color: var(--bg-input);
@@ -2179,11 +2272,18 @@ img {
   gap: 8px;
 }
 
-.highlighted-champ-icon {
+.highlighted-champ-frame {
   width: 28px;
   height: 28px;
   border-radius: 8px;
+}
+
+.highlighted-champ-icon {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  display: block;
+  transform: scale(1.16);
 }
 
 .highlighted-champ-text {
@@ -2353,17 +2453,26 @@ img {
   gap: 6px;
 }
 
-.match-champ-icon,
+.match-champ-frame {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.match-champ-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
 .match-champ-placeholder {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  object-fit: cover;
   border: 1px solid var(--border-highlight);
   background-color: var(--bg-input);
-}
-
-.match-champ-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2377,11 +2486,18 @@ img {
   gap: 3px;
 }
 
-.match-spell-icon {
+.match-spell-frame {
   width: 17px;
   height: 17px;
   border-radius: 4px;
-  border: 1px solid var(--border-subtle);
+}
+
+.match-spell-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.08);
 }
 
 .match-main-info {
@@ -2475,12 +2591,21 @@ img {
 }
 
 .match-item-slot {
+  position: relative;
   width: 22px;
   height: 22px;
   border-radius: 5px;
   background-color: var(--bg-input);
-  border: 1px solid var(--border-subtle);
   overflow: hidden;
+}
+
+.match-item-slot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  pointer-events: none;
 }
 
 .match-item-img {
@@ -2488,6 +2613,7 @@ img {
   height: 100%;
   object-fit: cover;
   display: block;
+  transform: scale(1.08);
 }
 
 .match-item-empty {
