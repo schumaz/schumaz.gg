@@ -1649,7 +1649,7 @@ img {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .profile-wallpaper-backdrop {
@@ -1817,16 +1817,28 @@ img {
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(13, 14, 18, 0.18) 0%,
-    rgba(13, 14, 18, 0.36) 50%,
-    rgba(13, 14, 18, 0.52) 100%
+    rgba(13, 14, 18, 0.12) 0%,
+    rgba(13, 14, 18, 0.26) 50%,
+    rgba(13, 14, 18, 0.4) 100%
   );
+}
+
+.container.profile-active .tabs-viewport,
+[data-testid="view-profile"].active-tab {
+  overflow: visible;
 }
 
 .profile-hero-card,
 .profile-split-grid {
   position: relative;
   z-index: 1;
+}
+
+[data-testid="view-profile"] .card {
+  border-radius: 16px;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.28);
 }
 
 [data-testid="view-profile"] .card,
@@ -1837,22 +1849,23 @@ img {
 }
 
 .container.profile-active .status-badge {
-  background-color: rgba(19, 20, 26, 0.52);
+  background-color: rgba(19, 20, 26, 0.38);
 }
 
 .container.profile-active .floating-dock {
-  background: rgba(19, 20, 26, 0.55);
+  background: rgba(19, 20, 26, 0.44);
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.28);
 }
 
 [data-testid="view-profile"] .idle-card {
-  background: rgba(19, 20, 26, 0.52);
+  background: rgba(19, 20, 26, 0.38);
 }
 
 .profile-hero-card {
   flex-shrink: 0;
   margin-bottom: 0;
   padding: 14px 18px;
-  background: rgba(19, 20, 26, 0.48);
+  background: rgba(19, 20, 26, 0.36);
   backdrop-filter: blur(var(--profile-ui-blur, 16px));
   -webkit-backdrop-filter: blur(var(--profile-ui-blur, 16px));
   border: 1px solid var(--border-highlight);
@@ -2055,7 +2068,7 @@ img {
   display: grid;
   grid-template-columns: 0.92fr 1.38fr;
   gap: 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .profile-col {
@@ -2067,19 +2080,22 @@ img {
 }
 
 .profile-col-left {
+  height: auto;
+  align-self: stretch;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
+  padding: 8px 10px 12px 10px;
+  margin: -8px -6px -12px -10px;
 }
 
 .profile-col-right {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .profile-section-card,
 .profile-matches-card {
   margin-bottom: 0;
-  background: rgba(19, 20, 26, 0.52);
+  background: rgba(19, 20, 26, 0.38);
   backdrop-filter: blur(var(--profile-ui-blur, 16px));
   -webkit-backdrop-filter: blur(var(--profile-ui-blur, 16px));
 }
@@ -2087,12 +2103,12 @@ img {
 .profile-layout .mastery-row,
 .profile-layout .match-card,
 .profile-layout .highlighted-champ-box {
-  background-color: rgba(19, 20, 26, 0.35);
+  background-color: rgba(19, 20, 26, 0.28);
 }
 
 .profile-layout .mastery-row:hover,
 .profile-layout .match-card:hover {
-  background-color: rgba(26, 27, 36, 0.55);
+  background-color: rgba(26, 27, 36, 0.44);
 }
 
 .profile-matches-card {
@@ -2663,7 +2679,7 @@ img {
   gap: 8px;
   padding: 8px 12px 10px 12px;
   border-top: 1px solid var(--border-subtle);
-  background-color: rgba(13, 14, 18, 0.55);
+  background-color: rgba(13, 14, 18, 0.42);
 }
 
 .match-detail-stat {
@@ -2696,10 +2712,12 @@ img {
     grid-template-columns: 1fr;
     overflow: visible;
   }
-  .profile-col {
+  .profile-col,
+  .profile-col-left {
     height: auto;
     overflow: visible;
-    padding-right: 0;
+    padding: 0;
+    margin: 0;
   }
   .match-row-btn {
     grid-template-columns: auto 1fr auto;
