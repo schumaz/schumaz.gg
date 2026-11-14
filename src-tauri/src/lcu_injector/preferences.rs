@@ -33,6 +33,7 @@ mod tests {
             auto_inject_spells: true,
             auto_inject_items: false,
             flash_key: FlashKeyPreference::F,
+            patch_48h_protection: false,
         };
 
         set_user_preferences(prefs.clone());
@@ -41,5 +42,6 @@ mod tests {
         // Reset to default
         set_user_preferences(UserPreferences::default());
         assert_eq!(get_user_preferences(), UserPreferences::default());
+        assert!(get_user_preferences().patch_48h_protection);
     }
 }

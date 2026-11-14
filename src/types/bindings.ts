@@ -20,7 +20,7 @@ export const commands = {
 	 */
 	syncDisplayedChampion: (championId: number | null) => __TAURI_INVOKE<void>("sync_displayed_champion", { championId }),
 	/**  Tauri command to sync user preferences from the frontend to the backend engine. */
-	syncUserPreferences: (preferences: UserPreferences) => __TAURI_INVOKE<void>("sync_user_preferences", { preferences }),
+	syncUserPreferences: (preferences: UserPreferences_Deserialize) => __TAURI_INVOKE<void>("sync_user_preferences", { preferences }),
 	/**  Tauri command to immediately inject only summoner spells into an active Champ Select session. */
 	injectSummonerSpells: (spell1Id: number, spell2Id: number, championId: number | null, secondarySpellId: number | null) => __TAURI_INVOKE<null>("inject_summoner_spells", { spell1Id, spell2Id, championId, secondarySpellId }),
 	/**  Tauri command to immediately inject a specific chosen rune page into the LoL client. */
@@ -131,6 +131,7 @@ export type ChampionBuild_Deserialize = {
 	active_patch?: string,
 	available_patches?: string[],
 	patch_fallback_applied?: boolean,
+	patch_protection_remaining_hours?: number | null,
 	supports_runes?: boolean,
 };
 
@@ -164,6 +165,7 @@ export type ChampionBuild_Serialize = {
 	active_patch: string,
 	available_patches: string[],
 	patch_fallback_applied: boolean,
+	patch_protection_remaining_hours: number | null,
 	supports_runes: boolean,
 };
 
@@ -426,11 +428,24 @@ export type UnifiedBuildOption_Serialize = {
 };
 
 /**  User preferences synchronized between frontend and backend. */
-export type UserPreferences = {
+export type UserPreferences = UserPreferences_Serialize | UserPreferences_Deserialize;
+
+/**  User preferences synchronized between frontend and backend. */
+export type UserPreferences_Deserialize = {
 	autoInjectRunes: boolean,
 	autoInjectSpells: boolean,
 	autoInjectItems: boolean,
 	flashKey: FlashKeyPreference,
+	patch48hProtection?: boolean,
+};
+
+/**  User preferences synchronized between frontend and backend. */
+export type UserPreferences_Serialize = {
+	autoInjectRunes: boolean,
+	autoInjectSpells: boolean,
+	autoInjectItems: boolean,
+	flashKey: FlashKeyPreference,
+	patch48hProtection: boolean,
 };
 
 /* Tauri Specta runtime */

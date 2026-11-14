@@ -40,6 +40,12 @@ function App() {
     }
   };
 
+  const handlePatchProtectionChange = () => {
+    if (build) {
+      handleFilterChange("patch", "");
+    }
+  };
+
   const {
     preferences,
     updatePreference,
@@ -47,7 +53,7 @@ function App() {
     updateProfileBlur,
     wallpaperVisible,
     updateWallpaperVisible,
-  } = usePreferences(handleFlashKeyChange);
+  } = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
 
   const {
     summoner,

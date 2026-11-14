@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChampionBuild, ChampSelectedPayload } from "../types";
 import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
 import { RegionFlag } from "./RegionFlag";
@@ -222,6 +223,8 @@ export function FiltersHeader({
   loading,
   onFilterChange,
 }: FiltersHeaderProps) {
+  const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
+
   const isAram =
     champSelect?.queue_mode === "Aram" ||
     champSelect?.queue_mode === "AramMayhem" ||
@@ -235,6 +238,38 @@ export function FiltersHeader({
       : build?.active_patch
       ? [build.active_patch]
       : ["16.22", "16.21"];
+
+  const patchDropdownOptions: FilterDropdownOption[] = patchOptions.map((p, idx) => ({
+    value: p,
+    label: idx === 0 ? `Patch ${p} (Mais atual)` : `Patch ${p}`,
+  }));
+
+  const hasKnownLatest = Boolean(build?.available_patches && build.available_patches.length > 0);
+  const latestPatch = patchOptions[0];
+  const isPatchProtectionActive = Boolean(
+    build.patch_fallback_applied && (!hasKnownLatest || build.active_patch !== latestPatch)
+  );
+
+  const remainingHours =
+    isPatchProtectionActive &&
+    typeof build.patch_protection_remaining_hours === "number" &&
+    build.patch_protection_remaining_hours > 0
+      ? build.patch_protection_remaining_hours
+      : null;
+
+  const remainingHoursShort =
+    remainingHours !== null
+      ? remainingHours === 1
+        ? "Falta 1h"
+        : `Faltam ${remainingHours}h`
+      : null;
+
+  const protectionTooltipText =
+    remainingHours !== null
+      ? `O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava. ${
+          remainingHours === 1 ? "Falta 1 hora" : `Faltam ${remainingHours} horas`
+        } para liberar o acesso automático ao patch mais novo.`
+      : "O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava.";
 
   return (
     <section className="card champ-hero-card" data-testid="champ-hero">
@@ -282,13 +317,14 @@ export function FiltersHeader({
                 {(build.pick_rate ?? 0).toFixed(1)}% Pick Rate
               </span>
             )}
-            {build.patch_fallback_applied && (
+            {isPatchProtectionActive && (
               <span
                 className="badge badge-warning badge-stat patch-fallback-badge"
-                title="Patch recente (<48h). Usando dados consolidados do patch anterior."
+                title={protectionTooltipText}
                 data-testid="patch-fallback-badge"
               >
                 🛡️ Volume Protegido ({build.active_patch})
+                {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
               </span>
             )}
           </div>
@@ -344,24 +380,54 @@ export function FiltersHeader({
           />
         </div>
 
-        <div className="filter-group">
-          <label htmlFor="filter-patch" className="filter-label">
+        <div className="filter-group filter-group-patch">
+          <label id="filter-patch-label" htmlFor="filter-patch" className="filter-label">
             Patch:
           </label>
-          <select
+          <FilterDropdown
             id="filter-patch"
-            data-testid="filter-patch"
-            className="filter-select"
-            value={build.active_patch || ""}
+            labelId="filter-patch-label"
+            testId="filter-patch"
+            value={build.active_patch || patchOptions[0] || ""}
+            options={patchDropdownOptions}
             disabled={loading}
-            onChange={(e) => onFilterChange("patch", e.target.value)}
-          >
-            {patchOptions.map((p) => (
-              <option key={p} value={p}>
-                Patch {p}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => onFilterChange("patch", val)}
+          />
+
+          {isPatchProtectionActive && (
+            <div
+              className="patch-protection-wrap"
+              onMouseEnter={() => setShowProtectionTooltip(true)}
+              onMouseLeave={() => setShowProtectionTooltip(false)}
+            >
+              <button
+                type="button"
+                className="patch-protection-indicator"
+                data-testid="patch-protection-indicator"
+                aria-label={protectionTooltipText}
+                aria-describedby={showProtectionTooltip ? "patch-protection-tooltip" : undefined}
+                onFocus={() => setShowProtectionTooltip(true)}
+                onBlur={() => setShowProtectionTooltip(false)}
+              >
+                !
+              </button>
+              {remainingHoursShort && (
+                <span className="patch-protection-hours" data-testid="patch-protection-hours">
+                  {remainingHoursShort}
+                </span>
+              )}
+              {showProtectionTooltip && (
+                <div
+                  id="patch-protection-tooltip"
+                  role="tooltip"
+                  className="patch-protection-tooltip"
+                  data-testid="patch-protection-tooltip"
+                >
+                  {protectionTooltipText}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>

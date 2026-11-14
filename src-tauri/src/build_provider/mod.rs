@@ -157,7 +157,40 @@ pub async fn get_recommended_build_with_filters_and_endpoints_internal(
     ddragon_cache: &DataDragonCache,
     rest_base: &str,
     mcp_endpoint: &str,
+    fast_spells_tx: Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
+) -> Result<ChampionBuild, String> {
+    let prefs = crate::lcu_injector::get_user_preferences();
+    get_recommended_build_with_filters_and_endpoints_with_protection(
+        client,
+        champion_id,
+        queue_id,
+        position,
+        tier,
+        region,
+        patch,
+        ddragon_cache,
+        rest_base,
+        mcp_endpoint,
+        fast_spells_tx,
+        prefs.patch_48h_protection,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
+    client: &reqwest::Client,
+    champion_id: i32,
+    queue_id: i32,
+    position: Option<&str>,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+    ddragon_cache: &DataDragonCache,
+    rest_base: &str,
+    mcp_endpoint: &str,
     mut fast_spells_tx: Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
+    patch_48h_protection: bool,
 ) -> Result<ChampionBuild, String> {
     let champ_name = ddragon_cache
         .champions
@@ -177,7 +210,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_internal(
         position.unwrap_or("").trim()
     };
     let build_cache_key = format!(
-        "{}:{}:{}:{}:{}:{}:{}:{}",
+        "{}:{}:{}:{}:{}:{}:{}:{}:{}",
         rest_base,
         mcp_endpoint,
         champion_id,
@@ -185,7 +218,8 @@ pub async fn get_recommended_build_with_filters_and_endpoints_internal(
         pos_cache_key,
         target_tier,
         target_region,
-        patch.unwrap_or("").trim()
+        patch.unwrap_or("").trim(),
+        patch_48h_protection
     );
 
     if let Ok(guard) = get_build_cache().read()
@@ -210,6 +244,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_internal(
     let available_versions = fetch_opgg_versions_from_base(client, rest_base, target_region).await;
 
     // 2. Determine initial effective patch
+    let mut patch_protection_remaining_hours: Option<u32> = None;
     let (mut effective_patch, mut patch_fallback_applied) = if let Some(p) = patch {
         if !p.trim().is_empty() {
             (p.trim().to_string(), false)
@@ -310,18 +345,20 @@ pub async fn get_recommended_build_with_filters_and_endpoints_internal(
                     .or_else(|| probe_json.pointer("/data/average_stats/play"))
                     .and_then(|v| v.as_u64());
 
-                let (chosen_patch, fallback) = select_effective_patch_with_volume(
+                let selection = resolve_effective_patch(
                     &available_versions,
                     created_at_iso,
                     prev_patch_created_at_iso,
                     play_count,
                     now_unix,
                     None,
+                    patch_48h_protection,
                 );
-                effective_patch = chosen_patch;
-                patch_fallback_applied = fallback;
+                effective_patch = selection.effective_patch;
+                patch_fallback_applied = selection.fallback_applied;
+                patch_protection_remaining_hours = selection.remaining_hours;
 
-                if fallback {
+                if patch_fallback_applied {
                     fetch_opgg_rest_champion_analysis_from_base(
                         client,
                         rest_base,
@@ -435,6 +472,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_internal(
     build.active_patch = effective_patch;
     build.available_patches = available_versions;
     build.patch_fallback_applied = patch_fallback_applied;
+    build.patch_protection_remaining_hours = patch_protection_remaining_hours;
     build.supports_runes = supports_runes;
 
     enrich_build_with_ddragon(&mut build, ddragon_cache);
@@ -468,7 +506,7 @@ pub async fn get_recommended_build(
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn test_ddragon_cache() -> DataDragonCache {
@@ -497,6 +535,30 @@ mod tests {
             runes: HashMap::new(),
             spells: HashMap::new(),
         }
+    }
+
+    fn format_unix_iso8601(unix_secs: u64) -> String {
+        // Civil-from-days algorithm (Howard Hinnant) for UTC ISO 8601 string
+        let days = (unix_secs / 86400) as i64;
+        let rem = unix_secs % 86400;
+        let hour = rem / 3600;
+        let min = (rem % 3600) / 60;
+        let sec = rem % 60;
+
+        let z = days + 719468;
+        let era = if z >= 0 { z } else { z - 146096 } / 146097;
+        let doe = z - era * 146097;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = mp + if mp < 10 { 3 } else { -9 };
+        let year = y + if m <= 2 { 1 } else { 0 };
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+            year, m, d, hour, min, sec
+        )
     }
 
     #[tokio::test]
@@ -921,5 +983,153 @@ mod tests {
                 vec![3153, 6672, 3033, 3094, 2523, 3046]
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_patch_48h_protection_exposes_remaining_hours_and_respects_toggle() {
+        let mock_server = MockServer::start().await;
+
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let ten_hours_ago_iso = format_unix_iso8601(now_unix - 10 * 3600);
+
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": ["16.22", "16.21"]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/champions/aram/103/none"))
+            .and(query_param("version", "16.22"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "damage_type": "AP",
+                    "summary": { "average_stats": { "win_rate": 0.50, "pick_rate": 0.05, "play": 120 } },
+                    "trends": { "win": [{ "created_at": ten_hours_ago_iso }] },
+                    "runes": [{
+                        "primary_page_id": 8100,
+                        "secondary_page_id": 8200,
+                        "primary_rune_ids": [8112, 8126, 8138, 8135],
+                        "secondary_rune_ids": [8226, 8210],
+                        "stat_mod_ids": [5008, 5008, 5001],
+                        "play": 120,
+                        "win": 60
+                    }],
+                    "summoner_spells": [{ "ids": [4, 32], "play": 100, "win": 50 }],
+                    "starter_items": [{ "ids": [3802, 2003], "play": 100, "win": 50 }],
+                    "boots": [{ "ids": [3020], "play": 100, "win": 50 }],
+                    "core_items": [{ "ids": [6655, 4645, 3089], "play": 100, "win": 50 }],
+                    "last_items": [{ "ids": [3157], "play": 100, "win": 50 }]
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/champions/aram/103/none"))
+            .and(query_param("version", "16.21"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "damage_type": "AP",
+                    "summary": { "average_stats": { "win_rate": 0.52, "pick_rate": 0.09, "play": 48000 } },
+                    "runes": [{
+                        "primary_page_id": 8100,
+                        "secondary_page_id": 8200,
+                        "primary_rune_ids": [8112, 8126, 8138, 8135],
+                        "secondary_rune_ids": [8226, 8210],
+                        "stat_mod_ids": [5008, 5008, 5001],
+                        "play": 30000,
+                        "win": 16000
+                    }],
+                    "summoner_spells": [{ "ids": [4, 32], "play": 31000, "win": 16500 }],
+                    "starter_items": [{ "ids": [3802, 2003], "play": 25000, "win": 13500 }],
+                    "boots": [{ "ids": [3020], "play": 39000, "win": 20500 }],
+                    "core_items": [{ "ids": [6655, 4645, 3089], "play": 17000, "win": 9000 }],
+                    "last_items": [{ "ids": [3157], "play": 14000, "win": 7600 }]
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let cache = test_ddragon_cache();
+        let mcp_url = format!("{}/mcp", mock_server.uri());
+
+        // 1. With 48h protection enabled: falls back to 16.21 and reports ~38h remaining
+        let protected_build = get_recommended_build_with_filters_and_endpoints_with_protection(
+            &client,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            None,
+            None,
+            None,
+            None,
+            &cache,
+            &mock_server.uri(),
+            &mcp_url,
+            None,
+            true,
+        )
+        .await
+        .expect("Protected build should succeed");
+
+        assert_eq!(protected_build.active_patch, "16.21");
+        assert!(protected_build.patch_fallback_applied);
+        assert_eq!(protected_build.patch_protection_remaining_hours, Some(38));
+
+        // 2. With 48h protection disabled: selects latest 16.22 without fallback
+        let unprotected_build = get_recommended_build_with_filters_and_endpoints_with_protection(
+            &client,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            None,
+            None,
+            None,
+            None,
+            &cache,
+            &mock_server.uri(),
+            &mcp_url,
+            None,
+            false,
+        )
+        .await
+        .expect("Unprotected build should succeed");
+
+        assert_eq!(unprotected_build.active_patch, "16.22");
+        assert!(!unprotected_build.patch_fallback_applied);
+        assert_eq!(unprotected_build.patch_protection_remaining_hours, None);
+
+        // 3. Manual override to 16.22 even when protection is enabled: respects manual choice
+        let manual_build = get_recommended_build_with_filters_and_endpoints_with_protection(
+            &client,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            None,
+            None,
+            None,
+            Some("16.22"),
+            &cache,
+            &mock_server.uri(),
+            &mcp_url,
+            None,
+            true,
+        )
+        .await
+        .expect("Manual override build should succeed");
+
+        assert_eq!(manual_build.active_patch, "16.22");
+        assert!(!manual_build.patch_fallback_applied);
+        assert_eq!(manual_build.patch_protection_remaining_hours, None);
     }
 }

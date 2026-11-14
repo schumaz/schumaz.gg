@@ -13,10 +13,7 @@ export function StatusDock({ summoner }: StatusDockProps) {
         {summoner ? (
           <div className="status-badge connected" data-testid="status-connected">
             <span className="dot dot-green"></span>
-            <span>
-              Conectado: <strong>{summoner.gameName || summoner.displayName}</strong>
-              {summoner.tagLine && <small> #{summoner.tagLine}</small>} (Nível {summoner.summonerLevel})
-            </span>
+            <span>Conectado ao cliente do LoL</span>
           </div>
         ) : (
           <div className="status-badge disconnected" data-testid="status-disconnected">

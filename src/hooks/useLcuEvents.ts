@@ -63,15 +63,23 @@ export function useLcuEvents(
     filterType: "position" | "tier" | "region" | "patch",
     value: string
   ) => {
-    if (!build) return;
-    const champId = champSelect?.champion_id || build.champion_id;
-    const qId = champSelect?.queue_id || (build.supports_runes === false ? 2400 : 420);
+    const currentBuild = buildRef.current ?? build;
+    if (!currentBuild) return;
+    const champId = champSelect?.champion_id || currentBuild.champion_id;
+    const qId = champSelect?.queue_id || (currentBuild.supports_runes === false ? 2400 : 420);
     const isAram =
       champSelect?.queue_mode === "Aram" ||
       champSelect?.queue_mode === "AramMayhem" ||
       qId === 450 ||
       qId === 2400 ||
-      build.supports_runes === false;
+      currentBuild.supports_runes === false;
+
+    const patchArg =
+      filterType === "patch"
+        ? value.trim() || null
+        : currentBuild.patch_fallback_applied
+        ? null
+        : currentBuild.active_patch || null;
 
     const fetchSeq = ++latestFetchSeqRef.current;
     setLoading(true);
@@ -80,10 +88,10 @@ export function useLcuEvents(
       const updatedBuild = await commands.updateBuildFilters(
         champId,
         qId,
-        isAram ? null : filterType === "position" ? value : (build.active_position || null),
-        filterType === "tier" ? value : (build.active_tier || null),
-        filterType === "region" ? value : (build.active_region || null),
-        filterType === "patch" ? value : (build.active_patch || null)
+        isAram ? null : filterType === "position" ? value : (currentBuild.active_position || null),
+        filterType === "tier" ? value : (currentBuild.active_tier || null),
+        filterType === "region" ? value : (currentBuild.active_region || null),
+        patchArg
       );
       if (updatedBuild && latestFetchSeqRef.current === fetchSeq) {
         buildRef.current = updatedBuild;

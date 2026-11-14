@@ -391,10 +391,20 @@ describe("App Component", () => {
     fireEvent.click(flashFBtn);
     expect(flashFBtn).toHaveAttribute("aria-pressed", "true");
 
+    // Toggle 48h patch protection off -> opens confirmation popup first
+    const patchProtToggle = screen.getByTestId("patch-48h-protection-toggle");
+    expect(patchProtToggle).toBeChecked();
+    fireEvent.click(patchProtToggle);
+    expect(screen.getByTestId("patch-48h-protection-warning")).toBeInTheDocument();
+    expect(patchProtToggle).toBeChecked();
+    fireEvent.click(screen.getByTestId("patch-48h-accept-btn"));
+    expect(patchProtToggle).not.toBeChecked();
+
     // Check localStorage
     const saved = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
     expect(saved.autoInjectRunes).toBe(false);
     expect(saved.flashKey).toBe("F");
+    expect(saved.patch48hProtection).toBe(false);
   });
 
   it("swaps summoner spell slots and supports inverting spells with immediate injection in champion select", async () => {
@@ -526,7 +536,7 @@ describe("App Component", () => {
     const tierSelect = screen.getByTestId("filter-tier");
     const posSelect = screen.getByTestId("filter-position");
     const regionSelect = screen.getByTestId("filter-region");
-    const patchSelect = screen.getByTestId("filter-patch") as HTMLSelectElement;
+    const patchSelect = screen.getByTestId("filter-patch");
 
     expect(tierSelect).toHaveAttribute("data-value", "emerald_plus");
     fireEvent.click(tierSelect);
@@ -549,7 +559,7 @@ describe("App Component", () => {
     fireEvent.keyDown(tierSelect, { key: "Escape" });
     expect(posSelect).toHaveAttribute("data-value", "mid");
     expect(regionSelect).toHaveAttribute("data-value", "global");
-    expect(patchSelect.value).toBe("16.22");
+    expect(patchSelect).toHaveAttribute("data-value", "16.22");
 
     // Change Rota to adc
     await act(async () => {

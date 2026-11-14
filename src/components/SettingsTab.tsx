@@ -1,4 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { UserPreferences } from "../types";
 import { clampProfileBlur } from "../hooks/usePreferences";
 
@@ -30,9 +31,11 @@ export function SettingsTab({
 }: SettingsTabProps) {
   const [isEditingBlur, setIsEditingBlur] = useState(false);
   const [draftBlur, setDraftBlur] = useState(String(profileBlur));
+  const [showDisablePatchProtectionModal, setShowDisablePatchProtectionModal] = useState(false);
   const blurInputRef = useRef<HTMLInputElement | null>(null);
   const originalBlurRef = useRef(profileBlur);
   const blurDisabled = isBlurSliderDisabled(wallpaperVisible);
+  const patch48hProtection = preferences.patch48hProtection ?? true;
 
   useEffect(() => {
     if (!isEditingBlur) {
@@ -53,6 +56,23 @@ export function SettingsTab({
       blurInputRef.current?.select();
     }
   }, [isEditingBlur]);
+
+  useEffect(() => {
+    if (!isActive || !patch48hProtection) {
+      setShowDisablePatchProtectionModal(false);
+    }
+  }, [isActive, patch48hProtection]);
+
+  useEffect(() => {
+    if (!showDisablePatchProtectionModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowDisablePatchProtectionModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showDisablePatchProtectionModal]);
 
   const handleProfileBlurChange = (nextBlur: number) => {
     if (blurDisabled) return;
@@ -216,104 +236,206 @@ export function SettingsTab({
           </section>
         </div>
 
-        {/* Group 2: Runas (Second Tab) */}
+        {/* Group 2: Runas (Second Tab — single unified island) */}
         <div className="settings-section-group" data-testid="settings-group-runes">
           <h2 className="settings-section-title">Runas</h2>
 
-          {/* Subgroup 2.1: Posicionamento do Flash */}
-          <section className="card settings-group-card" data-testid="settings-subgroup-flash">
-            <div className="settings-group-header">
-              <h3>Posicionamento do Flash</h3>
-              <p className="card-desc">
-                Tecla designada para o feitiço Flash ao aplicar as recomendações.
-              </p>
-            </div>
+          <section
+            className="card settings-group-card settings-runes-card"
+            data-testid="settings-subgroup-runes"
+          >
+            {/* Subsection 2.1: Posicionamento do Flash */}
+            <div className="settings-subsection" data-testid="settings-subgroup-flash">
+              <div className="settings-group-header">
+                <h3>Posicionamento do Flash</h3>
+                <p className="card-desc">
+                  Tecla designada para o feitiço Flash ao aplicar as recomendações.
+                </p>
+              </div>
 
-            <div className="segmented-control-container">
-              <div className="segmented-control" role="group" aria-label="Preferência de Tecla do Flash">
-                <button
-                  type="button"
-                  className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
-                  onClick={() => onUpdatePreference("flashKey", "D")}
-                  aria-pressed={preferences.flashKey === "D"}
-                  aria-label="D"
-                >
-                  <span>D</span>
-                </button>
-                <button
-                  type="button"
-                  className={`segment-btn ${preferences.flashKey === "F" ? "active" : ""}`}
-                  onClick={() => onUpdatePreference("flashKey", "F")}
-                  aria-pressed={preferences.flashKey === "F"}
-                  aria-label="F"
-                >
-                  <span>F</span>
-                </button>
+              <div className="segmented-control-container">
+                <div className="segmented-control" role="group" aria-label="Preferência de Tecla do Flash">
+                  <button
+                    type="button"
+                    className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
+                    onClick={() => onUpdatePreference("flashKey", "D")}
+                    aria-pressed={preferences.flashKey === "D"}
+                    aria-label="D"
+                  >
+                    <span>D</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`segment-btn ${preferences.flashKey === "F" ? "active" : ""}`}
+                    onClick={() => onUpdatePreference("flashKey", "F")}
+                    aria-pressed={preferences.flashKey === "F"}
+                    aria-label="F"
+                  >
+                    <span>F</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </section>
 
-          {/* Subgroup 2.2: Injeção Automática */}
-          <section className="card settings-group-card" data-testid="settings-subgroup-auto-inject">
-            <div className="settings-group-header">
-              <h3>Injeção Automática</h3>
-              <p className="card-desc">
-                Sincronização e aplicação automática de dados no cliente durante a seleção de campeões.
-              </p>
+            <div className="settings-card-divider" />
+
+            {/* Subsection 2.2: Injeção Automática */}
+            <div className="settings-subsection" data-testid="settings-subgroup-auto-inject">
+              <div className="settings-group-header">
+                <h3>Injeção Automática</h3>
+                <p className="card-desc">
+                  Sincronização e aplicação automática de dados no cliente durante a seleção de campeões.
+                </p>
+              </div>
+
+              <div className="settings-list">
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Injetar Runas Automaticamente</span>
+                    <span className="settings-item-desc">
+                      Aplica a página de runas recomendada diretamente na conta do jogador.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Injetar Runas Automaticamente"
+                    checked={preferences.autoInjectRunes}
+                    onChange={(e) => onUpdatePreference("autoInjectRunes", e.target.checked)}
+                  />
+                </label>
+
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Injetar Feitiços de Invocador</span>
+                    <span className="settings-item-desc">
+                      Configura os feitiços de invocador otimizados para a rota e fila da partida.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Injetar Feitiços de Invocador"
+                    checked={preferences.autoInjectSpells}
+                    onChange={(e) => onUpdatePreference("autoInjectSpells", e.target.checked)}
+                  />
+                </label>
+
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
+                    <span className="settings-item-desc">
+                      Gera blocos de itens recomendados na loja in-game da partida.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Injetar Conjuntos de Itens na Loja"
+                    checked={preferences.autoInjectItems}
+                    onChange={(e) => onUpdatePreference("autoInjectItems", e.target.checked)}
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="settings-list">
-              <label className="settings-item">
-                <div className="settings-item-text">
-                  <span className="settings-item-title">Injetar Runas Automaticamente</span>
-                  <span className="settings-item-desc">
-                    Aplica a página de runas recomendada diretamente na conta do jogador.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  aria-label="Injetar Runas Automaticamente"
-                  checked={preferences.autoInjectRunes}
-                  onChange={(e) => onUpdatePreference("autoInjectRunes", e.target.checked)}
-                />
-              </label>
+            <div className="settings-card-divider" />
 
-              <label className="settings-item">
-                <div className="settings-item-text">
-                  <span className="settings-item-title">Injetar Feitiços de Invocador</span>
-                  <span className="settings-item-desc">
-                    Configura os feitiços de invocador otimizados para a rota e fila da partida.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  aria-label="Injetar Feitiços de Invocador"
-                  checked={preferences.autoInjectSpells}
-                  onChange={(e) => onUpdatePreference("autoInjectSpells", e.target.checked)}
-                />
-              </label>
+            {/* Subsection 2.3: Proteção de Patch (48h) */}
+            <div className="settings-subsection" data-testid="settings-subgroup-patch-protection">
+              <div className="settings-group-header">
+                <h3>Proteção de Patch (48h)</h3>
+                <p className="card-desc">
+                  Controle de integridade na coleta automática de dados ao lançar um novo patch.
+                </p>
+              </div>
 
-              <label className="settings-item">
-                <div className="settings-item-text">
-                  <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
-                  <span className="settings-item-desc">
-                    Gera blocos de itens recomendados na loja in-game da partida.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  aria-label="Injetar Conjuntos de Itens na Loja"
-                  checked={preferences.autoInjectItems}
-                  onChange={(e) => onUpdatePreference("autoInjectItems", e.target.checked)}
-                />
-              </label>
+              <div className="settings-list">
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">Proteção de 48h para Novos Patches</span>
+                    <span className="settings-item-desc">
+                      Mantém o patch anterior consolidado nas primeiras 48 horas após um novo patch quando o volume de dados ainda é baixo.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Proteção de 48h para Novos Patches"
+                    data-testid="patch-48h-protection-toggle"
+                    checked={patch48hProtection}
+                    onChange={(e) => {
+                      if (!e.target.checked && patch48hProtection) {
+                        setShowDisablePatchProtectionModal(true);
+                        return;
+                      }
+                      onUpdatePreference("patch48hProtection", e.target.checked);
+                    }}
+                  />
+                </label>
+              </div>
             </div>
           </section>
         </div>
       </div>
+
+      {showDisablePatchProtectionModal &&
+        createPortal(
+          <div
+            className="settings-modal-backdrop"
+            data-testid="patch-48h-disable-modal-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowDisablePatchProtectionModal(false);
+              }
+            }}
+          >
+            <div
+              className="card settings-modal-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="patch-48h-modal-title"
+              aria-describedby="patch-48h-modal-desc"
+              data-testid="patch-48h-protection-warning"
+            >
+              <div className="settings-modal-header">
+                <span className="settings-warning-icon settings-modal-icon" aria-hidden="true">
+                  !
+                </span>
+                <h3 id="patch-48h-modal-title" className="settings-modal-title">
+                  Desativar Proteção de 48h?
+                </h3>
+              </div>
+
+              <p id="patch-48h-modal-desc" className="settings-modal-desc">
+                <strong>NÃO é recomendado</strong> desativar essa opção, pois desfavorece o uso do app devido ao baixo volume de dados no início do patch.
+              </p>
+
+              <div className="settings-modal-actions">
+                <button
+                  type="button"
+                  className="settings-modal-btn settings-modal-btn-revert"
+                  data-testid="patch-48h-revert-btn"
+                  onClick={() => setShowDisablePatchProtectionModal(false)}
+                >
+                  Reverter
+                </button>
+                <button
+                  type="button"
+                  className="settings-modal-btn settings-modal-btn-accept"
+                  data-testid="patch-48h-accept-btn"
+                  onClick={() => {
+                    setShowDisablePatchProtectionModal(false);
+                    onUpdatePreference("patch48hProtection", false);
+                  }}
+                >
+                  Aceitar desativação
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -63,6 +63,10 @@ export function loadInitialPreferences(): UserPreferences {
             ? parsed.autoInjectItems
             : DEFAULT_PREFERENCES.autoInjectItems,
         flashKey: parsed.flashKey === "F" ? "F" : "D",
+        patch48hProtection:
+          typeof parsed.patch48hProtection === "boolean"
+            ? parsed.patch48hProtection
+            : DEFAULT_PREFERENCES.patch48hProtection,
       };
     }
   } catch {
@@ -71,7 +75,10 @@ export function loadInitialPreferences(): UserPreferences {
   return DEFAULT_PREFERENCES;
 }
 
-export function usePreferences(onFlashKeyChange?: (newKey: FlashKeyPreference) => void) {
+export function usePreferences(
+  onFlashKeyChange?: (newKey: FlashKeyPreference) => void,
+  onPatchProtectionChange?: (enabled: boolean) => void
+) {
   const [preferences, setPreferences] = useState<UserPreferences>(loadInitialPreferences);
   const [profileBlur, setProfileBlur] = useState<number>(loadInitialProfileBlur);
   const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(loadInitialWallpaperVisible);
@@ -92,7 +99,14 @@ export function usePreferences(onFlashKeyChange?: (newKey: FlashKeyPreference) =
       } catch {
         // Ignore localStorage quota errors
       }
-      commands.syncUserPreferences(next).catch(() => {});
+      commands
+        .syncUserPreferences(next)
+        .then(() => {
+          if (key === "patch48hProtection" && onPatchProtectionChange) {
+            onPatchProtectionChange(Boolean(value));
+          }
+        })
+        .catch(() => {});
       return next;
     });
 

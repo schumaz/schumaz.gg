@@ -43,7 +43,63 @@ describe("SettingsTab", () => {
     expect(handleUpdate).toHaveBeenCalledWith("flashKey", "F");
   });
 
-  it("renders 10% default blur slider, clickable/editable percentage number, wallpaper toggle, and Perfil -> Runas order", () => {
+  it("shows confirmation popup only when clicking to disable 48h patch protection, supporting Reverter and Aceitar desativação", () => {
+    const handleUpdate = vi.fn();
+
+    const { rerender } = render(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={handleUpdate}
+      />
+    );
+
+    const toggle = screen.getByTestId("patch-48h-protection-toggle");
+    expect(toggle).toBeChecked();
+
+    // Warning popup is hidden until the user clicks to disable
+    expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
+
+    // Clicking to disable opens the warning popup without calling onUpdatePreference yet
+    fireEvent.click(toggle);
+    expect(handleUpdate).not.toHaveBeenCalled();
+
+    const popup = screen.getByTestId("patch-48h-protection-warning");
+    expect(popup).toBeInTheDocument();
+    expect(popup).toHaveAttribute("role", "dialog");
+    expect(popup).toHaveTextContent(/NÃO é recomendado/i);
+    expect(popup).toHaveTextContent(/baixo volume de dados no início do patch/i);
+
+    // Clicking "Reverter" closes popup and keeps 48h protection active
+    fireEvent.click(screen.getByTestId("patch-48h-revert-btn"));
+    expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
+    expect(handleUpdate).not.toHaveBeenCalled();
+    expect(toggle).toBeChecked();
+
+    // Clicking to disable again and clicking "Aceitar desativação" disables it
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("patch-48h-protection-warning")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("patch-48h-accept-btn"));
+    expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
+    expect(handleUpdate).toHaveBeenCalledWith("patch48hProtection", false);
+
+    // Re-enabling from disabled state happens immediately without popup
+    rerender(
+      <SettingsTab
+        preferences={{ ...DEFAULT_PREFERENCES, patch48hProtection: false }}
+        onUpdatePreference={handleUpdate}
+      />
+    );
+
+    const disabledToggle = screen.getByTestId("patch-48h-protection-toggle");
+    expect(disabledToggle).not.toBeChecked();
+    expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
+
+    fireEvent.click(disabledToggle);
+    expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
+    expect(handleUpdate).toHaveBeenCalledWith("patch48hProtection", true);
+  });
+
+  it("renders 10% default blur slider, clickable/editable percentage number, wallpaper toggle, and unified Runas island order", () => {
     const handleBlurChange = vi.fn();
     const handleWallpaperToggle = vi.fn();
 
@@ -87,7 +143,7 @@ describe("SettingsTab", () => {
     fireEvent.click(wpToggle);
     expect(handleWallpaperToggle).toHaveBeenCalledWith(false);
 
-    // Check subgroup hierarchy & exact order
+    // Check subgroup hierarchy: Perfil card + single unified Runas island card
     const groups = Array.from(container.querySelectorAll(".settings-section-group"));
     expect(groups).toHaveLength(2);
     expect(groups[0]).toHaveAttribute("data-testid", "settings-group-profile");
@@ -98,8 +154,17 @@ describe("SettingsTab", () => {
     );
     expect(cards).toEqual([
       "settings-subgroup-appearance",
+      "settings-subgroup-runes",
+    ]);
+
+    const runesCard = screen.getByTestId("settings-subgroup-runes");
+    const runeSubsections = Array.from(
+      runesCard.querySelectorAll(".settings-subsection")
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(runeSubsections).toEqual([
       "settings-subgroup-flash",
       "settings-subgroup-auto-inject",
+      "settings-subgroup-patch-protection",
     ]);
   });
 

@@ -310,4 +310,97 @@ describe("FiltersHeader", () => {
     fireEvent.click(tierTrigger);
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
+
+  it("renders custom Patch dropdown, labels the latest patch as '(Mais atual)', and hides 48h protection indicator when not active", () => {
+    render(
+      <FiltersHeader
+        build={{
+          ...mockBuild,
+          active_patch: "16.22",
+          available_patches: ["16.22", "16.21", "16.20"],
+          patch_fallback_applied: false,
+          patch_protection_remaining_hours: null,
+        }}
+        champSelect={summonerRiftChampSelect}
+        loading={false}
+        onFilterChange={vi.fn()}
+      />
+    );
+
+    const patchTrigger = screen.getByTestId("filter-patch");
+    expect(patchTrigger).toHaveAttribute("role", "combobox");
+    expect(patchTrigger).toHaveAttribute("aria-haspopup", "listbox");
+    expect(patchTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(patchTrigger).toHaveAttribute("data-value", "16.22");
+    expect(patchTrigger).toHaveTextContent("Patch 16.22 (Mais atual)");
+
+    fireEvent.click(patchTrigger);
+    expect(patchTrigger).toHaveAttribute("aria-expanded", "true");
+
+    const listbox = screen.getByRole("listbox", { name: "Patch:" });
+    const options = within(listbox).getAllByRole("option");
+    expect(options.map((opt) => opt.getAttribute("data-value"))).toEqual([
+      "16.22",
+      "16.21",
+      "16.20",
+    ]);
+    expect(options.map((opt) => opt.textContent)).toEqual([
+      "Patch 16.22 (Mais atual)",
+      "Patch 16.21",
+      "Patch 16.20",
+    ]);
+
+    expect(screen.queryByTestId("patch-protection-indicator")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("patch-fallback-badge")).not.toBeInTheDocument();
+  });
+
+  it("shows red '!' indicator, remaining hours, and tooltip on hover when 48h patch protection is active", () => {
+    const onFilterChange = vi.fn();
+    render(
+      <FiltersHeader
+        build={{
+          ...mockBuild,
+          active_patch: "16.21",
+          available_patches: ["16.22", "16.21"],
+          patch_fallback_applied: true,
+          patch_protection_remaining_hours: 38,
+        }}
+        champSelect={summonerRiftChampSelect}
+        loading={false}
+        onFilterChange={onFilterChange}
+      />
+    );
+
+    const indicator = screen.getByTestId("patch-protection-indicator");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent("!");
+
+    expect(screen.getByTestId("patch-protection-hours")).toHaveTextContent("Faltam 38h");
+    expect(screen.getByTestId("patch-fallback-badge")).toHaveTextContent(
+      /Volume Protegido \(16\.21\).*Faltam 38h/i
+    );
+
+    // Tooltip appears on hover/mouseEnter and explains 48h lock, manual override, and remaining hours
+    expect(screen.queryByTestId("patch-protection-tooltip")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(indicator);
+
+    const tooltip = screen.getByTestId("patch-protection-tooltip");
+    expect(tooltip).toBeInTheDocument();
+    expect(tooltip).toHaveAttribute("role", "tooltip");
+    expect(tooltip).toHaveTextContent(/48h/i);
+    expect(tooltip).toHaveTextContent(/integridade dos dados/i);
+    expect(tooltip).toHaveTextContent(/escolha manual/i);
+    expect(tooltip).toHaveTextContent(/Faltam 38 horas/i);
+
+    fireEvent.mouseLeave(indicator);
+    expect(screen.queryByTestId("patch-protection-tooltip")).not.toBeInTheDocument();
+
+    // User can manually override to the newest patch via custom Patch dropdown
+    const patchTrigger = screen.getByTestId("filter-patch");
+    expect(patchTrigger).toHaveAttribute("data-value", "16.21");
+    fireEvent.click(patchTrigger);
+    const listbox = screen.getByRole("listbox", { name: "Patch:" });
+    fireEvent.click(within(listbox).getByRole("option", { name: "Patch 16.22 (Mais atual)" }));
+    expect(onFilterChange).toHaveBeenCalledWith("patch", "16.22");
+  });
 });

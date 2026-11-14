@@ -160,6 +160,8 @@ pub struct ChampionBuild {
     pub available_patches: Vec<String>,
     #[serde(default)]
     pub patch_fallback_applied: bool,
+    #[serde(default)]
+    pub patch_protection_remaining_hours: Option<u32>,
     #[serde(default = "default_true")]
     pub supports_runes: bool,
 }

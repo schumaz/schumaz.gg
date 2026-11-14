@@ -40,6 +40,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   autoInjectSpells: true,
   autoInjectItems: true,
   flashKey: "D",
+  patch48hProtection: true,
 };
 
 export const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";

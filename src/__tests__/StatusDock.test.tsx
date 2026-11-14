@@ -13,7 +13,7 @@ describe("StatusDock", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders connected status with summoner details", () => {
+  it("renders clean connected status without player nick, tagLine, or summoner level", () => {
     const mockSummoner: SummonerInfo = {
       summonerId: 12345,
       gameName: "Faker",
@@ -25,9 +25,13 @@ describe("StatusDock", () => {
 
     render(<StatusDock summoner={mockSummoner} />);
 
-    expect(screen.getByTestId("status-connected")).toBeInTheDocument();
-    expect(screen.getByText("Faker")).toBeInTheDocument();
-    expect(screen.getByText(/KR1/)).toBeInTheDocument();
-    expect(screen.getByText(/500/)).toBeInTheDocument();
+    const badge = screen.getByTestId("status-connected");
+    expect(badge).toBeInTheDocument();
+    expect(screen.getByText("Conectado ao cliente do LoL")).toBeInTheDocument();
+
+    expect(screen.queryByText(/Faker/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/KR1/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/500/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nível/i)).not.toBeInTheDocument();
   });
 });
