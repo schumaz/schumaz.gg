@@ -35,8 +35,10 @@ export const events = {
 	champSelectEnded: makeEvent<ChampSelectEnded, ChampSelectEnded>("champ-select-ended"),
 	champSelectReconciled: makeEvent<ChampSelectReconciled_Serialize, ChampSelectReconciled_Deserialize>("champ-select-reconciled"),
 	champSelected: makeEvent<ChampSelected_Serialize, ChampSelected_Deserialize>("champ-selected"),
+	gameflowPhaseChanged: makeEvent<GameflowPhaseChanged, GameflowPhaseChanged>("gameflow-phase-changed"),
 	lcuConnected: makeEvent<LcuConnected_Serialize, LcuConnected_Deserialize>("lcu-connected"),
 	lcuDisconnected: makeEvent<LcuDisconnected, LcuDisconnected>("lcu-disconnected"),
+	matchEnded: makeEvent<MatchEnded, MatchEnded>("match-ended"),
 	profileRefreshRequested: makeEvent<ProfileRefreshRequested, ProfileRefreshRequested>("profile-refresh-requested"),
 	recommendedBuild: makeEvent<RecommendedBuild_Serialize, RecommendedBuild_Deserialize>("recommended-build"),
 };
@@ -177,6 +179,8 @@ export type ChampionMasteryInfo = {
 /**  User's preferred key for Flash (D vs F). */
 export type FlashKeyPreference = "D" | "F";
 
+export type GameflowPhaseChanged = string;
+
 /**  Summary report returned after attempting an injection into the LCU. */
 export type InjectionReport = {
 	champion_name: string,
@@ -231,6 +235,8 @@ export type LcuConnected_Deserialize = SummonerInfo_Deserialize;
 export type LcuConnected_Serialize = SummonerInfo_Serialize;
 
 export type LcuDisconnected = null;
+
+export type MatchEnded = null;
 
 /**  Aggregated player profile payload for the Profile tab. */
 export type PlayerProfile = PlayerProfile_Serialize | PlayerProfile_Deserialize;

@@ -31,7 +31,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             models::RecommendedBuild,
             models::BuildInjected,
             models::ChampSelectReconciled,
-            models::ProfileRefreshRequested
+            models::ProfileRefreshRequested,
+            models::GameflowPhaseChanged,
+            models::MatchEnded
         ])
         .dangerously_cast_bigints_to_number()
 }

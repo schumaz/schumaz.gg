@@ -1176,4 +1176,87 @@ describe("App Component", () => {
     expect(refreshBtn).toBeDisabled();
     expect(refreshBtn).toHaveTextContent("Atualizar (30s)");
   });
+
+  it("automatically navigates to Runas when entering a match and pulling a champion, and returns to Perfil when the match ends", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["champ-selected"]).toBeDefined();
+      expect(eventListeners["recommended-build"]).toBeDefined();
+      expect(eventListeners["gameflow-phase-changed"]).toBeDefined();
+      expect(eventListeners["champ-select-ended"]).toBeDefined();
+      expect(eventListeners["match-ended"]).toBeDefined();
+    });
+
+    const profileBtn = screen.getByRole("button", { name: /^perfil$/i });
+    const runesBtn = screen.getByRole("button", { name: /^runas$/i });
+    const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
+
+    // Starts on Perfil
+    expect(profileBtn).toHaveAttribute("aria-current", "page");
+    expect(runesBtn).not.toHaveAttribute("aria-current");
+
+    // User enters Champ Select and champion build is pulled
+    await act(async () => {
+      eventListeners["gameflow-phase-changed"]({ payload: "ChampSelect" });
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: false,
+        },
+      });
+    });
+
+    // Automatically switches to Runas once the champion build is pulled
+    await waitFor(() => {
+      expect(runesBtn).toHaveAttribute("aria-current", "page");
+    });
+    expect(screen.getByTestId("view-runes")).toHaveClass("active-tab");
+    expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+
+    // If user manually switches to Configurações during the same champ select, lock-in does not override it
+    fireEvent.click(settingsBtn);
+    expect(settingsBtn).toHaveAttribute("aria-current", "page");
+
+    await act(async () => {
+      eventListeners["champ-selected"]({
+        payload: {
+          champion_id: 103,
+          queue_id: 420,
+          queue_mode: "RankedSolo",
+          locked_in: true,
+        },
+      });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+    expect(settingsBtn).toHaveAttribute("aria-current", "page");
+
+    // User switches back to Runas, match enters InProgress and champ-select ends -> build stays visible
+    fireEvent.click(runesBtn);
+    await act(async () => {
+      eventListeners["gameflow-phase-changed"]({ payload: "InProgress" });
+      eventListeners["champ-select-ended"]({ payload: null });
+    });
+    expect(runesBtn).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+
+    // Match ends -> automatically returns to Perfil and clears build
+    await act(async () => {
+      eventListeners["gameflow-phase-changed"]({ payload: "EndOfGame" });
+      eventListeners["match-ended"]({ payload: null });
+    });
+    expect(profileBtn).toHaveAttribute("aria-current", "page");
+    expect(runesBtn).not.toHaveAttribute("aria-current");
+    expect(screen.queryByTestId("champ-hero")).not.toBeInTheDocument();
+
+    // Entering a second match switches back to Runas automatically again
+    await act(async () => {
+      eventListeners["gameflow-phase-changed"]({ payload: "ChampSelect" });
+      eventListeners["recommended-build"]({ payload: mockAhriBuild });
+    });
+    expect(runesBtn).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+  });
 });

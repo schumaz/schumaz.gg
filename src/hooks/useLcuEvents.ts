@@ -9,10 +9,23 @@ import {
 } from "../types";
 import { computeOrderedSpells } from "../utils/spells";
 
-export function useLcuEvents(flashKey: FlashKeyPreference) {
+export function isInGamePhase(phase: string): boolean {
+  return phase === "GameStart" || phase === "InProgress" || phase === "Reconnect";
+}
+
+export interface UseLcuEventsOptions {
+  onChampionPulled?: () => void;
+  onMatchEnded?: () => void;
+}
+
+export function useLcuEvents(
+  flashKey: FlashKeyPreference,
+  options?: UseLcuEventsOptions
+) {
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
   const [build, setBuild] = useState<ChampionBuild | null>(null);
+  const [gameflowPhase, setGameflowPhase] = useState<string>("");
   const [spellsInverted, setSpellsInverted] = useState(false);
   const [selectedSecondarySpellId, setSelectedSecondarySpellId] = useState<number | null>(null);
   const [selectedRunePageIndex, setSelectedRunePageIndex] = useState<number>(0);
@@ -24,6 +37,15 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
   const buildRef = useRef<ChampionBuild | null>(null);
   const latestFetchSeqRef = useRef(0);
   const prevSyncedChampRef = useRef<number | null>(null);
+  const gameflowPhaseRef = useRef<string>("");
+  const hasAutoNavigatedRef = useRef<boolean>(false);
+  const onChampionPulledRef = useRef(options?.onChampionPulled);
+  const onMatchEndedRef = useRef(options?.onMatchEnded);
+
+  useEffect(() => {
+    onChampionPulledRef.current = options?.onChampionPulled;
+    onMatchEndedRef.current = options?.onMatchEnded;
+  }, [options?.onChampionPulled, options?.onMatchEnded]);
 
   useEffect(() => {
     buildRef.current = build;
@@ -99,6 +121,15 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     let unlistenChampSelectEnded: (() => void) | undefined;
     let unlistenBuild: (() => void) | undefined;
     let unlistenReconciled: (() => void) | undefined;
+    let unlistenGameflowPhase: (() => void) | undefined;
+    let unlistenMatchEnded: (() => void) | undefined;
+
+    const notifyChampionPulledOnce = () => {
+      if (!hasAutoNavigatedRef.current) {
+        hasAutoNavigatedRef.current = true;
+        onChampionPulledRef.current?.();
+      }
+    };
 
     const fetchBuildForPayload = async (payload: ChampSelectedPayload, fetchSeq: number) => {
       try {
@@ -135,6 +166,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
             }
             return recommended;
           });
+          notifyChampionPulledOnce();
         }
       } catch {
         // Ignore background fetch error, ws_listener will emit recommended-build
@@ -152,9 +184,16 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
           activeChampIdRef.current = null;
           buildRef.current = null;
           latestFetchSeqRef.current += 1;
+          hasAutoNavigatedRef.current = false;
+          gameflowPhaseRef.current = "";
+          setGameflowPhase("");
           setSummoner(null);
           setChampSelect(null);
           setBuild(null);
+          setSpellsInverted(false);
+          setSelectedSecondarySpellId(null);
+          setSelectedRunePageIndex(0);
+          setSelectedBuildIndex(0);
         });
 
         unlistenChampSelected = await events.champSelected.listen(async (event) => {
@@ -175,9 +214,16 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
         });
 
         unlistenChampSelectEnded = await events.champSelectEnded.listen(() => {
+          const inGame = isInGamePhase(gameflowPhaseRef.current);
           activeChampIdRef.current = null;
-          buildRef.current = null;
           latestFetchSeqRef.current += 1;
+
+          if (inGame) {
+            return;
+          }
+
+          buildRef.current = null;
+          hasAutoNavigatedRef.current = false;
           setChampSelect(null);
           setBuild(null);
           setSpellsInverted(false);
@@ -202,6 +248,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
             }
             return event.payload;
           });
+          notifyChampionPulledOnce();
         });
 
         unlistenReconciled = await events.champSelectReconciled.listen(async (event) => {
@@ -226,6 +273,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
             ) {
               buildRef.current = reconciledBuild;
               setBuild(reconciledBuild);
+              notifyChampionPulledOnce();
             } else {
               await fetchBuildForPayload(champ_selected, fetchSeq);
             }
@@ -241,7 +289,27 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
           ) {
             buildRef.current = reconciledBuild;
             setBuild(reconciledBuild);
+            notifyChampionPulledOnce();
           }
+        });
+
+        unlistenGameflowPhase = await events.gameflowPhaseChanged.listen((event) => {
+          gameflowPhaseRef.current = event.payload;
+          setGameflowPhase(event.payload);
+        });
+
+        unlistenMatchEnded = await events.matchEnded.listen(() => {
+          activeChampIdRef.current = null;
+          buildRef.current = null;
+          latestFetchSeqRef.current += 1;
+          hasAutoNavigatedRef.current = false;
+          setChampSelect(null);
+          setBuild(null);
+          setSpellsInverted(false);
+          setSelectedSecondarySpellId(null);
+          setSelectedRunePageIndex(0);
+          setSelectedBuildIndex(0);
+          onMatchEndedRef.current?.();
         });
       } catch (e) {
         console.warn("Tauri event listener setup skipped or running in test mode:", e);
@@ -257,6 +325,8 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
       if (unlistenChampSelectEnded) unlistenChampSelectEnded();
       if (unlistenBuild) unlistenBuild();
       if (unlistenReconciled) unlistenReconciled();
+      if (unlistenGameflowPhase) unlistenGameflowPhase();
+      if (unlistenMatchEnded) unlistenMatchEnded();
     };
   }, []);
 
@@ -325,6 +395,7 @@ export function useLcuEvents(flashKey: FlashKeyPreference) {
     summoner,
     champSelect,
     build,
+    gameflowPhase,
     spellsInverted,
     setSpellsInverted,
     selectedSecondarySpellId,

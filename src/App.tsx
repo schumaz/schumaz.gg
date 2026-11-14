@@ -64,7 +64,10 @@ function App() {
     handleSelectSecondarySpell,
     handleSelectRunePage,
     handleSelectBuild,
-  } = useLcuEvents(preferences.flashKey);
+  } = useLcuEvents(preferences.flashKey, {
+    onChampionPulled: () => setActiveTab("runes"),
+    onMatchEnded: () => setActiveTab("profile"),
+  });
 
   const {
     profile,

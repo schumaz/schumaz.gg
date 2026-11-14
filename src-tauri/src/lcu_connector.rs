@@ -17,6 +17,7 @@ pub const MATCH_HISTORY_ENDPOINT: &str =
 pub const MATCH_HISTORY_FALLBACK_ENDPOINT: &str =
     "/lol-match-history/v1/products/lol/current-summoner/matches";
 pub const GAMEFLOW_SESSION_ENDPOINT: &str = "/lol-gameflow/v1/session";
+pub const GAMEFLOW_PHASE_ENDPOINT: &str = "/lol-gameflow/v1/gameflow-phase";
 pub const CHAMP_SELECT_SESSION_ENDPOINT: &str = "/lol-champ-select/v1/session";
 
 /// Calculates the reconnection backoff duration in seconds.
@@ -146,7 +147,10 @@ impl LcuConnection {
         if let Some(p) = puuid
             && !p.is_empty()
         {
-            endpoints.push(format!("/lol-collections/v1/inventories/{}/champion-mastery", p));
+            endpoints.push(format!(
+                "/lol-collections/v1/inventories/{}/champion-mastery",
+                p
+            ));
             endpoints.push(format!("/lol-champion-mastery/v1/{}/champion-masteries", p));
             endpoints.push(format!("/lol-champion-mastery/v1/{}/champion-mastery", p));
         }
@@ -232,6 +236,20 @@ impl LcuConnection {
         match response {
             Some(val) => crate::ws_listener::extract_queue_id(&val),
             None => Err("LCU returned an empty response for gameflow session".to_string()),
+        }
+    }
+
+    /// Fetches the current gameflow phase string via GET /lol-gameflow/v1/gameflow-phase.
+    pub async fn get_gameflow_phase(&self) -> Result<String, String> {
+        let response: Option<serde_json::Value> = self
+            .client
+            .get(GAMEFLOW_PHASE_ENDPOINT)
+            .await
+            .map_err(|err| format!("Error requesting gameflow phase: {:?}", err))?;
+
+        match response.and_then(|v| v.as_str().map(|s| s.trim().to_string())) {
+            Some(phase) if !phase.is_empty() => Ok(phase),
+            _ => Err("LCU returned an empty or invalid response for gameflow phase".to_string()),
         }
     }
 

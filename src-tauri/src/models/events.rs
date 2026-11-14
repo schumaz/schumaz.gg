@@ -30,3 +30,9 @@ pub struct ChampSelectReconciled(pub ChampSelectReconciledPayload);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 pub struct ProfileRefreshRequested;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct GameflowPhaseChanged(pub String);
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct MatchEnded;
