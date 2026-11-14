@@ -12,6 +12,8 @@ export const commands = {
 	updateBuildFilters: (championId: number, queueId: number | null, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("update_build_filters", { championId, queueId, position, tier, region, patch }),
 	/**  Tauri command to fetch the current summoner status if the client is connected. */
 	getSummonerStatus: () => __TAURI_INVOKE<SummonerInfo_Serialize | null>("get_summoner_status"),
+	/**  Tauri command to fetch aggregated player profile (wallpaper, ranked stats, top 3 masteries, 10 matches). */
+	getPlayerProfile: () => __TAURI_INVOKE<PlayerProfile_Serialize | null>("get_player_profile"),
 	/**
 	 *  Syncs the champion ID currently displayed in the frontend UI to backend session state
 	 *  so final Champ Select reconciliation can detect UI/backend divergence.
@@ -35,6 +37,7 @@ export const events = {
 	champSelected: makeEvent<ChampSelected_Serialize, ChampSelected_Deserialize>("champ-selected"),
 	lcuConnected: makeEvent<LcuConnected_Serialize, LcuConnected_Deserialize>("lcu-connected"),
 	lcuDisconnected: makeEvent<LcuDisconnected, LcuDisconnected>("lcu-disconnected"),
+	profileRefreshRequested: makeEvent<ProfileRefreshRequested, ProfileRefreshRequested>("profile-refresh-requested"),
 	recommendedBuild: makeEvent<RecommendedBuild_Serialize, RecommendedBuild_Deserialize>("recommended-build"),
 };
 
@@ -162,6 +165,15 @@ export type ChampionBuild_Serialize = {
 	supports_runes: boolean,
 };
 
+/**  Top champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
+export type ChampionMasteryInfo = {
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	champion_level: number,
+	champion_points: number,
+};
+
 /**  User's preferred key for Flash (D vs F). */
 export type FlashKeyPreference = "D" | "F";
 
@@ -220,8 +232,84 @@ export type LcuConnected_Serialize = SummonerInfo_Serialize;
 
 export type LcuDisconnected = null;
 
+/**  Aggregated player profile payload for the Profile tab. */
+export type PlayerProfile = PlayerProfile_Serialize | PlayerProfile_Deserialize;
+
+/**  Aggregated player profile payload for the Profile tab. */
+export type PlayerProfile_Deserialize = {
+	summoner: SummonerInfo_Deserialize,
+	profile_icon_url: string,
+	background_skin_id: number,
+	background_skin_name: string,
+	background_splash_url: string,
+	background_splash_fallback_url: string,
+	ranked_stats: RankedQueueStats[],
+	top_masteries: ChampionMasteryInfo[],
+	recent_matches: RecentMatchInfo[],
+};
+
+/**  Aggregated player profile payload for the Profile tab. */
+export type PlayerProfile_Serialize = {
+	summoner: SummonerInfo_Serialize,
+	profile_icon_url: string,
+	background_skin_id: number,
+	background_skin_name: string,
+	background_splash_url: string,
+	background_splash_fallback_url: string,
+	ranked_stats: RankedQueueStats[],
+	top_masteries: ChampionMasteryInfo[],
+	recent_matches: RecentMatchInfo[],
+};
+
+export type ProfileRefreshRequested = null;
+
 /**  Game queue classifications. */
 export type QueueMode = "SummonersRift" | "Aram" | "AramMayhem" | "PracticeTool" | "Other";
+
+/**  Ranked queue summary (Solo/Duo or Flex) from `/lol-ranked/v1/current-ranked-stats`. */
+export type RankedQueueStats = {
+	queue_type: string,
+	queue_label: string,
+	tier: string,
+	tier_label: string,
+	division: string,
+	league_points: number,
+	wins: number,
+	losses: number,
+};
+
+/**  Individual recent match entry from LCU match history (Practice Tool strictly excluded). */
+export type RecentMatchInfo = {
+	game_id: number,
+	queue_id: number,
+	game_mode_key: string,
+	game_mode_label: string,
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	win: boolean,
+	kills: number,
+	deaths: number,
+	assists: number,
+	cs: number,
+	game_duration_secs: number,
+	game_creation_ms: number,
+	spell1_id: number,
+	spell1_icon_url: string,
+	spell2_id: number,
+	spell2_icon_url: string,
+	item_ids: number[],
+	item_icon_urls: string[],
+	gold_earned: number,
+	total_damage_dealt_to_champions: number,
+	vision_score: number,
+	wards_placed: number,
+	champ_level: number,
+	double_kills: number,
+	triple_kills: number,
+	quadra_kills: number,
+	penta_kills: number,
+};
 
 export type RecommendedBuild = RecommendedBuild_Serialize | RecommendedBuild_Deserialize;
 

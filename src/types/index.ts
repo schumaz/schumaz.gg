@@ -1,4 +1,4 @@
-export type ActiveTab = "runes" | "settings";
+export type ActiveTab = "profile" | "runes" | "settings";
 
 export type {
   BuildInjected,
@@ -8,13 +8,18 @@ export type {
   ChampSelected,
   ChampSelectedPayload,
   ChampionBuild,
+  ChampionMasteryInfo,
   FlashKeyPreference,
   InjectionReport,
   ItemBlock,
   ItemBuildOption,
   LcuConnected,
   LcuDisconnected,
+  PlayerProfile,
+  ProfileRefreshRequested,
   QueueMode,
+  RankedQueueStats,
+  RecentMatchInfo,
   RecommendedBuild,
   RuneMetadata,
   RunePageOption,

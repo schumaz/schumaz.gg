@@ -1,4 +1,5 @@
 export * from "./StatusDock";
+export * from "./ProfileTab";
 export * from "./FiltersHeader";
 export * from "./RuneTree";
 export * from "./SpellsBar";

@@ -7,6 +7,43 @@ import {
   commands,
 } from "../types";
 
+export const PROFILE_BLUR_STORAGE_KEY = "schumaz_profile_ui_blur";
+export const WALLPAPER_VISIBLE_STORAGE_KEY = "schumaz_profile_wallpaper_visible";
+export const DEFAULT_PROFILE_BLUR = 10;
+export const MAX_PROFILE_BLUR_PX = 32;
+
+export function clampProfileBlur(val: number): number {
+  if (!Number.isFinite(val)) return DEFAULT_PROFILE_BLUR;
+  return Math.min(100, Math.max(0, Math.round(val)));
+}
+
+export function profileBlurPercentToPx(percent: number): number {
+  const clamped = clampProfileBlur(percent);
+  return Math.round((clamped / 100) * MAX_PROFILE_BLUR_PX * 10) / 10;
+}
+
+export function loadInitialProfileBlur(): number {
+  try {
+    const raw = localStorage.getItem(PROFILE_BLUR_STORAGE_KEY);
+    if (raw !== null) {
+      return clampProfileBlur(Number(raw));
+    }
+  } catch {
+    // Fallback to default blur
+  }
+  return DEFAULT_PROFILE_BLUR;
+}
+
+export function loadInitialWallpaperVisible(): boolean {
+  try {
+    const raw = localStorage.getItem(WALLPAPER_VISIBLE_STORAGE_KEY);
+    if (raw === "false") return false;
+  } catch {
+    // Ignore storage errors
+  }
+  return true;
+}
+
 export function loadInitialPreferences(): UserPreferences {
   try {
     const raw = localStorage.getItem(PREFERENCES_STORAGE_KEY);
@@ -36,6 +73,8 @@ export function loadInitialPreferences(): UserPreferences {
 
 export function usePreferences(onFlashKeyChange?: (newKey: FlashKeyPreference) => void) {
   const [preferences, setPreferences] = useState<UserPreferences>(loadInitialPreferences);
+  const [profileBlur, setProfileBlur] = useState<number>(loadInitialProfileBlur);
+  const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(loadInitialWallpaperVisible);
 
   useEffect(() => {
     // Sync initial preferences with backend
@@ -62,5 +101,31 @@ export function usePreferences(onFlashKeyChange?: (newKey: FlashKeyPreference) =
     }
   };
 
-  return { preferences, updatePreference };
+  const updateProfileBlur = (blurPercent: number) => {
+    const clamped = clampProfileBlur(blurPercent);
+    setProfileBlur(clamped);
+    try {
+      localStorage.setItem(PROFILE_BLUR_STORAGE_KEY, String(clamped));
+    } catch {
+      // Ignore localStorage quota errors
+    }
+  };
+
+  const updateWallpaperVisible = (visible: boolean) => {
+    setWallpaperVisible(visible);
+    try {
+      localStorage.setItem(WALLPAPER_VISIBLE_STORAGE_KEY, String(visible));
+    } catch {
+      // Ignore localStorage quota errors
+    }
+  };
+
+  return {
+    preferences,
+    updatePreference,
+    profileBlur,
+    updateProfileBlur,
+    wallpaperVisible,
+    updateWallpaperVisible,
+  };
 }

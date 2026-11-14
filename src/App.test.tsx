@@ -210,6 +210,10 @@ vi.mock("@tauri-apps/api/core", () => ({
       return Promise.resolve(null);
     }
 
+    if (cmd === "get_player_profile") {
+      return Promise.resolve(null);
+    }
+
     if (cmd === "get_recommended_build_for_champion") {
       if (args?.queueId === 2400) {
         return Promise.resolve({
@@ -258,12 +262,11 @@ describe("App Component", () => {
     localStorage.clear();
   });
 
-  it("renders schumaz.gg title and initial LCU disconnected status", () => {
+  it("renders schumaz.gg title, initial LCU disconnected status, and starts on Perfil tab", () => {
     render(<App />);
     expect(screen.getByText("schumaz.gg")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Aguardando cliente do LoL/i)
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("status-disconnected")).toHaveTextContent(/Aguardando cliente do LoL/i);
+    expect(screen.getByTestId("profile-waiting-client")).toHaveTextContent(/Aguardando Cliente do LoL/i);
   });
 
   it("does not render manual injection buttons as injection is strictly automatic", () => {
@@ -299,20 +302,52 @@ describe("App Component", () => {
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
-  it("renders the floating bottom dock with exactly 2 navigation tabs: Runas and Configurações", () => {
+  it("renders the floating bottom dock with 3 navigation tabs in order: Perfil, Runas and Configurações", () => {
     render(<App />);
     const dockNav = screen.getByRole("navigation", { name: /navegação principal/i });
     expect(dockNav).toBeInTheDocument();
 
+    const buttons = Array.from(dockNav.querySelectorAll("button"));
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Perfil", "Runas", "Configurações"]);
+
+    const profileBtn = screen.getByRole("button", { name: /^perfil$/i });
     const runesBtn = screen.getByRole("button", { name: /^runas$/i });
     const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
 
-    expect(runesBtn).toBeInTheDocument();
-    expect(settingsBtn).toBeInTheDocument();
-
-    // Runas tab is active by default
-    expect(runesBtn).toHaveAttribute("aria-current", "page");
+    // Perfil tab is active by default
+    expect(profileBtn).toHaveAttribute("aria-current", "page");
+    expect(runesBtn).not.toHaveAttribute("aria-current");
     expect(settingsBtn).not.toHaveAttribute("aria-current");
+  });
+
+  it("fetches player profile automatically when LCU connects and resets when disconnected", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["lcu-connected"]).toBeDefined();
+      expect(eventListeners["lcu-disconnected"]).toBeDefined();
+    });
+
+    await act(async () => {
+      eventListeners["lcu-connected"]({
+        payload: {
+          summonerId: 987654321,
+          gameName: "Schuma",
+          tagLine: "BR1",
+          displayName: "Schuma",
+          summonerLevel: 350,
+          profileIconId: 548,
+        },
+      });
+    });
+
+    expect(invoke).toHaveBeenCalledWith("get_player_profile");
+
+    await act(async () => {
+      eventListeners["lcu-disconnected"]({ payload: null });
+    });
+
+    expect(screen.getByTestId("profile-waiting-client")).toBeInTheDocument();
   });
 
   it("switches to the Configurações view and displays the settings groups", () => {
@@ -1041,5 +1076,104 @@ describe("App Component", () => {
       coreIndex: 1,
       finalIndex: 1,
     });
+  });
+
+  it("renders full-screen profile wallpaper only on Perfil tab, applies blur slider from Configurações, and enforces 30s refresh cooldown", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string, args?: any) => {
+      if (cmd === "get_summoner_status") return Promise.resolve(null);
+      if (cmd === "get_player_profile") {
+        return Promise.resolve({
+          summoner: {
+            summonerId: 987654321,
+            gameName: "Schuma",
+            tagLine: "BR1",
+            displayName: "Schuma",
+            summonerLevel: 350,
+            profileIconId: 548,
+          },
+          profile_icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/profileicon/548.png",
+          background_skin_id: 103015,
+          background_skin_name: "",
+          background_splash_url: "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_15.jpg",
+          background_splash_fallback_url: "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg",
+          ranked_stats: [],
+          top_masteries: [],
+          recent_matches: [],
+        });
+      }
+      if (cmd === "get_recommended_build_for_champion") return Promise.resolve(mockAhriBuild);
+      if (cmd === "update_build_filters") {
+        return Promise.resolve({
+          ...mockAhriBuild,
+          active_position: args?.position || mockAhriBuild.active_position,
+          active_tier: args?.tier || mockAhriBuild.active_tier,
+          active_region: args?.region || mockAhriBuild.active_region,
+          active_patch: args?.patch || mockAhriBuild.active_patch,
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(eventListeners["lcu-connected"]).toBeDefined();
+    });
+
+    await act(async () => {
+      eventListeners["lcu-connected"]({
+        payload: {
+          summonerId: 987654321,
+          gameName: "Schuma",
+          tagLine: "BR1",
+          displayName: "Schuma",
+          summonerLevel: 350,
+          profileIconId: 548,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("profile-wallpaper")).toBeInTheDocument();
+    });
+
+    // Wallpaper blur stays fixed at 1px; profile UI defaults to 10% (3.2px)
+    const wpImg = screen.getByTestId("profile-wallpaper").querySelector("img")!;
+    expect(wpImg.style.filter).toContain("blur(1px)");
+    expect(screen.getByTestId("view-profile").style.getPropertyValue("--profile-ui-blur")).toBe("3.2px");
+    expect(screen.getByTestId("top-masteries-card").style.backdropFilter).toBe("blur(3.2px)");
+
+    // Switch to Configurações, type 100% via clickable number and verify slider + persistence
+    fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
+    expect(screen.queryByTestId("profile-wallpaper")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("profile-blur-value"));
+    const numInput = screen.getByTestId("profile-blur-input");
+    fireEvent.change(numInput, { target: { value: "100" } });
+    fireEvent.keyDown(numInput, { key: "Enter" });
+    expect(localStorage.getItem("schumaz_profile_ui_blur")).toBe("100");
+    expect(screen.getByTestId("profile-blur-value")).toHaveTextContent("100%");
+
+    // Return to Perfil: wallpaper stays at 1px fixed while profile interface blur updates to 32px
+    fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
+    const wpImgAfter = screen.getByTestId("profile-wallpaper").querySelector("img")!;
+    expect(wpImgAfter.style.filter).toContain("blur(1px)");
+    expect(screen.getByTestId("view-profile").style.getPropertyValue("--profile-ui-blur")).toBe("32px");
+    expect(screen.getByTestId("top-masteries-card").style.backdropFilter).toBe("blur(32px)");
+
+    // Toggle Fundo Visível off in Configurações and confirm wallpaper hides in Perfil
+    fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
+    fireEvent.click(screen.getByTestId("wallpaper-visible-toggle"));
+    expect(localStorage.getItem("schumaz_profile_wallpaper_visible")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
+    expect(screen.queryByTestId("profile-wallpaper")).not.toBeInTheDocument();
+
+    // Clicking Atualizar triggers 30s cooldown timer
+    const refreshBtn = screen.getByTestId("refresh-profile-btn");
+    await act(async () => {
+      fireEvent.click(refreshBtn);
+    });
+    expect(refreshBtn).toBeDisabled();
+    expect(refreshBtn).toHaveTextContent("Atualizar (30s)");
   });
 });

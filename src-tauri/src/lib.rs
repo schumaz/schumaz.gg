@@ -3,6 +3,7 @@ pub mod commands;
 pub mod lcu_connector;
 pub mod lcu_injector;
 pub mod models;
+pub mod profile_provider;
 pub mod ws_listener;
 
 use specta_typescript::Typescript;
@@ -15,6 +16,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_recommended_build_for_champion,
             commands::update_build_filters,
             commands::get_summoner_status,
+            commands::get_player_profile,
             commands::sync_displayed_champion,
             commands::sync_user_preferences,
             commands::inject_summoner_spells,
@@ -28,7 +30,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             models::ChampSelectEnded,
             models::RecommendedBuild,
             models::BuildInjected,
-            models::ChampSelectReconciled
+            models::ChampSelectReconciled,
+            models::ProfileRefreshRequested
         ])
         .dangerously_cast_bigints_to_number()
 }

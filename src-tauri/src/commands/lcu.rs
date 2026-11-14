@@ -1,4 +1,4 @@
-use crate::{lcu_connector, models, ws_listener};
+use crate::{lcu_connector, models, profile_provider, ws_listener};
 
 #[tauri::command]
 #[specta::specta]
@@ -15,6 +15,20 @@ pub async fn get_summoner_status() -> Result<Option<models::SummonerInfo>, Strin
             Ok(summoner) => Ok(Some(summoner)),
             Err(_) => Ok(None),
         },
+        Err(_) => Ok(None),
+    }
+}
+
+/// Tauri command to fetch aggregated player profile (wallpaper, ranked stats, top 3 masteries, 10 matches).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_player_profile() -> Result<Option<models::PlayerProfile>, String> {
+    let Ok(conn) = lcu_connector::LcuConnection::connect() else {
+        return Ok(None);
+    };
+
+    match profile_provider::load_player_profile(&conn).await {
+        Ok(profile) => Ok(Some(profile)),
         Err(_) => Ok(None),
     }
 }

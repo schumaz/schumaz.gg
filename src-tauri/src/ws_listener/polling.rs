@@ -99,6 +99,17 @@ impl ChampSelectCoordinator {
     }
 }
 
+/// Returns true when a gameflow phase transition indicates a finished match
+/// whose match history / ranked stats / masteries should be refreshed in the Profile tab.
+pub fn should_request_profile_refresh(prev_phase: &str, next_phase: &str) -> bool {
+    let was_in_game = matches!(prev_phase, "InProgress" | "Reconnect");
+    let now_post_game = matches!(
+        next_phase,
+        "WaitingForStats" | "PreEndOfGame" | "EndOfGame" | "Lobby" | "None"
+    );
+    was_in_game && now_post_game
+}
+
 /// Custom error handler for irelia WebSocket that retries connection on transient drops.
 struct ReconnectingErrorHandler;
 
@@ -335,6 +346,7 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
     let session_state = shared_session_state();
     let reconcile_lock = shared_reconcile_lock();
     let coordinator = ChampSelectCoordinator::default();
+    let last_gameflow_phase = Arc::new(tokio::sync::Mutex::new(String::new()));
 
     // Fallback sync loop: ensures Champion Select and FINALIZATION timer countdowns are observed
     // even if WebSocket does not emit per-second timer ticks or missed an event.
@@ -443,6 +455,36 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
         },
     );
 
+    // Subscribe to gameflow phase changes to automatically refresh player profile after a match
+    let phase_handle = app_handle.clone();
+    let phase_state = Arc::clone(&last_gameflow_phase);
+    ws.subscribe(
+        EventKind::json_api_event_callback_str("/lol-gameflow/v1/gameflow-phase"),
+        move |event: &Event| {
+            let handle = phase_handle.clone();
+            let state = Arc::clone(&phase_state);
+            let next_phase = event.2.data.as_str().unwrap_or("").to_string();
+
+            if next_phase.is_empty() {
+                return;
+            }
+
+            tokio::spawn(async move {
+                let should_refresh = {
+                    let mut guard = state.lock().await;
+                    let trigger = should_request_profile_refresh(&guard, &next_phase);
+                    *guard = next_phase;
+                    trigger
+                };
+
+                if should_refresh {
+                    tokio::time::sleep(Duration::from_millis(1500)).await;
+                    let _ = models::ProfileRefreshRequested.emit(&handle);
+                }
+            });
+        },
+    );
+
     loop {
         tokio::time::sleep(Duration::from_secs(60)).await;
     }
@@ -451,6 +493,19 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_should_request_profile_refresh_on_post_game_transition() {
+        assert!(should_request_profile_refresh(
+            "InProgress",
+            "WaitingForStats"
+        ));
+        assert!(should_request_profile_refresh("InProgress", "EndOfGame"));
+        assert!(should_request_profile_refresh("Reconnect", "Lobby"));
+        assert!(!should_request_profile_refresh("Lobby", "ChampSelect"));
+        assert!(!should_request_profile_refresh("ChampSelect", "InProgress"));
+        assert!(!should_request_profile_refresh("EndOfGame", "Lobby"));
+    }
 
     #[tokio::test]
     async fn test_coordinator_cancels_stale_task_on_rapid_champion_switch() {

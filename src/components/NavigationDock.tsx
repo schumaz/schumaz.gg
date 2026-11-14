@@ -10,6 +10,29 @@ export function NavigationDock({ activeTab, onTabChange }: NavigationDockProps) 
     <nav className="floating-dock" aria-label="Navegação Principal">
       <button
         type="button"
+        className={`dock-btn ${activeTab === "profile" ? "active" : ""}`}
+        onClick={() => onTabChange("profile")}
+        aria-current={activeTab === "profile" ? "page" : undefined}
+      >
+        <svg
+          className="dock-icon"
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+        <span>Perfil</span>
+      </button>
+
+      <button
+        type="button"
         className={`dock-btn ${activeTab === "runes" ? "active" : ""}`}
         onClick={() => onTabChange("runes")}
         aria-current={activeTab === "runes" ? "page" : undefined}

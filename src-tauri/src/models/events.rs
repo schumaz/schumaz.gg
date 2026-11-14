@@ -27,3 +27,6 @@ pub struct BuildInjected(pub InjectionReport);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 pub struct ChampSelectReconciled(pub ChampSelectReconciledPayload);
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct ProfileRefreshRequested;

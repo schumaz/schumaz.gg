@@ -1,12 +1,14 @@
-import { useState } from "react";
+﻿import { CSSProperties, useEffect, useState } from "react";
 import "./App.css";
 
 import { ActiveTab, FlashKeyPreference, commands } from "./types";
-import { usePreferences } from "./hooks/usePreferences";
+import { profileBlurPercentToPx, usePreferences } from "./hooks/usePreferences";
 import { useLcuEvents } from "./hooks/useLcuEvents";
+import { usePlayerProfile } from "./hooks/usePlayerProfile";
 import { computeOrderedSpells } from "./utils/spells";
 import {
   StatusDock,
+  ProfileTab,
   FiltersHeader,
   RuneTree,
   SpellsBar,
@@ -21,7 +23,9 @@ export * from "./types";
 export * from "./utils/spells";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("runes");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
+  const [splashFallbackUsed, setSplashFallbackUsed] = useState(false);
+  const [splashBroken, setSplashBroken] = useState(false);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
     const reordered = computeOrderedSpells(
@@ -36,7 +40,14 @@ function App() {
     }
   };
 
-  const { preferences, updatePreference } = usePreferences(handleFlashKeyChange);
+  const {
+    preferences,
+    updatePreference,
+    profileBlur,
+    updateProfileBlur,
+    wallpaperVisible,
+    updateWallpaperVisible,
+  } = usePreferences(handleFlashKeyChange);
 
   const {
     summoner,
@@ -55,18 +66,88 @@ function App() {
     handleSelectBuild,
   } = useLcuEvents(preferences.flashKey);
 
+  const {
+    profile,
+    profileLoading,
+    profileError,
+    refreshCooldownSecs,
+    refreshProfile,
+  } = usePlayerProfile(summoner);
+
+  useEffect(() => {
+    setSplashFallbackUsed(false);
+    setSplashBroken(false);
+  }, [profile?.background_splash_url]);
+
+  const activeSplashUrl = splashFallbackUsed
+    ? profile?.background_splash_fallback_url || ""
+    : profile?.background_splash_url || "";
+
+  const showFullScreenWallpaper =
+    activeTab === "profile" &&
+    Boolean(summoner) &&
+    wallpaperVisible &&
+    Boolean(activeSplashUrl) &&
+    !splashBroken;
+
+  const profileUiBlurPx = profileBlurPercentToPx(profileBlur);
+
   const handleInvertSpells = async () => {
     const nextFlashKey: FlashKeyPreference = preferences.flashKey === "D" ? "F" : "D";
     updatePreference("flashKey", nextFlashKey);
   };
 
   return (
-    <main className="container">
+    <main
+      className={`container ${activeTab === "profile" ? "profile-active" : ""}`}
+      style={
+        activeTab === "profile"
+          ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties)
+          : undefined
+      }
+    >
+      {/* Full-Screen Profile Wallpaper Backdrop (fixed 1px blur) */}
+      {showFullScreenWallpaper && (
+        <div className="profile-wallpaper-backdrop" data-testid="profile-wallpaper">
+          <img
+            src={activeSplashUrl}
+            alt=""
+            aria-hidden="true"
+            className="profile-wallpaper-img"
+            style={{ filter: "blur(1px) saturate(1.05)" }}
+            onError={() => {
+              if (
+                !splashFallbackUsed &&
+                profile?.background_splash_fallback_url &&
+                profile.background_splash_fallback_url !== activeSplashUrl
+              ) {
+                setSplashFallbackUsed(true);
+              } else {
+                setSplashBroken(true);
+              }
+            }}
+          />
+          <div className="profile-wallpaper-scrim" />
+        </div>
+      )}
+
       <StatusDock summoner={summoner} />
 
       {/* Main Content Area with Seamless Crossfade Transition */}
       <div className="tabs-viewport">
-        {/* View 1: "Runas" Tab (Match Dashboard) */}
+        {/* View 1: "Perfil" Tab (Default Startup Screen) */}
+        <ProfileTab
+          summoner={summoner}
+          profile={profile}
+          loading={profileLoading}
+          errorMsg={profileError}
+          onRefresh={refreshProfile}
+          refreshCooldownSecs={refreshCooldownSecs}
+          profileBlur={profileBlur}
+          isActive={activeTab === "profile"}
+        />
+
+        {/* View 2: "Runas" Tab (Match Dashboard) */}
         <div
           className={`tab-content ${activeTab === "runes" ? "active-tab" : "inactive-tab"}`}
           data-testid="view-runes"
@@ -112,10 +193,14 @@ function App() {
           )}
         </div>
 
-        {/* View 2: "Configurações" Tab (Settings & Preferences) */}
+        {/* View 3: "Configurações" Tab (Settings & Preferences) */}
         <SettingsTab
           preferences={preferences}
           onUpdatePreference={updatePreference}
+          profileBlur={profileBlur}
+          onProfileBlurChange={updateProfileBlur}
+          wallpaperVisible={wallpaperVisible}
+          onWallpaperVisibleChange={updateWallpaperVisible}
           isActive={activeTab === "settings"}
         />
       </div>
