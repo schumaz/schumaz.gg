@@ -49,10 +49,10 @@ describe("ItemBlocks", () => {
     ],
   };
 
-  it("renders all 5 shop blocks and handles build option selection", () => {
+  it("renders all 5 shop blocks with rebranded layout, telemetry pill and handles build option selection", () => {
     const handleSelectBuild = vi.fn();
 
-    render(
+    const { container } = render(
       <ItemBlocks
         build={mockBuild}
         selectedBuildIndex={0}
@@ -61,11 +61,24 @@ describe("ItemBlocks", () => {
     );
 
     expect(screen.getByTestId("item-blocks")).toBeInTheDocument();
+    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/60\.0% escolha/i);
+    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/10[.,]000 partidas/i);
+
     expect(screen.getByText("1. Itens Iniciais")).toBeInTheDocument();
     expect(screen.getByText("2. Primeiros 3 Itens")).toBeInTheDocument();
     expect(screen.getByText("3. 3 Botas Mais Feitas")).toBeInTheDocument();
     expect(screen.getByText("4. Build Final")).toBeInTheDocument();
     expect(screen.getByText("5. Itens Situacionais / Úteis")).toBeInTheDocument();
+
+    expect(screen.getByText("Core Trio")).toBeInTheDocument();
+    expect(screen.getByText("6 Itens")).toBeInTheDocument();
+    expect(screen.getByText("Opcional")).toBeInTheDocument();
+    expect(container.querySelectorAll(".item-flow-arrow")).toHaveLength(2);
+    expect(container.querySelector(".block-kind-starter")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-boots")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-core")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-final")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-situational")).toBeInTheDocument();
 
     const build2Btn = screen.getByTestId("build-opt-btn-1");
     fireEvent.click(build2Btn);

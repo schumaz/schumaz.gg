@@ -27,7 +27,7 @@ describe("BuildSelector", () => {
     },
   ];
 
-  it("renders build pills with names and handles selection", () => {
+  it("renders build cards with names, pick rate stats, core icons and handles selection", () => {
     const handleSelect = vi.fn();
 
     render(
@@ -41,6 +41,12 @@ describe("BuildSelector", () => {
     expect(screen.getByTestId("unified-build-selector")).toBeInTheDocument();
     expect(screen.getByText("Build 1 (Mais Feita)")).toBeInTheDocument();
     expect(screen.getByText("Build 2")).toBeInTheDocument();
+    expect(screen.getByText("60.0%")).toBeInTheDocument();
+    expect(screen.getByText("30.0%")).toBeInTheDocument();
+
+    const firstCard = screen.getByTestId("build-opt-btn-0");
+    expect(firstCard).toHaveClass("active");
+    expect(firstCard.querySelectorAll(".build-pill-mini-icon")).toHaveLength(3);
 
     const secondPill = screen.getByTestId("build-opt-btn-1");
     fireEvent.click(secondPill);
