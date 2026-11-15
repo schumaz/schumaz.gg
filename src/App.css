@@ -2416,6 +2416,7 @@ img {
   user-select: text;
   -webkit-user-select: text;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .slider-value-input::-webkit-inner-spin-button,
