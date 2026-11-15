@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { events } from "../types";
+import { windowIpc, type UnlistenFn } from "../services/ipc";
 
 function getDocumentHidden(): boolean {
   if (typeof document === "undefined") return false;
@@ -53,28 +53,24 @@ export function useWindowMinimized(): boolean {
 
   useEffect(() => {
     let active = true;
-    let unlisten: (() => void) | undefined;
+    let unlisten: UnlistenFn | undefined;
 
-    try {
-      const listener = events?.windowMinimizedChanged?.listen;
-      if (typeof listener === "function") {
-        listener((event) => {
-          if (active) {
-            setIsWindowMinimized(Boolean(event.payload));
-          }
-        })
-          .then((fn) => {
-            if (active) {
-              unlisten = fn;
-            } else {
-              fn();
-            }
-          })
-          .catch(() => {});
-      }
-    } catch {
-      // Non-Tauri environments (e.g. Vitest / browser) safely fall back to visibilitychange & blur/focus
-    }
+    windowIpc
+      .onWindowMinimizedChanged((minimized) => {
+        if (active) {
+          setIsWindowMinimized(Boolean(minimized));
+        }
+      })
+      .then((fn) => {
+        if (active) {
+          unlisten = fn;
+        } else {
+          fn();
+        }
+      })
+      .catch(() => {
+        // Non-Tauri environments (e.g. Vitest / browser) safely fall back to visibilitychange & blur/focus
+      });
 
     return () => {
       active = false;

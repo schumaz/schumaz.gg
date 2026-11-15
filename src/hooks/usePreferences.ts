@@ -11,8 +11,8 @@ import {
   PREFERENCES_STORAGE_KEY,
   RANKED_FILTERS_STORAGE_KEY,
   UserPreferences,
-  commands,
 } from "../types";
+import { settingsIpc, windowIpc } from "../services/ipc";
 import { DEFAULT_ONBOARDING_LOCALE, isValidAppLocale } from "../i18n";
 
 export const PROFILE_BLUR_STORAGE_KEY = "schumaz_profile_ui_blur";
@@ -290,29 +290,27 @@ export function usePreferences(
     const initialize = async () => {
       let hydratedFromIni = false;
 
-      if (typeof commands.migrateLegacyLocalStorage === "function") {
-        try {
-          const payload = {
-            schumazUserPreferences: readLegacyStorageKey(PREFERENCES_STORAGE_KEY),
-            schumazLanguage: readLegacyStorageKey(LANGUAGE_STORAGE_KEY),
-            schumazProfileUiBlur: readLegacyStorageKey(PROFILE_BLUR_STORAGE_KEY),
-            schumazProfileWallpaperVisible: readLegacyStorageKey(WALLPAPER_VISIBLE_STORAGE_KEY),
-            schumazAramSubmode: readLegacyStorageKey(ARAM_SUBMODE_STORAGE_KEY),
-            schumazRankedFilters: readLegacyStorageKey(RANKED_FILTERS_STORAGE_KEY),
-          };
-          const migrated = await commands.migrateLegacyLocalStorage(payload);
-          if (active && isValidAppSettings(migrated)) {
-            applyIniSettings(migrated);
-            hydratedFromIni = true;
-          }
-        } catch {
-          // Fallback below
+      try {
+        const payload = {
+          schumazUserPreferences: readLegacyStorageKey(PREFERENCES_STORAGE_KEY),
+          schumazLanguage: readLegacyStorageKey(LANGUAGE_STORAGE_KEY),
+          schumazProfileUiBlur: readLegacyStorageKey(PROFILE_BLUR_STORAGE_KEY),
+          schumazProfileWallpaperVisible: readLegacyStorageKey(WALLPAPER_VISIBLE_STORAGE_KEY),
+          schumazAramSubmode: readLegacyStorageKey(ARAM_SUBMODE_STORAGE_KEY),
+          schumazRankedFilters: readLegacyStorageKey(RANKED_FILTERS_STORAGE_KEY),
+        };
+        const migrated = await settingsIpc.migrateLegacyLocalStorage(payload);
+        if (active && isValidAppSettings(migrated)) {
+          applyIniSettings(migrated);
+          hydratedFromIni = true;
         }
+      } catch {
+        // Fallback below
       }
 
-      if (!hydratedFromIni && typeof commands.getAppSettings === "function") {
+      if (!hydratedFromIni) {
         try {
-          const loaded = await commands.getAppSettings();
+          const loaded = await settingsIpc.getAppSettings();
           if (active && isValidAppSettings(loaded)) {
             applyIniSettings(loaded);
             hydratedFromIni = true;
@@ -323,24 +321,20 @@ export function usePreferences(
       }
 
       if (!hydratedFromIni && active) {
-        commands.syncUserPreferences(preferences).catch(() => {});
-        if (typeof commands.setLocale === "function") {
-          Promise.resolve(commands.setLocale(locale)).catch(() => {});
-        }
+        settingsIpc.syncUserPreferences(preferences).catch(() => {});
+        settingsIpc.setLocale(locale).catch(() => {});
       }
 
-      if (typeof commands.getHardwareAccelerationStatus === "function") {
-        commands
-          .getHardwareAccelerationStatus()
-          .then((status) => {
-            if (active && status && typeof status.enabled === "boolean") {
-              gpuActiveAtStartupRef.current = status.active_at_startup;
-              setHardwareAcceleration(status.enabled);
-              setGpuRestartRequired(status.enabled !== status.active_at_startup);
-            }
-          })
-          .catch(() => {});
-      }
+      settingsIpc
+        .getHardwareAccelerationStatus()
+        .then((status) => {
+          if (active && status && typeof status.enabled === "boolean") {
+            gpuActiveAtStartupRef.current = status.active_at_startup;
+            setHardwareAcceleration(status.enabled);
+            setGpuRestartRequired(status.enabled !== status.active_at_startup);
+          }
+        })
+        .catch(() => {});
     };
 
     initialize();
@@ -358,7 +352,7 @@ export function usePreferences(
         // Ignore localStorage quota errors
       }
     }
-    commands.syncUserPreferences(next).catch(() => {});
+    settingsIpc.syncUserPreferences(next).catch(() => {});
   }, []);
 
   const updatePreference = <K extends keyof UserPreferences>(
@@ -379,7 +373,7 @@ export function usePreferences(
           // Ignore localStorage quota errors
         }
       }
-      commands
+      settingsIpc
         .syncUserPreferences(next)
         .then(() => {
           if (key === "patch48hProtection" && onPatchProtectionChange) {
@@ -408,8 +402,9 @@ export function usePreferences(
       return next;
     });
 
-    if (usingIniRef.current && typeof commands.completeLanguageOnboarding === "function") {
-      Promise.resolve(commands.completeLanguageOnboarding(locale))
+    if (usingIniRef.current) {
+      settingsIpc
+        .completeLanguageOnboarding(locale)
         .then(() => {
           onLocaleChange?.(locale);
         })
@@ -420,17 +415,14 @@ export function usePreferences(
     }
 
     saveLanguageToStorage(locale);
-    if (typeof commands.setLocale === "function") {
-      Promise.resolve(commands.setLocale(locale))
-        .then(() => {
-          onLocaleChange?.(locale);
-        })
-        .catch(() => {
-          onLocaleChange?.(locale);
-        });
-    } else {
-      onLocaleChange?.(locale);
-    }
+    settingsIpc
+      .setLocale(locale)
+      .then(() => {
+        onLocaleChange?.(locale);
+      })
+      .catch(() => {
+        onLocaleChange?.(locale);
+      });
   }, [locale, persistPreferences, onLocaleChange]);
 
   const changeLanguage = useCallback(
@@ -445,17 +437,14 @@ export function usePreferences(
         persistPreferences(next);
         return next;
       });
-      if (typeof commands.setLocale === "function") {
-        Promise.resolve(commands.setLocale(nextLocale))
-          .then(() => {
-            onLocaleChange?.(nextLocale);
-          })
-          .catch(() => {
-            onLocaleChange?.(nextLocale);
-          });
-      } else {
-        onLocaleChange?.(nextLocale);
-      }
+      settingsIpc
+        .setLocale(nextLocale)
+        .then(() => {
+          onLocaleChange?.(nextLocale);
+        })
+        .catch(() => {
+          onLocaleChange?.(nextLocale);
+        });
     },
     [persistPreferences, onLocaleChange]
   );
@@ -464,8 +453,8 @@ export function usePreferences(
     const clamped = clampProfileBlur(blurPercent);
     profileBlurRef.current = clamped;
     setProfileBlur(clamped);
-    if (usingIniRef.current && typeof commands.updateProfileAppearance === "function") {
-      commands
+    if (usingIniRef.current) {
+      settingsIpc
         .updateProfileAppearance(clamped, wallpaperVisibleRef.current)
         .catch(() => {});
     } else {
@@ -480,8 +469,8 @@ export function usePreferences(
   const updateWallpaperVisible = useCallback((visible: boolean) => {
     wallpaperVisibleRef.current = visible;
     setWallpaperVisible(visible);
-    if (usingIniRef.current && typeof commands.updateProfileAppearance === "function") {
-      commands
+    if (usingIniRef.current) {
+      settingsIpc
         .updateProfileAppearance(profileBlurRef.current, visible)
         .catch(() => {});
     } else {
@@ -495,8 +484,8 @@ export function usePreferences(
 
   const updateNavigationState = useCallback((patch: NavigationStatePatch) => {
     setNavigationState((prev) => mergeNavigationState(prev, patch));
-    if (usingIniRef.current && typeof commands.updateNavigationState === "function") {
-      commands
+    if (usingIniRef.current) {
+      settingsIpc
         .updateNavigationState(patch)
         .then((updated) => {
           if (isValidAppSettings(updated)) {
@@ -511,24 +500,20 @@ export function usePreferences(
     setHardwareAcceleration(enabled);
     setGpuRestartRequired(enabled !== gpuActiveAtStartupRef.current);
 
-    if (typeof commands.setHardwareAcceleration === "function") {
-      commands
-        .setHardwareAcceleration(enabled)
-        .then((status) => {
-          if (status && typeof status.enabled === "boolean") {
-            gpuActiveAtStartupRef.current = status.active_at_startup;
-            setHardwareAcceleration(status.enabled);
-            setGpuRestartRequired(status.enabled !== status.active_at_startup);
-          }
-        })
-        .catch(() => {});
-    }
+    settingsIpc
+      .setHardwareAcceleration(enabled)
+      .then((status) => {
+        if (status && typeof status.enabled === "boolean") {
+          gpuActiveAtStartupRef.current = status.active_at_startup;
+          setHardwareAcceleration(status.enabled);
+          setGpuRestartRequired(status.enabled !== status.active_at_startup);
+        }
+      })
+      .catch(() => {});
   };
 
   const restartApp = () => {
-    if (typeof commands.restartApp === "function") {
-      commands.restartApp().catch(() => {});
-    }
+    windowIpc.restartApp().catch(() => {});
   };
 
   return {

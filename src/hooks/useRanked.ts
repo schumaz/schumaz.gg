@@ -8,8 +8,8 @@ import {
   RankedChampionEntry,
   RankedLane,
   RankedTierListResponse,
-  commands,
 } from "../types";
+import { rankedIpc } from "../services/ipc";
 import { translate } from "../i18n";
 import { computeOrderedSpells } from "../utils/spells";
 
@@ -167,7 +167,7 @@ export function useRanked(
       setTierError(null);
 
       try {
-        const res = await commands.getRankedTierList(
+        const res = await rankedIpc.getRankedTierList(
           targetFilters.region,
           targetFilters.tier,
           targetFilters.patch
@@ -203,7 +203,7 @@ export function useRanked(
       setBuildError(null);
 
       try {
-        const build = await commands.getRankedChampionBuild(
+        const build = await rankedIpc.getRankedChampionBuild(
           champion.id,
           laneOverride,
           targetFilters.tier,

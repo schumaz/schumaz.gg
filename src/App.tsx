@@ -1,7 +1,8 @@
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
-import { ActiveTab, FlashKeyPreference, commands } from "./types";
+import { ActiveTab, FlashKeyPreference } from "./types";
+import { injectorIpc } from "./services/ipc";
 import { I18nProvider } from "./i18n";
 import { profileBlurPercentToPx, usePreferences } from "./hooks/usePreferences";
 import { useLcuEvents } from "./hooks/useLcuEvents";
@@ -47,7 +48,7 @@ function App() {
       spellsInverted
     );
     if (reordered.length >= 2) {
-      commands.injectSummonerSpells(reordered[0].id, reordered[1].id, null, null).catch(() => {});
+      injectorIpc.injectSummonerSpells(reordered[0].id, reordered[1].id, null, null).catch(() => {});
     }
   };
 

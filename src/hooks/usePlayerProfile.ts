@@ -4,9 +4,8 @@ import {
   CachedProfileResult,
   PlayerProfile,
   SummonerInfo,
-  commands,
-  events,
 } from "../types";
+import { profileIpc, type UnlistenFn } from "../services/ipc";
 import { translate } from "../i18n";
 
 export const PROFILE_REFRESH_COOLDOWN_SECS = 30;
@@ -67,7 +66,7 @@ export function usePlayerProfile(
       }
 
       try {
-        const data = await commands.getPlayerProfile(forceRefresh);
+        const data = await profileIpc.getPlayerProfile(forceRefresh);
         if (fetchSeqRef.current === seq && data && "summoner" in data) {
           setProfile(data);
         }
@@ -90,11 +89,11 @@ export function usePlayerProfile(
   // Instant 0ms startup hydration from `%LOCALAPPDATA%\schumazgg\Cache\profile\`
   // even before LCU connects (using `LastSummonerId` from `UserSettings.ini`).
   useEffect(() => {
-    if (summonerRef.current !== null || typeof commands.getCachedPlayerProfile !== "function") {
+    if (summonerRef.current !== null) {
       return;
     }
     let active = true;
-    commands
+    profileIpc
       .getCachedPlayerProfile(null)
       .then((cached) => {
         if (
@@ -124,8 +123,8 @@ export function usePlayerProfile(
 
     const targetSummonerId =
       summoner?.summonerId ?? profileRef.current?.summoner.summonerId ?? null;
-    if (targetSummonerId !== null && typeof commands.getCachedPlayerProfile === "function") {
-      commands
+    if (targetSummonerId !== null) {
+      profileIpc
         .getCachedPlayerProfile(targetSummonerId)
         .then((cached) => {
           if (isValidCachedProfileResult(cached)) {
@@ -170,26 +169,24 @@ export function usePlayerProfile(
       const connectSeq = ++fetchSeqRef.current;
 
       const hydrateAndRevalidate = async () => {
-        if (typeof commands.getCachedPlayerProfile === "function") {
-          try {
-            const cached = await commands.getCachedPlayerProfile(summoner.summonerId);
-            if (cancelled || fetchSeqRef.current !== connectSeq) return;
-            if (
-              isValidCachedProfileResult(cached) &&
-              cached.profile.summoner.summonerId === summoner.summonerId
-            ) {
-              setProfile(cached.profile);
-              setProfileError(null);
-              if (!cached.isStale) {
-                return;
-              }
-              // Stale (> 5 min): keep cached profile visible and revalidate silently
-              await fetchProfile(false, true, false);
+        try {
+          const cached = await profileIpc.getCachedPlayerProfile(summoner.summonerId);
+          if (cancelled || fetchSeqRef.current !== connectSeq) return;
+          if (
+            isValidCachedProfileResult(cached) &&
+            cached.profile.summoner.summonerId === summoner.summonerId
+          ) {
+            setProfile(cached.profile);
+            setProfileError(null);
+            if (!cached.isStale) {
               return;
             }
-          } catch {
-            // Fall through to live fetch
+            // Stale (> 5 min): keep cached profile visible and revalidate silently
+            await fetchProfile(false, true, false);
+            return;
           }
+        } catch {
+          // Fall through to live fetch
         }
 
         if (!cancelled && fetchSeqRef.current === connectSeq) {
@@ -207,11 +204,11 @@ export function usePlayerProfile(
 
   // Force refresh on post-match events (`profile-refresh-requested` / `match-ended`)
   useEffect(() => {
-    let unlistenRefresh: (() => void) | undefined;
+    let unlistenRefresh: UnlistenFn | undefined;
 
     const setup = async () => {
       try {
-        unlistenRefresh = await events.profileRefreshRequested.listen(() => {
+        unlistenRefresh = await profileIpc.onProfileRefreshRequested(() => {
           if (summoner) {
             isFetchingRef.current = false;
             fetchProfile(false, true, true);

@@ -6,13 +6,17 @@ import { RankedTab } from "../components/RankedTab";
 import { useRanked } from "../hooks/useRanked";
 import {
   RANKED_FILTERS_STORAGE_KEY,
-  commands,
+  type ChampionBuild_Serialize,
+  type RankedChampionEntry_Serialize,
+  type RankedTierListResponse_Serialize,
 } from "../types";
-import type {
-  ChampionBuild_Serialize,
-  RankedChampionEntry_Serialize,
-  RankedTierListResponse_Serialize,
-} from "../types/bindings";
+import {
+  buildIpc,
+  injectorIpc,
+  lcuIpc,
+  rankedIpc,
+  settingsIpc,
+} from "../services/ipc";
 
 const mockRankedChampions: RankedChampionEntry_Serialize[] = [
   {
@@ -461,9 +465,9 @@ describe("useRanked hook state and filter preservation", () => {
   });
 
   it("loads tier list, fetches read-only build on champion click, and preserves user filters across detail/back", async () => {
-    const tierSpy = vi.spyOn(commands, "getRankedTierList").mockResolvedValue(mockTierResponse);
-    const buildSpy = vi.spyOn(commands, "getRankedChampionBuild").mockResolvedValue(mockAhriBuild);
-    const updateFiltersSpy = vi.spyOn(commands, "updateBuildFilters");
+    const tierSpy = vi.spyOn(rankedIpc, "getRankedTierList").mockResolvedValue(mockTierResponse);
+    const buildSpy = vi.spyOn(rankedIpc, "getRankedChampionBuild").mockResolvedValue(mockAhriBuild);
+    const updateFiltersSpy = vi.spyOn(buildIpc, "updateBuildFilters");
 
     const { result } = renderHook(() => useRanked(true, "D", true));
 
@@ -589,14 +593,14 @@ describe("useRanked hook state and filter preservation", () => {
       ],
     };
 
-    vi.spyOn(commands, "getRankedTierList").mockResolvedValue(mockTierResponse);
-    vi.spyOn(commands, "getRankedChampionBuild").mockResolvedValue(mockMultiBuild);
-    const injectRunesSpy = vi.spyOn(commands, "injectRunePage");
-    const injectBuildSpy = vi.spyOn(commands, "injectItemBuild");
-    const injectSpellsSpy = vi.spyOn(commands, "injectSummonerSpells");
-    const updateFiltersSpy = vi.spyOn(commands, "updateBuildFilters");
-    const syncChampSpy = vi.spyOn(commands, "syncDisplayedChampion");
-    const syncPrefsSpy = vi.spyOn(commands, "syncUserPreferences");
+    vi.spyOn(rankedIpc, "getRankedTierList").mockResolvedValue(mockTierResponse);
+    vi.spyOn(rankedIpc, "getRankedChampionBuild").mockResolvedValue(mockMultiBuild);
+    const injectRunesSpy = vi.spyOn(injectorIpc, "injectRunePage");
+    const injectBuildSpy = vi.spyOn(injectorIpc, "injectItemBuild");
+    const injectSpellsSpy = vi.spyOn(injectorIpc, "injectSummonerSpells");
+    const updateFiltersSpy = vi.spyOn(buildIpc, "updateBuildFilters");
+    const syncChampSpy = vi.spyOn(lcuIpc, "syncDisplayedChampion");
+    const syncPrefsSpy = vi.spyOn(settingsIpc, "syncUserPreferences");
 
     function Harness() {
       const ranked = useRanked(true, "D", true);

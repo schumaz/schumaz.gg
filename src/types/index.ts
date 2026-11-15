@@ -4,7 +4,9 @@ export type {
   AppLocale,
   AppSettings,
   AramAugmentEntry,
+  AramAugmentEntry_Serialize,
   AramChampionRank,
+  AramChampionRank_Serialize,
   AramMode,
   BuildInjected,
   CachedProfileResult,
@@ -14,11 +16,13 @@ export type {
   ChampSelected,
   ChampSelectedPayload,
   ChampionBuild,
+  ChampionBuild_Serialize,
   ChampionMasteryInfo,
   FlashKeyPreference,
   GameflowPhaseChanged,
   GeneralSettings,
   GraphicsSettings,
+  HardwareAccelerationStatus,
   InjectionReport,
   ItemBlock,
   ItemBuildOption,
@@ -33,9 +37,11 @@ export type {
   ProfileRefreshRequested,
   QueueMode,
   RankedChampionEntry,
+  RankedChampionEntry_Serialize,
   RankedLane,
   RankedQueueStats,
   RankedTierListResponse,
+  RankedTierListResponse_Serialize,
   RecentMatchInfo,
   RecommendedBuild,
   RuneMetadata,
@@ -44,10 +50,9 @@ export type {
   SummonerInfo,
   UnifiedBuildOption,
   UserPreferences,
+  WindowMinimizedChanged,
   WindowSettings,
 } from "./bindings";
-
-export { commands, events } from "./bindings";
 
 import type { UserPreferences } from "./bindings";
 

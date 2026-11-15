@@ -1,6 +1,10 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import {
+  SCHUMAZ_ASSET_PROTOCOL,
+  assetsIpc,
+  isTauriRuntime,
+} from "../services/ipc/assets.ipc";
 
-export const SCHUMAZ_ASSET_PROTOCOL = "schumaz-asset";
+export { SCHUMAZ_ASSET_PROTOCOL, isTauriRuntime };
 
 const ALLOWED_ASSET_PREFIXES = [
   "https://ddragon.leagueoflegends.com/",
@@ -9,13 +13,6 @@ const ALLOWED_ASSET_PREFIXES = [
 ] as const;
 
 const VALID_ASSET_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg", "gif"]);
-
-export function isTauriRuntime(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
-}
 
 export function isAllowedAssetUrl(url: string): boolean {
   const trimmed = url.trim();
@@ -67,5 +64,5 @@ export function resolveCachedAssetUrl(url: string | null | undefined, forceTauri
   if (!useTauri) {
     return trimmed;
   }
-  return convertFileSrc(buildAssetSegment(trimmed), SCHUMAZ_ASSET_PROTOCOL);
+  return assetsIpc.convertAssetFileSrc(buildAssetSegment(trimmed), SCHUMAZ_ASSET_PROTOCOL);
 }

@@ -10,8 +10,12 @@ import {
 } from "../components/AramTab";
 import { NavigationDock } from "../components/NavigationDock";
 import { useAram } from "../hooks/useAram";
-import type { AramAugmentEntry_Serialize, AramChampionRank_Serialize } from "../types/bindings";
-import { ARAM_SUBMODE_STORAGE_KEY, commands } from "../types";
+import {
+  ARAM_SUBMODE_STORAGE_KEY,
+  type AramAugmentEntry_Serialize,
+  type AramChampionRank_Serialize,
+} from "../types";
+import { aramIpc } from "../services/ipc";
 
 const mockAramChampions: AramChampionRank_Serialize[] = [
   {
@@ -110,8 +114,8 @@ describe("useAram persistence and click behavior", () => {
   });
 
   it("asks only on first click, saves choice, opens saved tab on 1 click, and reopens chooser on 2nd click", async () => {
-    vi.spyOn(commands, "getAramTierList").mockResolvedValue(mockAramChampions);
-    vi.spyOn(commands, "getAramMayhemAugments").mockResolvedValue(mockAhriAugments);
+    vi.spyOn(aramIpc, "getAramTierList").mockResolvedValue(mockAramChampions);
+    vi.spyOn(aramIpc, "getAramMayhemAugments").mockResolvedValue(mockAhriAugments);
 
     const { result } = renderHook(({ isActive }) => useAram(isActive, null), {
       initialProps: { isActive: false },
@@ -147,9 +151,9 @@ describe("useAram persistence and click behavior", () => {
 
   it("auto-selects current champion in ARAM Mayhem when active in Champ Select", async () => {
     localStorage.setItem(ARAM_SUBMODE_STORAGE_KEY, "aram_mayhem");
-    vi.spyOn(commands, "getAramTierList").mockResolvedValue(mockMayhemChampions);
+    vi.spyOn(aramIpc, "getAramTierList").mockResolvedValue(mockMayhemChampions);
     const augSpy = vi
-      .spyOn(commands, "getAramMayhemAugments")
+      .spyOn(aramIpc, "getAramMayhemAugments")
       .mockResolvedValue(mockAhriAugments);
 
     const { result } = renderHook(() => useAram(true, 103));

@@ -5,9 +5,8 @@ import {
   ChampSelectedPayload,
   FlashKeyPreference,
   SummonerInfo,
-  commands,
-  events,
 } from "../types";
+import { buildIpc, injectorIpc, lcuIpc, type UnlistenFn } from "../services/ipc";
 import { translate } from "../i18n";
 import { computeOrderedSpells } from "../utils/spells";
 
@@ -67,7 +66,7 @@ export function useLcuEvents(
     const displayedId = champSelect?.champion_id ?? build?.champion_id ?? null;
     if (prevSyncedChampRef.current !== displayedId) {
       prevSyncedChampRef.current = displayedId;
-      commands.syncDisplayedChampion(displayedId).catch(() => {});
+      lcuIpc.syncDisplayedChampion(displayedId).catch(() => {});
     }
   }, [champSelect?.champion_id, build?.champion_id]);
 
@@ -97,7 +96,7 @@ export function useLcuEvents(
     setLoading(true);
     setErrorMsg(null);
     try {
-      const updatedBuild = await commands.updateBuildFilters(
+      const updatedBuild = await buildIpc.updateBuildFilters(
         champId,
         qId,
         isAram ? null : filterType === "position" ? value : (currentBuild.active_position || null),
@@ -142,7 +141,7 @@ export function useLcuEvents(
       currentBuild.supports_runes === false;
 
     const fetchSeq = ++latestFetchSeqRef.current;
-    commands
+    buildIpc
       .updateBuildFilters(
         champId,
         qId,
@@ -162,7 +161,7 @@ export function useLcuEvents(
 
   useEffect(() => {
     // Initial check for summoner status
-    commands
+    lcuIpc
       .getSummonerStatus()
       .then((data) => {
         if (data) setSummoner(data);
@@ -170,14 +169,14 @@ export function useLcuEvents(
       .catch(() => {});
 
     // Listen to real-time events emitted from Tauri backend
-    let unlistenConnected: (() => void) | undefined;
-    let unlistenDisconnected: (() => void) | undefined;
-    let unlistenChampSelected: (() => void) | undefined;
-    let unlistenChampSelectEnded: (() => void) | undefined;
-    let unlistenBuild: (() => void) | undefined;
-    let unlistenReconciled: (() => void) | undefined;
-    let unlistenGameflowPhase: (() => void) | undefined;
-    let unlistenMatchEnded: (() => void) | undefined;
+    let unlistenConnected: UnlistenFn | undefined;
+    let unlistenDisconnected: UnlistenFn | undefined;
+    let unlistenChampSelected: UnlistenFn | undefined;
+    let unlistenChampSelectEnded: UnlistenFn | undefined;
+    let unlistenBuild: UnlistenFn | undefined;
+    let unlistenReconciled: UnlistenFn | undefined;
+    let unlistenGameflowPhase: UnlistenFn | undefined;
+    let unlistenMatchEnded: UnlistenFn | undefined;
 
     const notifyChampionPulledOnce = () => {
       if (!hasAutoNavigatedRef.current) {
@@ -197,7 +196,7 @@ export function useLcuEvents(
 
         const recommended =
           !isAram && payload.assigned_position
-            ? await commands.updateBuildFilters(
+            ? await buildIpc.updateBuildFilters(
                 payload.champion_id,
                 qId,
                 payload.assigned_position,
@@ -205,7 +204,7 @@ export function useLcuEvents(
                 null,
                 null
               )
-            : await commands.getRecommendedBuildForChampion(payload.champion_id, qId);
+            : await buildIpc.getRecommendedBuildForChampion(payload.champion_id, qId);
 
         if (
           recommended &&
@@ -230,12 +229,12 @@ export function useLcuEvents(
 
     const setupListeners = async () => {
       try {
-        unlistenConnected = await events.lcuConnected.listen((event) => {
-          setSummoner(event.payload);
+        unlistenConnected = await lcuIpc.onLcuConnected((payload) => {
+          setSummoner(payload);
           setErrorMsg(null);
         });
 
-        unlistenDisconnected = await events.lcuDisconnected.listen(() => {
+        unlistenDisconnected = await lcuIpc.onLcuDisconnected(() => {
           activeChampIdRef.current = null;
           buildRef.current = null;
           latestFetchSeqRef.current += 1;
@@ -251,24 +250,24 @@ export function useLcuEvents(
           setSelectedBuildIndex(0);
         });
 
-        unlistenChampSelected = await events.champSelected.listen(async (event) => {
-          activeChampIdRef.current = event.payload.champion_id;
+        unlistenChampSelected = await lcuIpc.onChampSelected(async (payload) => {
+          activeChampIdRef.current = payload.champion_id;
           const fetchSeq = ++latestFetchSeqRef.current;
 
           setChampSelect((prev) => {
-            if (prev?.champion_id !== event.payload.champion_id) {
+            if (prev?.champion_id !== payload.champion_id) {
               setSpellsInverted(false);
               setSelectedSecondarySpellId(null);
               setSelectedRunePageIndex(0);
               setSelectedBuildIndex(0);
             }
-            return event.payload;
+            return payload;
           });
 
-          await fetchBuildForPayload(event.payload, fetchSeq);
+          await fetchBuildForPayload(payload, fetchSeq);
         });
 
-        unlistenChampSelectEnded = await events.champSelectEnded.listen(() => {
+        unlistenChampSelectEnded = await lcuIpc.onChampSelectEnded(() => {
           const inGame = isInGamePhase(gameflowPhaseRef.current);
           activeChampIdRef.current = null;
           latestFetchSeqRef.current += 1;
@@ -287,27 +286,27 @@ export function useLcuEvents(
           setSelectedBuildIndex(0);
         });
 
-        unlistenBuild = await events.recommendedBuild.listen((event) => {
+        unlistenBuild = await buildIpc.onRecommendedBuild((payload) => {
           if (
             activeChampIdRef.current !== null &&
-            activeChampIdRef.current !== event.payload.champion_id
+            activeChampIdRef.current !== payload.champion_id
           ) {
             return;
           }
-          buildRef.current = event.payload;
+          buildRef.current = payload;
           setBuild((prev) => {
-            if (prev?.champion_id !== event.payload.champion_id) {
+            if (prev?.champion_id !== payload.champion_id) {
               setSelectedSecondarySpellId(null);
               setSelectedRunePageIndex(0);
               setSelectedBuildIndex(0);
             }
-            return event.payload;
+            return payload;
           });
           notifyChampionPulledOnce();
         });
 
-        unlistenReconciled = await events.champSelectReconciled.listen(async (event) => {
-          const { champ_selected, build: reconciledBuild } = event.payload;
+        unlistenReconciled = await lcuIpc.onChampSelectReconciled(async (payload) => {
+          const { champ_selected, build: reconciledBuild } = payload;
           const currentDisplayedChampId =
             activeChampIdRef.current ?? buildRef.current?.champion_id ?? null;
           const champDiverged = currentDisplayedChampId !== champ_selected.champion_id;
@@ -348,12 +347,12 @@ export function useLcuEvents(
           }
         });
 
-        unlistenGameflowPhase = await events.gameflowPhaseChanged.listen((event) => {
-          gameflowPhaseRef.current = event.payload;
-          setGameflowPhase(event.payload);
+        unlistenGameflowPhase = await lcuIpc.onGameflowPhaseChanged((phase) => {
+          gameflowPhaseRef.current = phase;
+          setGameflowPhase(phase);
         });
 
-        unlistenMatchEnded = await events.matchEnded.listen(() => {
+        unlistenMatchEnded = await lcuIpc.onMatchEnded(() => {
           activeChampIdRef.current = null;
           buildRef.current = null;
           latestFetchSeqRef.current += 1;
@@ -404,7 +403,7 @@ export function useLcuEvents(
     );
     if (reordered.length >= 2) {
       try {
-        await commands.injectSummonerSpells(
+        await injectorIpc.injectSummonerSpells(
           reordered[0].id,
           reordered[1].id,
           build?.champion_id ?? null,
@@ -421,7 +420,7 @@ export function useLcuEvents(
     setSelectedRunePageIndex(pageIndex);
     const page = build.rune_pages[pageIndex];
     try {
-      await commands.injectRunePage(
+      await injectorIpc.injectRunePage(
         build.champion_id,
         build.champion_name,
         pageIndex,
@@ -440,7 +439,7 @@ export function useLcuEvents(
     const activeQueueId =
       champSelect?.queue_id ?? (build.supports_runes === false ? 2400 : null);
     try {
-      await commands.injectItemBuild(build.champion_id, activeQueueId, index, index, index);
+      await injectorIpc.injectItemBuild(build.champion_id, activeQueueId, index, index, index);
     } catch (e) {
       console.warn("Failed to inject chosen unified build:", e);
     }

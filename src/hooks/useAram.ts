@@ -6,8 +6,8 @@ import {
   AramChampionRank,
   AramMode,
   NavigationStatePatch,
-  commands,
 } from "../types";
+import { aramIpc } from "../services/ipc";
 import { translate } from "../i18n";
 
 export function loadSavedAramMode(): AramMode | null {
@@ -92,7 +92,7 @@ export function useAram(
       setTierErrors((prev) => ({ ...prev, [mode]: null }));
 
       try {
-        const data = await commands.getAramTierList(mode);
+        const data = await aramIpc.getAramTierList(mode);
         tierCacheRef.current[mode] = data;
         setTierLists((prev) => ({ ...prev, [mode]: data }));
       } catch (err: unknown) {
@@ -127,7 +127,7 @@ export function useAram(
       setAugmentsLoading(true);
 
       try {
-        const data = await commands.getAramMayhemAugments(normalizedKey);
+        const data = await aramIpc.getAramMayhemAugments(normalizedKey);
         augmentsCacheRef.current[normalizedKey] = data;
         if (augmentsSeqRef.current === seq) {
           setAugmentsByChampion((prev) => ({ ...prev, [normalizedKey]: data }));
