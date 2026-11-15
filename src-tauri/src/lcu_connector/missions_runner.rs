@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -21,6 +22,17 @@ static AUTO_MARK_EXEC_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
 fn auto_mark_exec_lock() -> &'static tokio::sync::Mutex<()> {
     AUTO_MARK_EXEC_LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+fn spawn_async_task<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+    } else {
+        tauri::async_runtime::spawn(future);
+    }
 }
 
 impl LcuConnection {
@@ -130,7 +142,7 @@ pub fn schedule_debounced_auto_mark_missions() {
     }
 
     let seq = AUTO_MARK_WS_DEBOUNCE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
-    tokio::spawn(async move {
+    spawn_async_task(async move {
         tokio::time::sleep(Duration::from_millis(1200)).await;
         if AUTO_MARK_WS_DEBOUNCE_SEQ.load(Ordering::SeqCst) != seq {
             return;
@@ -151,13 +163,13 @@ pub fn spawn_auto_mark_daily_missions_if_enabled() {
         .is_err()
     {
         // A startup sweep is already active; run an immediate pass in case the user just toggled it ON.
-        tokio::spawn(async move {
+        spawn_async_task(async move {
             run_auto_mark_once().await;
         });
         return;
     }
 
-    tokio::spawn(async move {
+    spawn_async_task(async move {
         struct ResetGuard;
         impl Drop for ResetGuard {
             fn drop(&mut self) {

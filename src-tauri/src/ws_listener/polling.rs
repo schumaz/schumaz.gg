@@ -1,5 +1,6 @@
 use irelia::ws::LcuWebSocket;
 use irelia::ws::types::{Event, EventKind};
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
@@ -29,6 +30,21 @@ pub fn resolve_fallback_poll_interval(phase: &str, has_active_session: bool) -> 
 /// Only query `/lol-champ-select/v1/session` when in Champ Select or cleaning up an active session.
 pub fn should_poll_champ_select_session(phase: &str, has_active_session: bool) -> bool {
     phase == "ChampSelect" || has_active_session
+}
+
+/// Spawns an async task from synchronous WebSocket callback threads (e.g. `irelia` WS thread)
+/// onto the captured Tokio runtime, falling back to `tauri::async_runtime` if needed.
+fn spawn_on_runtime<F>(rt_handle: Option<&tokio::runtime::Handle>, future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    if let Some(handle) = rt_handle {
+        handle.spawn(future);
+    } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+    } else {
+        tauri::async_runtime::spawn(future);
+    }
 }
 
 /// Custom error handler for irelia WebSocket that stops immediately when LCU is disconnected
@@ -79,9 +95,11 @@ async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) {
 }
 
 fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
+    let rt_handle = tokio::runtime::Handle::try_current().ok();
     let mut ws = LcuWebSocket::new_with_error_handler(MonitorAwareErrorHandler);
 
     let ws_ctx = ctx.clone();
+    let session_rt = rt_handle.clone();
     ws.subscribe(
         EventKind::json_api_event_callback_str("/lol-champ-select/v1/session"),
         move |event: &Event| {
@@ -89,7 +107,7 @@ fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
             let event_type = event.2.event_type.clone();
             let data = event.2.data.clone();
 
-            tokio::spawn(async move {
+            spawn_on_runtime(session_rt.as_ref(), async move {
                 let mut current_q = ctx.active_queue_id.load(Ordering::Relaxed);
                 if current_q <= 0 {
                     let maybe_fetched = match crate::lcu_connector::LcuConnection::connect() {
@@ -131,6 +149,7 @@ fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
 
     let phase_handle = ctx.app_handle.clone();
     let phase_state = Arc::clone(&ctx.last_gameflow_phase);
+    let phase_rt = rt_handle.clone();
     ws.subscribe(
         EventKind::json_api_event_callback_str("/lol-gameflow/v1/gameflow-phase"),
         move |event: &Event| {
@@ -142,7 +161,7 @@ fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
                 return;
             }
 
-            tokio::spawn(async move {
+            spawn_on_runtime(phase_rt.as_ref(), async move {
                 process_gameflow_phase_update(&handle, &state, next_phase).await;
             });
         },
@@ -156,9 +175,11 @@ fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
         crate::lcu_connector::LOL_MISSIONS_ENDPOINT,
         crate::lcu_connector::LOL_MISSIONS_SERIES_ENDPOINT,
     ] {
+        let missions_rt = rt_handle.clone();
         ws.subscribe(
             EventKind::json_api_event_callback_str(endpoint),
             move |_event: &Event| {
+                let _guard = missions_rt.as_ref().map(tokio::runtime::Handle::enter);
                 crate::lcu_connector::schedule_debounced_auto_mark_missions();
             },
         );
@@ -335,5 +356,21 @@ mod tests {
         assert!(!should_poll_champ_select_session("InProgress", false));
         assert!(!should_poll_champ_select_session("None", false));
         assert!(!should_poll_champ_select_session("", false));
+    }
+
+    #[tokio::test]
+    async fn test_spawn_on_runtime_succeeds_from_non_tokio_thread() {
+        let rt_handle = tokio::runtime::Handle::current();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        std::thread::spawn(move || {
+            spawn_on_runtime(Some(&rt_handle), async move {
+                let _ = tx.send(42);
+            });
+        })
+        .join()
+        .expect("worker thread should not panic without active Tokio TLS context");
+
+        assert_eq!(rx.await.expect("spawned task should complete"), 42);
     }
 }
