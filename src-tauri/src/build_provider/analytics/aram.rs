@@ -1,7 +1,9 @@
+use super::client::peek_latest_cached_opgg_version;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank, AramMode};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
@@ -25,6 +27,78 @@ fn get_tier_cache() -> &'static RwLock<TierCacheMap> {
 
 fn get_augments_cache() -> &'static RwLock<AugmentsCacheMap> {
     ARAM_AUGMENTS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn aram_tier_file_path(dir: &Path, mode: AramMode, locale: AppLocale) -> PathBuf {
+    let mode_key = match mode {
+        AramMode::Aram => "aram",
+        AramMode::AramMayhem => "aram_mayhem",
+    };
+    dir.join(format!("tier_{}_{}.lz4", mode_key, locale.as_str()))
+}
+
+pub fn aram_augments_file_path(dir: &Path, locale: AppLocale, champ_key: &str) -> PathBuf {
+    let clean = crate::storage::sanitize_key_component(champ_key);
+    dir.join(format!("augments_{}_{}.lz4", locale.as_str(), clean))
+}
+
+fn rehydrate_aram_names(list: &mut [AramChampionRank], ddragon: &DataDragonCache) {
+    for entry in list {
+        if let Some(meta) = ddragon.champions.get(&entry.id) {
+            entry.name = meta.display_name.clone();
+            if !meta.icon_url.is_empty() {
+                entry.icon_url = meta.icon_url.clone();
+            }
+        }
+    }
+}
+
+/// Pre-warms valid (< 24h) ARAM and ARAM Mayhem tier lists from `.lz4` disk into RAM on startup.
+pub fn prewarm_aram_tier_lists_from_dir(
+    dir: &Path,
+    locale: AppLocale,
+    ddragon: &DataDragonCache,
+) -> usize {
+    let now = crate::storage::now_unix_secs();
+    let known_latest = peek_latest_cached_opgg_version("global");
+    let mut warmed = 0;
+
+    for (mode, url_key_prefix) in [
+        (
+            AramMode::Aram,
+            format!("aram:{}:{}", locale.as_str(), OPGG_ARAM_REST_URL),
+        ),
+        (
+            AramMode::AramMayhem,
+            format!("mayhem:{}:{}", locale.as_str(), OPGG_ARAM_MAYHEM_WEB_URL),
+        ),
+    ] {
+        let path = aram_tier_file_path(dir, mode, locale);
+        let Some(mut env) = crate::storage::read_lz4_envelope::<Vec<AramChampionRank>>(&path)
+        else {
+            continue;
+        };
+        if !crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            now,
+        ) {
+            continue;
+        }
+        if let Some(ref latest) = known_latest
+            && !env.patch.is_empty()
+            && &env.patch != latest
+        {
+            continue;
+        }
+        rehydrate_aram_names(&mut env.payload, ddragon);
+        if let Ok(mut guard) = get_tier_cache().write() {
+            guard.insert(url_key_prefix, (Instant::now(), env.payload));
+            warmed += 1;
+        }
+    }
+
+    warmed
 }
 
 pub fn aram_mayhem_augments_web_base(locale: AppLocale) -> &'static str {
@@ -277,13 +351,16 @@ pub fn parse_aram_mayhem_champions_html(
             } else {
                 dd_meta.map(|m| m.icon_url.clone()).unwrap_or_default()
             };
-            let name = if !item.name.is_empty() {
-                item.name
-            } else {
-                dd_meta
-                    .map(|m| m.display_name.clone())
-                    .unwrap_or_else(|| format!("Champion {}", item.id))
-            };
+            let name = dd_meta
+                .map(|m| m.display_name.clone())
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| {
+                    if !item.name.is_empty() {
+                        item.name
+                    } else {
+                        format!("Champion {}", item.id)
+                    }
+                });
 
             AramChampionRank {
                 id: item.id,
@@ -317,7 +394,6 @@ pub fn parse_aram_mayhem_augments_html(html: &str) -> Result<Vec<AramAugmentEntr
     let rsc = decode_next_f_stream(html);
     let source = if rsc.is_empty() { html } else { &rsc };
 
-    // Locate the `"data":[{"id":...,"tier":...,"performance":...}]` array inside the RSC stream.
     let mut search_from = 0usize;
     let mut matched_array: Option<&str> = None;
 
@@ -380,6 +456,129 @@ pub fn parse_aram_mayhem_augments_html(html: &str) -> Result<Vec<AramAugmentEntr
     Ok(augments)
 }
 
+pub async fn fetch_aram_tier_list_with_urls_and_dir(
+    client: &reqwest::Client,
+    mode: AramMode,
+    ddragon: &DataDragonCache,
+    aram_rest_url: &str,
+    mayhem_web_url: &str,
+    locale: AppLocale,
+    aram_dir: Option<&Path>,
+) -> Result<Vec<AramChampionRank>, String> {
+    let cache_key = match mode {
+        AramMode::Aram => format!("aram:{}:{}", locale.as_str(), aram_rest_url),
+        AramMode::AramMayhem => format!("mayhem:{}:{}", locale.as_str(), mayhem_web_url),
+    };
+
+    if let Ok(guard) = get_tier_cache().read()
+        && let Some((ts, cached)) = guard.get(&cache_key)
+        && ts.elapsed() < ARAM_CACHE_TTL
+    {
+        let mut list = cached.clone();
+        rehydrate_aram_names(&mut list, ddragon);
+        return Ok(list);
+    }
+
+    let disk_env = aram_dir.and_then(|dir| {
+        let path = aram_tier_file_path(dir, mode, locale);
+        crate::storage::read_lz4_envelope::<Vec<AramChampionRank>>(&path)
+    });
+    let known_latest = peek_latest_cached_opgg_version("global");
+
+    if let Some(ref env) = disk_env
+        && !env.payload.is_empty()
+        && crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::now_unix_secs(),
+        )
+    {
+        let patch_ok = match known_latest.as_deref() {
+            Some(latest) if !env.patch.is_empty() => env.patch == latest,
+            _ => true,
+        };
+        if patch_ok {
+            let mut list = env.payload.clone();
+            rehydrate_aram_names(&mut list, ddragon);
+            if let Ok(mut guard) = get_tier_cache().write() {
+                guard.insert(cache_key.clone(), (Instant::now(), list.clone()));
+            }
+            return Ok(list);
+        }
+    }
+
+    let fetch_res: Result<Vec<AramChampionRank>, String> = match mode {
+        AramMode::Aram => {
+            async {
+                let res = client
+                    .get(aram_rest_url)
+                    .send()
+                    .await
+                    .map_err(|e| format!("Failed to fetch ARAM tier list: {}", e))?;
+                if !res.status().is_success() {
+                    return Err(format!("ARAM tier list HTTP error: {}", res.status()));
+                }
+                let json: serde_json::Value = res
+                    .json()
+                    .await
+                    .map_err(|e| format!("Failed to parse ARAM tier list JSON: {}", e))?;
+                parse_classic_aram_champions(&json, ddragon)
+            }
+            .await
+        }
+        AramMode::AramMayhem => {
+            async {
+                let res = client
+                    .get(mayhem_web_url)
+                    .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT)
+                    .send()
+                    .await
+                    .map_err(|e| format!("Failed to fetch ARAM Mayhem tier list: {}", e))?;
+                if !res.status().is_success() {
+                    return Err(format!(
+                        "ARAM Mayhem tier list HTTP error: {}",
+                        res.status()
+                    ));
+                }
+                let html = res
+                    .text()
+                    .await
+                    .map_err(|e| format!("Failed to read ARAM Mayhem HTML: {}", e))?;
+                parse_aram_mayhem_champions_html(&html, ddragon)
+            }
+            .await
+        }
+    };
+
+    let list = match fetch_res {
+        Ok(list) => list,
+        Err(err) => {
+            // Stale-While-Error offline fallback
+            if let Some(env) = disk_env
+                && !env.payload.is_empty()
+            {
+                let mut rescued = env.payload;
+                rehydrate_aram_names(&mut rescued, ddragon);
+                return Ok(rescued);
+            }
+            return Err(err);
+        }
+    };
+
+    if !list.is_empty() {
+        if let Some(dir) = aram_dir {
+            let path = aram_tier_file_path(dir, mode, locale);
+            let patch = known_latest.as_deref().unwrap_or("");
+            let _ = crate::storage::write_lz4_envelope(&path, patch, &list);
+        }
+        if let Ok(mut guard) = get_tier_cache().write() {
+            guard.insert(cache_key, (Instant::now(), list.clone()));
+        }
+    }
+
+    Ok(list)
+}
+
 pub async fn fetch_aram_tier_list_with_urls(
     client: &reqwest::Client,
     mode: AramMode,
@@ -387,62 +586,22 @@ pub async fn fetch_aram_tier_list_with_urls(
     aram_rest_url: &str,
     mayhem_web_url: &str,
 ) -> Result<Vec<AramChampionRank>, String> {
-    let cache_key = match mode {
-        AramMode::Aram => format!("aram:{}", aram_rest_url),
-        AramMode::AramMayhem => format!("mayhem:{}", mayhem_web_url),
+    let locale = crate::lcu_injector::get_active_locale();
+    let dir = if aram_rest_url == OPGG_ARAM_REST_URL && mayhem_web_url == OPGG_ARAM_MAYHEM_WEB_URL {
+        crate::storage::global_paths().map(|p| p.opgg_aram_dir.as_path())
+    } else {
+        None
     };
-
-    if let Ok(guard) = get_tier_cache().read()
-        && let Some((ts, cached)) = guard.get(&cache_key)
-        && ts.elapsed() < ARAM_CACHE_TTL
-    {
-        return Ok(cached.clone());
-    }
-
-    let list = match mode {
-        AramMode::Aram => {
-            let res = client
-                .get(aram_rest_url)
-                .send()
-                .await
-                .map_err(|e| format!("Failed to fetch ARAM tier list: {}", e))?;
-            if !res.status().is_success() {
-                return Err(format!("ARAM tier list HTTP error: {}", res.status()));
-            }
-            let json: serde_json::Value = res
-                .json()
-                .await
-                .map_err(|e| format!("Failed to parse ARAM tier list JSON: {}", e))?;
-            parse_classic_aram_champions(&json, ddragon)?
-        }
-        AramMode::AramMayhem => {
-            let res = client
-                .get(mayhem_web_url)
-                .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT)
-                .send()
-                .await
-                .map_err(|e| format!("Failed to fetch ARAM Mayhem tier list: {}", e))?;
-            if !res.status().is_success() {
-                return Err(format!(
-                    "ARAM Mayhem tier list HTTP error: {}",
-                    res.status()
-                ));
-            }
-            let html = res
-                .text()
-                .await
-                .map_err(|e| format!("Failed to read ARAM Mayhem HTML: {}", e))?;
-            parse_aram_mayhem_champions_html(&html, ddragon)?
-        }
-    };
-
-    if !list.is_empty()
-        && let Ok(mut guard) = get_tier_cache().write()
-    {
-        guard.insert(cache_key, (Instant::now(), list.clone()));
-    }
-
-    Ok(list)
+    fetch_aram_tier_list_with_urls_and_dir(
+        client,
+        mode,
+        ddragon,
+        aram_rest_url,
+        mayhem_web_url,
+        locale,
+        dir,
+    )
+    .await
 }
 
 pub async fn fetch_aram_tier_list(
@@ -460,11 +619,12 @@ pub async fn fetch_aram_tier_list(
     .await
 }
 
-pub async fn fetch_aram_mayhem_augments_with_base_and_locale(
+pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
     client: &reqwest::Client,
     champion_key: &str,
     web_base: &str,
     locale: AppLocale,
+    aram_dir: Option<&Path>,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let normalized = normalize_opgg_champion_key(champion_key);
     if normalized.is_empty() {
@@ -479,31 +639,93 @@ pub async fn fetch_aram_mayhem_augments_with_base_and_locale(
         return Ok(cached.clone());
     }
 
-    let url = format!("{}/{}/augments", web_base.trim_end_matches('/'), normalized);
-    let res = client
-        .get(&url)
-        .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch ARAM Mayhem augments: {}", e))?;
+    let disk_env = aram_dir.and_then(|dir| {
+        let path = aram_augments_file_path(dir, locale, &normalized);
+        crate::storage::read_lz4_envelope::<Vec<AramAugmentEntry>>(&path)
+    });
+    let known_latest = peek_latest_cached_opgg_version("global");
 
-    if !res.status().is_success() {
-        return Err(format!("ARAM Mayhem augments HTTP error: {}", res.status()));
+    if let Some(ref env) = disk_env
+        && !env.payload.is_empty()
+        && crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::now_unix_secs(),
+        )
+    {
+        let patch_ok = match known_latest.as_deref() {
+            Some(latest) if !env.patch.is_empty() => env.patch == latest,
+            _ => true,
+        };
+        if patch_ok {
+            if let Ok(mut guard) = get_augments_cache().write() {
+                guard.insert(cache_key.clone(), (Instant::now(), env.payload.clone()));
+            }
+            return Ok(env.payload.clone());
+        }
     }
 
-    let html = res
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read ARAM Mayhem augments HTML: {}", e))?;
-    let augments = parse_aram_mayhem_augments_html(&html)?;
+    let url = format!("{}/{}/augments", web_base.trim_end_matches('/'), normalized);
+    let fetch_res: Result<Vec<AramAugmentEntry>, String> = async {
+        let res = client
+            .get(&url)
+            .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch ARAM Mayhem augments: {}", e))?;
 
-    if !augments.is_empty()
-        && let Ok(mut guard) = get_augments_cache().write()
-    {
-        guard.insert(cache_key, (Instant::now(), augments.clone()));
+        if !res.status().is_success() {
+            return Err(format!("ARAM Mayhem augments HTTP error: {}", res.status()));
+        }
+
+        let html = res
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read ARAM Mayhem augments HTML: {}", e))?;
+        parse_aram_mayhem_augments_html(&html)
+    }
+    .await;
+
+    let augments = match fetch_res {
+        Ok(list) => list,
+        Err(err) => {
+            // Stale-While-Error offline fallback
+            if let Some(env) = disk_env
+                && !env.payload.is_empty()
+            {
+                return Ok(env.payload);
+            }
+            return Err(err);
+        }
+    };
+
+    if !augments.is_empty() {
+        if let Some(dir) = aram_dir {
+            let path = aram_augments_file_path(dir, locale, &normalized);
+            let patch = known_latest.as_deref().unwrap_or("");
+            let _ = crate::storage::write_lz4_envelope(&path, patch, &augments);
+        }
+        if let Ok(mut guard) = get_augments_cache().write() {
+            guard.insert(cache_key, (Instant::now(), augments.clone()));
+        }
     }
 
     Ok(augments)
+}
+
+pub async fn fetch_aram_mayhem_augments_with_base_and_locale(
+    client: &reqwest::Client,
+    champion_key: &str,
+    web_base: &str,
+    locale: AppLocale,
+) -> Result<Vec<AramAugmentEntry>, String> {
+    let dir = if web_base == aram_mayhem_augments_web_base(locale) {
+        crate::storage::global_paths().map(|p| p.opgg_aram_dir.as_path())
+    } else {
+        None
+    };
+    fetch_aram_mayhem_augments_with_base_locale_and_dir(client, champion_key, web_base, locale, dir)
+        .await
 }
 
 pub async fn fetch_aram_mayhem_augments_with_base(
@@ -620,12 +842,12 @@ mod tests {
         assert_eq!(list[0].id, 4);
         assert_eq!(list[0].key, "twistedfate");
         assert_eq!(list[0].rank, 1);
-        assert_eq!(list[0].tier, 0); // OP
+        assert_eq!(list[0].tier, 0);
         assert_eq!(list[1].id, 103);
         assert_eq!(list[1].rank, 14);
-        assert_eq!(list[1].tier, 1); // Tier 1
+        assert_eq!(list[1].tier, 1);
         assert_eq!(list[2].id, 22);
-        assert_eq!(list[2].tier, 4); // Tier 4
+        assert_eq!(list[2].tier, 4);
     }
 
     #[test]
@@ -696,5 +918,69 @@ mod tests {
 
         assert_eq!(pt_augments[0].name, "Coice");
         assert_eq!(en_augments[0].name, "Recoil");
+    }
+
+    #[tokio::test]
+    async fn test_aram_augments_disk_cache_and_stale_while_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "schumazgg_aram_augments_disk_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mock_server = MockServer::start().await;
+        let inner_pt = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Coice","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Dano extra."}]}]"#;
+        let html_pt = format!(
+            r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+            serde_json::to_string(inner_pt).unwrap()
+        );
+
+        Mock::given(method("GET"))
+            .and(path("/pt/ahri/augments"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(html_pt))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let res1 = fetch_aram_mayhem_augments_with_base_locale_and_dir(
+            &client,
+            "Ahri",
+            &format!("{}/pt", mock_server.uri()),
+            AppLocale::PtBr,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(res1[0].name, "Coice");
+        let file_path = aram_augments_file_path(&dir, AppLocale::PtBr, "ahri");
+        assert!(file_path.exists());
+
+        // Clear RAM and expire disk timestamp -> Stale-While-Error rescues on 503
+        if let Ok(mut g) = get_augments_cache().write() {
+            g.clear();
+        }
+        crate::storage::write_lz4_envelope_at(&file_path, "16.25", &res1, 1).unwrap();
+
+        let offline = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pt/ahri/augments"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&offline)
+            .await;
+
+        let rescued = fetch_aram_mayhem_augments_with_base_locale_and_dir(
+            &client,
+            "Ahri",
+            &format!("{}/pt", offline.uri()),
+            AppLocale::PtBr,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rescued[0].name, "Coice");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

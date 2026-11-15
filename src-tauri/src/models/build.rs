@@ -6,7 +6,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ItemClassificationCache {
     pub boots: std::collections::HashSet<i32>,
     pub components: std::collections::HashSet<i32>,

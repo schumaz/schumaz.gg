@@ -1,5 +1,6 @@
 import { ChampionBuild } from "../types";
 import { TranslationKey, useTranslation } from "../i18n";
+import { resolveCachedAssetUrl } from "../utils/assets";
 
 interface RuneTreeProps {
   build: ChampionBuild;
@@ -115,14 +116,14 @@ export function RuneTree({
                   <div className="rune-page-btn-icons">
                     {keystone?.icon_url && (
                       <img
-                        src={keystone.icon_url}
+                        src={resolveCachedAssetUrl(keystone.icon_url)}
                         alt={keystone.name || t("runes.keystoneFallback")}
                         className="rune-page-keystone-icon"
                       />
                     )}
                     {subIcon && (
                       <img
-                        src={subIcon}
+                        src={resolveCachedAssetUrl(subIcon)}
                         alt={page.sub_style_name || t("runes.secondaryFallback")}
                         className="rune-page-sub-icon"
                       />
@@ -151,7 +152,7 @@ export function RuneTree({
           <div className="tree-header">
             {primaryStyleIcon && (
               <img
-                src={primaryStyleIcon}
+                src={resolveCachedAssetUrl(primaryStyleIcon)}
                 alt={primaryStyleName}
                 className="tree-icon"
               />
@@ -164,7 +165,7 @@ export function RuneTree({
             <div className="keystone-item" title={perksList[0].name}>
               {perksList[0].icon_url && (
                 <img
-                  src={perksList[0].icon_url}
+                  src={resolveCachedAssetUrl(perksList[0].icon_url)}
                   alt={perksList[0].name}
                   className="keystone-icon"
                 />
@@ -178,7 +179,11 @@ export function RuneTree({
             {perksList.slice(1, 4).map((perk, index) => (
               <div key={`primary-${index}-${perk.id}`} className="perk-item" title={perk.name}>
                 {perk.icon_url && (
-                  <img src={perk.icon_url} alt={perk.name} className="perk-icon" />
+                  <img
+                    src={resolveCachedAssetUrl(perk.icon_url)}
+                    alt={perk.name}
+                    className="perk-icon"
+                  />
                 )}
                 <span className="perk-name">{perk.name}</span>
               </div>
@@ -191,7 +196,7 @@ export function RuneTree({
           <div className="tree-header">
             {subStyleIcon && (
               <img
-                src={subStyleIcon}
+                src={resolveCachedAssetUrl(subStyleIcon)}
                 alt={subStyleName}
                 className="tree-icon"
               />
@@ -204,7 +209,11 @@ export function RuneTree({
             {perksList.slice(4, 6).map((perk, index) => (
               <div key={`sub-${index}-${perk.id}`} className="perk-item" title={perk.name}>
                 {perk.icon_url && (
-                  <img src={perk.icon_url} alt={perk.name} className="perk-icon" />
+                  <img
+                    src={resolveCachedAssetUrl(perk.icon_url)}
+                    alt={perk.name}
+                    className="perk-icon"
+                  />
                 )}
                 <span className="perk-name">{perk.name}</span>
               </div>
@@ -221,7 +230,11 @@ export function RuneTree({
                 return (
                   <div key={`shard-${index}-${shard.id}`} className="shard-item" title={shard.name}>
                     {shard.icon_url && (
-                      <img src={shard.icon_url} alt={shard.name} className="shard-icon" />
+                      <img
+                        src={resolveCachedAssetUrl(shard.icon_url)}
+                        alt={shard.name}
+                        className="shard-icon"
+                      />
                     )}
                     <span className="shard-name">{shardLabel}</span>
                   </div>

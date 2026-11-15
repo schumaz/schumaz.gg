@@ -3,6 +3,7 @@ import {
   AppLocale,
   ChampionBuild,
   FlashKeyPreference,
+  NavigationStatePatch,
   RANKED_FILTERS_STORAGE_KEY,
   RankedChampionEntry,
   RankedLane,
@@ -68,12 +69,27 @@ export function saveRankedFilters(filters: RankedFilters): void {
   }
 }
 
+export interface UseRankedPersistenceOptions {
+  iniBacked?: boolean;
+  savedFilters?: {
+    region?: string | null;
+    tier?: string | null;
+    lane?: string | null;
+    patch?: string | null;
+  };
+  onNavigationPatch?: (patch: NavigationStatePatch) => void;
+}
+
 export function useRanked(
   isActive: boolean,
   flashKey: FlashKeyPreference,
   patch48hProtection: boolean,
-  locale: AppLocale = "pt_BR"
+  locale: AppLocale = "pt_BR",
+  persistence?: UseRankedPersistenceOptions
 ) {
+  const iniBacked = Boolean(persistence?.iniBacked);
+  const onNavigationPatch = persistence?.onNavigationPatch;
+
   const [filters, setFilters] = useState<RankedFilters>(loadSavedRankedFilters);
   const [tierData, setTierData] = useState<RankedTierListResponse | null>(null);
   const [tierLoading, setTierLoading] = useState(false);
@@ -92,10 +108,42 @@ export function useRanked(
   const buildSeqRef = useRef(0);
   const loadedCacheKeyRef = useRef<string | null>(null);
   const prevLocaleRef = useRef<AppLocale>(locale);
+  const hydratedIniRef = useRef(false);
   const selectedChampionRef = useRef<RankedChampionEntry | null>(selectedChampion);
   selectedChampionRef.current = selectedChampion;
   const filtersRef = useRef<RankedFilters>(filters);
   filtersRef.current = filters;
+
+  const persistFilters = useCallback(
+    (next: RankedFilters) => {
+      if (iniBacked) {
+        onNavigationPatch?.({
+          rankedFilterRegion: next.region,
+          rankedFilterTier: next.tier,
+          rankedFilterLane: next.lane,
+          rankedFilterPatch: next.patch ?? "",
+        });
+      } else {
+        saveRankedFilters(next);
+      }
+    },
+    [iniBacked, onNavigationPatch]
+  );
+
+  useEffect(() => {
+    if (!iniBacked || hydratedIniRef.current || !persistence?.savedFilters) return;
+    hydratedIniRef.current = true;
+    const sf = persistence.savedFilters;
+    setFilters({
+      region: sf.region?.trim() || DEFAULT_RANKED_FILTERS.region,
+      tier: sf.tier?.trim() || DEFAULT_RANKED_FILTERS.tier,
+      lane:
+        sf.lane && VALID_LANES.has(sf.lane)
+          ? (sf.lane as RankedLaneFilter)
+          : DEFAULT_RANKED_FILTERS.lane,
+      patch: sf.patch?.trim() ? sf.patch.trim() : null,
+    });
+  }, [iniBacked, persistence?.savedFilters]);
 
   const buildCacheKey = useCallback(
     (f: RankedFilters, protection: boolean) =>
@@ -206,11 +254,11 @@ export function useRanked(
     (updater: (prev: RankedFilters) => RankedFilters) => {
       setFilters((prev) => {
         const next = updater(prev);
-        saveRankedFilters(next);
+        persistFilters(next);
         return next;
       });
     },
-    []
+    [persistFilters]
   );
 
   const handleTierListFilterChange = useCallback(
@@ -275,7 +323,7 @@ export function useRanked(
             : filters.patch,
       };
 
-      saveRankedFilters(nextFilters);
+      persistFilters(nextFilters);
       setFilters(nextFilters);
       setTierError(null);
 
@@ -290,7 +338,7 @@ export function useRanked(
         fetchChampionBuild(updatedChamp, nextLane, nextFilters);
       }
     },
-    [selectedChampion, championBuild, filters, fetchChampionBuild]
+    [selectedChampion, championBuild, filters, fetchChampionBuild, persistFilters]
   );
 
   const clearSelectedChampion = useCallback(() => {
@@ -313,7 +361,7 @@ export function useRanked(
 
   const handlePatchProtectionChange = useCallback(() => {
     const nextFilters: RankedFilters = { ...filters, patch: null };
-    saveRankedFilters(nextFilters);
+    persistFilters(nextFilters);
     setFilters(nextFilters);
     loadedCacheKeyRef.current = null;
     setTierError(null);
@@ -323,7 +371,7 @@ export function useRanked(
         fetchChampionBuild(selectedChampion, selectedChampion.lane, nextFilters);
       }
     }
-  }, [filters, isActive, selectedChampion, fetchTierList, fetchChampionBuild]);
+  }, [filters, isActive, selectedChampion, fetchTierList, fetchChampionBuild, persistFilters]);
 
   const orderedSpells = useMemo(
     () =>

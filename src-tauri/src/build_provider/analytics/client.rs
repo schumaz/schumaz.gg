@@ -6,6 +6,7 @@ use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
 use super::rest_parser::parse_opgg_analysis_payload_with_options;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
@@ -34,6 +35,29 @@ pub fn shared_http_client() -> &'static reqwest::Client {
 
 fn get_versions_cache() -> &'static RwLock<VersionsCacheMap> {
     OPGG_VERSIONS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn opgg_versions_file_path(dir: &Path, region: &str) -> PathBuf {
+    let reg = crate::storage::sanitize_key_component(region);
+    dir.join(format!("versions_{reg}.lz4"))
+}
+
+/// Non-blocking peek at the latest known OP.GG patch for `region` from RAM or disk `.lz4`.
+pub fn peek_latest_cached_opgg_version(region: &str) -> Option<String> {
+    let cache_key = format!("{}:{}", OPGG_REST_API_BASE, region);
+    if let Ok(guard) = get_versions_cache().read()
+        && let Some((_, vers)) = guard.get(&cache_key)
+        && let Some(first) = vers.first()
+    {
+        return Some(first.clone());
+    }
+    if let Some(paths) = crate::storage::global_paths() {
+        let path = opgg_versions_file_path(&paths.opgg_versions_dir, region);
+        if let Some(env) = crate::storage::read_lz4_envelope::<Vec<String>>(&path) {
+            return env.payload.first().cloned();
+        }
+    }
+    None
 }
 
 pub async fn fetch_opgg_champion_analysis(
@@ -142,11 +166,13 @@ pub async fn get_recommended_build_with_endpoint(
     build
 }
 
-/// Fetches available patch versions from the OP.GG REST API with in-memory TTL caching.
-pub async fn fetch_opgg_versions_from_base(
+/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (24h TTL)
+/// and Stale-While-Error offline fallback.
+pub async fn fetch_opgg_versions_with_cache_dir(
     client: &reqwest::Client,
     rest_base: &str,
     region: &str,
+    versions_dir: Option<&Path>,
 ) -> Vec<String> {
     let cache_key = format!("{}:{}", rest_base, region);
     if let Ok(guard) = get_versions_cache().read()
@@ -154,6 +180,25 @@ pub async fn fetch_opgg_versions_from_base(
         && ts.elapsed() < VERSIONS_CACHE_TTL
     {
         return cached.clone();
+    }
+
+    let disk_env = versions_dir.and_then(|dir| {
+        let path = opgg_versions_file_path(dir, region);
+        crate::storage::read_lz4_envelope::<Vec<String>>(&path)
+    });
+
+    if let Some(ref env) = disk_env
+        && !env.payload.is_empty()
+        && crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::now_unix_secs(),
+        )
+    {
+        if let Ok(mut guard) = get_versions_cache().write() {
+            guard.insert(cache_key.clone(), (Instant::now(), env.payload.clone()));
+        }
+        return env.payload.clone();
     }
 
     let url = format!("{}/{}/champions/ranked/versions", rest_base, region);
@@ -169,10 +214,40 @@ pub async fn fetch_opgg_versions_from_base(
             if let Ok(mut guard) = get_versions_cache().write() {
                 guard.insert(cache_key, (Instant::now(), vers.clone()));
             }
+            if let Some(dir) = versions_dir {
+                let path = opgg_versions_file_path(dir, region);
+                let latest = vers.first().map(String::as_str).unwrap_or("");
+                let _ = crate::storage::write_lz4_envelope(&path, latest, &vers);
+            }
             return vers;
         }
     }
+
+    // Stale-While-Error offline fallback: return expired `.lz4` versions if present
+    if let Some(env) = disk_env
+        && !env.payload.is_empty()
+    {
+        if let Ok(mut guard) = get_versions_cache().write() {
+            guard.insert(cache_key, (Instant::now(), env.payload.clone()));
+        }
+        return env.payload;
+    }
+
     vec!["16.22".to_string(), "16.21".to_string()]
+}
+
+/// Fetches available patch versions from the OP.GG REST API with in-memory TTL + disk caching.
+pub async fn fetch_opgg_versions_from_base(
+    client: &reqwest::Client,
+    rest_base: &str,
+    region: &str,
+) -> Vec<String> {
+    let dir = if rest_base == OPGG_REST_API_BASE {
+        crate::storage::global_paths().map(|p| p.opgg_versions_dir.as_path())
+    } else {
+        None
+    };
+    fetch_opgg_versions_with_cache_dir(client, rest_base, region, dir).await
 }
 
 /// Fetches available patch versions from the OP.GG REST API.
@@ -367,5 +442,61 @@ mod tests {
 
         assert!(res.is_ok(), "ARAM REST call should hit /aram/103/none");
         assert_eq!(res.unwrap()["data"]["ok"], serde_json::json!(true));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_opgg_versions_disk_cache_and_stale_while_error() {
+        let dir =
+            std::env::temp_dir().join(format!("schumazgg_versions_cache_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": ["16.25", "16.24"]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let v1 =
+            fetch_opgg_versions_with_cache_dir(&client, &mock_server.uri(), "global", Some(&dir))
+                .await;
+        assert_eq!(v1, vec!["16.25", "16.24"]);
+        let disk_file = opgg_versions_file_path(&dir, "global");
+        assert!(disk_file.exists());
+
+        // Clear RAM cache and verify expired disk envelope still rescues offline failure
+        if let Ok(mut g) = get_versions_cache().write() {
+            g.clear();
+        }
+        crate::storage::write_lz4_envelope_at(
+            &disk_file,
+            "16.25",
+            &vec!["16.25".to_string(), "16.24".to_string()],
+            1, // very old timestamp -> expired TTL
+        )
+        .unwrap();
+
+        let offline_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked/versions"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&offline_server)
+            .await;
+
+        let stale_fallback = fetch_opgg_versions_with_cache_dir(
+            &client,
+            &offline_server.uri(),
+            "global",
+            Some(&dir),
+        )
+        .await;
+        assert_eq!(stale_fallback, vec!["16.25", "16.24"]);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

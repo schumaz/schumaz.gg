@@ -5,6 +5,7 @@ import {
   AramAugmentEntry,
   AramChampionRank,
   AramMode,
+  NavigationStatePatch,
   commands,
 } from "../types";
 import { translate } from "../i18n";
@@ -29,19 +30,37 @@ export function saveAramMode(mode: AramMode): void {
   }
 }
 
+export interface UseAramPersistenceOptions {
+  iniBacked?: boolean;
+  savedAramMode?: AramMode | null;
+  savedLastChampion?: string | null;
+  onNavigationPatch?: (patch: NavigationStatePatch) => void;
+}
+
 export function useAram(
   isActive: boolean,
   currentChampionId: number | null,
-  locale: AppLocale = "pt_BR"
+  locale: AppLocale = "pt_BR",
+  persistence?: UseAramPersistenceOptions
 ) {
-  const [savedMode, setSavedMode] = useState<AramMode | null>(loadSavedAramMode);
-  const [showChooser, setShowChooser] = useState<boolean>(() => loadSavedAramMode() === null);
+  const iniBacked = Boolean(persistence?.iniBacked);
+  const onNavigationPatch = persistence?.onNavigationPatch;
+
+  const [savedMode, setSavedMode] = useState<AramMode | null>(() =>
+    iniBacked ? persistence?.savedAramMode ?? null : loadSavedAramMode()
+  );
+  const [showChooser, setShowChooser] = useState<boolean>(() => {
+    const initialMode = iniBacked ? persistence?.savedAramMode ?? null : loadSavedAramMode();
+    return initialMode === null;
+  });
 
   const [tierLists, setTierLists] = useState<Partial<Record<AramMode, AramChampionRank[]>>>({});
   const [tierLoading, setTierLoading] = useState<Partial<Record<AramMode, boolean>>>({});
   const [tierErrors, setTierErrors] = useState<Partial<Record<AramMode, string | null>>>({});
 
-  const [selectedChampionKey, setSelectedChampionKey] = useState<string | null>(null);
+  const [selectedChampionKey, setSelectedChampionKey] = useState<string | null>(
+    () => persistence?.savedLastChampion ?? null
+  );
   const [augmentsByChampion, setAugmentsByChampion] = useState<Record<string, AramAugmentEntry[]>>(
     {}
   );
@@ -55,6 +74,7 @@ export function useAram(
   const wasMayhemVisibleRef = useRef(false);
   const lastAutoChampionIdRef = useRef<number | null>(null);
   const prevLocaleRef = useRef<AppLocale>(locale);
+  const hydratedIniRef = useRef(false);
   const selectedChampionKeyRef = useRef<string | null>(selectedChampionKey);
   selectedChampionKeyRef.current = selectedChampionKey;
 
@@ -88,12 +108,15 @@ export function useAram(
   );
 
   const fetchAugmentsForChampion = useCallback(
-    async (championKey: string, force = false) => {
+    async (championKey: string, force = false, persistSelection = true) => {
       const normalizedKey = championKey.trim().toLowerCase();
       if (!normalizedKey) return;
 
       setSelectedChampionKey(normalizedKey);
       setAugmentsError(null);
+      if (persistSelection && iniBacked) {
+        onNavigationPatch?.({ aramMayhemLastChampion: normalizedKey });
+      }
 
       if (!force && augmentsCacheRef.current[normalizedKey]) {
         setAugmentsLoading(false);
@@ -121,8 +144,22 @@ export function useAram(
         }
       }
     },
-    [locale]
+    [locale, iniBacked, onNavigationPatch]
   );
+
+  // Hydrate initial ARAM submode and last champion once INI settings finish loading
+  useEffect(() => {
+    if (!iniBacked || hydratedIniRef.current) return;
+    hydratedIniRef.current = true;
+
+    const iniMode = persistence?.savedAramMode ?? null;
+    setSavedMode(iniMode);
+    setShowChooser(iniMode === null);
+
+    if (persistence?.savedLastChampion && !selectedChampionKeyRef.current) {
+      fetchAugmentsForChampion(persistence.savedLastChampion, false, false);
+    }
+  }, [iniBacked, persistence?.savedAramMode, persistence?.savedLastChampion, fetchAugmentsForChampion]);
 
   // Invalidate augment cache when locale changes and re-fetch if a champion is selected
   useEffect(() => {
@@ -131,7 +168,7 @@ export function useAram(
     augmentsCacheRef.current = {};
     setAugmentsByChampion({});
     if (selectedChampionKeyRef.current) {
-      fetchAugmentsForChampion(selectedChampionKeyRef.current, true);
+      fetchAugmentsForChampion(selectedChampionKeyRef.current, true, false);
     }
   }, [locale, fetchAugmentsForChampion]);
 
@@ -189,11 +226,18 @@ export function useAram(
     [savedMode]
   );
 
-  const selectMode = useCallback((mode: AramMode) => {
-    saveAramMode(mode);
-    setSavedMode(mode);
-    setShowChooser(false);
-  }, []);
+  const selectMode = useCallback(
+    (mode: AramMode) => {
+      if (iniBacked) {
+        onNavigationPatch?.({ savedAramMode: mode });
+      } else {
+        saveAramMode(mode);
+      }
+      setSavedMode(mode);
+      setShowChooser(false);
+    },
+    [iniBacked, onNavigationPatch]
+  );
 
   const retryTierList = useCallback(
     (mode: AramMode) => {
@@ -204,7 +248,7 @@ export function useAram(
 
   const retryAugments = useCallback(() => {
     if (selectedChampionKey) {
-      fetchAugmentsForChampion(selectedChampionKey, true);
+      fetchAugmentsForChampion(selectedChampionKey, true, false);
     }
   }, [selectedChampionKey, fetchAugmentsForChampion]);
 

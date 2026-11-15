@@ -1,4 +1,4 @@
-use crate::{build_provider, lcu_connector, lcu_injector, models, ws_listener};
+use crate::{build_provider, lcu_connector, lcu_injector, models, storage, ws_listener};
 
 /// Resolves the active queue ID for item build injection without hardcoding 420.
 pub fn normalize_item_build_queue_id(
@@ -103,14 +103,18 @@ pub async fn inject_item_build(
     lcu_injector::inject_item_sets(&conn, summoner.summoner_id, &build).await
 }
 
-/// Tauri command to sync user preferences from the frontend to the backend engine.
+/// Tauri command to sync user preferences from the frontend to the backend engine and `UserSettings.ini`.
 #[tauri::command]
 #[specta::specta]
 pub async fn sync_user_preferences(preferences: models::UserPreferences) {
     let prev = lcu_injector::get_user_preferences();
     let should_auto_mark = preferences.auto_mark_daily_missions_read;
     let target_locale = preferences.language;
-    lcu_injector::set_user_preferences(preferences);
+    lcu_injector::set_user_preferences(preferences.clone());
+    let _ = storage::update_global_settings(|s| {
+        s.automation = preferences;
+    });
+
     if prev.language != target_locale {
         let client = build_provider::shared_http_client().clone();
         tauri::async_runtime::spawn(async move {
@@ -126,11 +130,15 @@ pub async fn sync_user_preferences(preferences: models::UserPreferences) {
     }
 }
 
-/// Tauri command to update the active backend locale (`pt_BR` | `en_US`) and pre-warm DataDragon cache.
+/// Tauri command to update the active backend locale (`pt_BR` | `en_US`), persist to `UserSettings.ini`, and pre-warm DataDragon cache.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_locale(locale: models::AppLocale) {
     lcu_injector::set_active_locale(locale);
+    let _ = storage::update_global_settings(|s| {
+        s.general.language = Some(locale);
+        s.automation.language = locale;
+    });
     let client = build_provider::shared_http_client().clone();
     tauri::async_runtime::spawn(async move {
         let _ = build_provider::get_or_init_ddragon_cache_for_locale(&client, locale).await;

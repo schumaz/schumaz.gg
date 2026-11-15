@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import { AramAugmentEntry, AramChampionRank, AramMode } from "../types";
+import { resolveCachedAssetUrl } from "../utils/assets";
 import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
 import { SearchInput } from "./SearchInput";
 
@@ -14,6 +15,13 @@ export const LEAGUE_ARAM_ICON_URL =
 
 export const LEAGUE_ARAM_MAYHEM_ICON_URL =
   "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/kiwi/augments/icons/poroking_large.png";
+
+export function parseRarityFilter(raw: string | null | undefined): AugmentRarityFilter {
+  if (raw === "1") return 1;
+  if (raw === "4") return 4;
+  if (raw === "8") return 8;
+  return "all";
+}
 
 interface AramTabProps {
   isActive: boolean;
@@ -30,6 +38,8 @@ interface AramTabProps {
   onSelectChampion: (championKey: string) => void;
   onRetryTierList: (mode: AramMode) => void;
   onRetryAugments: () => void;
+  savedRarityFilter?: string;
+  onRarityFilterChange?: (rarity: AugmentRarityFilter) => void;
 }
 
 function normalizeSearch(value: string): string {
@@ -131,12 +141,27 @@ export function AramTab({
   onSelectChampion,
   onRetryTierList,
   onRetryAugments,
+  savedRarityFilter,
+  onRarityFilterChange,
 }: AramTabProps) {
   const { t } = useTranslation();
   const [aramSearch, setAramSearch] = useState("");
   const [mayhemChampSearch, setMayhemChampSearch] = useState("");
   const [augmentSearch, setAugmentSearch] = useState("");
-  const [rarityFilter, setRarityFilter] = useState<AugmentRarityFilter>("all");
+  const [rarityFilter, setRarityFilter] = useState<AugmentRarityFilter>(() =>
+    parseRarityFilter(savedRarityFilter)
+  );
+
+  useEffect(() => {
+    if (savedRarityFilter !== undefined) {
+      setRarityFilter(parseRarityFilter(savedRarityFilter));
+    }
+  }, [savedRarityFilter]);
+
+  const handleSelectRarityFilter = (next: AugmentRarityFilter) => {
+    setRarityFilter(next);
+    onRarityFilterChange?.(next);
+  };
 
   const activeMode = savedMode ?? "aram";
   const currentChampions = tierLists[activeMode] ?? [];
@@ -207,7 +232,7 @@ export function AramTab({
               <div className="aram-choice-top">
                 <div className="aram-choice-icon" aria-hidden="true">
                   <img
-                    src={LEAGUE_ARAM_ICON_URL}
+                    src={resolveCachedAssetUrl(LEAGUE_ARAM_ICON_URL)}
                     alt=""
                     className="aram-choice-icon-img"
                   />
@@ -229,7 +254,7 @@ export function AramTab({
               <div className="aram-choice-top">
                 <div className="aram-choice-icon is-mayhem" aria-hidden="true">
                   <img
-                    src={LEAGUE_ARAM_MAYHEM_ICON_URL}
+                    src={resolveCachedAssetUrl(LEAGUE_ARAM_MAYHEM_ICON_URL)}
                     alt=""
                     className="aram-choice-icon-img"
                   />
@@ -299,7 +324,7 @@ export function AramTab({
                     <span className="aram-rank-num">#{champ.rank}</span>
                     <div className="dd-icon-frame aram-champ-frame">
                       <img
-                        src={champ.icon_url}
+                        src={resolveCachedAssetUrl(champ.icon_url)}
                         alt={champ.name}
                         className="aram-champ-avatar"
                         loading="lazy"
@@ -399,7 +424,7 @@ export function AramTab({
                         <span className="aram-rank-num">#{champ.rank}</span>
                         <div className="dd-icon-frame aram-champ-frame">
                           <img
-                            src={champ.icon_url}
+                            src={resolveCachedAssetUrl(champ.icon_url)}
                             alt={champ.name}
                             className="aram-champ-avatar"
                             loading="lazy"
@@ -429,7 +454,7 @@ export function AramTab({
                       {selectedChampion && (
                         <div className="dd-icon-frame aram-hero-frame">
                           <img
-                            src={selectedChampion.icon_url}
+                            src={resolveCachedAssetUrl(selectedChampion.icon_url)}
                             alt={selectedChampion.name}
                             className="aram-hero-avatar"
                           />
@@ -463,7 +488,7 @@ export function AramTab({
                             key={String(opt.id)}
                             type="button"
                             className={`segment-btn ${rarityFilter === opt.id ? "active" : ""}`}
-                            onClick={() => setRarityFilter(opt.id)}
+                            onClick={() => handleSelectRarityFilter(opt.id)}
                           >
                             {opt.dot && <span className={`aram-rarity-dot ${opt.dot}`} />}
                             <span>{opt.label}</span>
@@ -514,7 +539,7 @@ export function AramTab({
                           <div key={aug.id} className="aram-augment-row">
                             <div className={`aram-augment-icon-frame ${rarityInfo.className}`}>
                               <img
-                                src={aug.icon_url}
+                                src={resolveCachedAssetUrl(aug.icon_url)}
                                 alt={aug.name}
                                 className="aram-augment-icon"
                                 loading="lazy"

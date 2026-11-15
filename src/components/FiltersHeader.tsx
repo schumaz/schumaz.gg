@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../types";
+import { resolveCachedAssetUrl } from "../utils/assets";
 import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
 import { LoadingBar } from "./LoadingIndicators";
 import { RegionFlag } from "./RegionFlag";
@@ -30,7 +31,7 @@ const CDRAGON_POSITION_SVG_BASE =
 export function buildIconImg(src: string, className = "filter-option-icon") {
   return (
     <img
-      src={src}
+      src={resolveCachedAssetUrl(src)}
       alt=""
       aria-hidden="true"
       className={className}
@@ -382,7 +383,7 @@ export function FiltersHeader({
           {build.champion_icon_url ? (
             <div className="dd-icon-frame champ-avatar-frame">
               <img
-                src={build.champion_icon_url}
+                src={resolveCachedAssetUrl(build.champion_icon_url)}
                 alt={build.champion_name}
                 className="champ-avatar"
                 onError={(e) => {

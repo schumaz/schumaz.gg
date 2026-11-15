@@ -1,6 +1,7 @@
 use super::client::OPGG_REST_API_BASE;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OpggPositionInfo {
@@ -15,6 +16,13 @@ pub type PositionsCache = HashMap<String, ChampionPositionsMap>;
 // In-memory cache for OP.GG champion rankings by (region, tier, version)
 static CHAMPION_POSITIONS_CACHE: std::sync::LazyLock<std::sync::RwLock<PositionsCache>> =
     std::sync::LazyLock::new(|| std::sync::RwLock::new(HashMap::new()));
+
+pub fn positions_file_path(dir: &Path, region: &str, tier: &str, version: Option<&str>) -> PathBuf {
+    let reg = crate::storage::sanitize_key_component(region);
+    let tr = crate::storage::sanitize_key_component(tier);
+    let ver = crate::storage::sanitize_key_component(version.unwrap_or("latest"));
+    dir.join(format!("positions_{reg}_{tr}_{ver}.lz4"))
+}
 
 /// Normalizes an OP.GG position name ("TOP", "JUNGLE", "MID", "ADC", "SUPPORT") into standard lowercase lane.
 pub fn normalize_opgg_lane_name(raw: &str) -> Option<&'static str> {
@@ -75,30 +83,73 @@ pub fn parse_opgg_champion_positions_ranking(
     map
 }
 
-/// Resolves the champion's primary lane dynamically by querying OP.GG's ranking data
-/// and picking the position with the highest game count (play count).
-pub async fn resolve_champion_most_played_lane(
+pub async fn resolve_champion_most_played_lane_with_base_and_dir(
     client: &reqwest::Client,
+    rest_base: &str,
     champion_id: i32,
     region: &str,
     tier: &str,
     version: Option<&str>,
+    positions_dir: Option<&Path>,
 ) -> Result<String, String> {
-    let cache_key = format!("{}:{}:{}", region, tier, version.unwrap_or("latest"));
+    let cache_key = format!(
+        "{}:{}:{}:{}",
+        rest_base,
+        region,
+        tier,
+        version.unwrap_or("latest")
+    );
+    let legacy_cache_key = format!("{}:{}:{}", region, tier, version.unwrap_or("latest"));
 
-    // 1. Check cache first
+    // 1. Check L1 RAM cache first
     if let Ok(guard) = CHAMPION_POSITIONS_CACHE.read()
-        && let Some(champ_map) = guard.get(&cache_key)
+        && let Some(champ_map) = guard
+            .get(&cache_key)
+            .or_else(|| guard.get(&legacy_cache_key))
         && let Some(positions) = champ_map.get(&champion_id)
         && let Some(lane) = select_most_played_lane(positions)
     {
         return Ok(lane.to_string());
     }
 
-    // 2. Fetch from OP.GG
+    // 2. Check L2 disk .lz4 cache (24h TTL + patch check)
+    let disk_env = positions_dir.and_then(|dir| {
+        let path = positions_file_path(dir, region, tier, version);
+        crate::storage::read_lz4_envelope::<ChampionPositionsMap>(&path)
+    });
+
+    if let Some(ref env) = disk_env
+        && crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::now_unix_secs(),
+        )
+    {
+        let patch_ok = match version.map(str::trim).filter(|v| !v.is_empty()) {
+            Some(v) => env.patch == v,
+            None => true,
+        };
+        if patch_ok {
+            let chosen = env
+                .payload
+                .get(&champion_id)
+                .and_then(|positions| select_most_played_lane(positions))
+                .map(|s| s.to_string());
+            if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
+                guard.insert(cache_key.clone(), env.payload.clone());
+            }
+            if let Some(lane) = chosen {
+                return Ok(lane);
+            }
+        }
+    }
+
+    // 3. Fetch from OP.GG REST API
     let mut url = format!(
         "{}/{}/champions/ranked?tier={}",
-        OPGG_REST_API_BASE, region, tier
+        rest_base.trim_end_matches('/'),
+        region,
+        tier
     );
     if let Some(v) = version
         && !v.trim().is_empty()
@@ -106,33 +157,64 @@ pub async fn resolve_champion_most_played_lane(
         url.push_str(&format!("&version={}", v.trim()));
     }
 
-    let res = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to request champions/ranked from OP.GG: {}", e))?;
+    let fetch_res = async {
+        let res = client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to request champions/ranked from OP.GG: {}", e))?;
 
-    if !res.status().is_success() {
-        return Err(format!(
-            "OP.GG champions/ranked returned status: {}",
-            res.status()
-        ));
+        if !res.status().is_success() {
+            return Err(format!(
+                "OP.GG champions/ranked returned status: {}",
+                res.status()
+            ));
+        }
+
+        let json_body: serde_json::Value = res
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse OP.GG champions/ranked JSON: {}", e))?;
+
+        Ok::<serde_json::Value, String>(json_body)
     }
+    .await;
 
-    let json_body: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse OP.GG champions/ranked JSON: {}", e))?;
+    let json_body = match fetch_res {
+        Ok(json) => json,
+        Err(err) => {
+            // Stale-While-Error offline fallback
+            if let Some(env) = disk_env
+                && let Some(lane) = env
+                    .payload
+                    .get(&champion_id)
+                    .and_then(|positions| select_most_played_lane(positions))
+                    .map(|s| s.to_string())
+            {
+                if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
+                    guard.insert(cache_key, env.payload);
+                }
+                return Ok(lane);
+            }
+            return Err(err);
+        }
+    };
 
     let parsed_map = parse_opgg_champion_positions_ranking(&json_body);
 
-    // 3. Find lane for requested champion
     let chosen_lane = parsed_map
         .get(&champion_id)
         .and_then(|positions| select_most_played_lane(positions))
         .map(|s| s.to_string());
 
-    // 4. Update cache
+    if let Some(dir) = positions_dir
+        && !parsed_map.is_empty()
+    {
+        let path = positions_file_path(dir, region, tier, version);
+        let patch_str = version.unwrap_or("").trim();
+        let _ = crate::storage::write_lz4_envelope(&path, patch_str, &parsed_map);
+    }
+
     if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
         guard.insert(cache_key, parsed_map);
     }
@@ -145,11 +227,34 @@ pub async fn resolve_champion_most_played_lane(
     })
 }
 
+/// Resolves the champion's primary lane dynamically by querying OP.GG's ranking data
+/// and picking the position with the highest game count (play count).
+pub async fn resolve_champion_most_played_lane(
+    client: &reqwest::Client,
+    champion_id: i32,
+    region: &str,
+    tier: &str,
+    version: Option<&str>,
+) -> Result<String, String> {
+    let dir = crate::storage::global_paths().map(|p| p.opgg_positions_dir.as_path());
+    resolve_champion_most_played_lane_with_base_and_dir(
+        client,
+        OPGG_REST_API_BASE,
+        champion_id,
+        region,
+        tier,
+        version,
+        dir,
+    )
+    .await
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
     #[test]
     fn test_parse_opgg_champion_positions_ranking_and_select_most_played_lane() {
         let json = serde_json::json!({
@@ -182,15 +287,12 @@ mod tests {
         let map = parse_opgg_champion_positions_ranking(&json);
         assert_eq!(map.len(), 3);
 
-        // Yasuo should pick Mid (57k > 22k > 14k)
         let yasuo_pos = map.get(&157).unwrap();
         assert_eq!(select_most_played_lane(yasuo_pos), Some("mid"));
 
-        // Gragas should pick Top (16k > 5k > 3k)
         let gragas_pos = map.get(&79).unwrap();
         assert_eq!(select_most_played_lane(gragas_pos), Some("top"));
 
-        // Seraphine should pick Support
         let sera_pos = map.get(&147).unwrap();
         assert_eq!(select_most_played_lane(sera_pos), Some("support"));
     }
@@ -230,5 +332,70 @@ mod tests {
         .await;
 
         assert_eq!(resolved, Ok("adc".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_positions_disk_cache_and_stale_while_error() {
+        let dir =
+            std::env::temp_dir().join(format!("schumazgg_positions_cache_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    { "id": 103, "positions": [{ "name": "MID", "stats": { "play": 50000, "role_rate": 0.9 } }] }
+                ]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let lane = resolve_champion_most_played_lane_with_base_and_dir(
+            &client,
+            &mock_server.uri(),
+            103,
+            "global",
+            "emerald_plus",
+            Some("16.25"),
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(lane, "mid");
+        assert!(positions_file_path(&dir, "global", "emerald_plus", Some("16.25")).exists());
+
+        // Clear RAM and test expired disk envelope with offline server -> Stale-While-Error rescues!
+        if let Ok(mut g) = CHAMPION_POSITIONS_CACHE.write() {
+            g.clear();
+        }
+        let disk_file = positions_file_path(&dir, "global", "emerald_plus", Some("16.25"));
+        let env = crate::storage::read_lz4_envelope::<ChampionPositionsMap>(&disk_file).unwrap();
+        crate::storage::write_lz4_envelope_at(&disk_file, "16.25", &env.payload, 1).unwrap();
+
+        let offline = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&offline)
+            .await;
+
+        let rescued = resolve_champion_most_played_lane_with_base_and_dir(
+            &client,
+            &offline.uri(),
+            103,
+            "global",
+            "emerald_plus",
+            Some("16.25"),
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rescued, "mid");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

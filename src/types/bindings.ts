@@ -12,16 +12,21 @@ export const commands = {
 	updateBuildFilters: (championId: number, queueId: number | null, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("update_build_filters", { championId, queueId, position, tier, region, patch }),
 	/**  Tauri command to fetch the current summoner status if the client is connected. */
 	getSummonerStatus: () => __TAURI_INVOKE<SummonerInfo_Serialize | null>("get_summoner_status"),
-	/**  Tauri command to fetch aggregated player profile (wallpaper, ranked stats, top 3 masteries, 10 matches). */
-	getPlayerProfile: () => __TAURI_INVOKE<PlayerProfile_Serialize | null>("get_player_profile"),
+	/**  Tauri command to return the cached profile for the last known summoner in 0ms (even before LCU connects). */
+	getCachedPlayerProfile: (summonerId: number | null) => __TAURI_INVOKE<CachedProfileResult_Serialize | null>("get_cached_player_profile", { summonerId }),
+	/**
+	 *  Tauri command to fetch aggregated player profile (wallpaper, ranked stats, top 3 masteries, 10 matches).
+	 *  When `force_refresh` is `Some(true)`, bypasses the `.lz4` disk cache.
+	 */
+	getPlayerProfile: (forceRefresh: boolean | null) => __TAURI_INVOKE<PlayerProfile_Serialize | null>("get_player_profile", { forceRefresh }),
 	/**
 	 *  Syncs the champion ID currently displayed in the frontend UI to backend session state
 	 *  so final Champ Select reconciliation can detect UI/backend divergence.
 	 */
 	syncDisplayedChampion: (championId: number | null) => __TAURI_INVOKE<void>("sync_displayed_champion", { championId }),
-	/**  Tauri command to sync user preferences from the frontend to the backend engine. */
+	/**  Tauri command to sync user preferences from the frontend to the backend engine and `UserSettings.ini`. */
 	syncUserPreferences: (preferences: UserPreferences_Deserialize) => __TAURI_INVOKE<void>("sync_user_preferences", { preferences }),
-	/**  Tauri command to update the active backend locale (`pt_BR` | `en_US`) and pre-warm DataDragon cache. */
+	/**  Tauri command to update the active backend locale (`pt_BR` | `en_US`), persist to `UserSettings.ini`, and pre-warm DataDragon cache. */
 	setLocale: (locale: AppLocale) => __TAURI_INVOKE<void>("set_locale", { locale }),
 	/**  Tauri command to immediately inject only summoner spells into an active Champ Select session. */
 	injectSummonerSpells: (spell1Id: number, spell2Id: number, championId: number | null, secondarySpellId: number | null) => __TAURI_INVOKE<null>("inject_summoner_spells", { spell1Id, spell2Id, championId, secondarySpellId }),
@@ -42,8 +47,18 @@ export const commands = {
 	getRankedChampionBuild: (championId: number, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_ranked_champion_build", { championId, position, tier, region, patch }),
 	/**  Returns the saved GPU hardware acceleration setting and whether it was active at startup. */
 	getHardwareAccelerationStatus: () => __TAURI_INVOKE<HardwareAccelerationStatus>("get_hardware_acceleration_status"),
-	/**  Saves the GPU hardware acceleration preference to disk for the next startup. */
+	/**  Saves the GPU hardware acceleration preference to `UserSettings.ini` for the next startup. */
 	setHardwareAcceleration: (enabled: boolean) => __TAURI_INVOKE<HardwareAccelerationStatus>("set_hardware_acceleration", { enabled }),
+	/**  Returns the full unified `AppSettings` loaded from `%LOCALAPPDATA%\schumazgg\Config\UserSettings.ini`. */
+	getAppSettings: () => __TAURI_INVOKE<AppSettings_Serialize>("get_app_settings"),
+	/**  Updates `[ProfileAppearanceSettings]` (`ProfileBlurPercent`, `bWallpaperVisible`) in `UserSettings.ini`. */
+	updateProfileAppearance: (blurPercent: number, wallpaperVisible: boolean) => __TAURI_INVOKE<AppSettings_Serialize>("update_profile_appearance", { blurPercent, wallpaperVisible }),
+	/**  Applies a partial patch to `[NavigationState]` in `UserSettings.ini`. */
+	updateNavigationState: (patch: NavigationStatePatch_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("update_navigation_state", { patch }),
+	/**  Marks the first-run language onboarding completed with `locale` and persists to `UserSettings.ini`. */
+	completeLanguageOnboarding: (locale: AppLocale) => __TAURI_INVOKE<AppSettings_Serialize>("complete_language_onboarding", { locale }),
+	/**  Performs one-time migration of the 6 legacy `localStorage` keys into `UserSettings.ini`. */
+	migrateLegacyLocalStorage: (payload: LegacyLocalStoragePayload_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("migrate_legacy_local_storage", { payload }),
 	/**  Restarts the Tauri application so updated WebView2 GPU flags take effect. */
 	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
@@ -66,6 +81,26 @@ export const events = {
 /* Types */
 /**  Supported application & data locales (`pt_BR` | `en_US`). */
 export type AppLocale = "pt_BR" | "en_US";
+
+export type AppSettings = AppSettings_Serialize | AppSettings_Deserialize;
+
+export type AppSettings_Deserialize = {
+	general: GeneralSettings_Deserialize,
+	automation: UserPreferences_Deserialize,
+	profileAppearance: ProfileAppearanceSettings,
+	graphics: GraphicsSettings,
+	window: WindowSettings_Deserialize,
+	navigation: NavigationState_Deserialize,
+};
+
+export type AppSettings_Serialize = {
+	general: GeneralSettings_Serialize,
+	automation: UserPreferences_Serialize,
+	profileAppearance: ProfileAppearanceSettings,
+	graphics: GraphicsSettings,
+	window: WindowSettings_Serialize,
+	navigation: NavigationState_Serialize,
+};
 
 export type AramAugmentEntry = AramAugmentEntry_Serialize | AramAugmentEntry_Deserialize;
 
@@ -118,6 +153,23 @@ export type AramChampionRank_Serialize = {
 export type AramMode = "aram" | "aram_mayhem";
 
 export type BuildInjected = InjectionReport;
+
+/**  Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR. */
+export type CachedProfileResult = CachedProfileResult_Serialize | CachedProfileResult_Deserialize;
+
+/**  Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR. */
+export type CachedProfileResult_Deserialize = {
+	profile: PlayerProfile_Deserialize,
+	createdAtUnix: number,
+	isStale: boolean,
+};
+
+/**  Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR. */
+export type CachedProfileResult_Serialize = {
+	profile: PlayerProfile_Serialize,
+	createdAtUnix: number,
+	isStale: boolean,
+};
 
 export type ChampSelectEnded = null;
 
@@ -256,6 +308,24 @@ export type FlashKeyPreference = "D" | "F";
 
 export type GameflowPhaseChanged = string;
 
+export type GeneralSettings = GeneralSettings_Serialize | GeneralSettings_Deserialize;
+
+export type GeneralSettings_Deserialize = {
+	language?: AppLocale | null,
+	languageOnboardingCompleted: boolean,
+	legacyStorageMigrated: boolean,
+};
+
+export type GeneralSettings_Serialize = {
+	language: AppLocale | null,
+	languageOnboardingCompleted: boolean,
+	legacyStorageMigrated: boolean,
+};
+
+export type GraphicsSettings = {
+	hardwareAcceleration: boolean,
+};
+
 export type HardwareAccelerationStatus = {
 	enabled: boolean,
 	active_at_startup: boolean,
@@ -316,7 +386,87 @@ export type LcuConnected_Serialize = SummonerInfo_Serialize;
 
 export type LcuDisconnected = null;
 
+export type LegacyLocalStoragePayload = LegacyLocalStoragePayload_Serialize | LegacyLocalStoragePayload_Deserialize;
+
+export type LegacyLocalStoragePayload_Deserialize = {
+	schumazUserPreferences?: string | null,
+	schumazLanguage?: string | null,
+	schumazProfileUiBlur?: string | null,
+	schumazProfileWallpaperVisible?: string | null,
+	schumazAramSubmode?: string | null,
+	schumazRankedFilters?: string | null,
+};
+
+export type LegacyLocalStoragePayload_Serialize = {
+	schumazUserPreferences: string | null,
+	schumazLanguage: string | null,
+	schumazProfileUiBlur: string | null,
+	schumazProfileWallpaperVisible: string | null,
+	schumazAramSubmode: string | null,
+	schumazRankedFilters: string | null,
+};
+
 export type MatchEnded = null;
+
+export type NavigationState = NavigationState_Serialize | NavigationState_Deserialize;
+
+export type NavigationStatePatch = NavigationStatePatch_Serialize | NavigationStatePatch_Deserialize;
+
+export type NavigationStatePatch_Deserialize = {
+	savedAramMode?: AramMode | null,
+	profileMatchModeFilter?: string | null,
+	aramMayhemRarityFilter?: string | null,
+	/**  Empty string clears `aram_mayhem_last_champion` to `None`. */
+	aramMayhemLastChampion?: string | null,
+	rankedFilterRegion?: string | null,
+	rankedFilterTier?: string | null,
+	rankedFilterLane?: string | null,
+	/**  Empty string clears `ranked_filter_patch` to `None`. */
+	rankedFilterPatch?: string | null,
+	rankedChampionTierFilter?: string | null,
+	lastSummonerId?: number | null,
+};
+
+export type NavigationStatePatch_Serialize = {
+	savedAramMode: AramMode | null,
+	profileMatchModeFilter: string | null,
+	aramMayhemRarityFilter: string | null,
+	/**  Empty string clears `aram_mayhem_last_champion` to `None`. */
+	aramMayhemLastChampion: string | null,
+	rankedFilterRegion: string | null,
+	rankedFilterTier: string | null,
+	rankedFilterLane: string | null,
+	/**  Empty string clears `ranked_filter_patch` to `None`. */
+	rankedFilterPatch: string | null,
+	rankedChampionTierFilter: string | null,
+	lastSummonerId: number | null,
+};
+
+export type NavigationState_Deserialize = {
+	savedAramMode?: AramMode | null,
+	profileMatchModeFilter: string,
+	aramMayhemRarityFilter: string,
+	aramMayhemLastChampion?: string | null,
+	rankedFilterRegion: string,
+	rankedFilterTier: string,
+	rankedFilterLane: string,
+	rankedFilterPatch?: string | null,
+	rankedChampionTierFilter: string,
+	lastSummonerId?: number | null,
+};
+
+export type NavigationState_Serialize = {
+	savedAramMode: AramMode | null,
+	profileMatchModeFilter: string,
+	aramMayhemRarityFilter: string,
+	aramMayhemLastChampion: string | null,
+	rankedFilterRegion: string,
+	rankedFilterTier: string,
+	rankedFilterLane: string,
+	rankedFilterPatch: string | null,
+	rankedChampionTierFilter: string,
+	lastSummonerId: number | null,
+};
 
 /**  Aggregated player profile payload for the Profile tab. */
 export type PlayerProfile = PlayerProfile_Serialize | PlayerProfile_Deserialize;
@@ -345,6 +495,11 @@ export type PlayerProfile_Serialize = {
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
 	recent_matches: RecentMatchInfo[],
+};
+
+export type ProfileAppearanceSettings = {
+	profileBlurPercent: number,
+	wallpaperVisible: boolean,
 };
 
 export type ProfileRefreshRequested = null;
@@ -588,6 +743,24 @@ export type UserPreferences_Serialize = {
 
 /**  Emitted when the main window becomes minimized/hidden (`true`) or restored/visible (`false`). */
 export type WindowMinimizedChanged = boolean;
+
+export type WindowSettings = WindowSettings_Serialize | WindowSettings_Deserialize;
+
+export type WindowSettings_Deserialize = {
+	windowWidth: number | null,
+	windowHeight: number | null,
+	windowX?: number | null,
+	windowY?: number | null,
+	windowMaximized: boolean,
+};
+
+export type WindowSettings_Serialize = {
+	windowWidth: number | null,
+	windowHeight: number | null,
+	windowX: number | null,
+	windowY: number | null,
+	windowMaximized: boolean,
+};
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

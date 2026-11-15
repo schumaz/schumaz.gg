@@ -1,5 +1,6 @@
 import { SpellMetadata } from "../types";
 import { useTranslation } from "../i18n";
+import { resolveCachedAssetUrl } from "../utils/assets";
 
 interface SpellsBarProps {
   orderedSpells: SpellMetadata[];
@@ -47,7 +48,11 @@ export function SpellsBar({
                 )}
                 {spell.icon_url && (
                   <div className="dd-icon-frame spell-icon-frame">
-                    <img src={spell.icon_url} alt={spell.name} className="spell-icon" />
+                    <img
+                      src={resolveCachedAssetUrl(spell.icon_url)}
+                      alt={spell.name}
+                      className="spell-icon"
+                    />
                   </div>
                 )}
                 <div className="spell-info">
@@ -87,7 +92,7 @@ export function SpellsBar({
                       {choice.icon_url && (
                         <div className="dd-icon-frame secondary-spell-frame">
                           <img
-                            src={choice.icon_url}
+                            src={resolveCachedAssetUrl(choice.icon_url)}
                             alt={choice.name}
                             className="secondary-spell-icon"
                           />
@@ -113,7 +118,7 @@ export function SpellsBar({
                     {choice.icon_url && (
                       <div className="dd-icon-frame secondary-spell-frame">
                         <img
-                          src={choice.icon_url}
+                          src={resolveCachedAssetUrl(choice.icon_url)}
                           alt={choice.name}
                           className="secondary-spell-icon"
                         />

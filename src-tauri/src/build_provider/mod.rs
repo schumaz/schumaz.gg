@@ -16,7 +16,9 @@ pub use patch::*;
 pub use runes::*;
 pub use spells::*;
 
+use crate::models::AppLocale;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
@@ -35,6 +37,33 @@ static BUILD_CACHE: OnceLock<RwLock<HashMap<String, (Instant, ChampionBuild)>>> 
 
 fn get_build_cache() -> &'static RwLock<HashMap<String, (Instant, ChampionBuild)>> {
     BUILD_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_cache_file_path(
+    dir: &Path,
+    champion_id: i32,
+    queue_id: i32,
+    pos: &str,
+    tier: &str,
+    region: &str,
+    manual_patch: &str,
+    patch_48h_protection: bool,
+    locale: AppLocale,
+) -> PathBuf {
+    let p_pos = crate::storage::sanitize_key_component(if pos.is_empty() { "auto" } else { pos });
+    let p_tier = crate::storage::sanitize_key_component(tier);
+    let p_reg = crate::storage::sanitize_key_component(region);
+    let p_pat = crate::storage::sanitize_key_component(if manual_patch.is_empty() {
+        "auto"
+    } else {
+        manual_patch
+    });
+    let prot = if patch_48h_protection { "p1" } else { "p0" };
+    dir.join(format!(
+        "build_{champion_id}_{queue_id}_{p_pos}_{p_tier}_{p_reg}_{p_pat}_{prot}_{}.lz4",
+        locale.as_str()
+    ))
 }
 
 fn extract_fast_spells_from_rest(
@@ -189,8 +218,47 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
     ddragon_cache: &DataDragonCache,
     rest_base: &str,
     mcp_endpoint: &str,
+    fast_spells_tx: Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
+    patch_48h_protection: bool,
+) -> Result<ChampionBuild, String> {
+    let builds_dir = if rest_base == OPGG_REST_API_BASE {
+        crate::storage::global_paths().map(|p| p.opgg_builds_dir.as_path())
+    } else {
+        None
+    };
+    get_recommended_build_with_filters_and_endpoints_with_dir(
+        client,
+        champion_id,
+        queue_id,
+        position,
+        tier,
+        region,
+        patch,
+        ddragon_cache,
+        rest_base,
+        mcp_endpoint,
+        fast_spells_tx,
+        patch_48h_protection,
+        builds_dir,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
+    client: &reqwest::Client,
+    champion_id: i32,
+    queue_id: i32,
+    position: Option<&str>,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+    ddragon_cache: &DataDragonCache,
+    rest_base: &str,
+    mcp_endpoint: &str,
     mut fast_spells_tx: Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
     patch_48h_protection: bool,
+    builds_dir: Option<&Path>,
 ) -> Result<ChampionBuild, String> {
     let champ_name = ddragon_cache
         .champions
@@ -209,7 +277,10 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
     } else {
         position.unwrap_or("").trim()
     };
-    let active_locale = crate::lcu_injector::get_active_locale();
+    let manual_patch_trimmed = patch.unwrap_or("").trim();
+    let prefs = crate::lcu_injector::get_user_preferences();
+    let active_locale = prefs.language;
+
     let build_cache_key = format!(
         "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
         active_locale.as_str(),
@@ -220,23 +291,22 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
         pos_cache_key,
         target_tier,
         target_region,
-        patch.unwrap_or("").trim(),
+        manual_patch_trimmed,
         patch_48h_protection
     );
 
+    // 1. Check L1 RAM cache
     if let Ok(guard) = get_build_cache().read()
         && let Some((ts, cached)) = guard.get(&build_cache_key)
         && ts.elapsed() < BUILD_CACHE_TTL
     {
         let mut build = cached.clone();
-        let prefs = crate::lcu_injector::get_user_preferences();
-        apply_build_spells_with_preference_and_locale(
+        enrich_build_with_ddragon_with_flash_key_and_locale(
             &mut build,
             ddragon_cache,
             prefs.flash_key,
-            prefs.language,
+            active_locale,
         );
-        localize_build_labels(&mut build, prefs.language);
         if let Some(tx) = fast_spells_tx.take() {
             let _ = tx.send(FastSpellRecommendation {
                 champion_id,
@@ -248,20 +318,68 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
         return Ok(build);
     }
 
-    // 1. Fetch available versions for region (cached in memory after first fetch)
+    // 2. Check L2 disk `.lz4` cache (24h TTL + locale + envelope patch validation)
+    let disk_env = builds_dir.and_then(|dir| {
+        let cache_file_path = build_cache_file_path(
+            dir,
+            champion_id,
+            queue_id,
+            pos_cache_key,
+            target_tier,
+            target_region,
+            manual_patch_trimmed,
+            patch_48h_protection,
+            active_locale,
+        );
+        crate::storage::read_lz4_envelope::<ChampionBuild>(&cache_file_path)
+    });
+
+    if let Some(ref env) = disk_env
+        && crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::now_unix_secs(),
+        )
+    {
+        let known_latest = peek_latest_cached_opgg_version(target_region);
+        let patch_valid = if !manual_patch_trimmed.is_empty() {
+            env.patch == manual_patch_trimmed
+        } else if let Some(ref latest) = known_latest {
+            env.payload.patch_fallback_applied || env.patch == *latest
+        } else {
+            true
+        };
+
+        if patch_valid {
+            let mut build = env.payload.clone();
+            enrich_build_with_ddragon_with_flash_key_and_locale(
+                &mut build,
+                ddragon_cache,
+                prefs.flash_key,
+                active_locale,
+            );
+            if let Some(tx) = fast_spells_tx.take() {
+                let _ = tx.send(FastSpellRecommendation {
+                    champion_id,
+                    spell1_id: build.spell1_id,
+                    spell2_id: build.spell2_id,
+                    is_jungle: build.active_position.eq_ignore_ascii_case("jungle"),
+                });
+            }
+            if let Ok(mut guard) = get_build_cache().write() {
+                guard.insert(build_cache_key.clone(), (Instant::now(), build.clone()));
+            }
+            return Ok(build);
+        }
+    }
+
+    // 3. Fetch available versions for region (L1 RAM + L2 .lz4 disk)
     let available_versions = fetch_opgg_versions_from_base(client, rest_base, target_region).await;
 
-    // 2. Determine initial effective patch
+    // 4. Determine initial effective patch
     let mut patch_protection_remaining_hours: Option<u32> = None;
-    let (mut effective_patch, mut patch_fallback_applied) = if let Some(p) = patch {
-        if !p.trim().is_empty() {
-            (p.trim().to_string(), false)
-        } else {
-            (
-                available_versions.first().cloned().unwrap_or_default(),
-                false,
-            )
-        }
+    let (mut effective_patch, mut patch_fallback_applied) = if !manual_patch_trimmed.is_empty() {
+        (manual_patch_trimmed.to_string(), false)
     } else {
         (
             available_versions.first().cloned().unwrap_or_default(),
@@ -270,7 +388,6 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
     };
 
     let target_position: Option<String> = if is_aram {
-        // ARAM and ARAM Mayhem have no lanes: ignore any incoming position and skip ranked lane lookup.
         None
     } else if let Some(p) = position
         && !p.trim().is_empty()
@@ -296,13 +413,9 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
         .as_deref()
         .is_some_and(|p| p.eq_ignore_ascii_case("jungle"));
 
-    let now_unix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let now_unix = crate::storage::now_unix_secs();
 
-    // 3. Start slow MCP depth item enrichment concurrently with a bounded timeout so it never
-    //    blocks fast REST spell resolution or stalls Champ Select updates.
+    // 5. Start slow MCP depth item enrichment concurrently with a bounded timeout
     let mcp_client = client.clone();
     let mcp_url = mcp_endpoint.to_string();
     let mcp_champ = champ_name.to_string();
@@ -326,8 +439,8 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
         .and_then(|res| res.ok())
     });
 
-    // 4. Fetch REST analysis (single request when latest patch is mature; avoids duplicate fetch)
-    let rest_res = if patch.is_none() || patch.unwrap_or("").trim().is_empty() {
+    // 6. Fetch REST analysis
+    let rest_res = if manual_patch_trimmed.is_empty() {
         let probe_res = fetch_opgg_rest_champion_analysis_from_base(
             client,
             rest_base,
@@ -408,6 +521,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
 
     let mcp_depth_opt = mcp_depth_handle.await.ok().flatten();
 
+    let mut fetched_ok = false;
     let mut build = match rest_res {
         Ok(mut json_res) => {
             if let Some(ref pos) = target_position
@@ -449,8 +563,29 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
                 champ_name,
                 supports_runes,
             ) {
-                Ok(b) => b,
+                Ok(b) => {
+                    fetched_ok = true;
+                    b
+                }
                 Err(_) => {
+                    if let Some(env) = disk_env {
+                        let mut stale = env.payload;
+                        enrich_build_with_ddragon_with_flash_key_and_locale(
+                            &mut stale,
+                            ddragon_cache,
+                            prefs.flash_key,
+                            active_locale,
+                        );
+                        if let Some(tx) = fast_spells_tx.take() {
+                            let _ = tx.send(FastSpellRecommendation {
+                                champion_id,
+                                spell1_id: stale.spell1_id,
+                                spell2_id: stale.spell2_id,
+                                is_jungle: stale.active_position.eq_ignore_ascii_case("jungle"),
+                            });
+                        }
+                        return Ok(stale);
+                    }
                     get_recommended_build_with_endpoint(
                         client,
                         mcp_endpoint,
@@ -463,6 +598,25 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
             }
         }
         Err(_) => {
+            // Stale-While-Error offline fallback before hardcoded fallback
+            if let Some(env) = disk_env {
+                let mut stale = env.payload;
+                enrich_build_with_ddragon_with_flash_key_and_locale(
+                    &mut stale,
+                    ddragon_cache,
+                    prefs.flash_key,
+                    active_locale,
+                );
+                if let Some(tx) = fast_spells_tx.take() {
+                    let _ = tx.send(FastSpellRecommendation {
+                        champion_id,
+                        spell1_id: stale.spell1_id,
+                        spell2_id: stale.spell2_id,
+                        is_jungle: stale.active_position.eq_ignore_ascii_case("jungle"),
+                    });
+                }
+                return Ok(stale);
+            }
             get_recommended_build_with_endpoint(
                 client,
                 mcp_endpoint,
@@ -477,7 +631,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
     build.active_position = target_position.unwrap_or_default();
     build.active_tier = target_tier.to_string();
     build.active_region = target_region.to_string();
-    build.active_patch = effective_patch;
+    build.active_patch = effective_patch.clone();
     build.available_patches = available_versions;
     build.patch_fallback_applied = patch_fallback_applied;
     build.patch_protection_remaining_hours = patch_protection_remaining_hours;
@@ -492,6 +646,21 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
             spell2_id: build.spell2_id,
             is_jungle,
         });
+    }
+
+    if fetched_ok && let Some(dir) = builds_dir {
+        let cache_file_path = build_cache_file_path(
+            dir,
+            champion_id,
+            queue_id,
+            pos_cache_key,
+            target_tier,
+            target_region,
+            manual_patch_trimmed,
+            patch_48h_protection,
+            active_locale,
+        );
+        let _ = crate::storage::write_lz4_envelope(&cache_file_path, &effective_patch, &build);
     }
 
     if let Ok(mut guard) = get_build_cache().write() {
@@ -546,7 +715,6 @@ mod tests {
     }
 
     fn format_unix_iso8601(unix_secs: u64) -> String {
-        // Civil-from-days algorithm (Howard Hinnant) for UTC ISO 8601 string
         let days = (unix_secs / 86400) as i64;
         let rem = unix_secs % 86400;
         let hour = rem / 3600;
@@ -581,7 +749,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Ranked positions endpoint MUST NOT be called for ARAM or ARAM Mayhem
         Mock::given(method("GET"))
             .and(path("/global/champions/ranked"))
             .respond_with(ResponseTemplate::new(500))
@@ -589,7 +756,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Any /aram/*/{lane} request MUST NOT happen
         Mock::given(method("GET"))
             .and(path("/global/champions/aram/18/mid"))
             .respond_with(ResponseTemplate::new(422))
@@ -609,7 +775,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // ARAM Mayhem (18) REST must hit /aram/18/none; omit runes to verify ARAM Mayhem works without runes
         Mock::given(method("GET"))
             .and(path("/global/champions/aram/18/none"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -631,7 +796,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Classic ARAM (103) REST must hit /aram/103/none with runes present
         Mock::given(method("GET"))
             .and(path("/global/champions/aram/103/none"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -677,7 +841,6 @@ mod tests {
         let cache = test_ddragon_cache();
         let mcp_url = format!("{}/mcp", mock_server.uri());
 
-        // ARAM Mayhem (2400): even with incoming position Some("top"), it is ignored, runes are optional, active_position == ""
         let mayhem_build = get_recommended_build_with_filters_and_endpoints(
             &client,
             18,
@@ -706,7 +869,6 @@ mod tests {
             vec![7, 21]
         );
 
-        // Classic ARAM (450): even with incoming position Some("mid"), it is ignored, runes are supported, active_position == ""
         let aram_build = get_recommended_build_with_filters_and_endpoints(
             &client,
             103,
@@ -742,7 +904,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // REST should only be called ONCE (reusing probe response when patch fallback is not needed)
         Mock::given(method("GET"))
             .and(path("/global/champions/aram/18/none"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -772,7 +933,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Simulate a slow MCP endpoint (1200ms latency)
         Mock::given(method("POST"))
             .and(path("/mcp"))
             .respond_with(
@@ -924,7 +1084,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Real MCP response shape for ARAM: Data(fourth_items, fifth_items, counters_meta) without sixth_items
         Mock::given(method("POST"))
             .and(path("/mcp"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -1074,7 +1233,6 @@ mod tests {
         let cache = test_ddragon_cache();
         let mcp_url = format!("{}/mcp", mock_server.uri());
 
-        // 1. With 48h protection enabled: falls back to 16.21 and reports ~38h remaining
         let protected_build = get_recommended_build_with_filters_and_endpoints_with_protection(
             &client,
             103,
@@ -1096,7 +1254,6 @@ mod tests {
         assert!(protected_build.patch_fallback_applied);
         assert_eq!(protected_build.patch_protection_remaining_hours, Some(38));
 
-        // 2. With 48h protection disabled: selects latest 16.22 without fallback
         let unprotected_build = get_recommended_build_with_filters_and_endpoints_with_protection(
             &client,
             103,
@@ -1118,7 +1275,6 @@ mod tests {
         assert!(!unprotected_build.patch_fallback_applied);
         assert_eq!(unprotected_build.patch_protection_remaining_hours, None);
 
-        // 3. Manual override to 16.22 even when protection is enabled: respects manual choice
         let manual_build = get_recommended_build_with_filters_and_endpoints_with_protection(
             &client,
             103,
@@ -1139,5 +1295,155 @@ mod tests {
         assert_eq!(manual_build.active_patch, "16.22");
         assert!(!manual_build.patch_fallback_applied);
         assert_eq!(manual_build.patch_protection_remaining_hours, None);
+    }
+
+    #[tokio::test]
+    async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
+        let dir =
+            std::env::temp_dir().join(format!("schumazgg_builds_disk_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": ["16.99"]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/global/champions/aram/103/none"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "damage_type": "AP",
+                    "summary": { "average_stats": { "win_rate": 0.54, "pick_rate": 0.08, "play": 50000 } },
+                    "runes": [{
+                        "primary_page_id": 8100,
+                        "secondary_page_id": 8200,
+                        "primary_rune_ids": [8112, 8126, 8138, 8135],
+                        "secondary_rune_ids": [8226, 8210],
+                        "stat_mod_ids": [5008, 5008, 5001],
+                        "play": 30000,
+                        "win": 16000
+                    }],
+                    "summoner_spells": [{ "ids": [4, 32], "play": 31000, "win": 16500 }],
+                    "starter_items": [{ "ids": [3802, 2003], "play": 25000, "win": 13500 }],
+                    "boots": [{ "ids": [3020], "play": 39000, "win": 20500 }],
+                    "core_items": [{ "ids": [6655, 4645, 3089], "play": 17000, "win": 9000 }],
+                    "last_items": [{ "ids": [3157], "play": 14000, "win": 7600 }]
+                }
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/mcp"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let cache = test_ddragon_cache();
+        let mcp_url = format!("{}/mcp", mock_server.uri());
+
+        let b1 = get_recommended_build_with_filters_and_endpoints_with_dir(
+            &client,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            None,
+            None,
+            None,
+            Some("16.99"),
+            &cache,
+            &mock_server.uri(),
+            &mcp_url,
+            None,
+            false,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(b1.active_patch, "16.99");
+        assert_eq!(b1.item_blocks[0].item_ids, vec![3802, 2003]);
+
+        // Clear L1 RAM cache -> second call hits L2 .lz4 disk with 0 network calls!
+        if let Ok(mut g) = get_build_cache().write() {
+            g.clear();
+        }
+        let b2 = get_recommended_build_with_filters_and_endpoints_with_dir(
+            &client,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            None,
+            None,
+            None,
+            Some("16.99"),
+            &cache,
+            &mock_server.uri(),
+            &mcp_url,
+            None,
+            false,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(b2.active_patch, "16.99");
+        assert_eq!(b2.item_blocks[0].item_ids, vec![3802, 2003]);
+
+        // Test Stale-While-Error when envelope is >24h expired and network fails
+        if let Ok(mut g) = get_build_cache().write() {
+            g.clear();
+        }
+        let locale = crate::lcu_injector::get_user_preferences().language;
+        let cache_file_path = build_cache_file_path(
+            &dir,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            "",
+            "emerald_plus",
+            "global",
+            "16.99",
+            false,
+            locale,
+        );
+        crate::storage::write_lz4_envelope_at(&cache_file_path, "16.99", &b2, 1).unwrap();
+
+        let offline = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/aram/103/none"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&offline)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/mcp"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&offline)
+            .await;
+
+        let offline_mcp = format!("{}/mcp", offline.uri());
+        let rescued = get_recommended_build_with_filters_and_endpoints_with_dir(
+            &client,
+            103,
+            crate::ws_listener::QUEUE_ARAM,
+            None,
+            None,
+            None,
+            Some("16.99"),
+            &cache,
+            &offline.uri(),
+            &offline_mcp,
+            None,
+            false,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rescued.active_patch, "16.99");
+        assert_eq!(rescued.item_blocks[0].item_ids, vec![3802, 2003]);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

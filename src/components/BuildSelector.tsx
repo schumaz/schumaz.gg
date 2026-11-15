@@ -1,5 +1,6 @@
 import { UnifiedBuildOption } from "../types";
 import { useTranslation } from "../i18n";
+import { resolveCachedAssetUrl } from "../utils/assets";
 
 interface BuildSelectorProps {
   buildOptions?: UnifiedBuildOption[];
@@ -82,7 +83,7 @@ export function BuildSelector({
                       className="dd-icon-frame build-pill-mini-frame"
                     >
                       <img
-                        src={iconUrl}
+                        src={resolveCachedAssetUrl(iconUrl)}
                         alt={t("common.itemAlt", { id: opt.core_item_ids[iconIdx] })}
                         className="build-pill-mini-icon"
                         onError={(e) => {

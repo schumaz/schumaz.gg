@@ -1,12 +1,14 @@
 use super::aram::normalize_opgg_champion_key;
 use super::client::{
     OPGG_REST_API_BASE, fetch_opgg_rest_champion_analysis_from_base, fetch_opgg_versions_from_base,
+    peek_latest_cached_opgg_version,
 };
 use crate::build_provider::models::DataDragonCache;
 use crate::build_provider::patch::resolve_effective_patch;
-use crate::models::{RankedChampionEntry, RankedLane, RankedTierListResponse};
+use crate::models::{AppLocale, RankedChampionEntry, RankedLane, RankedTierListResponse};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
@@ -19,6 +21,89 @@ static RANKED_TIER_CACHE: OnceLock<RwLock<RankedCacheMap>> = OnceLock::new();
 
 fn get_ranked_cache() -> &'static RwLock<RankedCacheMap> {
     RANKED_TIER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn ranked_tier_list_file_path(
+    dir: &Path,
+    region: &str,
+    tier: &str,
+    manual_patch: Option<&str>,
+    patch_48h_protection: bool,
+    locale: AppLocale,
+) -> PathBuf {
+    let reg = crate::storage::sanitize_key_component(region);
+    let tr = crate::storage::sanitize_key_component(tier);
+    let pat = crate::storage::sanitize_key_component(manual_patch.unwrap_or("auto"));
+    let prot = if patch_48h_protection { "p1" } else { "p0" };
+    dir.join(format!(
+        "tier_{reg}_{tr}_{pat}_{prot}_{}.lz4",
+        locale.as_str()
+    ))
+}
+
+fn rehydrate_ranked_names(response: &mut RankedTierListResponse, ddragon: &DataDragonCache) {
+    for champ in &mut response.champions {
+        if let Some(meta) = ddragon.champions.get(&champ.id) {
+            champ.name = meta.display_name.clone();
+            if !meta.icon_url.is_empty() {
+                champ.icon_url = meta.icon_url.clone();
+            }
+        }
+    }
+}
+
+/// Pre-warms a valid (< 24h) Ranked Tier List from `.lz4` disk into RAM on startup.
+pub fn prewarm_ranked_tier_list_from_dir(
+    dir: &Path,
+    region: &str,
+    tier: &str,
+    manual_patch: Option<&str>,
+    patch_48h_protection: bool,
+    locale: AppLocale,
+    ddragon: &DataDragonCache,
+) -> bool {
+    let path = ranked_tier_list_file_path(
+        dir,
+        region,
+        tier,
+        manual_patch,
+        patch_48h_protection,
+        locale,
+    );
+    let Some(mut env) = crate::storage::read_lz4_envelope::<RankedTierListResponse>(&path) else {
+        return false;
+    };
+    let now = crate::storage::now_unix_secs();
+    if !crate::storage::is_envelope_fresh(
+        env.created_at_unix,
+        crate::storage::OPGG_CACHE_TTL_SECS,
+        now,
+    ) {
+        return false;
+    }
+    if manual_patch.is_none()
+        && let Some(latest) = peek_latest_cached_opgg_version(region)
+        && !env.payload.patch_fallback_applied
+        && env.patch != latest
+    {
+        return false;
+    }
+
+    rehydrate_ranked_names(&mut env.payload, ddragon);
+    let cache_key = format!(
+        "{}:{}:{}:{}:{}:{}",
+        OPGG_REST_API_BASE,
+        region,
+        tier,
+        manual_patch.unwrap_or(""),
+        patch_48h_protection,
+        locale.as_str()
+    );
+    if let Ok(mut guard) = get_ranked_cache().write() {
+        guard.insert(cache_key, (Instant::now(), env.payload));
+        return true;
+    }
+    false
 }
 
 fn round_pct(val: f64) -> f64 {
@@ -237,12 +322,10 @@ fn extract_ranked_meta_info(json: &serde_json::Value) -> (Option<String>, Option
                 .and_then(|m| m.version.clone())
                 .filter(|v| !v.trim().is_empty());
             let match_count = resp.meta.as_ref().and_then(|m| m.match_count).or_else(|| {
-                let max_play = resp
-                    .data
+                resp.data
                     .iter()
                     .filter_map(|c| c.average_stats.as_ref().and_then(|s| s.play))
-                    .max();
-                max_play
+                    .max()
             });
             (version, match_count)
         }
@@ -285,7 +368,7 @@ async fn fetch_ranked_json(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn fetch_ranked_tier_list_with_base(
+pub async fn fetch_ranked_tier_list_with_base_and_dir(
     client: &reqwest::Client,
     rest_base: &str,
     region: Option<&str>,
@@ -294,6 +377,8 @@ pub async fn fetch_ranked_tier_list_with_base(
     ddragon: &DataDragonCache,
     patch_48h_protection: bool,
     now_unix: u64,
+    locale: AppLocale,
+    ranked_dir: Option<&Path>,
 ) -> Result<RankedTierListResponse, String> {
     let target_region = region
         .map(str::trim)
@@ -306,19 +391,58 @@ pub async fn fetch_ranked_tier_list_with_base(
     let manual_patch = patch.map(str::trim).filter(|s| !s.is_empty());
 
     let cache_key = format!(
-        "{}:{}:{}:{}:{}",
+        "{}:{}:{}:{}:{}:{}",
         rest_base,
         target_region,
         target_tier,
         manual_patch.unwrap_or(""),
-        patch_48h_protection
+        patch_48h_protection,
+        locale.as_str()
     );
 
     if let Ok(guard) = get_ranked_cache().read()
         && let Some((ts, cached)) = guard.get(&cache_key)
         && ts.elapsed() < RANKED_CACHE_TTL
     {
-        return Ok(cached.clone());
+        let mut resp = cached.clone();
+        rehydrate_ranked_names(&mut resp, ddragon);
+        return Ok(resp);
+    }
+
+    let disk_env = ranked_dir.and_then(|dir| {
+        let path = ranked_tier_list_file_path(
+            dir,
+            target_region,
+            target_tier,
+            manual_patch,
+            patch_48h_protection,
+            locale,
+        );
+        crate::storage::read_lz4_envelope::<RankedTierListResponse>(&path)
+    });
+
+    if let Some(ref env) = disk_env
+        && !env.payload.champions.is_empty()
+        && crate::storage::is_envelope_fresh(
+            env.created_at_unix,
+            crate::storage::OPGG_CACHE_TTL_SECS,
+            now_unix,
+        )
+    {
+        let known_latest = peek_latest_cached_opgg_version(target_region);
+        let patch_valid = match (manual_patch, known_latest.as_deref()) {
+            (Some(p), _) => env.patch == p,
+            (None, Some(latest)) if !env.payload.patch_fallback_applied => env.patch == latest,
+            _ => true,
+        };
+        if patch_valid {
+            let mut resp = env.payload.clone();
+            rehydrate_ranked_names(&mut resp, ddragon);
+            if let Ok(mut guard) = get_ranked_cache().write() {
+                guard.insert(cache_key.clone(), (Instant::now(), resp.clone()));
+            }
+            return Ok(resp);
+        }
     }
 
     let available_versions = fetch_opgg_versions_from_base(client, rest_base, target_region).await;
@@ -329,80 +453,101 @@ pub async fn fetch_ranked_tier_list_with_base(
     let mut patch_fallback_applied = false;
     let mut patch_protection_remaining_hours: Option<u32> = None;
 
-    let final_json = if let Some(user_patch) = manual_patch {
-        effective_patch = user_patch.to_string();
-        fetch_ranked_json(
-            client,
-            rest_base,
-            target_region,
-            target_tier,
-            Some(user_patch),
-        )
-        .await?
-    } else {
-        let probe_version = (!effective_patch.is_empty()).then_some(effective_patch.as_str());
-        let probe_json =
-            fetch_ranked_json(client, rest_base, target_region, target_tier, probe_version).await?;
-
-        let (meta_version, match_count) = extract_ranked_meta_info(&probe_json);
-        if effective_patch.is_empty()
-            && let Some(v) = meta_version
-        {
-            effective_patch = v;
-        }
-
-        if patch_48h_protection && available_versions.len() >= 2 && match_count.unwrap_or(0) < 1000
-        {
-            let probe_analysis = fetch_opgg_rest_champion_analysis_from_base(
+    let fetch_res: Result<serde_json::Value, String> = async {
+        if let Some(user_patch) = manual_patch {
+            effective_patch = user_patch.to_string();
+            fetch_ranked_json(
                 client,
                 rest_base,
                 target_region,
-                "ranked",
-                TREND_PROBE_CHAMPION_ID,
-                Some("mid"),
                 target_tier,
-                Some(&effective_patch),
+                Some(user_patch),
             )
-            .await;
+            .await
+        } else {
+            let probe_version = (!effective_patch.is_empty()).then_some(effective_patch.as_str());
+            let probe_json =
+                fetch_ranked_json(client, rest_base, target_region, target_tier, probe_version)
+                    .await?;
 
-            if let Ok(analysis_json) = probe_analysis {
-                let created_at_iso = analysis_json
-                    .pointer("/data/trends/win/0/created_at")
-                    .and_then(|v| v.as_str());
-                let prev_patch_created_at_iso = analysis_json
-                    .pointer("/data/trends/win/1/created_at")
-                    .and_then(|v| v.as_str());
+            let (meta_version, match_count) = extract_ranked_meta_info(&probe_json);
+            if effective_patch.is_empty()
+                && let Some(v) = meta_version
+            {
+                effective_patch = v;
+            }
 
-                let selection = resolve_effective_patch(
-                    &available_versions,
-                    created_at_iso,
-                    prev_patch_created_at_iso,
-                    match_count,
-                    now_unix,
-                    None,
-                    patch_48h_protection,
-                );
-                effective_patch = selection.effective_patch;
-                patch_fallback_applied = selection.fallback_applied;
-                patch_protection_remaining_hours = selection.remaining_hours;
+            if patch_48h_protection
+                && available_versions.len() >= 2
+                && match_count.unwrap_or(0) < 1000
+            {
+                let probe_analysis = fetch_opgg_rest_champion_analysis_from_base(
+                    client,
+                    rest_base,
+                    target_region,
+                    "ranked",
+                    TREND_PROBE_CHAMPION_ID,
+                    Some("mid"),
+                    target_tier,
+                    Some(&effective_patch),
+                )
+                .await;
 
-                if patch_fallback_applied {
-                    fetch_ranked_json(
-                        client,
-                        rest_base,
-                        target_region,
-                        target_tier,
-                        Some(&effective_patch),
-                    )
-                    .await?
+                if let Ok(analysis_json) = probe_analysis {
+                    let created_at_iso = analysis_json
+                        .pointer("/data/trends/win/0/created_at")
+                        .and_then(|v| v.as_str());
+                    let prev_patch_created_at_iso = analysis_json
+                        .pointer("/data/trends/win/1/created_at")
+                        .and_then(|v| v.as_str());
+
+                    let selection = resolve_effective_patch(
+                        &available_versions,
+                        created_at_iso,
+                        prev_patch_created_at_iso,
+                        match_count,
+                        now_unix,
+                        None,
+                        patch_48h_protection,
+                    );
+                    effective_patch = selection.effective_patch;
+                    patch_fallback_applied = selection.fallback_applied;
+                    patch_protection_remaining_hours = selection.remaining_hours;
+
+                    if patch_fallback_applied {
+                        fetch_ranked_json(
+                            client,
+                            rest_base,
+                            target_region,
+                            target_tier,
+                            Some(&effective_patch),
+                        )
+                        .await
+                    } else {
+                        Ok(probe_json)
+                    }
                 } else {
-                    probe_json
+                    Ok(probe_json)
                 }
             } else {
-                probe_json
+                Ok(probe_json)
             }
-        } else {
-            probe_json
+        }
+    }
+    .await;
+
+    let final_json = match fetch_res {
+        Ok(json) => json,
+        Err(err) => {
+            // Stale-While-Error offline fallback
+            if let Some(env) = disk_env
+                && !env.payload.champions.is_empty()
+            {
+                let mut resp = env.payload;
+                rehydrate_ranked_names(&mut resp, ddragon);
+                return Ok(resp);
+            }
+            return Err(err);
         }
     };
 
@@ -410,20 +555,63 @@ pub async fn fetch_ranked_tier_list_with_base(
     let response = RankedTierListResponse {
         region: target_region.to_string(),
         tier: target_tier.to_string(),
-        active_patch: effective_patch,
+        active_patch: effective_patch.clone(),
         available_patches: available_versions,
         patch_fallback_applied,
         patch_protection_remaining_hours,
         champions,
     };
 
-    if !response.champions.is_empty()
-        && let Ok(mut guard) = get_ranked_cache().write()
-    {
-        guard.insert(cache_key, (Instant::now(), response.clone()));
+    if !response.champions.is_empty() {
+        if let Some(dir) = ranked_dir {
+            let path = ranked_tier_list_file_path(
+                dir,
+                target_region,
+                target_tier,
+                manual_patch,
+                patch_48h_protection,
+                locale,
+            );
+            let _ = crate::storage::write_lz4_envelope(&path, &effective_patch, &response);
+        }
+        if let Ok(mut guard) = get_ranked_cache().write() {
+            guard.insert(cache_key, (Instant::now(), response.clone()));
+        }
     }
 
     Ok(response)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn fetch_ranked_tier_list_with_base(
+    client: &reqwest::Client,
+    rest_base: &str,
+    region: Option<&str>,
+    tier: Option<&str>,
+    patch: Option<&str>,
+    ddragon: &DataDragonCache,
+    patch_48h_protection: bool,
+    now_unix: u64,
+) -> Result<RankedTierListResponse, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    let dir = if rest_base == OPGG_REST_API_BASE {
+        crate::storage::global_paths().map(|p| p.opgg_ranked_dir.as_path())
+    } else {
+        None
+    };
+    fetch_ranked_tier_list_with_base_and_dir(
+        client,
+        rest_base,
+        region,
+        tier,
+        patch,
+        ddragon,
+        patch_48h_protection,
+        now_unix,
+        locale,
+        dir,
+    )
+    .await
 }
 
 pub async fn fetch_ranked_tier_list(
@@ -562,10 +750,9 @@ mod tests {
         let list = parse_ranked_tier_list(&json, &test_ddragon()).unwrap();
         assert_eq!(list.len(), 4);
 
-        // Both OP (tier 0) entries come first across lanes, sorted by win rate descending
         assert_eq!(list[0].lane, RankedLane::Mid);
         assert_eq!(list[0].name, "Ahri");
-        assert_eq!(list[0].tier, 0); // raw 1 -> OP
+        assert_eq!(list[0].tier, 0);
         assert_eq!(list[0].rank, 1);
         assert_eq!(list[0].overall_rank, 1);
         assert_eq!(list[0].pick_rate, Some(11.5));
@@ -573,18 +760,16 @@ mod tests {
 
         assert_eq!(list[1].lane, RankedLane::Top);
         assert_eq!(list[1].name, "Garen");
-        assert_eq!(list[1].tier, 0); // raw 1 -> OP
+        assert_eq!(list[1].tier, 0);
         assert_eq!(list[1].rank, 3);
         assert_eq!(list[1].overall_rank, 2);
         assert_eq!(list[1].win_rate, Some(50.7));
 
-        // Tier 1 (raw 2 -> 1)
         assert_eq!(list[2].lane, RankedLane::Mid);
         assert_eq!(list[2].name, "Ekko");
         assert_eq!(list[2].tier, 1);
         assert_eq!(list[2].overall_rank, 3);
 
-        // Tier 2 (raw 3 -> 2)
         assert_eq!(list[3].lane, RankedLane::Jungle);
         assert_eq!(list[3].name, "Ekko");
         assert_eq!(list[3].tier, 2);
@@ -603,7 +788,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Newest patch 16.22 has low volume (match_count: 150)
         Mock::given(method("GET"))
             .and(path("/global/champions/ranked"))
             .and(query_param("tier", "emerald_plus"))
@@ -622,7 +806,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Trend probe indicates 16.22 was created 10 hours ago (< 48h)
         let created_at = "2026-11-14T08:00:00Z";
         let now_unix = parse_iso8601_to_unix(created_at).unwrap() + 10 * 3600;
         Mock::given(method("GET"))
@@ -639,7 +822,6 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        // Mature fallback patch 16.21
         Mock::given(method("GET"))
             .and(path("/global/champions/ranked"))
             .and(query_param("tier", "emerald_plus"))
@@ -661,7 +843,6 @@ mod tests {
         let client = reqwest::Client::new();
         let ddragon = test_ddragon();
 
-        // Automatic mode with protection enabled -> falls back to 16.21 with 38h remaining
         let protected = fetch_ranked_tier_list_with_base(
             &client,
             &mock_server.uri(),
@@ -680,7 +861,6 @@ mod tests {
         assert_eq!(protected.patch_protection_remaining_hours, Some(38));
         assert_eq!(protected.champions[0].tier, 0);
 
-        // Manual override to 16.22 -> bypasses 48h lock
         let manual = fetch_ranked_tier_list_with_base(
             &client,
             &mock_server.uri(),
@@ -698,5 +878,104 @@ mod tests {
         assert!(!manual.patch_fallback_applied);
         assert_eq!(manual.patch_protection_remaining_hours, None);
         assert_eq!(manual.champions[0].tier, 1);
+    }
+
+    #[tokio::test]
+    async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
+        let dir =
+            std::env::temp_dir().join(format!("schumazgg_ranked_disk_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked/versions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": ["16.25"]
+            })))
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "meta": { "version": "16.25", "match_count": 50000 },
+                "data": [{
+                    "id": 103,
+                    "positions": [{ "name": "MID", "stats": { "win_rate": 0.53, "pick_rate": 0.1, "tier_data": { "tier": 1, "rank": 1 } } }]
+                }]
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let dd = test_ddragon();
+        let now = crate::storage::now_unix_secs();
+
+        let first = fetch_ranked_tier_list_with_base_and_dir(
+            &client,
+            &mock_server.uri(),
+            Some("global"),
+            Some("emerald_plus"),
+            None,
+            &dd,
+            false,
+            now,
+            AppLocale::PtBr,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.champions.len(), 1);
+        assert_eq!(first.active_patch, "16.25");
+
+        // Clear RAM and verify disk hit with 0 network calls within 24h
+        if let Ok(mut g) = get_ranked_cache().write() {
+            g.clear();
+        }
+        let disk_hit = fetch_ranked_tier_list_with_base_and_dir(
+            &client,
+            &mock_server.uri(),
+            Some("global"),
+            Some("emerald_plus"),
+            None,
+            &dd,
+            false,
+            now + 3600,
+            AppLocale::PtBr,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(disk_hit.champions[0].id, 103);
+
+        // Now test Stale-While-Error when >24h expired and network returns 503
+        if let Ok(mut g) = get_ranked_cache().write() {
+            g.clear();
+        }
+        let offline = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/global/champions/ranked"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&offline)
+            .await;
+
+        let rescued = fetch_ranked_tier_list_with_base_and_dir(
+            &client,
+            &offline.uri(),
+            Some("global"),
+            Some("emerald_plus"),
+            None,
+            &dd,
+            false,
+            now + 26 * 3600,
+            AppLocale::PtBr,
+            Some(&dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(rescued.champions[0].id, 103);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,6 +1,7 @@
 import "./NavigationDock.css";
 import { ActiveTab } from "../types";
 import { useTranslation } from "../i18n";
+import { resolveCachedAssetUrl } from "../utils/assets";
 
 interface NavigationDockProps {
   activeTab: ActiveTab;
@@ -125,7 +126,7 @@ export function NavigationDock({
         aria-current={activeTab === "aram" ? "page" : undefined}
       >
         <img
-          src={ARAM_DOCK_ICON_URL}
+          src={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
           alt=""
           className="dock-icon dock-icon-img"
           width={18}

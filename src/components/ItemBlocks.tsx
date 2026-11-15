@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { ChampionBuild } from "../types";
 import { useTranslation } from "../i18n";
+import { resolveCachedAssetUrl } from "../utils/assets";
 import { BuildSelector } from "./BuildSelector";
 
 interface ItemBlocksProps {
@@ -168,7 +169,7 @@ export function ItemBlocks({
                       <div className="item-icon-box" title={localizedTitle}>
                         {iconUrl ? (
                           <img
-                            src={iconUrl}
+                            src={resolveCachedAssetUrl(iconUrl)}
                             alt={t("common.itemAlt", { id: itemId })}
                             className="shop-item-icon"
                             onError={(e) => {

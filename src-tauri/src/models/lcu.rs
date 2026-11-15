@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 /// Basic summoner details parsed from `/lol-summoner/v1/current-summoner`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub struct SummonerInfo {
     #[serde(rename = "summonerId")]
     pub summoner_id: u64,
@@ -95,4 +95,13 @@ pub struct PlayerProfile {
     pub ranked_stats: Vec<RankedQueueStats>,
     pub top_masteries: Vec<ChampionMasteryInfo>,
     pub recent_matches: Vec<RecentMatchInfo>,
+}
+
+/// Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedProfileResult {
+    pub profile: PlayerProfile,
+    pub created_at_unix: u64,
+    pub is_stale: bool,
 }

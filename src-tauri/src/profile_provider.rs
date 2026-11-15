@@ -1,19 +1,180 @@
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::path::{Path, PathBuf};
+use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
 
-use tokio::sync::Mutex;
-
-use crate::build_provider::{self, ddragon::resolve_spell_metadata_for_locale};
+use crate::build_provider::{self, DDRAGON_BASE_URL, ddragon::resolve_spell_metadata_for_locale};
 use crate::lcu_connector::LcuConnection;
 use crate::models::{
-    AppLocale, ChampionMasteryInfo, DataDragonCache, PlayerProfile, RankedQueueStats, RecentMatchInfo,
+    AppLocale, CachedProfileResult, ChampionMasteryInfo, DataDragonCache, PlayerProfile,
+    RankedQueueStats, RecentMatchInfo,
 };
 
-static SKIN_NAME_CACHE: OnceLock<Mutex<HashMap<(AppLocale, String, i32), String>>> = OnceLock::new();
+static SKIN_NAME_CACHE: OnceLock<RwLock<HashMap<AppLocale, HashMap<i32, String>>>> =
+    OnceLock::new();
 
-fn skin_cache() -> &'static Mutex<HashMap<(AppLocale, String, i32), String>> {
-    SKIN_NAME_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+fn skin_cache() -> &'static RwLock<HashMap<AppLocale, HashMap<i32, String>>> {
+    SKIN_NAME_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn skins_file_path(dir: &Path, locale: AppLocale) -> PathBuf {
+    dir.join(format!("skins_{}.lz4", locale.as_str()))
+}
+
+pub fn prewarm_skins_from_dir(dir: &Path, locale: AppLocale) -> usize {
+    let path = skins_file_path(dir, locale);
+    let Some(env) = crate::storage::read_lz4_envelope::<HashMap<i32, String>>(&path) else {
+        return 0;
+    };
+    let count = env.payload.len();
+    if let Ok(mut guard) = skin_cache().write() {
+        let entry = guard.entry(locale).or_default();
+        for (k, v) in env.payload {
+            entry.entry(k).or_insert(v);
+        }
+    }
+    count
+}
+
+pub fn prewarm_skins_from_disk(locale: AppLocale) -> usize {
+    let Some(paths) = crate::storage::global_paths() else {
+        return 0;
+    };
+    prewarm_skins_from_dir(&paths.ddragon_dir, locale)
+}
+
+pub fn lookup_cached_skin_name(locale: AppLocale, background_skin_id: i32) -> Option<String> {
+    if background_skin_id <= 0 {
+        return None;
+    }
+    if let Ok(guard) = skin_cache().read()
+        && let Some(locale_map) = guard.get(&locale)
+        && let Some(name) = locale_map.get(&background_skin_id)
+    {
+        return Some(name.clone());
+    }
+    None
+}
+
+fn save_skins_map_to_dir(dir: &Path, locale: AppLocale, version: &str) {
+    let snapshot = skin_cache()
+        .read()
+        .ok()
+        .and_then(|g| g.get(&locale).cloned());
+    if let Some(map) = snapshot {
+        let path = skins_file_path(dir, locale);
+        let _ = crate::storage::write_lz4_envelope(&path, version, &map);
+    }
+}
+
+pub fn profile_cache_file_path(dir: &Path, summoner_id: u64) -> PathBuf {
+    dir.join(format!("summoner_{summoner_id}.lz4"))
+}
+
+pub fn save_profile_to_dir(dir: &Path, profile: &PlayerProfile, patch: &str) -> Result<(), String> {
+    if profile.summoner.summoner_id == 0 {
+        return Ok(());
+    }
+    let path = profile_cache_file_path(dir, profile.summoner.summoner_id);
+    crate::storage::write_lz4_envelope(&path, patch, profile)
+}
+
+pub fn load_profile_from_dir(
+    dir: &Path,
+    summoner_id: u64,
+    now_unix: u64,
+) -> Option<CachedProfileResult> {
+    if summoner_id == 0 {
+        return None;
+    }
+    let path = profile_cache_file_path(dir, summoner_id);
+    let env = crate::storage::read_lz4_envelope::<PlayerProfile>(&path)?;
+    if !crate::storage::is_envelope_fresh(
+        env.created_at_unix,
+        crate::storage::PROFILE_CACHE_TTL_SECS,
+        now_unix,
+    ) {
+        return None;
+    }
+    let is_stale = !crate::storage::is_envelope_fresh(
+        env.created_at_unix,
+        crate::storage::PROFILE_SWR_SECS,
+        now_unix,
+    );
+    Some(CachedProfileResult {
+        profile: env.payload,
+        created_at_unix: env.created_at_unix,
+        is_stale,
+    })
+}
+
+/// Re-localizes cached ranked tier labels, queue mode labels, champion names,
+/// and cached skin name in-memory when switching UI language without waiting on LCU.
+pub fn relocalize_player_profile(
+    profile: &mut PlayerProfile,
+    locale: AppLocale,
+    ddragon: Option<&DataDragonCache>,
+) {
+    for stat in &mut profile.ranked_stats {
+        stat.tier_label = translate_ranked_tier_for_locale(&stat.tier, locale);
+    }
+
+    for m in &mut profile.recent_matches {
+        let (_, label) = map_queue_mode_for_locale(m.queue_id, &m.game_mode_key, locale);
+        m.game_mode_label = label;
+        if let Some(cache) = ddragon
+            && let Some(champ) = cache.champions.get(&m.champion_id)
+        {
+            m.champion_name = champ.display_name.clone();
+        }
+    }
+
+    if let Some(cache) = ddragon {
+        for mastery in &mut profile.top_masteries {
+            if let Some(champ) = cache.champions.get(&mastery.champion_id) {
+                mastery.champion_name = champ.display_name.clone();
+            }
+        }
+    }
+
+    if let Some(skin_name) = lookup_cached_skin_name(locale, profile.background_skin_id) {
+        profile.background_skin_name = skin_name;
+    } else if profile.background_skin_id > 0
+        && let Some(cache) = ddragon
+    {
+        let (_, _, default_label, _, _) =
+            resolve_background_splash_urls_for_locale(profile.background_skin_id, cache, locale);
+        if profile.background_skin_name.is_empty()
+            || profile.background_skin_name.ends_with("(Clássica)")
+            || profile.background_skin_name.ends_with("(Classic)")
+        {
+            profile.background_skin_name = default_label;
+        }
+    }
+}
+
+pub fn get_cached_profile_for_summoner_id(
+    summoner_id: u64,
+    locale: AppLocale,
+) -> Option<CachedProfileResult> {
+    let paths = crate::storage::global_paths()?;
+    prewarm_skins_from_dir(&paths.ddragon_dir, locale);
+    let now = crate::storage::now_unix_secs();
+    let mut cached = load_profile_from_dir(&paths.profile_dir, summoner_id, now)?;
+    let dd_cache = build_provider::get_ddragon_cache_store()
+        .read()
+        .ok()
+        .and_then(|g| g.get(&locale).cloned())
+        .or_else(|| build_provider::ddragon::prewarm_ddragon_from_disk(locale));
+    relocalize_player_profile(&mut cached.profile, locale, dd_cache.as_deref());
+    Some(cached)
+}
+
+pub fn get_cached_profile_for_last_summoner(locale: AppLocale) -> Option<CachedProfileResult> {
+    let last_id = crate::storage::get_global_settings()
+        .navigation
+        .last_summoner_id?;
+    get_cached_profile_for_summoner_id(last_id, locale)
 }
 
 /// Extracts `backgroundSkinId` from `/lol-summoner/v1/current-summoner/summoner-profile`.
@@ -25,10 +186,10 @@ pub fn extract_background_skin_id(profile_json: &serde_json::Value) -> i32 {
         .unwrap_or(0)
 }
 
-/// Resolves DataDragon splash URLs and default label from a `backgroundSkinId` (`championId * 1000 + skinNum`).
-pub fn resolve_background_splash_urls(
+pub fn resolve_background_splash_urls_for_locale(
     background_skin_id: i32,
     cache: &DataDragonCache,
+    locale: AppLocale,
 ) -> (String, String, String, String, i32) {
     if background_skin_id <= 0 {
         return (
@@ -52,7 +213,7 @@ pub fn resolve_background_splash_urls(
             "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{}_0.jpg",
             champ.key_name
         );
-        let classic_suffix = match crate::lcu_injector::get_active_locale() {
+        let classic_suffix = match locale {
             AppLocale::PtBr => "Clássica",
             AppLocale::EnUs => "Classic",
         };
@@ -79,29 +240,46 @@ pub fn resolve_background_splash_urls(
     }
 }
 
-/// Fetches the localized skin name from DataDragon `champion/{key_name}.json` with caching and short timeout.
-pub async fn fetch_skin_name_for_locale(
+/// Resolves DataDragon splash URLs and default label from a `backgroundSkinId` (`championId * 1000 + skinNum`).
+pub fn resolve_background_splash_urls(
+    background_skin_id: i32,
+    cache: &DataDragonCache,
+) -> (String, String, String, String, i32) {
+    resolve_background_splash_urls_for_locale(
+        background_skin_id,
+        cache,
+        crate::lcu_injector::get_active_locale(),
+    )
+}
+
+pub async fn fetch_skin_name_for_locale_with_base(
     client: &reqwest::Client,
+    base_url: &str,
     version: &str,
     key_name: &str,
     skin_num: i32,
     background_skin_id: i32,
     locale: AppLocale,
+    disk_dir: Option<&Path>,
 ) -> Option<String> {
     if version.is_empty() || key_name.is_empty() || background_skin_id <= 0 {
         return None;
     }
 
-    let cache_key = (locale, key_name.to_string(), skin_num);
-    {
-        let guard = skin_cache().lock().await;
-        if let Some(cached) = guard.get(&cache_key) {
-            return Some(cached.clone());
+    if let Some(cached) = lookup_cached_skin_name(locale, background_skin_id) {
+        return Some(cached);
+    }
+
+    if let Some(dir) = disk_dir {
+        prewarm_skins_from_dir(dir, locale);
+        if let Some(cached) = lookup_cached_skin_name(locale, background_skin_id) {
+            return Some(cached);
         }
     }
 
     let url = format!(
-        "https://ddragon.leagueoflegends.com/cdn/{}/data/{}/champion/{}.json",
+        "{}/cdn/{}/data/{}/champion/{}.json",
+        base_url.trim_end_matches('/'),
         version,
         locale.ddragon_code(),
         key_name
@@ -142,9 +320,40 @@ pub async fn fetch_skin_name_for_locale(
         raw_name.to_string()
     };
 
-    let mut guard = skin_cache().lock().await;
-    guard.insert(cache_key, formatted.clone());
+    if let Ok(mut guard) = skin_cache().write() {
+        guard
+            .entry(locale)
+            .or_default()
+            .insert(background_skin_id, formatted.clone());
+    }
+    if let Some(dir) = disk_dir {
+        save_skins_map_to_dir(dir, locale, version);
+    }
+
     Some(formatted)
+}
+
+/// Fetches the localized skin name from DataDragon `champion/{key_name}.json` with caching and short timeout.
+pub async fn fetch_skin_name_for_locale(
+    client: &reqwest::Client,
+    version: &str,
+    key_name: &str,
+    skin_num: i32,
+    background_skin_id: i32,
+    locale: AppLocale,
+) -> Option<String> {
+    let dir = crate::storage::global_paths().map(|p| p.ddragon_dir.as_path());
+    fetch_skin_name_for_locale_with_base(
+        client,
+        DDRAGON_BASE_URL,
+        version,
+        key_name,
+        skin_num,
+        background_skin_id,
+        locale,
+        dir,
+    )
+    .await
 }
 
 pub async fn fetch_skin_name(
@@ -283,8 +492,18 @@ pub fn parse_ranked_stats_for_locale(
     };
 
     vec![
-        parse_single_ranked_entry("RANKED_SOLO_5x5", "Solo/Duo", find_queue("RANKED_SOLO_5x5"), locale),
-        parse_single_ranked_entry("RANKED_FLEX_SR", "Flex", find_queue("RANKED_FLEX_SR"), locale),
+        parse_single_ranked_entry(
+            "RANKED_SOLO_5x5",
+            "Solo/Duo",
+            find_queue("RANKED_SOLO_5x5"),
+            locale,
+        ),
+        parse_single_ranked_entry(
+            "RANKED_FLEX_SR",
+            "Flex",
+            find_queue("RANKED_FLEX_SR"),
+            locale,
+        ),
     ]
 }
 
@@ -525,7 +744,8 @@ pub fn parse_recent_matches_for_locale(
             let game_id = game.get("gameId").and_then(|v| v.as_u64()).unwrap_or(0);
             let queue_id = game.get("queueId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let game_mode = game.get("gameMode").and_then(|v| v.as_str()).unwrap_or("");
-            let (game_mode_key, game_mode_label) = map_queue_mode_for_locale(queue_id, game_mode, locale);
+            let (game_mode_key, game_mode_label) =
+                map_queue_mode_for_locale(queue_id, game_mode, locale);
 
             let champion_id = participant
                 .get("championId")
@@ -672,20 +892,43 @@ pub fn parse_recent_matches(
     parse_recent_matches_for_locale(history_json, summoner_id, cache, limit, AppLocale::PtBr)
 }
 
-/// Fetches and assembles the full `PlayerProfile` from an active LCU connection + DataDragon cache.
-pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, String> {
+/// Fetches and assembles the full `PlayerProfile` from an active LCU connection + DataDragon cache,
+/// supporting disk `.lz4` caching (24h TTL, SWR > 5m, `force_refresh` bypass) and `LastSummonerId` persistence.
+pub async fn load_player_profile_with_cache(
+    conn: &LcuConnection,
+    force_refresh: bool,
+) -> Result<PlayerProfile, String> {
     let locale = crate::lcu_injector::get_active_locale();
     let (summoner, puuid) = conn.get_current_summoner_with_puuid().await?;
     let http_client = build_provider::shared_http_client();
+
+    if summoner.summoner_id > 0 {
+        let current_last = crate::storage::get_global_settings()
+            .navigation
+            .last_summoner_id;
+        if current_last != Some(summoner.summoner_id) {
+            let _ = crate::storage::update_global_settings(|s| {
+                s.navigation.last_summoner_id = Some(summoner.summoner_id);
+            });
+        }
+    }
+
+    if !force_refresh
+        && let Some(cached) = get_cached_profile_for_summoner_id(summoner.summoner_id, locale)
+        && !cached.is_stale
+    {
+        return Ok(cached.profile);
+    }
 
     let default_cache = DataDragonCache {
         version: "16.22.1".to_string(),
         ..Default::default()
     };
-    let cache = match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
-        Ok(c) => c.as_ref().clone(),
-        Err(_) => default_cache,
-    };
+    let cache =
+        match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
+            Ok(c) => c.as_ref().clone(),
+            Err(_) => default_cache,
+        };
 
     let (profile_res, masteries_res, ranked_res, history_res) = tokio::join!(
         conn.get_summoner_profile(),
@@ -699,10 +942,23 @@ pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, 
         .map(extract_background_skin_id)
         .unwrap_or(0);
 
-    let (background_splash_url, background_splash_fallback_url, _, _, _) =
-        resolve_background_splash_urls(background_skin_id, &cache);
+    let (background_splash_url, background_splash_fallback_url, default_label, key_name, skin_num) =
+        resolve_background_splash_urls_for_locale(background_skin_id, &cache, locale);
 
-    let background_skin_name = String::new();
+    let background_skin_name = if background_skin_id > 0 && !key_name.is_empty() {
+        fetch_skin_name_for_locale(
+            http_client,
+            &cache.version,
+            &key_name,
+            skin_num,
+            background_skin_id,
+            locale,
+        )
+        .await
+        .unwrap_or(default_label)
+    } else {
+        String::new()
+    };
 
     let ranked_stats = ranked_res
         .as_ref()
@@ -728,7 +984,7 @@ pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, 
         String::new()
     };
 
-    Ok(PlayerProfile {
+    let profile = PlayerProfile {
         summoner,
         profile_icon_url,
         background_skin_id,
@@ -738,13 +994,25 @@ pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, 
         ranked_stats,
         top_masteries,
         recent_matches,
-    })
+    };
+
+    if let Some(paths) = crate::storage::global_paths() {
+        let _ = save_profile_to_dir(&paths.profile_dir, &profile, &cache.version);
+    }
+
+    Ok(profile)
+}
+
+pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, String> {
+    load_player_profile_with_cache(conn, false).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ChampionMetadata, SpellMetadata};
+    use crate::models::{ChampionMetadata, SpellMetadata, SummonerInfo};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn sample_cache() -> DataDragonCache {
         let mut champions = HashMap::new();
@@ -982,5 +1250,112 @@ mod tests {
             map_queue_mode_for_locale(1300, "", AppLocale::EnUs).1,
             "Nexus Blitz"
         );
+    }
+
+    #[tokio::test]
+    async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization() {
+        let dir = std::env::temp_dir().join(format!(
+            "schumazgg_profile_cache_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let ddragon_dir = dir.join("ddragon");
+        let profile_dir = dir.join("profile");
+        std::fs::create_dir_all(&ddragon_dir).unwrap();
+        std::fs::create_dir_all(&profile_dir).unwrap();
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/cdn/16.22.1/data/pt_BR/champion/Ahri.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "Ahri": {
+                        "name": "Ahri",
+                        "skins": [
+                            { "id": 103027, "num": 27, "name": "Ahri Florescer Espiritual" }
+                        ]
+                    }
+                }
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let skin_name = fetch_skin_name_for_locale_with_base(
+            &client,
+            &mock_server.uri(),
+            "16.22.1",
+            "Ahri",
+            27,
+            103027,
+            AppLocale::PtBr,
+            Some(&ddragon_dir),
+        )
+        .await
+        .unwrap();
+        assert_eq!(skin_name, "Ahri Florescer Espiritual");
+        assert!(skins_file_path(&ddragon_dir, AppLocale::PtBr).exists());
+
+        // Clear RAM map and reload from disk to prove 0-network disk hydration
+        if let Ok(mut g) = skin_cache().write() {
+            g.remove(&AppLocale::PtBr);
+        }
+        assert_eq!(prewarm_skins_from_dir(&ddragon_dir, AppLocale::PtBr), 1);
+        assert_eq!(
+            lookup_cached_skin_name(AppLocale::PtBr, 103027).as_deref(),
+            Some("Ahri Florescer Espiritual")
+        );
+
+        // Save & reload profile with SWR detection + EN-US relocalization
+        let profile = PlayerProfile {
+            summoner: SummonerInfo {
+                summoner_id: 55501, game_name: "Tester".to_string(),
+                display_name: "Tester".to_string(),
+                tag_line: "BR1".to_string(),
+                profile_icon_id: 123,
+                summoner_level: 100,
+            },
+            profile_icon_url:
+                "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/profileicon/123.png"
+                    .to_string(),
+            background_skin_id: 103027,
+            background_skin_name: skin_name,
+            background_splash_url:
+                "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_27.jpg"
+                    .to_string(),
+            background_splash_fallback_url:
+                "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg".to_string(),
+            ranked_stats: vec![RankedQueueStats {
+                queue_type: "RANKED_SOLO_5x5".to_string(),
+                queue_label: "Solo/Duo".to_string(),
+                tier: "EMERALD".to_string(),
+                tier_label: "Esmeralda".to_string(),
+                division: "II".to_string(),
+                league_points: 50,
+                wins: 10,
+                losses: 8,
+            }],
+            top_masteries: vec![],
+            recent_matches: vec![],
+        };
+
+        save_profile_to_dir(&profile_dir, &profile, "16.22.1").unwrap();
+        let now = crate::storage::now_unix_secs();
+        let loaded_fresh = load_profile_from_dir(&profile_dir, 55501, now).unwrap();
+        assert!(!loaded_fresh.is_stale);
+
+        let mut loaded_stale = load_profile_from_dir(&profile_dir, 55501, now + 400).unwrap();
+        assert!(loaded_stale.is_stale);
+
+        // Relocalize cached profile to en_US
+        let dd = sample_cache();
+        relocalize_player_profile(&mut loaded_stale.profile, AppLocale::EnUs, Some(&dd));
+        assert_eq!(loaded_stale.profile.ranked_stats[0].tier_label, "Emerald");
+
+        // Expired after 24h
+        assert!(load_profile_from_dir(&profile_dir, 55501, now + 25 * 3600).is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

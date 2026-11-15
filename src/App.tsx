@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 import { ActiveTab, FlashKeyPreference, commands } from "./types";
@@ -9,6 +9,7 @@ import { usePlayerProfile } from "./hooks/usePlayerProfile";
 import { useAram } from "./hooks/useAram";
 import { useRanked } from "./hooks/useRanked";
 import { useWindowMinimized } from "./hooks/useWindowMinimized";
+import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
 import {
   StatusDock,
@@ -73,6 +74,9 @@ function App() {
     updateHardwareAcceleration,
     gpuRestartRequired,
     restartApp,
+    navigationState,
+    updateNavigationState,
+    iniBacked,
   } = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
 
   const {
@@ -97,12 +101,56 @@ function App() {
   });
 
   const currentChampionId = champSelect?.champion_id ?? build?.champion_id ?? null;
-  const aram = useAram(activeTab === "aram", currentChampionId, locale);
+
+  const aramPersistence = useMemo(
+    () => ({
+      iniBacked,
+      savedAramMode: navigationState?.savedAramMode ?? null,
+      savedLastChampion: navigationState?.aramMayhemLastChampion ?? null,
+      onNavigationPatch: updateNavigationState,
+    }),
+    [
+      iniBacked,
+      navigationState?.savedAramMode,
+      navigationState?.aramMayhemLastChampion,
+      updateNavigationState,
+    ]
+  );
+
+  const rankedSavedFilters = useMemo(
+    () =>
+      navigationState
+        ? {
+            region: navigationState.rankedFilterRegion,
+            tier: navigationState.rankedFilterTier,
+            lane: navigationState.rankedFilterLane,
+            patch: navigationState.rankedFilterPatch ?? null,
+          }
+        : undefined,
+    [
+      navigationState?.rankedFilterRegion,
+      navigationState?.rankedFilterTier,
+      navigationState?.rankedFilterLane,
+      navigationState?.rankedFilterPatch,
+    ]
+  );
+
+  const rankedPersistence = useMemo(
+    () => ({
+      iniBacked,
+      savedFilters: rankedSavedFilters,
+      onNavigationPatch: updateNavigationState,
+    }),
+    [iniBacked, rankedSavedFilters, updateNavigationState]
+  );
+
+  const aram = useAram(activeTab === "aram", currentChampionId, locale, aramPersistence);
   const ranked = useRanked(
     activeTab === "ranked",
     preferences.flashKey,
     preferences.patch48hProtection ?? true,
-    locale
+    locale,
+    rankedPersistence
   );
 
   useEffect(() => {
@@ -125,12 +173,14 @@ function App() {
   const activeSplashUrl = splashFallbackUsed
     ? profile?.background_splash_fallback_url || ""
     : profile?.background_splash_url || "";
+  const resolvedActiveSplashUrl = resolveCachedAssetUrl(activeSplashUrl);
+  const displaySummoner = summoner ?? profile?.summoner ?? null;
 
   const showFullScreenWallpaper =
     activeTab === "profile" &&
-    Boolean(summoner) &&
+    Boolean(displaySummoner) &&
     wallpaperVisible &&
-    Boolean(activeSplashUrl) &&
+    Boolean(resolvedActiveSplashUrl) &&
     !splashBroken;
 
   const profileUiBlurPx = profileBlurPercentToPx(profileBlur);
@@ -170,7 +220,7 @@ function App() {
         {showFullScreenWallpaper && (
           <div className="profile-wallpaper-backdrop" data-testid="profile-wallpaper">
             <img
-              src={activeSplashUrl}
+              src={resolvedActiveSplashUrl}
               alt=""
               aria-hidden="true"
               className="profile-wallpaper-img"
@@ -205,6 +255,10 @@ function App() {
             refreshCooldownSecs={refreshCooldownSecs}
             profileBlur={profileBlur}
             isActive={activeTab === "profile"}
+            savedModeFilter={navigationState?.profileMatchModeFilter}
+            onModeFilterChange={(mode) =>
+              updateNavigationState({ profileMatchModeFilter: mode })
+            }
           />
 
           {/* View 2: "Runas" Tab (Match Dashboard) */}
@@ -280,6 +334,10 @@ function App() {
             onRetryBuild={ranked.retryChampionBuild}
             onSelectRunePage={ranked.setSelectedRunePageIndex}
             onSelectBuild={ranked.setSelectedBuildIndex}
+            savedChampionTierFilter={navigationState?.rankedChampionTierFilter}
+            onChampionTierFilterChange={(tier) =>
+              updateNavigationState({ rankedChampionTierFilter: tier })
+            }
           />
 
           {/* View 4: "Aram" Tab (ARAM & ARAM Mayhem) */}
@@ -298,6 +356,10 @@ function App() {
             onSelectChampion={aram.selectChampion}
             onRetryTierList={aram.retryTierList}
             onRetryAugments={aram.retryAugments}
+            savedRarityFilter={navigationState?.aramMayhemRarityFilter}
+            onRarityFilterChange={(rarity) =>
+              updateNavigationState({ aramMayhemRarityFilter: String(rarity) })
+            }
           />
 
           {/* View 5: "Configurações" Tab (Settings & Preferences) */}

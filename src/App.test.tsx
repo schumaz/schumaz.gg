@@ -210,7 +210,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       return Promise.resolve(null);
     }
 
-    if (cmd === "get_player_profile") {
+    if (cmd === "get_player_profile" || cmd === "get_cached_player_profile") {
       return Promise.resolve(null);
     }
 
@@ -348,7 +348,7 @@ describe("App Component", () => {
       });
     });
 
-    expect(invoke).toHaveBeenCalledWith("get_player_profile");
+    await waitFor(() => { expect(invoke).toHaveBeenCalledWith("get_player_profile", { forceRefresh: false }); });
 
     await act(async () => {
       eventListeners["lcu-disconnected"]({ payload: null });
@@ -1114,7 +1114,7 @@ describe("App Component", () => {
   it("renders full-screen profile wallpaper only on Perfil tab, applies blur slider from Configurações, and enforces 30s refresh cooldown", async () => {
     vi.mocked(invoke).mockImplementation((cmd: string, args?: any) => {
       if (cmd === "get_summoner_status") return Promise.resolve(null);
-      if (cmd === "get_player_profile") {
+      if (cmd === "get_player_profile" || cmd === "get_cached_player_profile") {
         return Promise.resolve({
           summoner: {
             summonerId: 987654321,

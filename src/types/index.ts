@@ -2,10 +2,12 @@ export type ActiveTab = "profile" | "runes" | "ranked" | "aram" | "settings";
 
 export type {
   AppLocale,
+  AppSettings,
   AramAugmentEntry,
   AramChampionRank,
   AramMode,
   BuildInjected,
+  CachedProfileResult,
   ChampSelectEnded,
   ChampSelectReconciled,
   ChampSelectReconciledPayload,
@@ -15,13 +17,19 @@ export type {
   ChampionMasteryInfo,
   FlashKeyPreference,
   GameflowPhaseChanged,
+  GeneralSettings,
+  GraphicsSettings,
   InjectionReport,
   ItemBlock,
   ItemBuildOption,
   LcuConnected,
   LcuDisconnected,
+  LegacyLocalStoragePayload,
   MatchEnded,
+  NavigationState,
+  NavigationStatePatch,
   PlayerProfile,
+  ProfileAppearanceSettings,
   ProfileRefreshRequested,
   QueueMode,
   RankedChampionEntry,
@@ -36,6 +44,7 @@ export type {
   SummonerInfo,
   UnifiedBuildOption,
   UserPreferences,
+  WindowSettings,
 } from "./bindings";
 
 export { commands, events } from "./bindings";

@@ -1,7 +1,8 @@
-import { CSSProperties, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../i18n";
 import { PlayerProfile, RecentMatchInfo, SummonerInfo } from "../types";
 import { profileBlurPercentToPx } from "../hooks/usePreferences";
+import { resolveCachedAssetUrl } from "../utils/assets";
 import { IdleIsland } from "./IdleState";
 import { LoadingBar, LoadingDots } from "./LoadingIndicators";
 
@@ -14,6 +15,8 @@ interface ProfileTabProps {
   refreshCooldownSecs?: number;
   profileBlur?: number;
   isActive?: boolean;
+  savedModeFilter?: string;
+  onModeFilterChange?: (mode: string) => void;
 }
 
 const CDRAGON_RANKED_EMBLEM_BASE =
@@ -41,11 +44,13 @@ function normalizeRankTierKey(tier: string): string {
 }
 
 function getRankedCrestUrl(tier: string): string {
-  return `${CDRAGON_RANKED_EMBLEM_BASE}/${normalizeRankTierKey(tier)}.png`;
+  return resolveCachedAssetUrl(`${CDRAGON_RANKED_EMBLEM_BASE}/${normalizeRankTierKey(tier)}.png`);
 }
 
 function getRankedMiniCrestUrl(tier: string): string {
-  return `${CDRAGON_RANKED_MINI_CRESTS_BASE}/${normalizeRankTierKey(tier)}.svg`;
+  return resolveCachedAssetUrl(
+    `${CDRAGON_RANKED_MINI_CRESTS_BASE}/${normalizeRankTierKey(tier)}.svg`
+  );
 }
 
 function formatDuration(secs: number): string {
@@ -71,10 +76,25 @@ export function ProfileTab({
   refreshCooldownSecs = 0,
   profileBlur = 10,
   isActive = true,
+  savedModeFilter,
+  onModeFilterChange,
 }: ProfileTabProps) {
   const { t, formatNumber, formatCompactNumber, formatRelativeTime } = useTranslation();
-  const [selectedMode, setSelectedMode] = useState<string>("all");
+  const [selectedMode, setSelectedMode] = useState<string>(savedModeFilter || "all");
   const [expandedGameId, setExpandedGameId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (savedModeFilter) {
+      setSelectedMode(savedModeFilter);
+    }
+  }, [savedModeFilter]);
+
+  const handleSelectMode = (mode: string) => {
+    setSelectedMode(mode);
+    onModeFilterChange?.(mode);
+  };
+
+  const displaySummoner = summoner ?? profile?.summoner ?? null;
 
   // Defensive exclusion of Practice Tool on frontend as well
   const validMatches = useMemo(() => {
@@ -173,7 +193,7 @@ export function ProfileTab({
       aria-hidden={!isActive}
       style={{ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties}
     >
-      {!summoner ? (
+      {!displaySummoner ? (
         <IdleIsland
           testId="profile-waiting-client"
           mode="waiting"
@@ -232,30 +252,34 @@ export function ProfileTab({
                   {profile?.profile_icon_url ? (
                     <div className="dd-icon-frame profile-avatar-frame">
                       <img
-                        src={profile.profile_icon_url}
+                        src={resolveCachedAssetUrl(profile.profile_icon_url)}
                         alt={t("profile.summonerIconAlt")}
                         className="profile-avatar-img"
                       />
                     </div>
                   ) : (
                     <div className="profile-avatar-placeholder">
-                      {(summoner.gameName || summoner.displayName || "?").charAt(0).toUpperCase()}
+                      {(displaySummoner.gameName || displaySummoner.displayName || "?")
+                        .charAt(0)
+                        .toUpperCase()}
                     </div>
                   )}
                   <span className="profile-level-badge" data-testid="profile-level">
-                    {t("profile.levelPrefix", { level: summoner.summonerLevel })}
+                    {t("profile.levelPrefix", { level: displaySummoner.summonerLevel })}
                   </span>
                 </div>
 
                 <div className="profile-riot-id">
                   <h2
                     className="profile-summoner-name"
-                    title={`${summoner.gameName || summoner.displayName}${summoner.tagLine ? `#${summoner.tagLine}` : ""}`}
+                    title={`${displaySummoner.gameName || displaySummoner.displayName}${
+                      displaySummoner.tagLine ? `#${displaySummoner.tagLine}` : ""
+                    }`}
                   >
-                    {summoner.gameName || summoner.displayName}
+                    {displaySummoner.gameName || displaySummoner.displayName}
                   </h2>
-                  {summoner.tagLine && (
-                    <span className="profile-tagline">#{summoner.tagLine}</span>
+                  {displaySummoner.tagLine && (
+                    <span className="profile-tagline">#{displaySummoner.tagLine}</span>
                   )}
                 </div>
               </div>
@@ -328,7 +352,7 @@ export function ProfileTab({
                     className="profile-action-btn primary"
                     data-testid="refresh-profile-btn"
                     onClick={onRefresh}
-                    disabled={loading || refreshCooldownSecs > 0}
+                    disabled={!summoner || loading || refreshCooldownSecs > 0}
                   >
                     {loading ? (
                       <>
@@ -433,7 +457,7 @@ export function ProfileTab({
                             {highlightedChampion.icon && (
                               <div className="dd-icon-frame highlighted-champ-frame">
                                 <img
-                                  src={highlightedChampion.icon}
+                                  src={resolveCachedAssetUrl(highlightedChampion.icon)}
                                   alt={highlightedChampion.name}
                                   className="highlighted-champ-icon"
                                 />
@@ -503,7 +527,7 @@ export function ProfileTab({
                         {mastery.champion_icon_url ? (
                           <div className="dd-icon-frame mastery-champ-frame">
                             <img
-                              src={mastery.champion_icon_url}
+                              src={resolveCachedAssetUrl(mastery.champion_icon_url)}
                               alt={mastery.champion_name}
                               className="mastery-champ-icon"
                             />
@@ -556,7 +580,7 @@ export function ProfileTab({
                     <button
                       type="button"
                       className={`mode-chip ${activeMode === "all" ? "active" : ""}`}
-                      onClick={() => setSelectedMode("all")}
+                      onClick={() => handleSelectMode("all")}
                       aria-pressed={activeMode === "all"}
                       data-testid="mode-filter-all"
                     >
@@ -567,7 +591,7 @@ export function ProfileTab({
                         key={mode.key}
                         type="button"
                         className={`mode-chip ${activeMode === mode.key ? "active" : ""}`}
-                        onClick={() => setSelectedMode(mode.key)}
+                        onClick={() => handleSelectMode(mode.key)}
                         aria-pressed={activeMode === mode.key}
                         data-testid={`mode-filter-${mode.key}`}
                       >
@@ -611,7 +635,7 @@ export function ProfileTab({
                               {match.champion_icon_url ? (
                                 <div className="dd-icon-frame match-champ-frame">
                                   <img
-                                    src={match.champion_icon_url}
+                                    src={resolveCachedAssetUrl(match.champion_icon_url)}
                                     alt={match.champion_name}
                                     className="match-champ-icon"
                                   />
@@ -625,7 +649,7 @@ export function ProfileTab({
                                 {match.spell1_icon_url && (
                                   <div className="dd-icon-frame match-spell-frame">
                                     <img
-                                      src={match.spell1_icon_url}
+                                      src={resolveCachedAssetUrl(match.spell1_icon_url)}
                                       alt={t("profile.spell1Alt")}
                                       className="match-spell-icon"
                                     />
@@ -634,7 +658,7 @@ export function ProfileTab({
                                 {match.spell2_icon_url && (
                                   <div className="dd-icon-frame match-spell-frame">
                                     <img
-                                      src={match.spell2_icon_url}
+                                      src={resolveCachedAssetUrl(match.spell2_icon_url)}
                                       alt={t("profile.spell2Alt")}
                                       className="match-spell-icon"
                                     />
@@ -682,7 +706,7 @@ export function ProfileTab({
                                   <div key={slotIdx} className="match-item-slot">
                                     {itemId > 0 && iconUrl ? (
                                       <img
-                                        src={iconUrl}
+                                        src={resolveCachedAssetUrl(iconUrl)}
                                         alt={t("common.itemAlt", { id: itemId })}
                                         className="match-item-img"
                                       />

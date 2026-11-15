@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ARAM_SUBMODE_STORAGE_KEY,
   AppLocale,
+  AppSettings,
   DEFAULT_PREFERENCES,
   FlashKeyPreference,
   LANGUAGE_STORAGE_KEY,
+  NavigationState,
+  NavigationStatePatch,
   PREFERENCES_STORAGE_KEY,
+  RANKED_FILTERS_STORAGE_KEY,
   UserPreferences,
   commands,
 } from "../types";
@@ -14,6 +19,52 @@ export const PROFILE_BLUR_STORAGE_KEY = "schumaz_profile_ui_blur";
 export const WALLPAPER_VISIBLE_STORAGE_KEY = "schumaz_profile_wallpaper_visible";
 export const DEFAULT_PROFILE_BLUR = 10;
 export const MAX_PROFILE_BLUR_PX = 32;
+
+const LEGACY_LOCAL_STORAGE_KEYS = [
+  PREFERENCES_STORAGE_KEY,
+  LANGUAGE_STORAGE_KEY,
+  PROFILE_BLUR_STORAGE_KEY,
+  WALLPAPER_VISIBLE_STORAGE_KEY,
+  ARAM_SUBMODE_STORAGE_KEY,
+  RANKED_FILTERS_STORAGE_KEY,
+] as const;
+
+export function isValidAppSettings(value: unknown): value is AppSettings {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<AppSettings>;
+  return Boolean(
+    candidate.general &&
+      typeof candidate.general === "object" &&
+      candidate.automation &&
+      typeof candidate.automation === "object" &&
+      candidate.profileAppearance &&
+      typeof candidate.profileAppearance === "object" &&
+      candidate.graphics &&
+      typeof candidate.graphics === "object" &&
+      candidate.navigation &&
+      typeof candidate.navigation === "object"
+  );
+}
+
+function readLegacyStorageKey(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function clearLegacyLocalStorageKeys(): void {
+  try {
+    for (const key of LEGACY_LOCAL_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+}
 
 export interface InitialLanguageState {
   locale: AppLocale;
@@ -113,6 +164,67 @@ export function loadInitialPreferences(resolvedLocale?: AppLocale): UserPreferen
   return { ...DEFAULT_PREFERENCES, language: fallbackLanguage };
 }
 
+function mergeNavigationState(
+  prev: NavigationState | null,
+  patch: NavigationStatePatch
+): NavigationState {
+  const base: NavigationState = prev ?? {
+    savedAramMode: null,
+    profileMatchModeFilter: "all",
+    aramMayhemRarityFilter: "all",
+    aramMayhemLastChampion: null,
+    rankedFilterRegion: "global",
+    rankedFilterTier: "emerald_plus",
+    rankedFilterLane: "all",
+    rankedFilterPatch: null,
+    rankedChampionTierFilter: "all",
+    lastSummonerId: null,
+  };
+
+  return {
+    savedAramMode:
+      patch.savedAramMode !== undefined ? patch.savedAramMode : base.savedAramMode ?? null,
+    profileMatchModeFilter:
+      patch.profileMatchModeFilter !== undefined && patch.profileMatchModeFilter !== null
+        ? patch.profileMatchModeFilter
+        : base.profileMatchModeFilter,
+    aramMayhemRarityFilter:
+      patch.aramMayhemRarityFilter !== undefined && patch.aramMayhemRarityFilter !== null
+        ? patch.aramMayhemRarityFilter
+        : base.aramMayhemRarityFilter,
+    aramMayhemLastChampion:
+      patch.aramMayhemLastChampion !== undefined
+        ? patch.aramMayhemLastChampion === ""
+          ? null
+          : patch.aramMayhemLastChampion
+        : base.aramMayhemLastChampion ?? null,
+    rankedFilterRegion:
+      patch.rankedFilterRegion !== undefined && patch.rankedFilterRegion !== null
+        ? patch.rankedFilterRegion
+        : base.rankedFilterRegion,
+    rankedFilterTier:
+      patch.rankedFilterTier !== undefined && patch.rankedFilterTier !== null
+        ? patch.rankedFilterTier
+        : base.rankedFilterTier,
+    rankedFilterLane:
+      patch.rankedFilterLane !== undefined && patch.rankedFilterLane !== null
+        ? patch.rankedFilterLane
+        : base.rankedFilterLane,
+    rankedFilterPatch:
+      patch.rankedFilterPatch !== undefined
+        ? patch.rankedFilterPatch === ""
+          ? null
+          : patch.rankedFilterPatch
+        : base.rankedFilterPatch ?? null,
+    rankedChampionTierFilter:
+      patch.rankedChampionTierFilter !== undefined && patch.rankedChampionTierFilter !== null
+        ? patch.rankedChampionTierFilter
+        : base.rankedChampionTierFilter,
+    lastSummonerId:
+      patch.lastSummonerId !== undefined ? patch.lastSummonerId : base.lastSummonerId ?? null,
+  };
+}
+
 export function usePreferences(
   onFlashKeyChange?: (newKey: FlashKeyPreference) => void,
   onPatchProtectionChange?: (enabled: boolean) => void,
@@ -130,38 +242,121 @@ export function usePreferences(
   const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(loadInitialWallpaperVisible);
   const [hardwareAcceleration, setHardwareAcceleration] = useState<boolean>(true);
   const [gpuRestartRequired, setGpuRestartRequired] = useState<boolean>(false);
+  const [navigationState, setNavigationState] = useState<NavigationState | null>(null);
+  const [iniBacked, setIniBacked] = useState<boolean>(false);
+
   const gpuActiveAtStartupRef = useRef<boolean>(true);
+  const usingIniRef = useRef<boolean>(false);
+  const profileBlurRef = useRef<number>(profileBlur);
+  const wallpaperVisibleRef = useRef<boolean>(wallpaperVisible);
 
   useEffect(() => {
     document.documentElement.lang = locale === "pt_BR" ? "pt-BR" : "en-US";
   }, [locale]);
 
   useEffect(() => {
-    // Sync initial preferences with backend
-    commands.syncUserPreferences(preferences).catch(() => {});
-    if (typeof commands.setLocale === "function") {
-      Promise.resolve(commands.setLocale(locale)).catch(() => {});
-    }
+    let active = true;
 
-    if (typeof commands.getHardwareAccelerationStatus === "function") {
-      commands
-        .getHardwareAccelerationStatus()
-        .then((status) => {
-          if (status && typeof status.enabled === "boolean") {
-            gpuActiveAtStartupRef.current = status.active_at_startup;
-            setHardwareAcceleration(status.enabled);
-            setGpuRestartRequired(status.enabled !== status.active_at_startup);
+    const applyIniSettings = (settings: AppSettings) => {
+      usingIniRef.current = true;
+      setIniBacked(true);
+      clearLegacyLocalStorageKeys();
+
+      const resolvedLocale: AppLocale = isValidAppLocale(settings.general.language)
+        ? settings.general.language
+        : isValidAppLocale(settings.automation.language)
+        ? settings.automation.language
+        : DEFAULT_ONBOARDING_LOCALE;
+
+      setLocale(resolvedLocale);
+      setNeedsLanguageOnboarding(!settings.general.languageOnboardingCompleted);
+      setPreferences({
+        ...settings.automation,
+        language: resolvedLocale,
+      });
+
+      const blur = clampProfileBlur(settings.profileAppearance.profileBlurPercent);
+      profileBlurRef.current = blur;
+      setProfileBlur(blur);
+
+      const wpVisible = Boolean(settings.profileAppearance.wallpaperVisible);
+      wallpaperVisibleRef.current = wpVisible;
+      setWallpaperVisible(wpVisible);
+
+      setHardwareAcceleration(Boolean(settings.graphics.hardwareAcceleration));
+      setNavigationState(settings.navigation);
+    };
+
+    const initialize = async () => {
+      let hydratedFromIni = false;
+
+      if (typeof commands.migrateLegacyLocalStorage === "function") {
+        try {
+          const payload = {
+            schumazUserPreferences: readLegacyStorageKey(PREFERENCES_STORAGE_KEY),
+            schumazLanguage: readLegacyStorageKey(LANGUAGE_STORAGE_KEY),
+            schumazProfileUiBlur: readLegacyStorageKey(PROFILE_BLUR_STORAGE_KEY),
+            schumazProfileWallpaperVisible: readLegacyStorageKey(WALLPAPER_VISIBLE_STORAGE_KEY),
+            schumazAramSubmode: readLegacyStorageKey(ARAM_SUBMODE_STORAGE_KEY),
+            schumazRankedFilters: readLegacyStorageKey(RANKED_FILTERS_STORAGE_KEY),
+          };
+          const migrated = await commands.migrateLegacyLocalStorage(payload);
+          if (active && isValidAppSettings(migrated)) {
+            applyIniSettings(migrated);
+            hydratedFromIni = true;
           }
-        })
-        .catch(() => {});
-    }
+        } catch {
+          // Fallback below
+        }
+      }
+
+      if (!hydratedFromIni && typeof commands.getAppSettings === "function") {
+        try {
+          const loaded = await commands.getAppSettings();
+          if (active && isValidAppSettings(loaded)) {
+            applyIniSettings(loaded);
+            hydratedFromIni = true;
+          }
+        } catch {
+          // Fallback to legacy localStorage mode in non-Tauri environments
+        }
+      }
+
+      if (!hydratedFromIni && active) {
+        commands.syncUserPreferences(preferences).catch(() => {});
+        if (typeof commands.setLocale === "function") {
+          Promise.resolve(commands.setLocale(locale)).catch(() => {});
+        }
+      }
+
+      if (typeof commands.getHardwareAccelerationStatus === "function") {
+        commands
+          .getHardwareAccelerationStatus()
+          .then((status) => {
+            if (active && status && typeof status.enabled === "boolean") {
+              gpuActiveAtStartupRef.current = status.active_at_startup;
+              setHardwareAcceleration(status.enabled);
+              setGpuRestartRequired(status.enabled !== status.active_at_startup);
+            }
+          })
+          .catch(() => {});
+      }
+    };
+
+    initialize();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const persistPreferences = useCallback((next: UserPreferences) => {
-    try {
-      localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore localStorage quota errors
+    if (!usingIniRef.current) {
+      try {
+        localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore localStorage quota errors
+      }
     }
     commands.syncUserPreferences(next).catch(() => {});
   }, []);
@@ -177,10 +372,12 @@ export function usePreferences(
 
     setPreferences((prev) => {
       const next = { ...prev, [key]: value };
-      try {
-        localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // Ignore localStorage quota errors
+      if (!usingIniRef.current) {
+        try {
+          localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // Ignore localStorage quota errors
+        }
       }
       commands
         .syncUserPreferences(next)
@@ -204,13 +401,25 @@ export function usePreferences(
   }, []);
 
   const confirmLanguageOnboarding = useCallback(() => {
-    saveLanguageToStorage(locale);
     setNeedsLanguageOnboarding(false);
     setPreferences((prev) => {
       const next = { ...prev, language: locale };
       persistPreferences(next);
       return next;
     });
+
+    if (usingIniRef.current && typeof commands.completeLanguageOnboarding === "function") {
+      Promise.resolve(commands.completeLanguageOnboarding(locale))
+        .then(() => {
+          onLocaleChange?.(locale);
+        })
+        .catch(() => {
+          onLocaleChange?.(locale);
+        });
+      return;
+    }
+
+    saveLanguageToStorage(locale);
     if (typeof commands.setLocale === "function") {
       Promise.resolve(commands.setLocale(locale))
         .then(() => {
@@ -227,7 +436,9 @@ export function usePreferences(
   const changeLanguage = useCallback(
     (nextLocale: AppLocale) => {
       setLocale(nextLocale);
-      saveLanguageToStorage(nextLocale);
+      if (!usingIniRef.current) {
+        saveLanguageToStorage(nextLocale);
+      }
       setNeedsLanguageOnboarding(false);
       setPreferences((prev) => {
         const next = { ...prev, language: nextLocale };
@@ -249,24 +460,52 @@ export function usePreferences(
     [persistPreferences, onLocaleChange]
   );
 
-  const updateProfileBlur = (blurPercent: number) => {
+  const updateProfileBlur = useCallback((blurPercent: number) => {
     const clamped = clampProfileBlur(blurPercent);
+    profileBlurRef.current = clamped;
     setProfileBlur(clamped);
-    try {
-      localStorage.setItem(PROFILE_BLUR_STORAGE_KEY, String(clamped));
-    } catch {
-      // Ignore localStorage quota errors
+    if (usingIniRef.current && typeof commands.updateProfileAppearance === "function") {
+      commands
+        .updateProfileAppearance(clamped, wallpaperVisibleRef.current)
+        .catch(() => {});
+    } else {
+      try {
+        localStorage.setItem(PROFILE_BLUR_STORAGE_KEY, String(clamped));
+      } catch {
+        // Ignore localStorage quota errors
+      }
     }
-  };
+  }, []);
 
-  const updateWallpaperVisible = (visible: boolean) => {
+  const updateWallpaperVisible = useCallback((visible: boolean) => {
+    wallpaperVisibleRef.current = visible;
     setWallpaperVisible(visible);
-    try {
-      localStorage.setItem(WALLPAPER_VISIBLE_STORAGE_KEY, String(visible));
-    } catch {
-      // Ignore localStorage quota errors
+    if (usingIniRef.current && typeof commands.updateProfileAppearance === "function") {
+      commands
+        .updateProfileAppearance(profileBlurRef.current, visible)
+        .catch(() => {});
+    } else {
+      try {
+        localStorage.setItem(WALLPAPER_VISIBLE_STORAGE_KEY, String(visible));
+      } catch {
+        // Ignore localStorage quota errors
+      }
     }
-  };
+  }, []);
+
+  const updateNavigationState = useCallback((patch: NavigationStatePatch) => {
+    setNavigationState((prev) => mergeNavigationState(prev, patch));
+    if (usingIniRef.current && typeof commands.updateNavigationState === "function") {
+      commands
+        .updateNavigationState(patch)
+        .then((updated) => {
+          if (isValidAppSettings(updated)) {
+            setNavigationState(updated.navigation);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const updateHardwareAcceleration = (enabled: boolean) => {
     setHardwareAcceleration(enabled);
@@ -308,5 +547,8 @@ export function usePreferences(
     updateHardwareAcceleration,
     gpuRestartRequired,
     restartApp,
+    navigationState,
+    updateNavigationState,
+    iniBacked,
   };
 }

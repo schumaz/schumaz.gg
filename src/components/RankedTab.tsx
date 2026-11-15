@@ -1,5 +1,5 @@
 import "./RankedTab.css";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import {
   ChampionBuild,
@@ -9,6 +9,7 @@ import {
   SpellMetadata,
 } from "../types";
 import { RankedFilters } from "../hooks/useRanked";
+import { resolveCachedAssetUrl } from "../utils/assets";
 import { getChampionTierClass, getChampionTierLabel } from "./AramTab";
 import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
 import {
@@ -137,6 +138,8 @@ interface RankedTabProps {
   onRetryBuild: () => void;
   onSelectRunePage: (pageIndex: number) => void;
   onSelectBuild: (index: number) => void;
+  savedChampionTierFilter?: string;
+  onChampionTierFilterChange?: (tier: string) => void;
 }
 
 function normalizeSearch(value: string): string {
@@ -227,11 +230,24 @@ export function RankedTab({
   onRetryBuild,
   onSelectRunePage,
   onSelectBuild,
+  savedChampionTierFilter,
+  onChampionTierFilterChange,
 }: RankedTabProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const [tierFilter, setTierFilter] = useState<string>("all");
+  const [tierFilter, setTierFilter] = useState<string>(savedChampionTierFilter || "all");
   const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
+
+  useEffect(() => {
+    if (savedChampionTierFilter) {
+      setTierFilter(savedChampionTierFilter);
+    }
+  }, [savedChampionTierFilter]);
+
+  const handleSelectTierFilter = (next: string) => {
+    setTierFilter(next);
+    onChampionTierFilterChange?.(next);
+  };
 
   const laneMeta = useMemo(() => getLaneMeta(t), [t]);
   const tierOptions = useMemo(() => getTierOptions(t), [t]);
@@ -337,7 +353,7 @@ export function RankedTab({
                 </span>
                 <div className="dd-icon-frame aram-champ-frame">
                   <img
-                    src={champ.icon_url}
+                    src={resolveCachedAssetUrl(champ.icon_url)}
                     alt={champ.name}
                     className="aram-champ-avatar"
                     loading="lazy"
@@ -483,7 +499,7 @@ export function RankedTab({
                 <div className="ranked-detail-champ-summary">
                   <div className="dd-icon-frame aram-champ-frame">
                     <img
-                      src={selectedChampion.icon_url}
+                      src={resolveCachedAssetUrl(selectedChampion.icon_url)}
                       alt={selectedChampion.name}
                       className="aram-champ-avatar"
                     />
@@ -706,7 +722,7 @@ export function RankedTab({
                   value={tierFilter}
                   options={championTierFilterOptions}
                   disabled={tierLoading && !tierData}
-                  onChange={setTierFilter}
+                  onChange={handleSelectTierFilter}
                 />
               </div>
             </div>
