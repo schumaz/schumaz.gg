@@ -1,9 +1,9 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AppLocale, UserPreferences } from "../types";
 import { clampProfileBlur } from "../hooks/usePreferences";
 import { useTranslation } from "../i18n";
-import { LanguageFlag } from "./LanguageFlag";
+import { LanguageFlag } from "./ui/LanguageFlag";
 
 export function isBlurSliderDisabled(wallpaperVisible: boolean): boolean {
   return !wallpaperVisible;

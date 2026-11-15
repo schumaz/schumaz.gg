@@ -11,7 +11,7 @@ import {
 import { RankedFilters } from "../hooks/useRanked";
 import { resolveCachedAssetUrl } from "../utils/assets";
 import { getChampionTierClass, getChampionTierLabel } from "./AramTab";
-import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
+import { FilterDropdown, FilterDropdownOption } from "./ui/FilterDropdown";
 import {
   FiltersHeader,
   buildIconImg,
@@ -20,9 +20,9 @@ import {
   getTierOptions,
 } from "./FiltersHeader";
 import { ItemBlocks } from "./ItemBlocks";
-import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
+import { ListSkeleton, LoadingBar, LoadingDots } from "./ui/LoadingIndicators";
 import { RuneTree } from "./RuneTree";
-import { SearchInput } from "./SearchInput";
+import { SearchInput } from "./ui/SearchInput";
 import { SpellsBar } from "./SpellsBar";
 
 type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;

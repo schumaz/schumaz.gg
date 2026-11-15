@@ -1,5 +1,5 @@
 import { AppLocale, useTranslation } from "../i18n";
-import { LanguageFlag } from "./LanguageFlag";
+import { LanguageFlag } from "./ui/LanguageFlag";
 
 interface LanguageOnboardingModalProps {
   selectedLocale: AppLocale;

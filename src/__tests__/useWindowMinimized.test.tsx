@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, renderHook, act, waitFor } from "@testing-library/react";
-import { NavigationDock } from "../components/NavigationDock";
+import { NavigationDock } from "../components/ui/NavigationDock";
 import { useWindowMinimized } from "../hooks/useWindowMinimized";
 
 const listeners: Record<string, (event: { payload: boolean }) => void> = {};

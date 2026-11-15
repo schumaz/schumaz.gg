@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { ChampSelectedPayload, SummonerInfo } from "../types";
 import { useTranslation } from "../i18n";
-import { LoadingDots } from "./LoadingIndicators";
+import { LoadingDots } from "./ui/LoadingIndicators";
 
 interface IdleIslandProps {
   badge?: string;

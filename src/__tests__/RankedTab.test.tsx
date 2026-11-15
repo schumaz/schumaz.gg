@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderHook, act } from "@testing-library/react";
-import { NavigationDock } from "../components/NavigationDock";
+import { NavigationDock } from "../components/ui/NavigationDock";
 import { RankedTab } from "../components/RankedTab";
 import { useRanked } from "../hooks/useRanked";
 import {

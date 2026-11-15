@@ -4,7 +4,7 @@ import { PlayerProfile, RecentMatchInfo, SummonerInfo } from "../types";
 import { profileBlurPercentToPx } from "../hooks/usePreferences";
 import { resolveCachedAssetUrl } from "../utils/assets";
 import { IdleIsland } from "./IdleState";
-import { LoadingBar, LoadingDots } from "./LoadingIndicators";
+import { LoadingBar, LoadingDots } from "./ui/LoadingIndicators";
 
 interface ProfileTabProps {
   summoner: SummonerInfo | null;

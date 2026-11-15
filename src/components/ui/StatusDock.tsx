@@ -1,5 +1,5 @@
-import { SummonerInfo } from "../types";
-import { useTranslation } from "../i18n";
+import type { SummonerInfo } from "../../types";
+import { useTranslation } from "../../i18n";
 import { LoadingDots } from "./LoadingIndicators";
 
 interface StatusDockProps {

@@ -1,7 +1,7 @@
-import brFlagUrl from "../assets/flags/br.svg";
-import brCompactFlagUrl from "../assets/flags/compact/br.svg";
-import usFlagUrl from "../assets/flags/us.svg";
-import { AppLocale } from "../i18n/types";
+import brFlagUrl from "../../assets/flags/br.svg";
+import brCompactFlagUrl from "../../assets/flags/compact/br.svg";
+import usFlagUrl from "../../assets/flags/us.svg";
+import { AppLocale } from "../../i18n/types";
 
 interface LanguageFlagProps {
   locale: AppLocale;

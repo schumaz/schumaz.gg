@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { renderHook, act } from "@testing-library/react";
 import {
@@ -8,7 +8,7 @@ import {
   getChampionTierClass,
   getChampionTierLabel,
 } from "../components/AramTab";
-import { NavigationDock } from "../components/NavigationDock";
+import { NavigationDock } from "../components/ui/NavigationDock";
 import { useAram } from "../hooks/useAram";
 import {
   ARAM_SUBMODE_STORAGE_KEY,

@@ -2,9 +2,9 @@ import { useState } from "react";
 import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../types";
 import { resolveCachedAssetUrl } from "../utils/assets";
-import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
-import { LoadingBar } from "./LoadingIndicators";
-import { RegionFlag } from "./RegionFlag";
+import { FilterDropdown, FilterDropdownOption } from "./ui/FilterDropdown";
+import { LoadingBar } from "./ui/LoadingIndicators";
+import { RegionFlag } from "./ui/RegionFlag";
 
 interface FiltersHeaderProps {
   build: ChampionBuild;

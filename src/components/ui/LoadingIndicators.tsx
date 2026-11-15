@@ -1,4 +1,4 @@
-import { useTranslation } from "../i18n";
+import { useTranslation } from "../../i18n";
 
 interface LoadingDotsProps {
   variant?: "accent" | "warning" | "inline";

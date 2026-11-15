@@ -1,7 +1,9 @@
 import "./NavigationDock.css";
-import { ActiveTab } from "../types";
-import { useTranslation } from "../i18n";
-import { resolveCachedAssetUrl } from "../utils/assets";
+import type { ActiveTab } from "../../types";
+import { useTranslation } from "../../i18n";
+
+export const ARAM_DOCK_ICON_URL =
+  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/aram/img/game-select-icon-active.png";
 
 interface NavigationDockProps {
   activeTab: ActiveTab;
@@ -9,10 +11,8 @@ interface NavigationDockProps {
   onRankedClick?: () => void;
   onAramClick?: () => void;
   animationsPaused?: boolean;
+  aramIconSrc?: string;
 }
-
-const ARAM_DOCK_ICON_URL =
-  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/aram/img/game-select-icon-active.png";
 
 export function NavigationDock({
   activeTab,
@@ -20,6 +20,7 @@ export function NavigationDock({
   onRankedClick,
   onAramClick,
   animationsPaused = false,
+  aramIconSrc = ARAM_DOCK_ICON_URL,
 }: NavigationDockProps) {
   const { t } = useTranslation();
 
@@ -126,7 +127,7 @@ export function NavigationDock({
         aria-current={activeTab === "aram" ? "page" : undefined}
       >
         <img
-          src={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
+          src={aramIconSrc}
           alt=""
           className="dock-icon dock-icon-img"
           width={18}

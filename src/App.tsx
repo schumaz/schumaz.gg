@@ -22,6 +22,7 @@ import {
   SettingsTab,
   IdleState,
   NavigationDock,
+  ARAM_DOCK_ICON_URL,
   AramTab,
   RankedTab,
   LanguageOnboardingModal,
@@ -388,6 +389,7 @@ function App() {
           onAramClick={handleAramDockClick}
           onRankedClick={handleRankedDockClick}
           animationsPaused={isAppMinimized}
+          aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 
         {/* First-Launch Language Onboarding Overlay (with blur backdrop) */}

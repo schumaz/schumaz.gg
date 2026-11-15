@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import { AramAugmentEntry, AramChampionRank, AramMode } from "../types";
 import { resolveCachedAssetUrl } from "../utils/assets";
-import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
-import { SearchInput } from "./SearchInput";
+import { ListSkeleton, LoadingBar, LoadingDots } from "./ui/LoadingIndicators";
+import { SearchInput } from "./ui/SearchInput";
 
 export type AugmentRarityFilter = "all" | 1 | 4 | 8;
 

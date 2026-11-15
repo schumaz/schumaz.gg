@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { StatusDock } from "../components/StatusDock";
+import { StatusDock } from "../components/ui/StatusDock";
 import { SummonerInfo } from "../types";
 
 describe("StatusDock", () => {
