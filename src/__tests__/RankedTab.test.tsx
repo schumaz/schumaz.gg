@@ -1,163 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { NavigationDock } from "../components/ui/NavigationDock";
 import { RankedTab } from "../components/RankedTab";
-import { useRanked } from "../hooks/useRanked";
 import {
-  RANKED_FILTERS_STORAGE_KEY,
-  type ChampionBuild_Serialize,
-  type RankedChampionEntry_Serialize,
-  type RankedTierListResponse_Serialize,
-} from "../types";
-import {
-  buildIpc,
-  injectorIpc,
-  lcuIpc,
-  rankedIpc,
-  settingsIpc,
-} from "../services/ipc";
-
-const mockRankedChampions: RankedChampionEntry_Serialize[] = [
-  {
-    id: 245,
-    key: "ekko",
-    name: "Ekko",
-    icon_url: "https://example.com/ekko.png",
-    lane: "mid",
-    tier: 0,
-    rank: 2,
-    overall_rank: 1,
-    win_rate: 52.2,
-    pick_rate: 5.3,
-    ban_rate: 3.4,
-    role_rate: 55.0,
-  },
-  {
-    id: 54,
-    key: "malphite",
-    name: "Malphite",
-    icon_url: "https://example.com/malphite.png",
-    lane: "top",
-    tier: 0,
-    rank: 1,
-    overall_rank: 2,
-    win_rate: 51.7,
-    pick_rate: 6.8,
-    ban_rate: 18.0,
-    role_rate: 88.0,
-  },
-  {
-    id: 103,
-    key: "ahri",
-    name: "Ahri",
-    icon_url: "https://example.com/ahri.png",
-    lane: "mid",
-    tier: 0,
-    rank: 1,
-    overall_rank: 3,
-    win_rate: 51.2,
-    pick_rate: 11.5,
-    ban_rate: 3.6,
-    role_rate: 94.0,
-  },
-  {
-    id: 86,
-    key: "garen",
-    name: "Garen",
-    icon_url: "https://example.com/garen.png",
-    lane: "top",
-    tier: 1,
-    rank: 2,
-    overall_rank: 4,
-    win_rate: 50.8,
-    pick_rate: 6.2,
-    ban_rate: 4.5,
-    role_rate: 89.0,
-  },
-  {
-    id: 245,
-    key: "ekko",
-    name: "Ekko",
-    icon_url: "https://example.com/ekko.png",
-    lane: "jungle",
-    tier: 2,
-    rank: 10,
-    overall_rank: 5,
-    win_rate: 50.7,
-    pick_rate: 4.5,
-    ban_rate: 3.4,
-    role_rate: 45.0,
-  },
-];
-
-const mockTierResponse: RankedTierListResponse_Serialize = {
-  region: "global",
-  tier: "emerald_plus",
-  active_patch: "16.22",
-  available_patches: ["16.22", "16.21"],
-  patch_fallback_applied: false,
-  patch_protection_remaining_hours: null,
-  champions: mockRankedChampions,
-};
-
-const mockProtectedTierResponse: RankedTierListResponse_Serialize = {
-  region: "global",
-  tier: "emerald_plus",
-  active_patch: "16.21",
-  available_patches: ["16.22", "16.21"],
-  patch_fallback_applied: true,
-  patch_protection_remaining_hours: 38,
-  champions: mockRankedChampions,
-};
-
-const mockAhriBuild: ChampionBuild_Serialize = {
-  champion_id: 103,
-  champion_name: "Ahri",
-  win_rate: 51.2,
-  pick_rate: 11.5,
-  primary_style_id: 8100,
-  sub_style_id: 8200,
-  selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],
-  spell1_id: 4,
-  spell2_id: 14,
-  champion_icon_url: "https://example.com/ahri.png",
-  primary_style_name: "Dominação",
-  primary_style_icon_url: "dom.png",
-  sub_style_name: "Feitiçaria",
-  sub_style_icon_url: "sorc.png",
-  perks: [
-    { id: 8112, key: "Electrocute", name: "Eletrocutar", icon_url: "elec.png" },
-    { id: 8126, key: "CheapShot", name: "Golpe Desleal", icon_url: "cheap.png" },
-    { id: 8138, key: "EyeballCollection", name: "Globos", icon_url: "eyeball.png" },
-    { id: 8135, key: "TreasureHunter", name: "Tesouro", icon_url: "treasure.png" },
-    { id: 8226, key: "ManaflowBand", name: "Faixa", icon_url: "mana.png" },
-    { id: 8210, key: "Transcendence", name: "Transcendência", icon_url: "trans.png" },
-    { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "af.png" },
-    { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "af.png" },
-    { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "hp.png" },
-  ],
-  rune_pages: [],
-  core_build_options: [],
-  build_options: [],
-  final_build_options: [],
-  spells: [
-    { id: 4, name: "Flash", icon_url: "flash.png" },
-    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
-  ],
-  spell_choices: [{ id: 14, name: "Incendiar", icon_url: "ignite.png" }],
-  item_blocks: [
-    { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
-  ],
-  active_position: "mid",
-  active_tier: "emerald_plus",
-  active_region: "global",
-  active_patch: "16.22",
-  available_patches: ["16.22", "16.21"],
-  patch_fallback_applied: false,
-  patch_protection_remaining_hours: null,
-  supports_runes: true,
-};
+  mockProtectedTierResponse,
+  mockTierResponse,
+} from "../features/ranked/__tests__/rankedFixtures";
 
 describe("NavigationDock Ranqueada position", () => {
   it("places Ranqueada button strictly between Runas and Aram", () => {
@@ -205,32 +53,26 @@ describe("RankedTab UI", () => {
       />
     );
 
-    // Unified branding: large Tier List title on left, Ranqueada badge on right, no "entradas" pill
     const filtersCard = screen.getByTestId("ranked-filters-card");
     const heroTitle = within(filtersCard).getByRole("heading", { name: "Tier List" });
     expect(heroTitle).toHaveClass("page-hero-title");
     expect(within(filtersCard).getByText("Ranqueada")).toHaveClass("ranked-mode-badge");
     expect(screen.queryByText(/entradas/i)).not.toBeInTheDocument();
 
-    // Champion search sits in the top toolbar card on the right (matching ARAM)
     expect(within(filtersCard).getByTestId("ranked-toolbar-search-wrap")).toBeInTheDocument();
     expect(within(filtersCard).getByLabelText("Buscar campeão na Ranqueada")).toBeInTheDocument();
 
-    // Duplicate Rota dropdown between Elo and Servidor must NOT exist
     expect(screen.queryByTestId("ranked-filter-position")).not.toBeInTheDocument();
     expect(screen.getByTestId("ranked-filter-tier")).toBeInTheDocument();
     expect(screen.getByTestId("ranked-filter-region")).toBeInTheDocument();
     expect(screen.getByTestId("ranked-filter-patch")).toBeInTheDocument();
 
-    // Bottom lane pills remain the single lane selector, alongside pipe and Tier filter menu
     expect(screen.getByTestId("ranked-lane-tabs")).toBeInTheDocument();
     expect(screen.getByTestId("ranked-filter-champ-tier")).toBeInTheDocument();
 
-    // Unified all-lanes view (NOT split into separate lane sections)
     expect(screen.queryByTestId("ranked-lane-section-top")).not.toBeInTheDocument();
     expect(screen.getByTestId("ranked-all-lanes-list")).toBeInTheDocument();
 
-    // OP group contains Ekko (Mid #1), Malphite (Top #2), Ahri (Mid #3) all together
     const opGroup = screen.getByTestId("ranked-tier-group-all-0");
     expect(within(opGroup).getAllByText("OP")[0]).toHaveClass("tier-op");
     const opButtons = within(opGroup).getAllByRole("button");
@@ -240,7 +82,6 @@ describe("RankedTab UI", () => {
       "ranked-champ-mid-ahri",
     ]);
 
-    // Differentiates overall rank (#1, #2, #3) and lane badge (Meio vs Topo vs Selva)
     expect(within(screen.getByTestId("ranked-champ-mid-ekko")).getByText("#1")).toBeInTheDocument();
     expect(within(screen.getByTestId("ranked-champ-top-malphite")).getByText("#2")).toBeInTheDocument();
     expect(within(screen.getByTestId("ranked-champ-mid-ahri")).getByText("#3")).toBeInTheDocument();
@@ -248,13 +89,11 @@ describe("RankedTab UI", () => {
     expect(screen.getByTestId("ranked-champ-lane-top-malphite")).toHaveTextContent("Topo");
     expect(screen.getByTestId("ranked-champ-lane-jungle-ekko")).toHaveTextContent("Selva");
 
-    // Tier 1 and Tier 2 groups are also combined across lanes
     const tier1Group = screen.getByTestId("ranked-tier-group-all-1");
     expect(within(tier1Group).getByText("Garen")).toBeInTheDocument();
     const tier2Group = screen.getByTestId("ranked-tier-group-all-2");
     expect(within(tier2Group).getByText("Ekko")).toBeInTheDocument();
 
-    // Clicking a lane separation pill updates position filter
     fireEvent.click(screen.getByTestId("ranked-lane-tab-mid"));
     expect(onTierListFilterChange).toHaveBeenCalledWith("position", "mid");
   });
@@ -288,7 +127,6 @@ describe("RankedTab UI", () => {
     const tierTrigger = screen.getByTestId("ranked-filter-champ-tier");
     expect(tierTrigger).toHaveAttribute("data-value", "all");
 
-    // Filter to Tier 1 -> shows only Garen
     fireEvent.click(tierTrigger);
     const tierListbox = screen.getByRole("listbox", { name: "Tier:" });
     fireEvent.click(within(tierListbox).getByRole("option", { name: "Tier 1" }));
@@ -298,7 +136,6 @@ describe("RankedTab UI", () => {
     expect(screen.queryByTestId("ranked-tier-group-all-2")).not.toBeInTheDocument();
     expect(screen.getByText("Garen")).toBeInTheDocument();
 
-    // Filter back to OP and combine with search
     fireEvent.click(tierTrigger);
     fireEvent.click(within(screen.getByRole("listbox", { name: "Tier:" })).getByRole("option", { name: "OP" }));
     expect(screen.getByTestId("ranked-tier-group-all-0")).toBeInTheDocument();
@@ -311,7 +148,6 @@ describe("RankedTab UI", () => {
     expect(screen.getByTestId("ranked-champ-top-malphite")).toBeInTheDocument();
     expect(screen.queryByTestId("ranked-champ-mid-ahri")).not.toBeInTheDocument();
 
-    // Clicking the X button clears the search text and restores OP entries
     fireEvent.click(screen.getByLabelText("Limpar busca na Ranqueada"));
     expect(screen.getByLabelText("Buscar campeão na Ranqueada")).toHaveValue("");
     expect(screen.getByTestId("ranked-champ-mid-ahri")).toBeInTheDocument();
@@ -353,7 +189,6 @@ describe("RankedTab UI", () => {
     expect(within(midSection).queryByText("Malphite")).not.toBeInTheDocument();
 
     const opMidGroup = screen.getByTestId("ranked-tier-group-mid-0");
-    // In single-lane Mid view, lane rank #1 Ahri comes before lane rank #2 Ekko
     const midOpButtons = within(opMidGroup).getAllByRole("button");
     expect(midOpButtons.map((btn) => btn.getAttribute("data-testid"))).toEqual([
       "ranked-champ-mid-ahri",
@@ -403,329 +238,5 @@ describe("RankedTab UI", () => {
     const listbox = screen.getByRole("listbox", { name: "Patch:" });
     fireEvent.click(within(listbox).getByRole("option", { name: "Patch 16.22 (Mais atual)" }));
     expect(onTierListFilterChange).toHaveBeenCalledWith("patch", "16.22");
-  });
-
-  it("renders read-only consultation build screen inside Ranked tab when a champion is selected", () => {
-    const onBackToTierList = vi.fn();
-    const onDetailFilterChange = vi.fn();
-
-    render(
-      <RankedTab
-        isActive={true}
-        filters={{ region: "global", tier: "emerald_plus", lane: "mid", patch: null }}
-        tierData={mockTierResponse}
-        tierLoading={false}
-        tierError={null}
-        selectedChampion={mockRankedChampions[2]}
-        championBuild={mockAhriBuild}
-        buildLoading={false}
-        buildError={null}
-        orderedSpells={mockAhriBuild.spells}
-        selectedRunePageIndex={0}
-        selectedBuildIndex={0}
-        onTierListFilterChange={vi.fn()}
-        onDetailFilterChange={onDetailFilterChange}
-        onSelectChampion={vi.fn()}
-        onBackToTierList={onBackToTierList}
-        onRetryTierList={vi.fn()}
-        onRetryBuild={vi.fn()}
-        onSelectRunePage={vi.fn()}
-        onSelectBuild={vi.fn()}
-      />
-    );
-
-    const view = screen.getByTestId("view-ranked");
-    expect(within(view).getByTestId("ranked-champion-detail")).toBeInTheDocument();
-    expect(within(view).getByTestId("champ-hero")).toBeInTheDocument();
-    expect(within(view).getByTestId("runes-tree")).toBeInTheDocument();
-    expect(within(view).getByTestId("spells-card")).toBeInTheDocument();
-    expect(within(view).getByTestId("item-blocks")).toBeInTheDocument();
-
-    // Consultation/read-only mode assertions (no Runas-only injection wording or controls)
-    expect(within(view).getByText("Feitiços que Pode Usar")).toBeInTheDocument();
-    expect(within(view).queryByText("Escolha de Segundo Feitiço")).not.toBeInTheDocument();
-    expect(within(view).queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
-    expect(within(view).getByTestId("sec-spell-info-14")).toBeInTheDocument();
-    expect(within(view).queryByTestId("sec-spell-btn-14")).not.toBeInTheDocument();
-    expect(within(view).queryByText("D")).not.toBeInTheDocument();
-    expect(within(view).queryByText("F")).not.toBeInTheDocument();
-    expect(within(view).getByText("Build Recomendada")).toBeInTheDocument();
-    expect(within(view).queryByText("Build na Loja")).not.toBeInTheDocument();
-
-    fireEvent.click(within(view).getByTestId("ranked-back-btn"));
-    expect(onBackToTierList).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("useRanked hook state and filter preservation", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    vi.restoreAllMocks();
-  });
-
-  it("loads tier list, fetches read-only build on champion click, and preserves user filters across detail/back", async () => {
-    const tierSpy = vi.spyOn(rankedIpc, "getRankedTierList").mockResolvedValue(mockTierResponse);
-    const buildSpy = vi.spyOn(rankedIpc, "getRankedChampionBuild").mockResolvedValue(mockAhriBuild);
-    const updateFiltersSpy = vi.spyOn(buildIpc, "updateBuildFilters");
-
-    const { result } = renderHook(() => useRanked(true, "D", true));
-
-    await waitFor(() => {
-      expect(tierSpy).toHaveBeenCalledWith("global", "emerald_plus", null);
-    });
-
-    // User selects server BR and patch 16.22 on the Tier List
-    act(() => {
-      result.current.handleTierListFilterChange("region", "br");
-      result.current.handleTierListFilterChange("patch", "16.22");
-    });
-
-    await waitFor(() => {
-      expect(tierSpy).toHaveBeenCalledWith("br", "emerald_plus", "16.22");
-    });
-
-    // Click Ahri (Mid) -> fetches read-only build with preserved filters (br, emerald_plus, 16.22)
-    act(() => {
-      result.current.selectChampion(mockRankedChampions[2]);
-    });
-
-    await waitFor(() => {
-      expect(buildSpy).toHaveBeenCalledWith(103, "mid", "emerald_plus", "br", "16.22");
-    });
-    expect(updateFiltersSpy).not.toHaveBeenCalled();
-
-    // Change Elo inside detail screen -> updates both build AND preserved Ranked filters
-    act(() => {
-      result.current.handleDetailFilterChange("tier", "diamond_plus");
-    });
-
-    await waitFor(() => {
-      expect(buildSpy).toHaveBeenCalledWith(103, "mid", "diamond_plus", "br", "16.22");
-    });
-
-    // Go back to Tier List -> filters remain (br, diamond_plus, 16.22)
-    act(() => {
-      result.current.clearSelectedChampion();
-    });
-
-    expect(result.current.selectedChampion).toBeNull();
-    expect(result.current.filters).toEqual({
-      region: "br",
-      tier: "diamond_plus",
-      lane: "all",
-      patch: "16.22",
-    });
-    expect(JSON.parse(localStorage.getItem(RANKED_FILTERS_STORAGE_KEY) || "{}")).toEqual({
-      region: "br",
-      tier: "diamond_plus",
-      lane: "all",
-      patch: "16.22",
-    });
-  });
-
-  it("switches rune pages and build options locally in Ranked without injecting anything into the game", async () => {
-    const mockMultiBuild: ChampionBuild_Serialize = {
-      ...mockAhriBuild,
-      rune_pages: [
-        {
-          primary_style_id: 8100,
-          sub_style_id: 8200,
-          primary_style_name: "Dominação",
-          primary_style_icon_url: "dom.png",
-          sub_style_name: "Feitiçaria",
-          sub_style_icon_url: "sorc.png",
-          selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],
-          perks: mockAhriBuild.perks,
-          play: 5000,
-          win: 2600,
-          pick_rate: 70.0,
-        },
-        {
-          primary_style_id: 8200,
-          sub_style_id: 8300,
-          primary_style_name: "Feitiçaria",
-          primary_style_icon_url: "sorc.png",
-          sub_style_name: "Inspiração",
-          sub_style_icon_url: "insp.png",
-          selected_perk_ids: [8229, 8226, 8210, 8237, 8304, 8345, 5008, 5008, 5001],
-          perks: [
-            { id: 8229, key: "ArcaneComet", name: "Cometa Arcano", icon_url: "comet.png" },
-            { id: 8226, key: "ManaflowBand", name: "Faixa", icon_url: "mana.png" },
-            { id: 8210, key: "Transcendence", name: "Transcendência", icon_url: "trans.png" },
-            { id: 8237, key: "Scorch", name: "Chamuscar", icon_url: "scorch.png" },
-            { id: 8304, key: "MagicalFootwear", name: "Calçados", icon_url: "boots.png" },
-            { id: 8345, key: "BiscuitDelivery", name: "Biscoito", icon_url: "biscuit.png" },
-            { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "af.png" },
-            { id: 5008, key: "AdaptiveForce", name: "Força Adaptativa", icon_url: "af.png" },
-            { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "hp.png" },
-          ],
-          play: 2000,
-          win: 1050,
-          pick_rate: 30.0,
-        },
-      ],
-      build_options: [
-        {
-          name: "Build 1 (Mais Feita)",
-          core_item_ids: [3118, 4645, 3089],
-          core_item_icon_urls: ["b1-1.png", "b1-2.png", "b1-3.png"],
-          final_item_ids: [3118, 4645, 3089, 3020, 3157, 3135],
-          final_item_icon_urls: ["b1-1.png", "b1-2.png", "b1-3.png", "b1-4.png", "b1-5.png", "b1-6.png"],
-          situational_item_ids: [3157],
-          situational_item_icon_urls: ["zhonya.png"],
-          play: 8000,
-          win: 4200,
-          pick_rate: 70.0,
-        },
-        {
-          name: "Build 2",
-          core_item_ids: [6655, 3157, 3089],
-          core_item_icon_urls: ["b2-1.png", "b2-2.png", "b2-3.png"],
-          final_item_ids: [6655, 3157, 3089, 3020, 3165, 3102],
-          final_item_icon_urls: ["b2-1.png", "b2-2.png", "b2-3.png", "b2-4.png", "b2-5.png", "b2-6.png"],
-          situational_item_ids: [3102],
-          situational_item_icon_urls: ["banshee.png"],
-          play: 3000,
-          win: 1600,
-          pick_rate: 30.0,
-        },
-      ],
-    };
-
-    vi.spyOn(rankedIpc, "getRankedTierList").mockResolvedValue(mockTierResponse);
-    vi.spyOn(rankedIpc, "getRankedChampionBuild").mockResolvedValue(mockMultiBuild);
-    const injectRunesSpy = vi.spyOn(injectorIpc, "injectRunePage");
-    const injectBuildSpy = vi.spyOn(injectorIpc, "injectItemBuild");
-    const injectSpellsSpy = vi.spyOn(injectorIpc, "injectSummonerSpells");
-    const updateFiltersSpy = vi.spyOn(buildIpc, "updateBuildFilters");
-    const syncChampSpy = vi.spyOn(lcuIpc, "syncDisplayedChampion");
-    const syncPrefsSpy = vi.spyOn(settingsIpc, "syncUserPreferences");
-
-    function Harness() {
-      const ranked = useRanked(true, "D", true);
-      return (
-        <RankedTab
-          isActive={true}
-          filters={ranked.filters}
-          tierData={ranked.tierData}
-          tierLoading={ranked.tierLoading}
-          tierError={ranked.tierError}
-          selectedChampion={ranked.selectedChampion}
-          championBuild={ranked.championBuild}
-          buildLoading={ranked.buildLoading}
-          buildError={ranked.buildError}
-          orderedSpells={ranked.orderedSpells}
-          selectedRunePageIndex={ranked.selectedRunePageIndex}
-          selectedBuildIndex={ranked.selectedBuildIndex}
-          onTierListFilterChange={ranked.handleTierListFilterChange}
-          onDetailFilterChange={ranked.handleDetailFilterChange}
-          onSelectChampion={ranked.selectChampion}
-          onBackToTierList={ranked.clearSelectedChampion}
-          onRetryTierList={ranked.retryTierList}
-          onRetryBuild={ranked.retryChampionBuild}
-          onSelectRunePage={ranked.setSelectedRunePageIndex}
-          onSelectBuild={ranked.setSelectedBuildIndex}
-        />
-      );
-    }
-
-    render(<Harness />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("ranked-champ-mid-ahri")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId("ranked-champ-mid-ahri"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("ranked-champion-detail")).toBeInTheDocument();
-      expect(screen.getByText("Eletrocutar")).toBeInTheDocument();
-      expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/70\.0% uso/i);
-    });
-
-    // Switch rune page -> displays Página 2 locally, zero LCU/game calls
-    fireEvent.click(screen.getByTestId("rune-page-btn-1"));
-    expect(screen.getByText("Cometa Arcano")).toBeInTheDocument();
-    expect(screen.queryByText("Eletrocutar")).not.toBeInTheDocument();
-
-    // Switch build option -> displays Build 2 locally, zero LCU/game calls
-    fireEvent.click(screen.getByTestId("build-opt-btn-1"));
-    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/30\.0% uso/i);
-
-    expect(injectRunesSpy).not.toHaveBeenCalled();
-    expect(injectBuildSpy).not.toHaveBeenCalled();
-    expect(injectSpellsSpy).not.toHaveBeenCalled();
-    expect(updateFiltersSpy).not.toHaveBeenCalled();
-    expect(syncChampSpy).not.toHaveBeenCalled();
-    expect(syncPrefsSpy).not.toHaveBeenCalled();
-  });
-
-  it("renders interactive loading indicators for initial tier list, in-place reload, and champion build", () => {
-    const baseProps = {
-      isActive: true,
-      filters: { lane: "all" as const, tier: "emerald_plus", region: "global", patch: "16.22" },
-      tierError: null,
-      buildError: null,
-      orderedSpells: [],
-      selectedRunePageIndex: 0,
-      selectedBuildIndex: 0,
-      onTierListFilterChange: vi.fn(),
-      onDetailFilterChange: vi.fn(),
-      onSelectChampion: vi.fn(),
-      onBackToTierList: vi.fn(),
-      onRetryTierList: vi.fn(),
-      onRetryBuild: vi.fn(),
-      onSelectRunePage: vi.fn(),
-      onSelectBuild: vi.fn(),
-    };
-
-    const { rerender } = render(
-      <RankedTab
-        {...baseProps}
-        tierData={null}
-        tierLoading={true}
-        selectedChampion={null}
-        championBuild={null}
-        buildLoading={false}
-      />
-    );
-
-    expect(screen.getByTestId("ranked-tierlist-loading")).toHaveTextContent(
-      /Carregando tier list ranqueada/i
-    );
-    expect(screen.getByTestId("ranked-tierlist-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
-    expect(screen.getByTestId("ranked-tierlist-skeleton")).toHaveAttribute("aria-hidden", "true");
-    expect(screen.queryByTestId("ranked-loading-bar")).not.toBeInTheDocument();
-
-    rerender(
-      <RankedTab
-        {...baseProps}
-        tierData={mockTierResponse}
-        tierLoading={true}
-        selectedChampion={null}
-        championBuild={null}
-        buildLoading={false}
-      />
-    );
-
-    expect(screen.getByTestId("ranked-loading-bar")).toHaveAttribute("role", "progressbar");
-    expect(screen.getByTestId("ranked-tierlist-scroll")).toBeInTheDocument();
-
-    rerender(
-      <RankedTab
-        {...baseProps}
-        tierData={mockTierResponse}
-        tierLoading={false}
-        selectedChampion={mockRankedChampions[2]}
-        championBuild={null}
-        buildLoading={true}
-      />
-    );
-
-    expect(screen.getByTestId("ranked-build-loading")).toHaveTextContent(
-      /Carregando runas e build de Ahri/i
-    );
-    expect(screen.getByTestId("ranked-build-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
   });
 });

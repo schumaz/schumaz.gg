@@ -1,0 +1,310 @@
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+:root {
+  /* Linear Amethyst Dark Palette */
+  --bg-base: #0d0e12;
+  --bg-surface: #13141a;
+  --bg-card: #13141a;
+  --bg-card-hover: #1a1b24;
+  --bg-glass: rgba(19, 20, 26, 0.85);
+  --bg-input: #151620;
+  
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-highlight: rgba(255, 255, 255, 0.16);
+
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  --accent-primary: #7c3aed;
+  --accent-primary-hover: #a78bfa;
+  --accent-subtle: rgba(124, 58, 237, 0.16);
+  --accent-border: rgba(124, 58, 237, 0.45);
+
+  --accent-success: #34d399;
+  --accent-warning: #fbbf24;
+  --accent-danger: #f87171;
+
+  /* Centralized Status Pill Tokens (consistent across all tabs) */
+  --status-badge-blur: 16px;
+  --status-badge-glass-bg: rgba(19, 20, 26, 0.48);
+  --status-badge-connected-tint: rgba(48, 209, 88, 0.1);
+  --status-badge-connected-border: rgba(48, 209, 88, 0.35);
+  --status-badge-disconnected-tint: rgba(255, 159, 10, 0.1);
+  --status-badge-disconnected-border: rgba(255, 159, 10, 0.35);
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* Custom Minimal Dark Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-highlight);
+}
+
+/* App Container (Desktop Viewport Lock) */
+.container {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: 8px 16px 6px 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header & Status Section */
+.header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 16px 0 16px;
+  margin-bottom: 4px;
+  background: transparent;
+  border: none;
+  flex-shrink: 0;
+}
+
+.title {
+  margin: 0 0 2px 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  margin: 0 0 6px 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+/* Status Badge */
+.status-badge-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.status-badge {
+  --status-badge-tint: transparent;
+  contain: layout style;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  background-color: var(--status-badge-glass-bg);
+  background-image: linear-gradient(var(--status-badge-tint), var(--status-badge-tint));
+  backdrop-filter: blur(var(--status-badge-blur));
+  -webkit-backdrop-filter: blur(var(--status-badge-blur));
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.status-badge strong {
+  color: var(--text-primary);
+}
+
+.status-badge.connected {
+  --status-badge-tint: var(--status-badge-connected-tint);
+  border-color: var(--status-badge-connected-border);
+}
+
+.status-badge.disconnected {
+  --status-badge-tint: var(--status-badge-disconnected-tint);
+  border-color: var(--status-badge-disconnected-border);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-green {
+  background-color: var(--accent-success);
+  box-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+}
+
+.dot-orange {
+  background-color: var(--accent-warning);
+  box-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
+}
+
+.dot-orange.dot-pulsing {
+  position: relative;
+  animation: statusDotPulse 2s ease-in-out infinite;
+}
+
+.dot-orange.dot-pulsing::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(251, 191, 36, 0.55);
+  animation: statusDotRing 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+/* Workspace Central Area & Seamless Crossfade Viewport */
+.tabs-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  display: flex;
+}
+
+.tab-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: center top;
+  backface-visibility: hidden;
+}
+
+.tab-content.active-tab {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  visibility: visible;
+  z-index: 2;
+  transition: 
+    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0ms linear;
+}
+
+.tab-content.inactive-tab {
+  opacity: 0;
+  transform: scale(0.985) translateY(6px);
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 1;
+  transition: 
+    opacity 220ms ease-out,
+    transform 220ms ease-out,
+    visibility 0ms linear 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-content,
+  .tab-content.active-tab,
+  .tab-content.inactive-tab,
+  .settings-modal-backdrop,
+  .settings-modal-dialog,
+  .language-onboarding-backdrop,
+  .language-onboarding-card,
+  .language-flag-card,
+  .language-continue-btn,
+  .dot-orange.dot-pulsing,
+  .dot-orange.dot-pulsing::after,
+  .idle-radar-ring,
+  .idle-spinner-ring,
+  .spinner,
+  .loading-dot,
+  .loading-bar-fill,
+  .skeleton-block::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Pause & drop all animations, compositor hints, and blur surfaces while minimized */
+.app-minimized *,
+.app-minimized *::before,
+.app-minimized *::after {
+  animation: none !important;
+  transition: none !important;
+  will-change: auto !important;
+}
+
+.app-minimized .dot-orange.dot-pulsing::after,
+.app-minimized .idle-radar-ring,
+.app-minimized .loading-bar-fill,
+.app-minimized .skeleton-block::after {
+  display: none !important;
+}
+
+.app-minimized .status-badge,
+.app-minimized .floating-dock,
+.app-minimized .profile-hero-card,
+.app-minimized .card,
+.app-minimized .settings-modal-backdrop,
+.app-minimized .language-onboarding-backdrop,
+.gpu-effects-disabled .status-badge,
+.gpu-effects-disabled .floating-dock,
+.gpu-effects-disabled .profile-hero-card,
+.gpu-effects-disabled .card,
+.gpu-effects-disabled .settings-modal-backdrop,
+.gpu-effects-disabled .language-onboarding-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.gpu-effects-disabled * {
+  will-change: auto !important;
+}
+

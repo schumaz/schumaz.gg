@@ -1,52 +1,33 @@
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-
 import { ActiveTab, FlashKeyPreference } from "./types";
 import { injectorIpc } from "./services/ipc";
 import { I18nProvider } from "./i18n";
-import { profileBlurPercentToPx, usePreferences } from "./hooks/usePreferences";
-import { useLcuEvents } from "./hooks/useLcuEvents";
-import { usePlayerProfile } from "./hooks/usePlayerProfile";
-import { useAram } from "./hooks/useAram";
-import { useRanked } from "./hooks/useRanked";
 import { useWindowMinimized } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
-import {
-  StatusDock,
-  ProfileTab,
-  FiltersHeader,
-  RuneTree,
-  SpellsBar,
-  ItemBlocks,
-  SettingsTab,
-  IdleState,
-  NavigationDock,
-  ARAM_DOCK_ICON_URL,
-  AramTab,
-  RankedTab,
-  LanguageOnboardingModal,
-} from "./components";
+import { ARAM_DOCK_ICON_URL, NavigationDock, StatusDock } from "./components/ui";
+import { LanguageOnboardingModal, SettingsTab, profileBlurPercentToPx, usePreferences } from "./features/settings";
+import { ProfileTab, ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
+import { ChampSelectTab, useLcuEvents } from "./features/champ-select";
+import { AramTab, useAram } from "./features/aram";
+import { RankedTab, useRanked } from "./features/ranked";
 
-// Re-export all types and utilities for seamless backward compatibility
 export * from "./types";
 export * from "./utils/spells";
 
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
-  const [splashFallbackUsed, setSplashFallbackUsed] = useState(false);
-  const [splashBroken, setSplashBroken] = useState(false);
-
   const isAppMinimized = useWindowMinimized();
   const rankedPatchChangeRef = useRef<(() => void) | null>(null);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
     const reordered = computeOrderedSpells(
-      build?.spells,
-      selectedSecondarySpellId,
-      build?.spell_choices,
+      lcu.build?.spells,
+      lcu.selectedSecondarySpellId,
+      lcu.build?.spell_choices,
       newFlashKey,
-      spellsInverted
+      lcu.spellsInverted
     );
     if (reordered.length >= 2) {
       injectorIpc.injectSummonerSpells(reordered[0].id, reordered[1].id, null, null).catch(() => {});
@@ -54,55 +35,20 @@ function App() {
   };
 
   const handlePatchProtectionChange = () => {
-    if (build) {
-      handleFilterChange("patch", "");
-    }
+    if (lcu.build) lcu.handleFilterChange("patch", "");
     rankedPatchChangeRef.current?.();
   };
 
-  const {
-    locale,
-    needsLanguageOnboarding,
-    previewOnboardingLocale,
-    confirmLanguageOnboarding,
-    changeLanguage,
-    preferences,
-    updatePreference,
-    profileBlur,
-    updateProfileBlur,
-    wallpaperVisible,
-    updateWallpaperVisible,
-    hardwareAcceleration,
-    updateHardwareAcceleration,
-    gpuRestartRequired,
-    restartApp,
-    navigationState,
-    updateNavigationState,
-    iniBacked,
-  } = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
+  const prefs = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
+  const { locale, preferences, navigationState, updateNavigationState, iniBacked } = prefs;
 
-  const {
-    summoner,
-    champSelect,
-    build,
-    spellsInverted,
-    selectedSecondarySpellId,
-    selectedRunePageIndex,
-    selectedBuildIndex,
-    loading,
-    errorMsg,
-    orderedSpells,
-    handleFilterChange,
-    handleSelectSecondarySpell,
-    handleSelectRunePage,
-    handleSelectBuild,
-  } = useLcuEvents(preferences.flashKey, {
+  const lcu = useLcuEvents(preferences.flashKey, {
     onChampionPulled: () => setActiveTab("runes"),
     onMatchEnded: () => setActiveTab("profile"),
     locale,
   });
 
-  const currentChampionId = champSelect?.champion_id ?? build?.champion_id ?? null;
+  const currentChampionId = lcu.champSelect?.champion_id ?? lcu.build?.champion_id ?? null;
 
   const aramPersistence = useMemo(
     () => ({
@@ -111,17 +57,13 @@ function App() {
       savedLastChampion: navigationState?.aramMayhemLastChampion ?? null,
       onNavigationPatch: updateNavigationState,
     }),
-    [
-      iniBacked,
-      navigationState?.savedAramMode,
-      navigationState?.aramMayhemLastChampion,
-      updateNavigationState,
-    ]
+    [iniBacked, navigationState?.savedAramMode, navigationState?.aramMayhemLastChampion, updateNavigationState]
   );
 
-  const rankedSavedFilters = useMemo(
-    () =>
-      navigationState
+  const rankedPersistence = useMemo(
+    () => ({
+      iniBacked,
+      savedFilters: navigationState
         ? {
             region: navigationState.rankedFilterRegion,
             tier: navigationState.rankedFilterTier,
@@ -129,21 +71,9 @@ function App() {
             patch: navigationState.rankedFilterPatch ?? null,
           }
         : undefined,
-    [
-      navigationState?.rankedFilterRegion,
-      navigationState?.rankedFilterTier,
-      navigationState?.rankedFilterLane,
-      navigationState?.rankedFilterPatch,
-    ]
-  );
-
-  const rankedPersistence = useMemo(
-    () => ({
-      iniBacked,
-      savedFilters: rankedSavedFilters,
       onNavigationPatch: updateNavigationState,
     }),
-    [iniBacked, rankedSavedFilters, updateNavigationState]
+    [iniBacked, navigationState, updateNavigationState]
   );
 
   const aram = useAram(activeTab === "aram", currentChampionId, locale, aramPersistence);
@@ -159,37 +89,11 @@ function App() {
     rankedPatchChangeRef.current = ranked.handlePatchProtectionChange;
   }, [ranked.handlePatchProtectionChange]);
 
-  const {
-    profile,
-    profileLoading,
-    profileError,
-    refreshCooldownSecs,
-    refreshProfile,
-  } = usePlayerProfile(summoner, locale);
-
-  useEffect(() => {
-    setSplashFallbackUsed(false);
-    setSplashBroken(false);
-  }, [profile?.background_splash_url]);
-
-  const activeSplashUrl = splashFallbackUsed
-    ? profile?.background_splash_fallback_url || ""
-    : profile?.background_splash_url || "";
-  const resolvedActiveSplashUrl = resolveCachedAssetUrl(activeSplashUrl);
-  const displaySummoner = summoner ?? profile?.summoner ?? null;
-
-  const showFullScreenWallpaper =
-    activeTab === "profile" &&
-    Boolean(displaySummoner) &&
-    wallpaperVisible &&
-    Boolean(resolvedActiveSplashUrl) &&
-    !splashBroken;
-
-  const profileUiBlurPx = profileBlurPercentToPx(profileBlur);
+  const playerProfile = usePlayerProfile(lcu.summoner, locale);
+  const profileUiBlurPx = profileBlurPercentToPx(prefs.profileBlur);
 
   const handleInvertSpells = async () => {
-    const nextFlashKey: FlashKeyPreference = preferences.flashKey === "D" ? "F" : "D";
-    updatePreference("flashKey", nextFlashKey);
+    prefs.updatePreference("flashKey", preferences.flashKey === "D" ? "F" : "D");
   };
 
   const handleAramDockClick = () => {
@@ -201,120 +105,58 @@ function App() {
   const handleRankedDockClick = () => {
     const wasAlreadyOnRanked = activeTab === "ranked";
     setActiveTab("ranked");
-    if (wasAlreadyOnRanked && ranked.selectedChampion) {
-      ranked.clearSelectedChampion();
-    }
+    if (wasAlreadyOnRanked && ranked.selectedChampion) ranked.clearSelectedChampion();
   };
 
   return (
-    <I18nProvider locale={locale} onLocaleChange={changeLanguage}>
+    <I18nProvider locale={locale} onLocaleChange={prefs.changeLanguage}>
       <main
         className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
           isAppMinimized ? "app-minimized" : ""
-        } ${!hardwareAcceleration ? "gpu-effects-disabled" : ""}`}
-        style={
-          activeTab === "profile"
-            ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties)
-            : undefined
-        }
+        } ${!prefs.hardwareAcceleration ? "gpu-effects-disabled" : ""}`}
+        style={activeTab === "profile" ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties) : undefined}
       >
-        {/* Full-Screen Profile Wallpaper Backdrop (fixed 1px blur) */}
-        {showFullScreenWallpaper && (
-          <div className="profile-wallpaper-backdrop" data-testid="profile-wallpaper">
-            <img
-              src={resolvedActiveSplashUrl}
-              alt=""
-              aria-hidden="true"
-              className="profile-wallpaper-img"
-              style={{ filter: "blur(1px) saturate(1.05)" }}
-              onError={() => {
-                if (
-                  !splashFallbackUsed &&
-                  profile?.background_splash_fallback_url &&
-                  profile.background_splash_fallback_url !== activeSplashUrl
-                ) {
-                  setSplashFallbackUsed(true);
-                } else {
-                  setSplashBroken(true);
-                }
-              }}
-            />
-            <div className="profile-wallpaper-scrim" />
-          </div>
-        )}
+        <ProfileWallpaperBackdrop
+          activeTab={activeTab}
+          summoner={lcu.summoner}
+          profile={playerProfile.profile}
+          wallpaperVisible={prefs.wallpaperVisible}
+        />
 
-        <StatusDock summoner={summoner} />
+        <StatusDock summoner={lcu.summoner} />
 
-        {/* Main Content Area with Seamless Crossfade Transition */}
         <div className="tabs-viewport">
-          {/* View 1: "Perfil" Tab (Default Startup Screen) */}
           <ProfileTab
-            summoner={summoner}
-            profile={profile}
-            loading={profileLoading}
-            errorMsg={profileError}
-            onRefresh={refreshProfile}
-            refreshCooldownSecs={refreshCooldownSecs}
-            profileBlur={profileBlur}
+            summoner={lcu.summoner}
+            profile={playerProfile.profile}
+            loading={playerProfile.profileLoading}
+            errorMsg={playerProfile.profileError}
+            onRefresh={playerProfile.refreshProfile}
+            refreshCooldownSecs={playerProfile.refreshCooldownSecs}
+            profileBlur={prefs.profileBlur}
             isActive={activeTab === "profile"}
             savedModeFilter={navigationState?.profileMatchModeFilter}
-            onModeFilterChange={(mode) =>
-              updateNavigationState({ profileMatchModeFilter: mode })
-            }
+            onModeFilterChange={(mode) => updateNavigationState({ profileMatchModeFilter: mode })}
           />
 
-          {/* View 2: "Runas" Tab (Match Dashboard) */}
-          <div
-            className={`tab-content ${activeTab === "runes" ? "active-tab" : "inactive-tab"}`}
-            data-testid="view-runes"
-            aria-hidden={activeTab !== "runes"}
-          >
-            {build ? (
-              <div className="dashboard-layout">
-                <FiltersHeader
-                  build={build}
-                  champSelect={champSelect}
-                  loading={loading}
-                  onFilterChange={handleFilterChange}
-                />
+          <ChampSelectTab
+            isActive={activeTab === "runes"}
+            build={lcu.build}
+            champSelect={lcu.champSelect}
+            summoner={lcu.summoner}
+            loading={lcu.loading}
+            errorMsg={lcu.errorMsg}
+            orderedSpells={lcu.orderedSpells}
+            selectedSecondarySpellId={lcu.selectedSecondarySpellId}
+            selectedRunePageIndex={lcu.selectedRunePageIndex}
+            selectedBuildIndex={lcu.selectedBuildIndex}
+            onFilterChange={lcu.handleFilterChange}
+            onSelectRunePage={lcu.handleSelectRunePage}
+            onInvertSpells={handleInvertSpells}
+            onSelectSecondarySpell={lcu.handleSelectSecondarySpell}
+            onSelectBuild={lcu.handleSelectBuild}
+          />
 
-                <div className="dashboard-split-grid">
-                  <div className="dashboard-col dashboard-col-left">
-                    <RuneTree
-                      build={build}
-                      selectedRunePageIndex={selectedRunePageIndex}
-                      onSelectRunePage={handleSelectRunePage}
-                    />
-
-                    <SpellsBar
-                      orderedSpells={orderedSpells}
-                      spellChoices={build.spell_choices}
-                      selectedSecondarySpellId={selectedSecondarySpellId}
-                      onInvertSpells={handleInvertSpells}
-                      onSelectSecondarySpell={handleSelectSecondarySpell}
-                    />
-                  </div>
-
-                  <div className="dashboard-col dashboard-col-right">
-                    <ItemBlocks
-                      build={build}
-                      selectedBuildIndex={selectedBuildIndex}
-                      onSelectBuild={handleSelectBuild}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <IdleState
-                summoner={summoner}
-                errorMsg={errorMsg}
-                champSelect={champSelect}
-                loading={loading}
-              />
-            )}
-          </div>
-
-          {/* View 3: "Ranqueada" Tab (Tier List + Read-Only Champion Build Preview) */}
           <RankedTab
             isActive={activeTab === "ranked"}
             filters={ranked.filters}
@@ -337,12 +179,9 @@ function App() {
             onSelectRunePage={ranked.setSelectedRunePageIndex}
             onSelectBuild={ranked.setSelectedBuildIndex}
             savedChampionTierFilter={navigationState?.rankedChampionTierFilter}
-            onChampionTierFilterChange={(tier) =>
-              updateNavigationState({ rankedChampionTierFilter: tier })
-            }
+            onChampionTierFilterChange={(tier) => updateNavigationState({ rankedChampionTierFilter: tier })}
           />
 
-          {/* View 4: "Aram" Tab (ARAM & ARAM Mayhem) */}
           <AramTab
             isActive={activeTab === "aram"}
             savedMode={aram.savedMode}
@@ -359,30 +198,26 @@ function App() {
             onRetryTierList={aram.retryTierList}
             onRetryAugments={aram.retryAugments}
             savedRarityFilter={navigationState?.aramMayhemRarityFilter}
-            onRarityFilterChange={(rarity) =>
-              updateNavigationState({ aramMayhemRarityFilter: String(rarity) })
-            }
+            onRarityFilterChange={(rarity) => updateNavigationState({ aramMayhemRarityFilter: String(rarity) })}
           />
 
-          {/* View 5: "Configurações" Tab (Settings & Preferences) */}
           <SettingsTab
             preferences={preferences}
-            onUpdatePreference={updatePreference}
+            onUpdatePreference={prefs.updatePreference}
             locale={locale}
-            onChangeLanguage={changeLanguage}
-            profileBlur={profileBlur}
-            onProfileBlurChange={updateProfileBlur}
-            wallpaperVisible={wallpaperVisible}
-            onWallpaperVisibleChange={updateWallpaperVisible}
-            hardwareAcceleration={hardwareAcceleration}
-            onHardwareAccelerationChange={updateHardwareAcceleration}
-            gpuRestartRequired={gpuRestartRequired}
-            onRestartApp={restartApp}
+            onChangeLanguage={prefs.changeLanguage}
+            profileBlur={prefs.profileBlur}
+            onProfileBlurChange={prefs.updateProfileBlur}
+            wallpaperVisible={prefs.wallpaperVisible}
+            onWallpaperVisibleChange={prefs.updateWallpaperVisible}
+            hardwareAcceleration={prefs.hardwareAcceleration}
+            onHardwareAccelerationChange={prefs.updateHardwareAcceleration}
+            gpuRestartRequired={prefs.gpuRestartRequired}
+            onRestartApp={prefs.restartApp}
             isActive={activeTab === "settings"}
           />
         </div>
 
-        {/* Persistent Bottom Navigation Dock */}
         <NavigationDock
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -392,12 +227,11 @@ function App() {
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 
-        {/* First-Launch Language Onboarding Overlay (with blur backdrop) */}
-        {needsLanguageOnboarding && (
+        {prefs.needsLanguageOnboarding && (
           <LanguageOnboardingModal
             selectedLocale={locale}
-            onSelectLocale={previewOnboardingLocale}
-            onConfirm={confirmLanguageOnboarding}
+            onSelectLocale={prefs.previewOnboardingLocale}
+            onConfirm={prefs.confirmLanguageOnboarding}
           />
         )}
       </main>

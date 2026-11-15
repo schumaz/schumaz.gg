@@ -1,6 +1,4 @@
-﻿import { useState } from "react";
-import { describe, it, expect, vi } from "vitest";
-import { AppLocale, I18nProvider } from "../i18n";
+﻿import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SettingsTab, isBlurSliderDisabled } from "../components/SettingsTab";
 import { DEFAULT_PREFERENCES } from "../types";
@@ -57,11 +55,8 @@ describe("SettingsTab", () => {
 
     const toggle = screen.getByTestId("patch-48h-protection-toggle");
     expect(toggle).toBeChecked();
-
-    // Warning popup is hidden until the user clicks to disable
     expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
 
-    // Clicking to disable opens the warning popup without calling onUpdatePreference yet
     fireEvent.click(toggle);
     expect(handleUpdate).not.toHaveBeenCalled();
 
@@ -71,20 +66,17 @@ describe("SettingsTab", () => {
     expect(popup).toHaveTextContent(/NÃO é recomendado/i);
     expect(popup).toHaveTextContent(/baixo volume de dados no início do patch/i);
 
-    // Clicking "Reverter" closes popup and keeps 48h protection active
     fireEvent.click(screen.getByTestId("patch-48h-revert-btn"));
     expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
     expect(handleUpdate).not.toHaveBeenCalled();
     expect(toggle).toBeChecked();
 
-    // Clicking to disable again and clicking "Aceitar desativação" disables it
     fireEvent.click(toggle);
     expect(screen.getByTestId("patch-48h-protection-warning")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("patch-48h-accept-btn"));
     expect(screen.queryByTestId("patch-48h-protection-warning")).not.toBeInTheDocument();
     expect(handleUpdate).toHaveBeenCalledWith("patch48hProtection", false);
 
-    // Re-enabling from disabled state happens immediately without popup
     rerender(
       <SettingsTab
         preferences={{ ...DEFAULT_PREFERENCES, patch48hProtection: false }}
@@ -115,7 +107,6 @@ describe("SettingsTab", () => {
       />
     );
 
-    // Default blur is 10%
     const slider = screen.getByTestId("profile-blur-slider") as HTMLInputElement;
     expect(slider.min).toBe("0");
     expect(slider.max).toBe("100");
@@ -126,11 +117,9 @@ describe("SettingsTab", () => {
     expect(valueBtn).toHaveTextContent("10%");
     expect(valueBtn).toBeEnabled();
 
-    // Slider change works
     fireEvent.change(slider, { target: { value: "80" } });
     expect(handleBlurChange).toHaveBeenCalledWith(80);
 
-    // Clicking the percentage number opens editable input
     fireEvent.click(valueBtn);
     const numInput = screen.getByTestId("profile-blur-input") as HTMLInputElement;
     expect(numInput).toHaveFocus();
@@ -139,13 +128,11 @@ describe("SettingsTab", () => {
     fireEvent.keyDown(numInput, { key: "Enter" });
     expect(screen.queryByTestId("profile-blur-input")).not.toBeInTheDocument();
 
-    // Fundo Visível toggle sits below the blur slider inside Aparência do Perfil
     const wpToggle = screen.getByTestId("wallpaper-visible-toggle");
     expect(wpToggle).toBeChecked();
     fireEvent.click(wpToggle);
     expect(handleWallpaperToggle).toHaveBeenCalledWith(false);
 
-    // Check subgroup hierarchy: Perfil + Runas + Diversos islands
     const groups = Array.from(container.querySelectorAll(".settings-section-group"));
     expect(groups).toHaveLength(3);
     expect(groups[0]).toHaveAttribute("data-testid", "settings-group-profile");
@@ -170,95 +157,6 @@ describe("SettingsTab", () => {
       "settings-subgroup-auto-inject",
       "settings-subgroup-patch-protection",
     ]);
-  });
-
-  it("renders Diversos GPU acceleration toggle and restart banner when restart is required", () => {
-    const handleGpuChange = vi.fn();
-    const handleRestart = vi.fn();
-
-    const { rerender } = render(
-      <SettingsTab
-        preferences={DEFAULT_PREFERENCES}
-        onUpdatePreference={vi.fn()}
-        hardwareAcceleration={true}
-        onHardwareAccelerationChange={handleGpuChange}
-        gpuRestartRequired={false}
-        onRestartApp={handleRestart}
-      />
-    );
-
-    const miscGroup = screen.getByTestId("settings-group-misc");
-    expect(miscGroup).toHaveTextContent("Diversos");
-
-    const gpuToggle = screen.getByTestId("hardware-acceleration-toggle");
-    expect(gpuToggle).toBeChecked();
-    expect(screen.queryByTestId("gpu-restart-banner")).not.toBeInTheDocument();
-
-    fireEvent.click(gpuToggle);
-    expect(handleGpuChange).toHaveBeenCalledWith(false);
-
-    rerender(
-      <SettingsTab
-        preferences={DEFAULT_PREFERENCES}
-        onUpdatePreference={vi.fn()}
-        hardwareAcceleration={false}
-        onHardwareAccelerationChange={handleGpuChange}
-        gpuRestartRequired={true}
-        onRestartApp={handleRestart}
-      />
-    );
-
-    expect(screen.getByTestId("hardware-acceleration-toggle")).not.toBeChecked();
-    expect(screen.getByTestId("gpu-restart-banner")).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("gpu-restart-btn"));
-    expect(handleRestart).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders daily missions auto-read toggle disabled by default below GPU option in Diversos", () => {
-    const handleUpdate = vi.fn();
-
-    const { rerender } = render(
-      <SettingsTab
-        preferences={DEFAULT_PREFERENCES}
-        onUpdatePreference={handleUpdate}
-      />
-    );
-
-    const miscCard = screen.getByTestId("settings-subgroup-misc");
-    const miscSubsections = Array.from(
-      miscCard.querySelectorAll(".settings-subsection")
-    ).map((el) => el.getAttribute("data-testid"));
-    expect(miscSubsections).toEqual([
-      "settings-subgroup-language",
-      "settings-subgroup-graphics",
-      "settings-subgroup-daily-missions",
-    ]);
-
-    const gpuToggle = screen.getByTestId("hardware-acceleration-toggle");
-    const dailyMissionsToggle = screen.getByTestId("auto-mark-daily-missions-toggle");
-    expect(miscCard).toContainElement(dailyMissionsToggle);
-    expect(
-      gpuToggle.compareDocumentPosition(dailyMissionsToggle) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-
-    // Off by default
-    expect(DEFAULT_PREFERENCES.autoMarkDailyMissionsRead).toBe(false);
-    expect(dailyMissionsToggle).not.toBeChecked();
-
-    fireEvent.click(dailyMissionsToggle);
-    expect(handleUpdate).toHaveBeenCalledWith("autoMarkDailyMissionsRead", true);
-
-    rerender(
-      <SettingsTab
-        preferences={{ ...DEFAULT_PREFERENCES, autoMarkDailyMissionsRead: true }}
-        onUpdatePreference={handleUpdate}
-      />
-    );
-
-    const enabledToggle = screen.getByTestId("auto-mark-daily-missions-toggle");
-    expect(enabledToggle).toBeChecked();
-    fireEvent.click(enabledToggle);
-    expect(handleUpdate).toHaveBeenCalledWith("autoMarkDailyMissionsRead", false);
   });
 
   it("blocks blur slider and percentage editing when Fundo Visível is unchecked", () => {
@@ -287,13 +185,11 @@ describe("SettingsTab", () => {
       screen.getByText("Ative a opção Fundo Visível para ajustar o desfoque.")
     ).toBeInTheDocument();
 
-    // Even if a change event is dispatched, the guard prevents updating blur
     fireEvent.change(slider, { target: { value: "70" } });
     fireEvent.click(valueBtn);
     expect(handleBlurChange).not.toHaveBeenCalled();
     expect(screen.queryByTestId("profile-blur-input")).not.toBeInTheDocument();
 
-    // Re-enabling Fundo Visível unlocks the slider and exits/allows editing cleanly
     rerender(
       <SettingsTab
         preferences={DEFAULT_PREFERENCES}
@@ -308,7 +204,6 @@ describe("SettingsTab", () => {
     expect(screen.getByTestId("profile-blur-slider")).toBeEnabled();
     expect(screen.getByTestId("profile-blur-value")).toBeEnabled();
 
-    // Start editing while visible, then uncheck Fundo Visível -> edit closes cleanly
     fireEvent.click(screen.getByTestId("profile-blur-value"));
     expect(screen.getByTestId("profile-blur-input")).toBeInTheDocument();
 
@@ -325,62 +220,5 @@ describe("SettingsTab", () => {
 
     expect(screen.queryByTestId("profile-blur-input")).not.toBeInTheDocument();
     expect(screen.getByTestId("profile-blur-slider")).toBeDisabled();
-  });
-  it("renders language selector with Brazil & USA flags in Diversos and switches UI language dynamically", () => {
-    const handleLanguageChange = vi.fn();
-    const handleUpdate = vi.fn();
-
-    function Wrapper() {
-      const [locale, setLocale] = useState<AppLocale>("pt_BR");
-      return (
-        <I18nProvider
-          locale={locale}
-          onLocaleChange={(next) => {
-            setLocale(next);
-            handleLanguageChange(next);
-          }}
-        >
-          <SettingsTab
-            preferences={{ ...DEFAULT_PREFERENCES, language: locale }}
-            onUpdatePreference={handleUpdate}
-            locale={locale}
-            onChangeLanguage={(next) => {
-              setLocale(next);
-              handleLanguageChange(next);
-            }}
-          />
-        </I18nProvider>
-      );
-    }
-
-    render(<Wrapper />);
-
-    const miscGroup = screen.getByTestId("settings-group-misc");
-    const langSubgroup = screen.getByTestId("settings-subgroup-language");
-    expect(miscGroup).toContainElement(langSubgroup);
-
-    const ptBtn = screen.getByTestId("settings-lang-pt_BR");
-    const enBtn = screen.getByTestId("settings-lang-en_US");
-    expect(ptBtn).toHaveAttribute("aria-pressed", "true");
-    expect(enBtn).toHaveAttribute("aria-pressed", "false");
-    expect(ptBtn.querySelector("img")).toHaveAttribute("src", expect.stringMatching(/br\.svg|data:image/i));
-    expect(enBtn.querySelector("img")).toHaveAttribute("src", expect.stringMatching(/us\.svg|data:image/i));
-    expect(miscGroup).toHaveTextContent("Diversos");
-
-    // Switch to English
-    fireEvent.click(enBtn);
-    expect(handleLanguageChange).toHaveBeenCalledWith("en_US");
-    expect(enBtn).toHaveAttribute("aria-pressed", "true");
-    expect(ptBtn).toHaveAttribute("aria-pressed", "false");
-    expect(miscGroup).toHaveTextContent("Miscellaneous");
-    expect(langSubgroup).toHaveTextContent("App Language");
-    expect(screen.getByLabelText("Auto-Inject Runes")).toBeInTheDocument();
-
-    // Switch back to Portuguese
-    fireEvent.click(ptBtn);
-    expect(handleLanguageChange).toHaveBeenCalledWith("pt_BR");
-    expect(ptBtn).toHaveAttribute("aria-pressed", "true");
-    expect(miscGroup).toHaveTextContent("Diversos");
-    expect(langSubgroup).toHaveTextContent("Idioma do Aplicativo");
   });
 });

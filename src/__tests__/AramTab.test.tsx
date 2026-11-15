@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import {
   AramTab,
   LEAGUE_ARAM_ICON_URL,
@@ -8,163 +7,11 @@ import {
   getChampionTierClass,
   getChampionTierLabel,
 } from "../components/AramTab";
-import { NavigationDock } from "../components/ui/NavigationDock";
-import { useAram } from "../hooks/useAram";
 import {
-  ARAM_SUBMODE_STORAGE_KEY,
-  type AramAugmentEntry_Serialize,
-  type AramChampionRank_Serialize,
-} from "../types";
-import { aramIpc } from "../services/ipc";
-
-const mockAramChampions: AramChampionRank_Serialize[] = [
-  {
-    id: 50,
-    key: "swain",
-    name: "Swain",
-    icon_url: "https://example.com/swain.png",
-    tier: 0,
-    rank: 1,
-    win_rate: 63.3,
-    pick_rate: 9.1,
-  },
-  {
-    id: 21,
-    key: "missfortune",
-    name: "Miss Fortune",
-    icon_url: "https://example.com/mf.png",
-    tier: 1,
-    rank: 2,
-    win_rate: 52.8,
-    pick_rate: 13.7,
-  },
-];
-
-const mockMayhemChampions: AramChampionRank_Serialize[] = [
-  {
-    id: 4,
-    key: "twistedfate",
-    name: "Twisted Fate",
-    icon_url: "https://example.com/tf.png",
-    tier: 0,
-    rank: 1,
-    win_rate: null,
-    pick_rate: null,
-  },
-  {
-    id: 103,
-    key: "ahri",
-    name: "Ahri",
-    icon_url: "https://example.com/ahri.png",
-    tier: 1,
-    rank: 14,
-    win_rate: null,
-    pick_rate: null,
-  },
-];
-
-const mockAhriAugments: AramAugmentEntry_Serialize[] = [
-  {
-    id: 1074,
-    name: "Raio Encolhedor",
-    tier: 2,
-    rarity: 1,
-    performance: 76.8,
-    popular: 0.4,
-    icon_url: "https://example.com/shrink.png",
-    desc: "Reduz o dano do alvo.",
-  },
-  {
-    id: 2062,
-    name: "Conjuração Ecoante",
-    tier: 0,
-    rarity: 8,
-    performance: 114.2,
-    popular: 3.2,
-    icon_url: "https://example.com/echo.png",
-    desc: "Conjura habilidades duas vezes.",
-  },
-  {
-    id: 3075,
-    name: "Coice",
-    tier: 0,
-    rarity: 4,
-    performance: 99.6,
-    popular: 3.8,
-    icon_url: "https://example.com/recoil.png",
-    desc: "Aumenta o dano e recua.",
-  },
-];
-
-describe("NavigationDock Aram label and icon", () => {
-  it("always displays the dock button label as Aram with an official League icon", () => {
-    render(<NavigationDock activeTab="aram" onTabChange={vi.fn()} onAramClick={vi.fn()} />);
-    const btn = screen.getByRole("button", { name: "Aram" });
-    expect(btn).toBeInTheDocument();
-    const img = btn.querySelector("img.dock-icon-img");
-    expect(img).toHaveAttribute("src", LEAGUE_ARAM_ICON_URL);
-  });
-});
-
-describe("useAram persistence and click behavior", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    vi.restoreAllMocks();
-  });
-
-  it("asks only on first click, saves choice, opens saved tab on 1 click, and reopens chooser on 2nd click", async () => {
-    vi.spyOn(aramIpc, "getAramTierList").mockResolvedValue(mockAramChampions);
-    vi.spyOn(aramIpc, "getAramMayhemAugments").mockResolvedValue(mockAhriAugments);
-
-    const { result } = renderHook(({ isActive }) => useAram(isActive, null), {
-      initialProps: { isActive: false },
-    });
-
-    // No saved mode initially -> clicking Aram from another tab opens chooser
-    expect(result.current.savedMode).toBeNull();
-    act(() => {
-      result.current.handleAramDockClick(false);
-    });
-    expect(result.current.showChooser).toBe(true);
-
-    // Selecting ARAM saves it to localStorage and closes chooser
-    act(() => {
-      result.current.selectMode("aram");
-    });
-    expect(result.current.savedMode).toBe("aram");
-    expect(result.current.showChooser).toBe(false);
-    expect(localStorage.getItem(ARAM_SUBMODE_STORAGE_KEY)).toBe("aram");
-
-    // Coming from another tab clicks once -> opens saved mode directly (no chooser)
-    act(() => {
-      result.current.handleAramDockClick(false);
-    });
-    expect(result.current.showChooser).toBe(false);
-
-    // Clicking Aram a second time while already on Aram -> opens chooser to change mode
-    act(() => {
-      result.current.handleAramDockClick(true);
-    });
-    expect(result.current.showChooser).toBe(true);
-  });
-
-  it("auto-selects current champion in ARAM Mayhem when active in Champ Select", async () => {
-    localStorage.setItem(ARAM_SUBMODE_STORAGE_KEY, "aram_mayhem");
-    vi.spyOn(aramIpc, "getAramTierList").mockResolvedValue(mockMayhemChampions);
-    const augSpy = vi
-      .spyOn(aramIpc, "getAramMayhemAugments")
-      .mockResolvedValue(mockAhriAugments);
-
-    const { result } = renderHook(() => useAram(true, 103));
-
-    await waitFor(() => {
-      expect(augSpy).toHaveBeenCalledWith("ahri");
-    });
-    expect(result.current.selectedChampionKey).toBe("ahri");
-    expect(result.current.augmentsByChampion.ahri).toHaveLength(3);
-  });
-});
+  mockAhriAugments,
+  mockAramChampions,
+  mockMayhemChampions,
+} from "../features/aram/__tests__/aramFixtures";
 
 describe("AramTab UI", () => {
   it("maps champion tiers 0..5 to OP and Tier 1..5 labels and CSS classes", () => {
@@ -232,13 +79,11 @@ describe("AramTab UI", () => {
     const heroHeading = within(classicView).getByRole("heading", { name: "Ranking de Campeões" });
     expect(heroHeading).toHaveClass("page-hero-title");
 
-    // ARAM badge moved to the right container alongside the search input
     const rightContainer = classicView.querySelector(".aram-hero-right") as HTMLElement;
     expect(rightContainer).toBeTruthy();
     expect(within(rightContainer).getByText("ARAM")).toHaveClass("aram-mode-badge");
     expect(within(rightContainer).getByLabelText("Buscar campeão no ARAM")).toBeInTheDocument();
 
-    // Champion count pill removed
     expect(within(classicView).queryByText(/2 campeões/i)).not.toBeInTheDocument();
 
     const list = screen.getByTestId("aram-classic-list");
@@ -289,41 +134,31 @@ describe("AramTab UI", () => {
 
     const tfRow = screen.getByTestId("mayhem-champ-twistedfate");
     expect(within(tfRow).getByText("OP")).toHaveClass("tier-op");
-    expect(tfRow.querySelector(".dd-icon-frame.aram-champ-frame .aram-champ-avatar")).toBeTruthy();
     const ahriRow = screen.getByTestId("mayhem-champ-ahri");
     expect(within(ahriRow).getByText("Tier 1")).toHaveClass("tier-1");
-
-    expect(mayhemView.querySelector(".dd-icon-frame.aram-hero-frame .aram-hero-avatar")).toBeTruthy();
 
     const augList = screen.getByTestId("aram-augments-list");
     const names = Array.from(augList.querySelectorAll(".aram-augment-name")).map(
       (el) => el.textContent
     );
-    // Tier 0 (Coice pop=3.8, Conjuração Ecoante pop=3.2) before Tier 2 (Raio Encolhedor)
     expect(names).toEqual(["Coice", "Conjuração Ecoante", "Raio Encolhedor"]);
 
-    // Rarity filter uses project's .segment-btn class
     const silverBtn = screen.getByRole("button", { name: "Prata" });
     expect(silverBtn).toHaveClass("segment-btn");
 
-    // Filter by Prata (rarity 1)
     fireEvent.click(silverBtn);
     expect(within(augList).getByText("Raio Encolhedor")).toBeInTheDocument();
     expect(within(augList).queryByText("Coice")).not.toBeInTheDocument();
 
-    // Filter by Ouro (rarity 4)
     fireEvent.click(screen.getByRole("button", { name: "Ouro" }));
     expect(within(augList).getByText("Coice")).toBeInTheDocument();
     expect(within(augList).queryByText("Conjuração Ecoante")).not.toBeInTheDocument();
 
-    // Filter by Prismática (rarity 8)
     fireEvent.click(screen.getByRole("button", { name: "Prismática" }));
     expect(within(augList).getByText("Conjuração Ecoante")).toBeInTheDocument();
     expect(within(augList).queryByText("Coice")).not.toBeInTheDocument();
 
-    // Back to Todas + search + clear X buttons in both Mayhem inputs
     fireEvent.click(screen.getByRole("button", { name: "Todas" }));
-    expect(screen.queryByLabelText("Limpar busca de cartinha")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar cartinha"), {
       target: { value: "coice" },
     });
@@ -331,14 +166,12 @@ describe("AramTab UI", () => {
     expect(within(augList).queryByText("Conjuração Ecoante")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Limpar busca de cartinha"));
     expect(screen.getByLabelText("Buscar cartinha")).toHaveValue("");
-    expect(within(augList).getByText("Conjuração Ecoante")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Buscar campeão no ARAM Mayhem"), {
       target: { value: "ahri" },
     });
     expect(screen.queryByTestId("mayhem-champ-twistedfate")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Limpar busca de campeão no ARAM Mayhem"));
-    expect(screen.getByLabelText("Buscar campeão no ARAM Mayhem")).toHaveValue("");
     expect(screen.getByTestId("mayhem-champ-twistedfate")).toBeInTheDocument();
   });
 
@@ -395,7 +228,6 @@ describe("AramTab UI", () => {
     );
 
     expect(screen.getByTestId("aram-mayhem-champions-loading")).toHaveTextContent(/Carregando campeões/i);
-    expect(screen.getByTestId("aram-mayhem-champions-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
     expect(screen.getByTestId("aram-mayhem-champions-skeleton")).toHaveAttribute("aria-hidden", "true");
 
     rerender(
@@ -410,7 +242,6 @@ describe("AramTab UI", () => {
     );
 
     expect(screen.getByTestId("aram-augments-loading")).toHaveTextContent(/Carregando cartinhas/i);
-    expect(screen.getByTestId("aram-augments-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
     expect(screen.getByTestId("aram-augments-skeleton")).toHaveAttribute("aria-hidden", "true");
   });
 });

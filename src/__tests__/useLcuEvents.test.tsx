@@ -2,96 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useLcuEvents } from "../hooks/useLcuEvents";
 import { ChampionBuild } from "../types";
-
-const baseBuild: ChampionBuild = {
-  champion_id: 18,
-  champion_name: "Tristana",
-  win_rate: 53.0,
-  pick_rate: 8.5,
-  primary_style_id: 8000,
-  sub_style_id: 8100,
-  selected_perk_ids: [],
-  spell1_id: 4,
-  spell2_id: 7,
-  champion_icon_url: "tristana.png",
-  primary_style_name: "Precisão",
-  primary_style_icon_url: "precision.png",
-  sub_style_name: "Dominação",
-  sub_style_icon_url: "domination.png",
-  perks: [],
-  rune_pages: [
-    {
-      primary_style_id: 8000,
-      sub_style_id: 8100,
-      selected_perk_ids: [8005, 9111, 9104, 8014, 8139, 8135, 5005, 5008, 5001],
-      play: 100,
-      win: 55,
-      pick_rate: 60,
-      primary_style_name: "Precisão",
-      primary_style_icon_url: "precision.png",
-      sub_style_name: "Dominação",
-      sub_style_icon_url: "domination.png",
-      perks: [],
-    },
-    {
-      primary_style_id: 8000,
-      sub_style_id: 8200,
-      selected_perk_ids: [8008, 9111, 9104, 8014, 8233, 8236, 5005, 5008, 5001],
-      play: 50,
-      win: 28,
-      pick_rate: 30,
-      primary_style_name: "Precisão",
-      primary_style_icon_url: "precision.png",
-      sub_style_name: "Feitiçaria",
-      sub_style_icon_url: "sorcery.png",
-      perks: [],
-    },
-  ],
-  spell_choices: [
-    { id: 7, name: "Curar", icon_url: "heal.png" },
-    { id: 21, name: "Barreira", icon_url: "barrier.png" },
-  ],
-  spells: [
-    { id: 4, name: "Flash", icon_url: "flash.png" },
-    { id: 7, name: "Curar", icon_url: "heal.png" },
-  ],
-  build_options: [
-    {
-      name: "Padrão",
-      core_item_ids: [3032, 6675, 3031],
-      core_item_icon_urls: [],
-      final_item_ids: [3032, 6675, 3031, 3094, 3036, 3026],
-      final_item_icon_urls: [],
-      situational_item_ids: [],
-      situational_item_icon_urls: [],
-      play: 100,
-      win: 54,
-      pick_rate: 55,
-    },
-    {
-      name: "Alternativa",
-      core_item_ids: [3031, 3046, 3036],
-      core_item_icon_urls: [],
-      final_item_ids: [3031, 3046, 3036, 3072, 3026, 3153],
-      final_item_icon_urls: [],
-      situational_item_ids: [],
-      situational_item_icon_urls: [],
-      play: 40,
-      win: 22,
-      pick_rate: 25,
-    },
-  ],
-  core_build_options: [],
-  final_build_options: [],
-  item_blocks: [],
-  active_position: "",
-  active_tier: "emerald_plus",
-  active_region: "global",
-  active_patch: "16.22",
-  available_patches: ["16.22"],
-  patch_fallback_applied: false,
-  supports_runes: false,
-};
+import { baseBuild } from "../features/champ-select/__tests__/lcuEventsFixtures";
 
 let listeners: Record<string, (event: { payload: unknown }) => void> = {};
 let resolveTristana!: (value: ChampionBuild) => void;
@@ -146,7 +57,6 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
       expect(listeners["recommended-build"]).toBeDefined();
     });
 
-    // 1. Rapidly select Tristana (18) then switch to Ahri (103)
     act(() => {
       listeners["champ-selected"]({
         payload: {
@@ -183,20 +93,17 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
       supports_runes: true,
     };
 
-    // 2. Ahri resolves first
     await act(async () => {
       resolveAhri(ahriBuild);
     });
     expect(result.current.build?.champion_id).toBe(103);
     expect(result.current.orderedSpells.map((s) => s.name)).toEqual(["Flash", "Marca"]);
 
-    // 3. Stale Tristana command response AND late backend recommended-build event arrive afterwards
     await act(async () => {
       resolveTristana(baseBuild);
       listeners["recommended-build"]({ payload: baseBuild });
     });
 
-    // Must remain on Ahri (103), never reverted to Tristana (18)
     expect(result.current.build?.champion_id).toBe(103);
     expect(result.current.build?.champion_name).toBe("Ahri");
     expect(syncedDisplayedChampions).toContain(103);
@@ -317,120 +224,5 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
     expect(result.current.selectedSecondarySpellId).toBe(21);
     expect(result.current.selectedBuildIndex).toBe(1);
     expect(result.current.spellsInverted).toBe(true);
-  });
-
-  it("calls onChampionPulled once per match, keeps build during InProgress, and calls onMatchEnded when match finishes", async () => {
-    const onChampionPulled = vi.fn();
-    const onMatchEnded = vi.fn();
-    const { result } = renderHook(() =>
-      useLcuEvents("D", { onChampionPulled, onMatchEnded })
-    );
-
-    await waitFor(() => {
-      expect(listeners["champ-selected"]).toBeDefined();
-      expect(listeners["gameflow-phase-changed"]).toBeDefined();
-      expect(listeners["champ-select-ended"]).toBeDefined();
-      expect(listeners["match-ended"]).toBeDefined();
-    });
-
-    await act(async () => {
-      listeners["gameflow-phase-changed"]({ payload: "ChampSelect" });
-      listeners["champ-selected"]({
-        payload: {
-          champion_id: 18,
-          queue_id: 450,
-          queue_mode: "Aram",
-          locked_in: false,
-        },
-      });
-      resolveTristana({ ...baseBuild, supports_runes: true });
-    });
-
-    expect(onChampionPulled).toHaveBeenCalledTimes(1);
-    expect(result.current.build?.champion_id).toBe(18);
-
-    // Subsequent recommended-build update in the same session should not re-trigger navigation
-    await act(async () => {
-      listeners["recommended-build"]({ payload: { ...baseBuild, supports_runes: true } });
-    });
-    expect(onChampionPulled).toHaveBeenCalledTimes(1);
-
-    // Transition to GameStart / InProgress: champ-select-ended keeps the build visible
-    await act(async () => {
-      listeners["gameflow-phase-changed"]({ payload: "InProgress" });
-      listeners["champ-select-ended"]({ payload: null });
-    });
-
-    expect(result.current.gameflowPhase).toBe("InProgress");
-    expect(result.current.build?.champion_id).toBe(18);
-    expect(onMatchEnded).not.toHaveBeenCalled();
-
-    // Match finishes: clears build and triggers onMatchEnded
-    await act(async () => {
-      listeners["gameflow-phase-changed"]({ payload: "EndOfGame" });
-      listeners["match-ended"]({ payload: null });
-    });
-
-    expect(result.current.build).toBeNull();
-    expect(result.current.champSelect).toBeNull();
-    expect(onMatchEnded).toHaveBeenCalledTimes(1);
-
-    // Next match can auto-navigate again
-    await act(async () => {
-      listeners["gameflow-phase-changed"]({ payload: "ChampSelect" });
-      listeners["recommended-build"]({
-        payload: { ...baseBuild, champion_id: 103, champion_name: "Ahri" },
-      });
-    });
-
-    expect(onChampionPulled).toHaveBeenCalledTimes(2);
-  });
-
-  it("clears build on champ-select-ended when champ select ends via dodge (not in-game)", async () => {
-    const onChampionPulled = vi.fn();
-    const onMatchEnded = vi.fn();
-    const { result } = renderHook(() =>
-      useLcuEvents("D", { onChampionPulled, onMatchEnded })
-    );
-
-    await waitFor(() => {
-      expect(listeners["champ-selected"]).toBeDefined();
-      expect(listeners["gameflow-phase-changed"]).toBeDefined();
-      expect(listeners["champ-select-ended"]).toBeDefined();
-    });
-
-    await act(async () => {
-      listeners["gameflow-phase-changed"]({ payload: "ChampSelect" });
-      listeners["champ-selected"]({
-        payload: {
-          champion_id: 18,
-          queue_id: 450,
-          queue_mode: "Aram",
-          locked_in: false,
-        },
-      });
-      resolveTristana({ ...baseBuild, supports_runes: true });
-    });
-
-    expect(onChampionPulled).toHaveBeenCalledTimes(1);
-    expect(result.current.build?.champion_id).toBe(18);
-
-    // Dodge back to Lobby
-    await act(async () => {
-      listeners["gameflow-phase-changed"]({ payload: "Lobby" });
-      listeners["champ-select-ended"]({ payload: null });
-    });
-
-    expect(result.current.build).toBeNull();
-    expect(result.current.champSelect).toBeNull();
-    expect(onMatchEnded).not.toHaveBeenCalled();
-
-    // Next Champ Select triggers auto-navigation again
-    await act(async () => {
-      listeners["recommended-build"]({
-        payload: { ...baseBuild, champion_id: 103, champion_name: "Ahri" },
-      });
-    });
-    expect(onChampionPulled).toHaveBeenCalledTimes(2);
   });
 });
