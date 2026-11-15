@@ -566,6 +566,7 @@ export type UserPreferences_Deserialize = {
 	autoInjectItems: boolean,
 	flashKey: FlashKeyPreference,
 	patch48hProtection?: boolean,
+	autoMarkDailyMissionsRead?: boolean,
 };
 
 /**  User preferences synchronized between frontend and backend. */
@@ -575,6 +576,7 @@ export type UserPreferences_Serialize = {
 	autoInjectItems: boolean,
 	flashKey: FlashKeyPreference,
 	patch48hProtection: boolean,
+	autoMarkDailyMissionsRead: boolean,
 };
 
 /**  Emitted when the main window becomes minimized/hidden (`true`) or restored/visible (`false`). */

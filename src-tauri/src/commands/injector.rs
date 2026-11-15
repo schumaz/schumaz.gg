@@ -106,8 +106,16 @@ pub async fn inject_item_build(
 /// Tauri command to sync user preferences from the frontend to the backend engine.
 #[tauri::command]
 #[specta::specta]
-pub fn sync_user_preferences(preferences: models::UserPreferences) {
+pub async fn sync_user_preferences(preferences: models::UserPreferences) {
+    let prev = lcu_injector::get_user_preferences();
+    let should_auto_mark = preferences.auto_mark_daily_missions_read;
     lcu_injector::set_user_preferences(preferences);
+    if should_auto_mark {
+        if !prev.auto_mark_daily_missions_read {
+            lcu_connector::reset_auto_mark_session_state();
+        }
+        lcu_connector::spawn_auto_mark_daily_missions_if_enabled();
+    }
 }
 
 #[cfg(test)]

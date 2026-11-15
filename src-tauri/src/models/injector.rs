@@ -23,6 +23,8 @@ pub struct UserPreferences {
     pub flash_key: FlashKeyPreference,
     #[serde(default = "default_true", rename = "patch48hProtection")]
     pub patch_48h_protection: bool,
+    #[serde(default, rename = "autoMarkDailyMissionsRead")]
+    pub auto_mark_daily_missions_read: bool,
 }
 
 impl Default for UserPreferences {
@@ -33,6 +35,7 @@ impl Default for UserPreferences {
             auto_inject_items: true,
             flash_key: FlashKeyPreference::D,
             patch_48h_protection: true,
+            auto_mark_daily_missions_read: false,
         }
     }
 }

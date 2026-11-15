@@ -212,6 +212,52 @@ describe("SettingsTab", () => {
     expect(handleRestart).toHaveBeenCalledTimes(1);
   });
 
+  it("renders daily missions auto-read toggle disabled by default below GPU option in Diversos", () => {
+    const handleUpdate = vi.fn();
+
+    const { rerender } = render(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={handleUpdate}
+      />
+    );
+
+    const miscCard = screen.getByTestId("settings-subgroup-misc");
+    const miscSubsections = Array.from(
+      miscCard.querySelectorAll(".settings-subsection")
+    ).map((el) => el.getAttribute("data-testid"));
+    expect(miscSubsections).toEqual([
+      "settings-subgroup-graphics",
+      "settings-subgroup-daily-missions",
+    ]);
+
+    const gpuToggle = screen.getByTestId("hardware-acceleration-toggle");
+    const dailyMissionsToggle = screen.getByTestId("auto-mark-daily-missions-toggle");
+    expect(miscCard).toContainElement(dailyMissionsToggle);
+    expect(
+      gpuToggle.compareDocumentPosition(dailyMissionsToggle) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    // Off by default
+    expect(DEFAULT_PREFERENCES.autoMarkDailyMissionsRead).toBe(false);
+    expect(dailyMissionsToggle).not.toBeChecked();
+
+    fireEvent.click(dailyMissionsToggle);
+    expect(handleUpdate).toHaveBeenCalledWith("autoMarkDailyMissionsRead", true);
+
+    rerender(
+      <SettingsTab
+        preferences={{ ...DEFAULT_PREFERENCES, autoMarkDailyMissionsRead: true }}
+        onUpdatePreference={handleUpdate}
+      />
+    );
+
+    const enabledToggle = screen.getByTestId("auto-mark-daily-missions-toggle");
+    expect(enabledToggle).toBeChecked();
+    fireEvent.click(enabledToggle);
+    expect(handleUpdate).toHaveBeenCalledWith("autoMarkDailyMissionsRead", false);
+  });
+
   it("blocks blur slider and percentage editing when Fundo Visível is unchecked", () => {
     expect(isBlurSliderDisabled(false)).toBe(true);
     expect(isBlurSliderDisabled(true)).toBe(false);

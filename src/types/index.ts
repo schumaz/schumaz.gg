@@ -47,6 +47,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   autoInjectItems: true,
   flashKey: "D",
   patch48hProtection: true,
+  autoMarkDailyMissionsRead: false,
 };
 
 export const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";

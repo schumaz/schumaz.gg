@@ -67,6 +67,10 @@ export function loadInitialPreferences(): UserPreferences {
           typeof parsed.patch48hProtection === "boolean"
             ? parsed.patch48hProtection
             : DEFAULT_PREFERENCES.patch48hProtection,
+        autoMarkDailyMissionsRead:
+          typeof parsed.autoMarkDailyMissionsRead === "boolean"
+            ? parsed.autoMarkDailyMissionsRead
+            : DEFAULT_PREFERENCES.autoMarkDailyMissionsRead,
       };
     }
   } catch {

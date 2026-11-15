@@ -34,6 +34,7 @@ mod tests {
             auto_inject_items: false,
             flash_key: FlashKeyPreference::F,
             patch_48h_protection: false,
+            auto_mark_daily_missions_read: true,
         };
 
         set_user_preferences(prefs.clone());
@@ -43,5 +44,19 @@ mod tests {
         set_user_preferences(UserPreferences::default());
         assert_eq!(get_user_preferences(), UserPreferences::default());
         assert!(get_user_preferences().patch_48h_protection);
+        assert!(!get_user_preferences().auto_mark_daily_missions_read);
+    }
+
+    #[test]
+    fn test_user_preferences_deserialize_defaults_missing_daily_missions_flag_to_false() {
+        let raw = r#"{
+            "autoInjectRunes": true,
+            "autoInjectSpells": true,
+            "autoInjectItems": true,
+            "flashKey": "D"
+        }"#;
+        let parsed: UserPreferences = serde_json::from_str(raw).unwrap();
+        assert!(parsed.patch_48h_protection);
+        assert!(!parsed.auto_mark_daily_missions_read);
     }
 }

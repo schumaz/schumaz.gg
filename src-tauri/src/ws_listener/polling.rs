@@ -595,6 +595,24 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
         },
     );
 
+    // Subscribe to mission and objective updates so delayed client hydration (~30s after login)
+    // and newly granted/updated missions automatically clear notification badges and dots.
+    for endpoint in [
+        crate::lcu_connector::OBJECTIVES_READY_ENDPOINT,
+        crate::lcu_connector::LOL_OBJECTIVES_ENDPOINT,
+        crate::lcu_connector::TFT_OBJECTIVES_ENDPOINT,
+        crate::lcu_connector::JADE_OBJECTIVES_ENDPOINT,
+        crate::lcu_connector::LOL_MISSIONS_ENDPOINT,
+        crate::lcu_connector::LOL_MISSIONS_SERIES_ENDPOINT,
+    ] {
+        ws.subscribe(
+            EventKind::json_api_event_callback_str(endpoint),
+            move |_event: &Event| {
+                crate::lcu_connector::schedule_debounced_auto_mark_missions();
+            },
+        );
+    }
+
     loop {
         tokio::time::sleep(Duration::from_secs(60)).await;
     }

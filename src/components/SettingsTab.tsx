@@ -44,6 +44,7 @@ export function SettingsTab({
   const originalBlurRef = useRef(profileBlur);
   const blurDisabled = isBlurSliderDisabled(wallpaperVisible);
   const patch48hProtection = preferences.patch48hProtection ?? true;
+  const autoMarkDailyMissionsRead = preferences.autoMarkDailyMissionsRead ?? false;
 
   useEffect(() => {
     if (!isEditingBlur) {
@@ -391,53 +392,89 @@ export function SettingsTab({
           <h2 className="settings-section-title">Diversos</h2>
 
           <section className="card settings-group-card" data-testid="settings-subgroup-misc">
-            <div className="settings-group-header">
-              <h3>Gráficos e Desempenho</h3>
-              <p className="card-desc">
-                Controle o uso de aceleração por hardware para renderização da interface.
-              </p>
-            </div>
-
-            <div className="settings-list">
-              <label className="settings-item">
-                <div className="settings-item-text">
-                  <span className="settings-item-title">
-                    Renderização Acelerada por Hardware (GPU)
-                  </span>
-                  <span className="settings-item-desc">
-                    Usa a GPU para renderizar animações, transições e efeitos de desfoque com maior fluidez. Desative para economizar recursos gráficos ou evitar conflitos de driver.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  aria-label="Renderização Acelerada por Hardware (GPU)"
-                  data-testid="hardware-acceleration-toggle"
-                  checked={hardwareAcceleration}
-                  onChange={(e) => onHardwareAccelerationChange?.(e.target.checked)}
-                />
-              </label>
-            </div>
-
-            {gpuRestartRequired && (
-              <div
-                className="settings-restart-banner"
-                role="status"
-                data-testid="gpu-restart-banner"
-              >
-                <span className="settings-restart-text">
-                  Reinicie o aplicativo para aplicar completamente a alteração de aceleração por GPU.
-                </span>
-                <button
-                  type="button"
-                  className="settings-restart-btn"
-                  data-testid="gpu-restart-btn"
-                  onClick={() => onRestartApp?.()}
-                >
-                  Reiniciar agora
-                </button>
+            <div className="settings-subsection" data-testid="settings-subgroup-graphics">
+              <div className="settings-group-header">
+                <h3>Gráficos e Desempenho</h3>
+                <p className="card-desc">
+                  Controle o uso de aceleração por hardware para renderização da interface.
+                </p>
               </div>
-            )}
+
+              <div className="settings-list">
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">
+                      Renderização Acelerada por Hardware (GPU)
+                    </span>
+                    <span className="settings-item-desc">
+                      Usa a GPU para renderizar animações, transições e efeitos de desfoque com maior fluidez. Desative para economizar recursos gráficos ou evitar conflitos de driver.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Renderização Acelerada por Hardware (GPU)"
+                    data-testid="hardware-acceleration-toggle"
+                    checked={hardwareAcceleration}
+                    onChange={(e) => onHardwareAccelerationChange?.(e.target.checked)}
+                  />
+                </label>
+              </div>
+
+              {gpuRestartRequired && (
+                <div
+                  className="settings-restart-banner"
+                  role="status"
+                  data-testid="gpu-restart-banner"
+                >
+                  <span className="settings-restart-text">
+                    Reinicie o aplicativo para aplicar completamente a alteração de aceleração por GPU.
+                  </span>
+                  <button
+                    type="button"
+                    className="settings-restart-btn"
+                    data-testid="gpu-restart-btn"
+                    onClick={() => onRestartApp?.()}
+                  >
+                    Reiniciar agora
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-card-divider" />
+
+            <div className="settings-subsection" data-testid="settings-subgroup-daily-missions">
+              <div className="settings-group-header">
+                <h3>Missões e Objetivos</h3>
+                <p className="card-desc">
+                  Limpeza automática de notificações e indicadores de novidade em missões e objetivos no cliente do LoL.
+                </p>
+              </div>
+
+              <div className="settings-list">
+                <label className="settings-item">
+                  <div className="settings-item-text">
+                    <span className="settings-item-title">
+                      Marcar Missões e Objetivos como Lidos Automaticamente
+                    </span>
+                    <span className="settings-item-desc">
+                      Marca automaticamente todas as missões e objetivos não lidos como vistos ao conectar e ao receber novas missões no cliente do LoL, zerando o contador de notificação.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch"
+                    aria-label="Marcar Missões e Objetivos como Lidos Automaticamente"
+                    data-testid="auto-mark-daily-missions-toggle"
+                    checked={autoMarkDailyMissionsRead}
+                    onChange={(e) =>
+                      onUpdatePreference("autoMarkDailyMissionsRead", e.target.checked)
+                    }
+                  />
+                </label>
+              </div>
+            </div>
           </section>
         </div>
       </div>
