@@ -15,8 +15,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 pub const CACHE_SCHEMA_VERSION: u32 = 1;
-pub const OPGG_CACHE_TTL_SECS: u64 = 24 * 3600;
-pub const PROFILE_CACHE_TTL_SECS: u64 = 24 * 3600;
+pub const OPGG_CACHE_TTL_SECS: u64 = 48 * 3600;
+pub const PROFILE_CACHE_TTL_SECS: u64 = 48 * 3600;
 pub const PROFILE_SWR_SECS: u64 = 5 * 60;
 pub const GC_MAX_INACTIVE_SECS: u64 = 7 * 24 * 3600;
 

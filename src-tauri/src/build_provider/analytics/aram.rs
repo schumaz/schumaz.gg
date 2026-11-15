@@ -53,7 +53,7 @@ fn rehydrate_aram_names(list: &mut [AramChampionRank], ddragon: &DataDragonCache
     }
 }
 
-/// Pre-warms valid (< 24h) ARAM and ARAM Mayhem tier lists from `.lz4` disk into RAM on startup.
+/// Pre-warms valid (< 48h) ARAM and ARAM Mayhem tier lists from `.lz4` disk into RAM on startup.
 pub fn prewarm_aram_tier_lists_from_dir(
     dir: &Path,
     locale: AppLocale,

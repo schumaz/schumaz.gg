@@ -112,7 +112,7 @@ pub async fn resolve_champion_most_played_lane_with_base_and_dir(
         return Ok(lane.to_string());
     }
 
-    // 2. Check L2 disk .lz4 cache (24h TTL + patch check)
+    // 2. Check L2 disk .lz4 cache (48h TTL + patch check)
     let disk_env = positions_dir.and_then(|dir| {
         let path = positions_file_path(dir, region, tier, version);
         crate::storage::read_lz4_envelope::<ChampionPositionsMap>(&path)

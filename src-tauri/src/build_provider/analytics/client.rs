@@ -166,7 +166,7 @@ pub async fn get_recommended_build_with_endpoint(
     build
 }
 
-/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (24h TTL)
+/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (48h TTL)
 /// and Stale-While-Error offline fallback.
 pub async fn fetch_opgg_versions_with_cache_dir(
     client: &reqwest::Client,

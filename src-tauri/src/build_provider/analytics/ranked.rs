@@ -52,7 +52,7 @@ fn rehydrate_ranked_names(response: &mut RankedTierListResponse, ddragon: &DataD
     }
 }
 
-/// Pre-warms a valid (< 24h) Ranked Tier List from `.lz4` disk into RAM on startup.
+/// Pre-warms a valid (< 48h) Ranked Tier List from `.lz4` disk into RAM on startup.
 pub fn prewarm_ranked_tier_list_from_dir(
     dir: &Path,
     region: &str,
@@ -929,7 +929,7 @@ mod tests {
         assert_eq!(first.champions.len(), 1);
         assert_eq!(first.active_patch, "16.25");
 
-        // Clear RAM and verify disk hit with 0 network calls within 24h
+        // Clear RAM and verify disk hit with 0 network calls within 48h
         if let Ok(mut g) = get_ranked_cache().write() {
             g.clear();
         }
@@ -941,7 +941,7 @@ mod tests {
             None,
             &dd,
             false,
-            now + 3600,
+            now + 26 * 3600,
             AppLocale::PtBr,
             Some(&dir),
         )
@@ -949,7 +949,7 @@ mod tests {
         .unwrap();
         assert_eq!(disk_hit.champions[0].id, 103);
 
-        // Now test Stale-While-Error when >24h expired and network returns 503
+        // Now test Stale-While-Error when >48h expired and network returns 503
         if let Ok(mut g) = get_ranked_cache().write() {
             g.clear();
         }
@@ -968,7 +968,7 @@ mod tests {
             None,
             &dd,
             false,
-            now + 26 * 3600,
+            now + 49 * 3600,
             AppLocale::PtBr,
             Some(&dir),
         )

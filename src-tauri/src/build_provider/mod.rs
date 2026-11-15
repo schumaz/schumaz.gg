@@ -318,7 +318,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         return Ok(build);
     }
 
-    // 2. Check L2 disk `.lz4` cache (24h TTL + locale + envelope patch validation)
+    // 2. Check L2 disk `.lz4` cache (48h TTL + locale + envelope patch validation)
     let disk_env = builds_dir.and_then(|dir| {
         let cache_file_path = build_cache_file_path(
             dir,
@@ -1393,7 +1393,7 @@ mod tests {
         assert_eq!(b2.active_patch, "16.99");
         assert_eq!(b2.item_blocks[0].item_ids, vec![3802, 2003]);
 
-        // Test Stale-While-Error when envelope is >24h expired and network fails
+        // Test Stale-While-Error when envelope is >48h expired and network fails
         if let Ok(mut g) = get_build_cache().write() {
             g.clear();
         }

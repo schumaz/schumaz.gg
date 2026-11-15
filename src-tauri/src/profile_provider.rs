@@ -893,7 +893,7 @@ pub fn parse_recent_matches(
 }
 
 /// Fetches and assembles the full `PlayerProfile` from an active LCU connection + DataDragon cache,
-/// supporting disk `.lz4` caching (24h TTL, SWR > 5m, `force_refresh` bypass) and `LastSummonerId` persistence.
+/// supporting disk `.lz4` caching (48h TTL, SWR > 5m, `force_refresh` bypass) and `LastSummonerId` persistence.
 pub async fn load_player_profile_with_cache(
     conn: &LcuConnection,
     force_refresh: bool,
@@ -1353,8 +1353,11 @@ mod tests {
         relocalize_player_profile(&mut loaded_stale.profile, AppLocale::EnUs, Some(&dd));
         assert_eq!(loaded_stale.profile.ranked_stats[0].tier_label, "Emerald");
 
-        // Expired after 24h
-        assert!(load_profile_from_dir(&profile_dir, 55501, now + 25 * 3600).is_none());
+        // Still valid after 25h (within 48h TTL)
+        assert!(load_profile_from_dir(&profile_dir, 55501, now + 25 * 3600).is_some());
+
+        // Expired after 48h
+        assert!(load_profile_from_dir(&profile_dir, 55501, now + 49 * 3600).is_none());
 
         let _ = std::fs::remove_dir_all(&dir);
     }
