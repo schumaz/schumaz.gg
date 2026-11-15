@@ -163,6 +163,12 @@ impl LcuConnection {
     }
 }
 
+/// Connects to the local LCU (when running) and returns the current summoner info if available.
+pub async fn fetch_current_summoner_status() -> Option<SummonerInfo> {
+    let conn = LcuConnection::connect().ok()?;
+    conn.get_current_summoner().await.ok()
+}
+
 #[cfg(test)]
 #[path = "summoner_tests.rs"]
 mod tests;

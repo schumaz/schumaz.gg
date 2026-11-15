@@ -1,5 +1,4 @@
-use crate::{build_provider, lcu_connector, lcu_injector, models, ws_listener};
-use tauri_specta::Event;
+use crate::{build_provider, models, ws_listener};
 
 /// Tauri command to fetch the recommended build (with visual metadata) for a champion.
 #[tauri::command]
@@ -8,9 +7,7 @@ pub async fn get_recommended_build_for_champion(
     champion_id: i32,
     queue_id: Option<i32>,
 ) -> Result<models::ChampionBuild, String> {
-    let http_client = build_provider::shared_http_client();
-    let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
-    build_provider::get_recommended_build(http_client, champion_id, q_id).await
+    build_provider::get_recommended_build_for_champion_service(champion_id, queue_id).await
 }
 
 /// Tauri command to update build filters (position, tier, region, patch) and re-inject if connected.
@@ -25,39 +22,14 @@ pub async fn update_build_filters(
     patch: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<models::ChampionBuild, String> {
-    let http_client = build_provider::shared_http_client();
-    let q_id = queue_id.unwrap_or(ws_listener::QUEUE_SOLO_DUO);
-    let is_aram = q_id == ws_listener::QUEUE_ARAM || q_id == ws_listener::QUEUE_ARAM_MAYHEM;
-    let effective_position = if is_aram { None } else { position.as_deref() };
-
-    let build = build_provider::get_recommended_build_with_filters(
-        http_client,
+    ws_listener::update_build_filters_and_reinject(
         champion_id,
-        q_id,
-        effective_position,
-        tier.as_deref(),
-        region.as_deref(),
-        patch.as_deref(),
+        queue_id,
+        position,
+        tier,
+        region,
+        patch,
+        &app_handle,
     )
-    .await?;
-
-    let _ = models::RecommendedBuild(build.clone()).emit(&app_handle);
-
-    // If client is connected and summoner is present, inject the updated build
-    if let Ok(conn) = lcu_connector::LcuConnection::connect()
-        && let Ok(summoner) = conn.get_current_summoner().await
-    {
-        let report = lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
-        let effective_q = if q_id == 0 || q_id == ws_listener::QUEUE_PRACTICE_TOOL {
-            ws_listener::QUEUE_SOLO_DUO
-        } else {
-            q_id
-        };
-        let applied =
-            lcu_injector::AppliedInjectionState::from_report(effective_q, &build, &report);
-        ws_listener::record_filter_updated_build(build.clone(), applied).await;
-        let _ = models::BuildInjected(report).emit(&app_handle);
-    }
-
-    Ok(build)
+    .await
 }

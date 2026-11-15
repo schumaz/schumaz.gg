@@ -45,6 +45,34 @@ impl GraphicsState {
             current_enabled: Mutex::new(active_at_startup),
         }
     }
+
+    pub fn status(&self) -> HardwareAccelerationStatus {
+        let enabled = self
+            .current_enabled
+            .lock()
+            .map(|g| *g)
+            .unwrap_or(self.active_at_startup);
+        HardwareAccelerationStatus {
+            enabled,
+            active_at_startup: self.active_at_startup,
+        }
+    }
+}
+
+pub fn update_hardware_acceleration_setting(
+    enabled: bool,
+    state: &GraphicsState,
+) -> Result<HardwareAccelerationStatus, String> {
+    super::settings::update_global_settings(|s| {
+        s.graphics.hardware_acceleration = enabled;
+    })?;
+    if let Ok(mut guard) = state.current_enabled.lock() {
+        *guard = enabled;
+    }
+    Ok(HardwareAccelerationStatus {
+        enabled,
+        active_at_startup: state.active_at_startup,
+    })
 }
 
 pub fn browser_args_for_hardware_acceleration(enabled: bool) -> String {

@@ -4,8 +4,8 @@ use std::sync::{OnceLock, RwLock};
 use super::super::paths::atomic_write;
 use super::ini_serializer::serialize_user_settings_ini;
 use super::{
-    AppSettings, NavigationState, NavigationStatePatch, validate_champion_tier_filter,
-    validate_ranked_lane, validate_rarity_filter,
+    AppSettings, NavigationState, NavigationStatePatch, clamp_profile_blur,
+    validate_champion_tier_filter, validate_ranked_lane, validate_rarity_filter,
 };
 
 pub fn save_user_settings_to_path(path: &Path, settings: &AppSettings) -> Result<(), String> {
@@ -111,4 +111,22 @@ where
     }
 
     Ok(updated)
+}
+
+/// Updates `[ProfileAppearanceSettings]` in global settings and `UserSettings.ini`.
+pub fn update_profile_appearance_settings(
+    blur_percent: u32,
+    wallpaper_visible: bool,
+) -> Result<AppSettings, String> {
+    update_global_settings(|s| {
+        s.profile_appearance.profile_blur_percent = clamp_profile_blur(blur_percent);
+        s.profile_appearance.wallpaper_visible = wallpaper_visible;
+    })
+}
+
+/// Applies a partial `[NavigationState]` patch in global settings and `UserSettings.ini`.
+pub fn update_navigation_settings(patch: NavigationStatePatch) -> Result<AppSettings, String> {
+    update_global_settings(|s| {
+        apply_navigation_patch(&mut s.navigation, patch);
+    })
 }

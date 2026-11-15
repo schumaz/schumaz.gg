@@ -1,4 +1,4 @@
-use crate::{build_provider, models, ws_listener};
+use crate::{build_provider, models};
 
 /// Tauri command to fetch Ranked Summoner's Rift tier list filtered by region, elo tier, and patch.
 #[tauri::command]
@@ -8,14 +8,10 @@ pub async fn get_ranked_tier_list(
     tier: Option<String>,
     patch: Option<String>,
 ) -> Result<models::RankedTierListResponse, String> {
-    let http_client = build_provider::shared_http_client();
-    let ddragon = build_provider::get_or_init_ddragon_cache(http_client).await?;
-    build_provider::fetch_ranked_tier_list(
-        http_client,
+    build_provider::get_ranked_tier_list_service(
         region.as_deref(),
         tier.as_deref(),
         patch.as_deref(),
-        &ddragon,
     )
     .await
 }
@@ -31,11 +27,8 @@ pub async fn get_ranked_champion_build(
     region: Option<String>,
     patch: Option<String>,
 ) -> Result<models::ChampionBuild, String> {
-    let http_client = build_provider::shared_http_client();
-    build_provider::get_recommended_build_with_filters(
-        http_client,
+    build_provider::get_ranked_champion_build_service(
         champion_id,
-        ws_listener::QUEUE_SOLO_DUO,
         position.as_deref(),
         tier.as_deref(),
         region.as_deref(),

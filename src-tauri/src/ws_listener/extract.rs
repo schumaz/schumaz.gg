@@ -303,3 +303,7 @@ pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String
 #[cfg(test)]
 #[path = "extract_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "extract_queue_tests.rs"]
+mod queue_tests;

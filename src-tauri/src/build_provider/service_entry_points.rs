@@ -1,8 +1,14 @@
-use super::analytics::{OPGG_MCP_ENDPOINT, OPGG_REST_API_BASE};
+use super::analytics::{
+    OPGG_MCP_ENDPOINT, OPGG_REST_API_BASE, fetch_aram_mayhem_augments_for_locale,
+    fetch_aram_tier_list, fetch_ranked_tier_list, shared_http_client,
+};
 use super::ddragon::get_or_init_ddragon_cache;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::service::get_recommended_build_with_filters_and_endpoints_with_dir;
 use super::service_helpers::FastSpellRecommendation;
+use crate::models::{
+    AramAugmentEntry, AramChampionRank, AramMode, QUEUE_SOLO_DUO, RankedTierListResponse,
+};
 
 pub async fn get_recommended_build_with_filters(
     client: &reqwest::Client,
@@ -160,4 +166,62 @@ pub async fn get_recommended_build(
     queue_id: i32,
 ) -> Result<ChampionBuild, String> {
     get_recommended_build_with_filters(client, champion_id, queue_id, None, None, None, None).await
+}
+
+/// Domain service entry point for IPC commands requesting a champion build without filters.
+pub async fn get_recommended_build_for_champion_service(
+    champion_id: i32,
+    queue_id: Option<i32>,
+) -> Result<ChampionBuild, String> {
+    let http_client = shared_http_client();
+    let q_id = queue_id.unwrap_or(QUEUE_SOLO_DUO);
+    get_recommended_build(http_client, champion_id, q_id).await
+}
+
+/// Domain service entry point for fetching ARAM / ARAM Mayhem tier list.
+pub async fn get_aram_tier_list_service(mode: AramMode) -> Result<Vec<AramChampionRank>, String> {
+    let http_client = shared_http_client();
+    let ddragon = get_or_init_ddragon_cache(http_client).await?;
+    fetch_aram_tier_list(http_client, mode, &ddragon).await
+}
+
+/// Domain service entry point for fetching ARAM Mayhem augments for the active locale.
+pub async fn get_aram_mayhem_augments_service(
+    champion_key: &str,
+) -> Result<Vec<AramAugmentEntry>, String> {
+    let http_client = shared_http_client();
+    let locale = crate::lcu_injector::get_active_locale();
+    fetch_aram_mayhem_augments_for_locale(http_client, champion_key, locale).await
+}
+
+/// Domain service entry point for fetching the Ranked Solo/Duo tier list.
+pub async fn get_ranked_tier_list_service(
+    region: Option<&str>,
+    tier: Option<&str>,
+    patch: Option<&str>,
+) -> Result<RankedTierListResponse, String> {
+    let http_client = shared_http_client();
+    let ddragon = get_or_init_ddragon_cache(http_client).await?;
+    fetch_ranked_tier_list(http_client, region, tier, patch, &ddragon).await
+}
+
+/// Domain service entry point for fetching a read-only Ranked champion build preview.
+pub async fn get_ranked_champion_build_service(
+    champion_id: i32,
+    position: Option<&str>,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+) -> Result<ChampionBuild, String> {
+    let http_client = shared_http_client();
+    get_recommended_build_with_filters(
+        http_client,
+        champion_id,
+        QUEUE_SOLO_DUO,
+        position,
+        tier,
+        region,
+        patch,
+    )
+    .await
 }

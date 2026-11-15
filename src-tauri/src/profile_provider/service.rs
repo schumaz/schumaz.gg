@@ -1,8 +1,10 @@
 use crate::build_provider;
 use crate::lcu_connector::LcuConnection;
-use crate::models::{DataDragonCache, PlayerProfile};
+use crate::models::{CachedProfileResult, DataDragonCache, PlayerProfile};
 
-use super::cache::{get_cached_profile_for_summoner_id, save_profile_to_dir};
+use super::cache::{
+    get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
+};
 use super::masteries_parser::parse_top_masteries;
 use super::matches_parser::parse_recent_matches_for_locale;
 use super::ranked_parser::parse_ranked_stats_for_locale;
@@ -124,4 +126,23 @@ pub async fn load_player_profile_with_cache(
 
 pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, String> {
     load_player_profile_with_cache(conn, false).await
+}
+
+/// Returns the cached profile for `summoner_id` (or the last known summoner) using the active locale.
+pub fn get_cached_profile_for_active_locale(
+    summoner_id: Option<u64>,
+) -> Option<CachedProfileResult> {
+    let locale = crate::lcu_injector::get_active_locale();
+    match summoner_id {
+        Some(id) if id > 0 => get_cached_profile_for_summoner_id(id, locale),
+        _ => get_cached_profile_for_last_summoner(locale),
+    }
+}
+
+/// Connects to the local LCU and loads the current player profile if connected.
+pub async fn fetch_live_player_profile(force_refresh: bool) -> Option<PlayerProfile> {
+    let conn = LcuConnection::connect().ok()?;
+    load_player_profile_with_cache(&conn, force_refresh)
+        .await
+        .ok()
 }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::{QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_SOLO_DUO};
 use std::sync::atomic::AtomicUsize;
 
 struct MockGateway {

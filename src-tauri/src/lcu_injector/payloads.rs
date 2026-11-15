@@ -256,3 +256,7 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
 #[cfg(test)]
 #[path = "payloads_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "payloads_items_tests.rs"]
+mod items_tests;

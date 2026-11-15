@@ -1,4 +1,4 @@
-use crate::{build_provider, lcu_injector, models};
+use crate::{build_provider, models};
 
 /// Tauri command to fetch ARAM or ARAM Mayhem champion tier list.
 #[tauri::command]
@@ -6,9 +6,7 @@ use crate::{build_provider, lcu_injector, models};
 pub async fn get_aram_tier_list(
     mode: models::AramMode,
 ) -> Result<Vec<models::AramChampionRank>, String> {
-    let http_client = build_provider::shared_http_client();
-    let ddragon = build_provider::get_or_init_ddragon_cache(http_client).await?;
-    build_provider::fetch_aram_tier_list(http_client, mode, &ddragon).await
+    build_provider::get_aram_tier_list_service(mode).await
 }
 
 /// Tauri command to fetch ARAM Mayhem augments for a specific champion key.
@@ -17,7 +15,5 @@ pub async fn get_aram_tier_list(
 pub async fn get_aram_mayhem_augments(
     champion_key: String,
 ) -> Result<Vec<models::AramAugmentEntry>, String> {
-    let http_client = build_provider::shared_http_client();
-    let locale = lcu_injector::get_active_locale();
-    build_provider::fetch_aram_mayhem_augments_for_locale(http_client, &champion_key, locale).await
+    build_provider::get_aram_mayhem_augments_service(&champion_key).await
 }
