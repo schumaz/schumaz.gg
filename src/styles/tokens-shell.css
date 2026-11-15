@@ -99,33 +99,58 @@ img {
   height: 100vh;
   max-width: none;
   margin: 0;
-  padding: 8px 16px 6px 16px;
+  padding: 0 16px 6px 16px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Header & Status Section */
+/* Seamless Transparent Top Bar & Window Controls */
 .header {
   position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 4px 16px 0 16px;
-  margin-bottom: 4px;
+  min-height: 44px;
+  margin: 0 -16px 4px -16px;
+  padding: 0 0 0 16px;
   background: transparent;
   border: none;
   flex-shrink: 0;
 }
 
-.title {
-  margin: 0 0 2px 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+.header-brand {
+  position: relative;
+  z-index: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 0;
+  min-width: 0;
+}
+
+.header-brand-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.title,
+.header-brand-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
   color: var(--text-primary);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.025em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -136,9 +161,58 @@ img {
 
 /* Status Badge */
 .status-badge-container {
+  position: relative;
+  z-index: 2;
+  justify-self: center;
   display: flex;
   justify-content: center;
-  margin-top: 4px;
+  align-items: center;
+  padding: 6px 8px;
+}
+
+.window-controls {
+  position: relative;
+  z-index: 1300;
+  justify-self: end;
+  align-self: start;
+  display: inline-flex;
+  align-items: stretch;
+  height: 34px;
+}
+
+.window-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 34px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: rgba(243, 244, 246, 0.88);
+  cursor: default;
+  outline: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.window-control-btn:hover {
+  background-color: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+.window-control-btn:active {
+  background-color: rgba(255, 255, 255, 0.055);
+}
+
+.window-control-btn.window-control-close:hover {
+  background-color: #c42b1c;
+  color: #ffffff;
+}
+
+.window-control-btn.window-control-close:active {
+  background-color: rgba(196, 43, 28, 0.85);
+  color: #ffffff;
 }
 
 .status-badge {

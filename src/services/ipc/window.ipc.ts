@@ -1,8 +1,13 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { commands, events, type WindowMinimizedChanged } from "../../types/bindings";
 import type { UnlistenFn } from "./lcu.ipc";
 
+export function isTauriWindowAvailable(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 /**
- * Typed IPC adapter for Tauri window state events and app lifecycle commands.
+ * Typed IPC adapter for Tauri window state events, native controls, and app lifecycle commands.
  */
 export const windowIpc = {
   async onWindowMinimizedChanged(
@@ -15,6 +20,51 @@ export const windowIpc = {
     return listener((event) => {
       handler(Boolean(event.payload));
     });
+  },
+
+  async isWindowMaximized(): Promise<boolean> {
+    if (!isTauriWindowAvailable()) {
+      return false;
+    }
+    try {
+      return await getCurrentWindow().isMaximized();
+    } catch {
+      return false;
+    }
+  },
+
+  async onWindowResized(handler: () => void): Promise<UnlistenFn> {
+    if (!isTauriWindowAvailable()) {
+      return () => {};
+    }
+    try {
+      return await getCurrentWindow().onResized(() => {
+        handler();
+      });
+    } catch {
+      return () => {};
+    }
+  },
+
+  async minimizeWindow(): Promise<void> {
+    if (!isTauriWindowAvailable()) {
+      return;
+    }
+    await getCurrentWindow().minimize();
+  },
+
+  async toggleMaximizeWindow(): Promise<void> {
+    if (!isTauriWindowAvailable()) {
+      return;
+    }
+    await getCurrentWindow().toggleMaximize();
+  },
+
+  async closeWindow(): Promise<void> {
+    if (!isTauriWindowAvailable()) {
+      return;
+    }
+    await getCurrentWindow().close();
   },
 
   async restartApp(): Promise<void> {

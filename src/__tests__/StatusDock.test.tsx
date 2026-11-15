@@ -1,11 +1,23 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { StatusDock } from "../components/ui/StatusDock";
+import { windowIpc } from "../services/ipc/window.ipc";
 import { SummonerInfo } from "../types";
 
 describe("StatusDock", () => {
-  it("renders disconnected status with pulsing dot and animated dots when summoner is null", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders visible brand icon/title, window controls, and disconnected status when summoner is null", () => {
     const { container } = render(<StatusDock summoner={null} />);
+
+    expect(screen.getByText("schumaz.gg")).toBeInTheDocument();
+    expect(container.querySelector(".header-brand-icon")).toBeInTheDocument();
+
+    expect(screen.getByTestId("window-minimize-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("window-maximize-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("window-close-btn")).toBeInTheDocument();
 
     expect(screen.getByTestId("status-disconnected")).toBeInTheDocument();
     expect(
@@ -41,5 +53,29 @@ describe("StatusDock", () => {
     expect(screen.queryByText(/KR1/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/500/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Nível/i)).not.toBeInTheDocument();
+  });
+
+  it("invokes window control IPC actions and updates maximize icon state", async () => {
+    const minSpy = vi.spyOn(windowIpc, "minimizeWindow").mockResolvedValue(undefined);
+    const maxSpy = vi.spyOn(windowIpc, "toggleMaximizeWindow").mockResolvedValue(undefined);
+    const closeSpy = vi.spyOn(windowIpc, "closeWindow").mockResolvedValue(undefined);
+    const isMaxSpy = vi.spyOn(windowIpc, "isWindowMaximized").mockResolvedValue(true);
+
+    render(<StatusDock summoner={null} />);
+
+    fireEvent.click(screen.getByTestId("window-minimize-btn"));
+    expect(minSpy).toHaveBeenCalledTimes(1);
+
+    const maxBtn = screen.getByTestId("window-maximize-btn");
+    expect(maxBtn.querySelector("rect")).toBeInTheDocument();
+    fireEvent.click(maxBtn);
+    expect(maxSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(isMaxSpy).toHaveBeenCalled();
+      expect(maxBtn.querySelector("path")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("window-close-btn"));
+    expect(closeSpy).toHaveBeenCalledTimes(1);
   });
 });
