@@ -119,8 +119,8 @@ describe("ProfileTab Component", () => {
     localStorage.clear();
   });
 
-  it("renders waiting state when League client is disconnected", () => {
-    render(
+  it("renders waiting state with unified island branding when League client is disconnected", () => {
+    const { container } = render(
       <ProfileTab
         summoner={null}
         profile={null}
@@ -130,8 +130,11 @@ describe("ProfileTab Component", () => {
       />
     );
 
-    expect(screen.getByTestId("profile-waiting-client")).toBeInTheDocument();
+    const waiting = screen.getByTestId("profile-waiting-client");
+    expect(waiting).toBeInTheDocument();
     expect(screen.getByText(/Aguardando Cliente do LoL/i)).toBeInTheDocument();
+    expect(screen.getByText("schumaz.gg · Perfil")).toBeInTheDocument();
+    expect(container.querySelector(".idle-card")).not.toHaveAttribute("style");
   });
 
   it("renders summoner icon, level, ranked stats with crest icons on the right, top 3 masteries, 10 matches, and omits wallpaper skin name text", () => {

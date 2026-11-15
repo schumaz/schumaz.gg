@@ -1248,7 +1248,7 @@ img {
   font-family: monospace;
 }
 
-/* Idle / Waiting State Card */
+/* Idle / Waiting State Card (Unified Color & Branding) */
 .idle-state-container {
   flex: 1;
   min-height: 0;
@@ -1263,18 +1263,76 @@ img {
   max-width: 580px;
   width: 100%;
   text-align: center;
-  padding: 32px 24px;
+  padding: 36px 28px;
   margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(
+    165deg,
+    rgba(124, 58, 237, 0.1) 0%,
+    var(--bg-card) 52%,
+    #101117 100%
+  );
+  border: 1px solid var(--border-highlight);
+  border-radius: 18px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(124, 58, 237, 0.08);
+}
+
+.idle-card:hover {
+  border-color: var(--border-highlight);
 }
 
 .idle-icon-box {
-  margin-bottom: 16px;
-  color: var(--accent-primary);
+  margin-bottom: 14px;
+  color: var(--accent-primary-hover);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 14px;
   background-color: var(--accent-subtle);
-  border-radius: 20px;
-  border: 1px solid var(--accent-subtle);
+  border-radius: 18px;
+  border: 1px solid var(--accent-border);
+  box-shadow: 0 0 24px rgba(124, 58, 237, 0.18);
+}
+
+.idle-brand-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  margin-bottom: 12px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+}
+
+.idle-card .idle-title {
+  margin: 0 0 10px 0;
+  font-size: clamp(1.5rem, 2.8vw, 1.85rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.idle-card .idle-desc {
+  margin: 0 auto;
+  max-width: 440px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.idle-card .idle-alert {
+  width: 100%;
+  margin-top: 18px;
+  text-align: left;
 }
 
 .idle-actions {
@@ -2249,14 +2307,14 @@ img {
   z-index: 1;
 }
 
-[data-testid="view-profile"] .card {
+[data-testid="view-profile"] .card:not(.idle-card) {
   border-radius: 16px;
   overflow: hidden;
   isolation: isolate;
   box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.28);
 }
 
-[data-testid="view-profile"] .card,
+[data-testid="view-profile"] .card:not(.idle-card),
 .container.profile-active .floating-dock {
   backdrop-filter: blur(var(--profile-ui-blur, 16px));
   -webkit-backdrop-filter: blur(var(--profile-ui-blur, 16px));
@@ -2265,10 +2323,6 @@ img {
 .container.profile-active .floating-dock {
   background: rgba(19, 20, 26, 0.44);
   box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(0, 0, 0, 0.28);
-}
-
-[data-testid="view-profile"] .idle-card {
-  background: rgba(19, 20, 26, 0.38);
 }
 
 .profile-hero-card {

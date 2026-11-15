@@ -1,6 +1,7 @@
 import { CSSProperties, useMemo, useState } from "react";
 import { PlayerProfile, RecentMatchInfo, SummonerInfo } from "../types";
 import { profileBlurPercentToPx } from "../hooks/usePreferences";
+import { IdleIsland } from "./IdleState";
 
 interface ProfileTabProps {
   summoner: SummonerInfo | null;
@@ -200,58 +201,50 @@ export function ProfileTab({
       style={{ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties}
     >
       {!summoner ? (
-        <div className="idle-state-container" data-testid="profile-waiting-client">
-          <section className="card idle-card" style={glassBlurStyle}>
-            <div className="idle-icon-box">
-              <svg
-                viewBox="0 0 24 24"
-                width="48"
-                height="48"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </div>
-            <h2>Aguardando Cliente do LoL</h2>
-            <p className="card-desc">
-              Abra o cliente do League of Legends para carregar seu perfil, maestrias e partidas recentes.
-            </p>
-            {errorMsg && (
-              <div className="alert alert-error" role="alert">
-                <strong>Erro: </strong> {errorMsg}
-              </div>
-            )}
-          </section>
-        </div>
+        <IdleIsland
+          testId="profile-waiting-client"
+          badge="schumaz.gg · Perfil"
+          title="Aguardando Cliente do LoL"
+          description="Abra o cliente do League of Legends para carregar seu perfil, maestrias e partidas recentes."
+          errorMsg={errorMsg}
+          icon={
+            <svg
+              viewBox="0 0 24 24"
+              width="42"
+              height="42"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          }
+        />
       ) : loading && !profile ? (
-        <div className="idle-state-container" data-testid="profile-loading">
-          <section className="card idle-card" style={glassBlurStyle}>
-            <div className="idle-icon-box">
-              <svg
-                viewBox="0 0 24 24"
-                width="44"
-                height="44"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </div>
-            <h2>Carregando Perfil</h2>
-            <p className="card-desc">
-              Obtendo ícone, nível, wallpaper do perfil, maestrias e histórico recente...
-            </p>
-          </section>
-        </div>
+        <IdleIsland
+          testId="profile-loading"
+          badge="schumaz.gg · Perfil"
+          title="Carregando Perfil"
+          description="Obtendo ícone, nível, wallpaper do perfil, maestrias e histórico recente..."
+          icon={
+            <svg
+              viewBox="0 0 24 24"
+              width="42"
+              height="42"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          }
+        />
       ) : (
         <div className="profile-layout" data-testid="profile-loaded">
           {/* Top Profile Hero Card */}
