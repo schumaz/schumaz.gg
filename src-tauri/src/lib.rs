@@ -238,12 +238,12 @@ pub fn run() {
 
                 // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/ & Cache/ subfolders
                 let paths = storage::AppPaths::resolve_from_app(&app_handle)
-                    .map_err(|e| std::io::Error::other(e))?;
-                paths.ensure_dirs().map_err(|e| std::io::Error::other(e))?;
+                    .map_err(std::io::Error::other)?;
+                paths.ensure_dirs().map_err(std::io::Error::other)?;
                 storage::set_global_paths(paths.clone());
 
                 // 2. Load or migrate UserSettings.ini BEFORE creating window or spawning background tasks
-                let legacy_gpu_path = commands::resolve_legacy_graphics_config_path(&app_handle);
+                let legacy_gpu_path = storage::resolve_legacy_graphics_config_path(&app_handle);
                 let settings = storage::load_or_migrate_user_settings(
                     &paths.user_settings_ini_path(),
                     legacy_gpu_path.as_deref(),
@@ -257,7 +257,7 @@ pub fn run() {
                     *guard = settings.window.clone();
                 }
 
-                app.manage(commands::GraphicsState::new(
+                app.manage(storage::GraphicsState::new(
                     settings.graphics.hardware_acceleration,
                 ));
 
@@ -288,7 +288,7 @@ pub fn run() {
                     window_config.center = bounds.center;
                     window_config.maximized = bounds.maximized;
                     window_config.additional_browser_args =
-                        Some(commands::browser_args_for_hardware_acceleration(
+                        Some(storage::browser_args_for_hardware_acceleration(
                             settings.graphics.hardware_acceleration,
                         ));
                     tauri::WebviewWindowBuilder::from_config(&app_handle, &window_config)?
