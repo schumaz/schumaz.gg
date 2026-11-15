@@ -1,3 +1,4 @@
+import "./NavigationDock.css";
 import { ActiveTab } from "../types";
 
 interface NavigationDockProps {
@@ -18,6 +19,12 @@ export function NavigationDock({
 }: NavigationDockProps) {
   return (
     <nav className="floating-dock" aria-label="Navegação Principal">
+      <span className="dock-beam-wrap" aria-hidden="true">
+        <span className="dock-beam-ring">
+          <span className="dock-beam-glow" />
+        </span>
+      </span>
+
       <button
         type="button"
         className={`dock-btn ${activeTab === "profile" ? "active" : ""}`}
