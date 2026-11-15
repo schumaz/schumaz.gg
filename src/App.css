@@ -143,6 +143,7 @@ img {
 
 .status-badge {
   --status-badge-tint: transparent;
+  contain: layout style;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -221,6 +222,7 @@ img {
   flex-direction: column;
   overflow: hidden;
   transform-origin: center top;
+  backface-visibility: hidden;
 }
 
 .tab-content.active-tab {
@@ -264,6 +266,40 @@ img {
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* Pause & drop all animations, compositor hints, and blur surfaces while minimized */
+.app-minimized *,
+.app-minimized *::before,
+.app-minimized *::after {
+  animation: none !important;
+  transition: none !important;
+  will-change: auto !important;
+}
+
+.app-minimized .dot-orange.dot-pulsing::after,
+.app-minimized .idle-radar-ring,
+.app-minimized .loading-bar-fill,
+.app-minimized .skeleton-block::after {
+  display: none !important;
+}
+
+.app-minimized .status-badge,
+.app-minimized .floating-dock,
+.app-minimized .profile-hero-card,
+.app-minimized .card,
+.app-minimized .settings-modal-backdrop,
+.gpu-effects-disabled .status-badge,
+.gpu-effects-disabled .floating-dock,
+.gpu-effects-disabled .profile-hero-card,
+.gpu-effects-disabled .card,
+.gpu-effects-disabled .settings-modal-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.gpu-effects-disabled * {
+  will-change: auto !important;
 }
 
 /* Elevated Cards - iOS/Telegram Dark Style */
@@ -1613,6 +1649,47 @@ img {
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
+/* Pending GPU Restart Banner inside Diversos card */
+.settings-restart-banner {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+}
+
+.settings-restart-text {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.settings-restart-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--accent-border);
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+
+.settings-restart-btn:hover {
+  background-color: var(--accent-primary-hover);
+}
+
+.settings-restart-btn:active {
+  transform: scale(0.97);
+}
+
 /* Segmented Control - iOS Style */
 .segmented-control-container {
   display: flex;
@@ -2193,6 +2270,8 @@ img {
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
+  contain: strict;
+  isolation: isolate;
 }
 
 .profile-wallpaper-img {
@@ -2201,7 +2280,8 @@ img {
   object-fit: cover;
   object-position: center 20%;
   opacity: 0.56;
-  transform: scale(1.06);
+  transform: scale(1.06) translateZ(0);
+  backface-visibility: hidden;
   transition: opacity 0.25s ease;
 }
 
@@ -4363,6 +4443,8 @@ img {
 }
 
 .spinner {
+  will-change: transform;
+  backface-visibility: hidden;
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -4468,19 +4550,19 @@ img {
 
 @keyframes loadingBarSweep {
   0% {
-    transform: translateX(-100%);
+    transform: translate3d(-100%, 0, 0);
   }
   100% {
-    transform: translateX(320%);
+    transform: translate3d(320%, 0, 0);
   }
 }
 
 @keyframes skeletonShimmer {
   0% {
-    transform: translateX(-100%);
+    transform: translate3d(-100%, 0, 0);
   }
   100% {
-    transform: translateX(100%);
+    transform: translate3d(100%, 0, 0);
   }
 }
 
@@ -4534,6 +4616,7 @@ img {
 
 /* Indeterminate top progress bar for in-place reloads */
 .loading-bar-track {
+  contain: layout style paint;
   position: absolute;
   top: 0;
   left: 0;
@@ -4547,6 +4630,8 @@ img {
 }
 
 .loading-bar-fill {
+  will-change: transform;
+  backface-visibility: hidden;
   height: 100%;
   width: 36%;
   border-radius: 9999px;
@@ -4615,6 +4700,7 @@ img {
 }
 
 .skeleton-block {
+  contain: layout style paint;
   position: relative;
   overflow: hidden;
   border-radius: 6px;
@@ -4623,6 +4709,8 @@ img {
 }
 
 .skeleton-block::after {
+  will-change: transform;
+  backface-visibility: hidden;
   content: "";
   position: absolute;
   inset: 0;

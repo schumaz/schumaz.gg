@@ -99,7 +99,7 @@ describe("SettingsTab", () => {
     expect(handleUpdate).toHaveBeenCalledWith("patch48hProtection", true);
   });
 
-  it("renders 10% default blur slider, clickable/editable percentage number, wallpaper toggle, and unified Runas island order", () => {
+  it("renders 10% default blur slider, clickable/editable percentage number, wallpaper toggle, Runas island, and Diversos island", () => {
     const handleBlurChange = vi.fn();
     const handleWallpaperToggle = vi.fn();
 
@@ -143,11 +143,12 @@ describe("SettingsTab", () => {
     fireEvent.click(wpToggle);
     expect(handleWallpaperToggle).toHaveBeenCalledWith(false);
 
-    // Check subgroup hierarchy: Perfil card + single unified Runas island card
+    // Check subgroup hierarchy: Perfil + Runas + Diversos islands
     const groups = Array.from(container.querySelectorAll(".settings-section-group"));
-    expect(groups).toHaveLength(2);
+    expect(groups).toHaveLength(3);
     expect(groups[0]).toHaveAttribute("data-testid", "settings-group-profile");
     expect(groups[1]).toHaveAttribute("data-testid", "settings-group-runes");
+    expect(groups[2]).toHaveAttribute("data-testid", "settings-group-misc");
 
     const cards = Array.from(container.querySelectorAll(".settings-group-card")).map((el) =>
       el.getAttribute("data-testid")
@@ -155,6 +156,7 @@ describe("SettingsTab", () => {
     expect(cards).toEqual([
       "settings-subgroup-appearance",
       "settings-subgroup-runes",
+      "settings-subgroup-misc",
     ]);
 
     const runesCard = screen.getByTestId("settings-subgroup-runes");
@@ -166,6 +168,48 @@ describe("SettingsTab", () => {
       "settings-subgroup-auto-inject",
       "settings-subgroup-patch-protection",
     ]);
+  });
+
+  it("renders Diversos GPU acceleration toggle and restart banner when restart is required", () => {
+    const handleGpuChange = vi.fn();
+    const handleRestart = vi.fn();
+
+    const { rerender } = render(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={vi.fn()}
+        hardwareAcceleration={true}
+        onHardwareAccelerationChange={handleGpuChange}
+        gpuRestartRequired={false}
+        onRestartApp={handleRestart}
+      />
+    );
+
+    const miscGroup = screen.getByTestId("settings-group-misc");
+    expect(miscGroup).toHaveTextContent("Diversos");
+
+    const gpuToggle = screen.getByTestId("hardware-acceleration-toggle");
+    expect(gpuToggle).toBeChecked();
+    expect(screen.queryByTestId("gpu-restart-banner")).not.toBeInTheDocument();
+
+    fireEvent.click(gpuToggle);
+    expect(handleGpuChange).toHaveBeenCalledWith(false);
+
+    rerender(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={vi.fn()}
+        hardwareAcceleration={false}
+        onHardwareAccelerationChange={handleGpuChange}
+        gpuRestartRequired={true}
+        onRestartApp={handleRestart}
+      />
+    );
+
+    expect(screen.getByTestId("hardware-acceleration-toggle")).not.toBeChecked();
+    expect(screen.getByTestId("gpu-restart-banner")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("gpu-restart-btn"));
+    expect(handleRestart).toHaveBeenCalledTimes(1);
   });
 
   it("blocks blur slider and percentage editing when Fundo Visível is unchecked", () => {

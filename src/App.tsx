@@ -7,6 +7,7 @@ import { useLcuEvents } from "./hooks/useLcuEvents";
 import { usePlayerProfile } from "./hooks/usePlayerProfile";
 import { useAram } from "./hooks/useAram";
 import { useRanked } from "./hooks/useRanked";
+import { useWindowMinimized } from "./hooks/useWindowMinimized";
 import { computeOrderedSpells } from "./utils/spells";
 import {
   StatusDock,
@@ -31,6 +32,7 @@ function App() {
   const [splashFallbackUsed, setSplashFallbackUsed] = useState(false);
   const [splashBroken, setSplashBroken] = useState(false);
 
+  const isAppMinimized = useWindowMinimized();
   const rankedPatchChangeRef = useRef<(() => void) | null>(null);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
@@ -60,6 +62,10 @@ function App() {
     updateProfileBlur,
     wallpaperVisible,
     updateWallpaperVisible,
+    hardwareAcceleration,
+    updateHardwareAcceleration,
+    gpuRestartRequired,
+    restartApp,
   } = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
 
   const {
@@ -141,7 +147,9 @@ function App() {
 
   return (
     <main
-      className={`container ${activeTab === "profile" ? "profile-active" : ""}`}
+      className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
+        isAppMinimized ? "app-minimized" : ""
+      } ${!hardwareAcceleration ? "gpu-effects-disabled" : ""}`}
       style={
         activeTab === "profile"
           ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties)
@@ -290,6 +298,10 @@ function App() {
           onProfileBlurChange={updateProfileBlur}
           wallpaperVisible={wallpaperVisible}
           onWallpaperVisibleChange={updateWallpaperVisible}
+          hardwareAcceleration={hardwareAcceleration}
+          onHardwareAccelerationChange={updateHardwareAcceleration}
+          gpuRestartRequired={gpuRestartRequired}
+          onRestartApp={restartApp}
           isActive={activeTab === "settings"}
         />
       </div>
@@ -300,6 +312,7 @@ function App() {
         onTabChange={setActiveTab}
         onAramClick={handleAramDockClick}
         onRankedClick={handleRankedDockClick}
+        animationsPaused={isAppMinimized}
       />
     </main>
   );

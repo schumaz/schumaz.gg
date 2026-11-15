@@ -38,6 +38,12 @@ export const commands = {
 	 *  without emitting Champ Select events or injecting into LCU.
 	 */
 	getRankedChampionBuild: (championId: number, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_ranked_champion_build", { championId, position, tier, region, patch }),
+	/**  Returns the saved GPU hardware acceleration setting and whether it was active at startup. */
+	getHardwareAccelerationStatus: () => __TAURI_INVOKE<HardwareAccelerationStatus>("get_hardware_acceleration_status"),
+	/**  Saves the GPU hardware acceleration preference to disk for the next startup. */
+	setHardwareAcceleration: (enabled: boolean) => __TAURI_INVOKE<HardwareAccelerationStatus>("set_hardware_acceleration", { enabled }),
+	/**  Restarts the Tauri application so updated WebView2 GPU flags take effect. */
+	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
 
 /** Events */
@@ -52,6 +58,7 @@ export const events = {
 	matchEnded: makeEvent<MatchEnded, MatchEnded>("match-ended"),
 	profileRefreshRequested: makeEvent<ProfileRefreshRequested, ProfileRefreshRequested>("profile-refresh-requested"),
 	recommendedBuild: makeEvent<RecommendedBuild_Serialize, RecommendedBuild_Deserialize>("recommended-build"),
+	windowMinimizedChanged: makeEvent<WindowMinimizedChanged, WindowMinimizedChanged>("window-minimized-changed"),
 };
 
 /* Types */
@@ -243,6 +250,11 @@ export type ChampionMasteryInfo = {
 export type FlashKeyPreference = "D" | "F";
 
 export type GameflowPhaseChanged = string;
+
+export type HardwareAccelerationStatus = {
+	enabled: boolean,
+	active_at_startup: boolean,
+};
 
 /**  Summary report returned after attempting an injection into the LCU. */
 export type InjectionReport = {
@@ -564,6 +576,9 @@ export type UserPreferences_Serialize = {
 	flashKey: FlashKeyPreference,
 	patch48hProtection: boolean,
 };
+
+/**  Emitted when the main window becomes minimized/hidden (`true`) or restored/visible (`false`). */
+export type WindowMinimizedChanged = boolean;
 
 /* Tauri Specta runtime */
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;

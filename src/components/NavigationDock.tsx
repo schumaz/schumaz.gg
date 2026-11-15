@@ -6,6 +6,7 @@ interface NavigationDockProps {
   onTabChange: (tab: ActiveTab) => void;
   onRankedClick?: () => void;
   onAramClick?: () => void;
+  animationsPaused?: boolean;
 }
 
 const ARAM_DOCK_ICON_URL =
@@ -16,14 +17,17 @@ export function NavigationDock({
   onTabChange,
   onRankedClick,
   onAramClick,
+  animationsPaused = false,
 }: NavigationDockProps) {
   return (
     <nav className="floating-dock" aria-label="Navegação Principal">
-      <span className="dock-beam-wrap" aria-hidden="true">
-        <span className="dock-beam-ring">
-          <span className="dock-beam-glow" />
+      {!animationsPaused && (
+        <span className="dock-beam-wrap" aria-hidden="true">
+          <span className="dock-beam-ring">
+            <span className="dock-beam-glow" />
+          </span>
         </span>
-      </span>
+      )}
 
       <button
         type="button"

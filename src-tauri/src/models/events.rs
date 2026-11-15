@@ -36,3 +36,7 @@ pub struct GameflowPhaseChanged(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 pub struct MatchEnded;
+
+/// Emitted when the main window becomes minimized/hidden (`true`) or restored/visible (`false`).
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct WindowMinimizedChanged(pub bool);

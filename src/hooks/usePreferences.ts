@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   DEFAULT_PREFERENCES,
   FlashKeyPreference,
@@ -82,10 +82,26 @@ export function usePreferences(
   const [preferences, setPreferences] = useState<UserPreferences>(loadInitialPreferences);
   const [profileBlur, setProfileBlur] = useState<number>(loadInitialProfileBlur);
   const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(loadInitialWallpaperVisible);
+  const [hardwareAcceleration, setHardwareAcceleration] = useState<boolean>(true);
+  const [gpuRestartRequired, setGpuRestartRequired] = useState<boolean>(false);
+  const gpuActiveAtStartupRef = useRef<boolean>(true);
 
   useEffect(() => {
     // Sync initial preferences with backend
     commands.syncUserPreferences(preferences).catch(() => {});
+
+    if (typeof commands.getHardwareAccelerationStatus === "function") {
+      commands
+        .getHardwareAccelerationStatus()
+        .then((status) => {
+          if (status && typeof status.enabled === "boolean") {
+            gpuActiveAtStartupRef.current = status.active_at_startup;
+            setHardwareAcceleration(status.enabled);
+            setGpuRestartRequired(status.enabled !== status.active_at_startup);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const updatePreference = <K extends keyof UserPreferences>(
@@ -134,6 +150,30 @@ export function usePreferences(
     }
   };
 
+  const updateHardwareAcceleration = (enabled: boolean) => {
+    setHardwareAcceleration(enabled);
+    setGpuRestartRequired(enabled !== gpuActiveAtStartupRef.current);
+
+    if (typeof commands.setHardwareAcceleration === "function") {
+      commands
+        .setHardwareAcceleration(enabled)
+        .then((status) => {
+          if (status && typeof status.enabled === "boolean") {
+            gpuActiveAtStartupRef.current = status.active_at_startup;
+            setHardwareAcceleration(status.enabled);
+            setGpuRestartRequired(status.enabled !== status.active_at_startup);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  const restartApp = () => {
+    if (typeof commands.restartApp === "function") {
+      commands.restartApp().catch(() => {});
+    }
+  };
+
   return {
     preferences,
     updatePreference,
@@ -141,5 +181,9 @@ export function usePreferences(
     updateProfileBlur,
     wallpaperVisible,
     updateWallpaperVisible,
+    hardwareAcceleration,
+    updateHardwareAcceleration,
+    gpuRestartRequired,
+    restartApp,
   };
 }

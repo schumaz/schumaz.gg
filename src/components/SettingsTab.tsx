@@ -17,6 +17,10 @@ interface SettingsTabProps {
   onProfileBlurChange?: (blurPercent: number) => void;
   wallpaperVisible?: boolean;
   onWallpaperVisibleChange?: (visible: boolean) => void;
+  hardwareAcceleration?: boolean;
+  onHardwareAccelerationChange?: (enabled: boolean) => void;
+  gpuRestartRequired?: boolean;
+  onRestartApp?: () => void;
   isActive?: boolean;
 }
 
@@ -27,6 +31,10 @@ export function SettingsTab({
   onProfileBlurChange,
   wallpaperVisible = true,
   onWallpaperVisibleChange,
+  hardwareAcceleration = true,
+  onHardwareAccelerationChange,
+  gpuRestartRequired = false,
+  onRestartApp,
   isActive = true,
 }: SettingsTabProps) {
   const [isEditingBlur, setIsEditingBlur] = useState(false);
@@ -375,6 +383,61 @@ export function SettingsTab({
                 </label>
               </div>
             </div>
+          </section>
+        </div>
+
+        {/* Group 3: Diversos */}
+        <div className="settings-section-group" data-testid="settings-group-misc">
+          <h2 className="settings-section-title">Diversos</h2>
+
+          <section className="card settings-group-card" data-testid="settings-subgroup-misc">
+            <div className="settings-group-header">
+              <h3>Gráficos e Desempenho</h3>
+              <p className="card-desc">
+                Controle o uso de aceleração por hardware para renderização da interface.
+              </p>
+            </div>
+
+            <div className="settings-list">
+              <label className="settings-item">
+                <div className="settings-item-text">
+                  <span className="settings-item-title">
+                    Renderização Acelerada por Hardware (GPU)
+                  </span>
+                  <span className="settings-item-desc">
+                    Usa a GPU para renderizar animações, transições e efeitos de desfoque com maior fluidez. Desative para economizar recursos gráficos ou evitar conflitos de driver.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  className="toggle-switch"
+                  aria-label="Renderização Acelerada por Hardware (GPU)"
+                  data-testid="hardware-acceleration-toggle"
+                  checked={hardwareAcceleration}
+                  onChange={(e) => onHardwareAccelerationChange?.(e.target.checked)}
+                />
+              </label>
+            </div>
+
+            {gpuRestartRequired && (
+              <div
+                className="settings-restart-banner"
+                role="status"
+                data-testid="gpu-restart-banner"
+              >
+                <span className="settings-restart-text">
+                  Reinicie o aplicativo para aplicar completamente a alteração de aceleração por GPU.
+                </span>
+                <button
+                  type="button"
+                  className="settings-restart-btn"
+                  data-testid="gpu-restart-btn"
+                  onClick={() => onRestartApp?.()}
+                >
+                  Reiniciar agora
+                </button>
+              </div>
+            )}
           </section>
         </div>
       </div>

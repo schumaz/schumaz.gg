@@ -1,9 +1,10 @@
 /* ============================================================
-   NavigationDock — Traveling Purple Border Beam
+   NavigationDock — Traveling Purple Border Beam (GPU-Composited)
    ============================================================ */
 
 .floating-dock {
   position: relative;
+  contain: layout style;
 }
 
 .dock-btn {
@@ -17,21 +18,22 @@
   border-radius: inherit;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 6px rgba(124, 58, 237, 0.55));
-  transition: opacity 0.25s ease, filter 0.25s ease;
+  opacity: 0.92;
+  contain: layout style paint;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  transition: opacity 0.25s ease;
 }
 
 .floating-dock:hover .dock-beam-wrap {
   opacity: 1;
-  filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.72));
 }
 
 .dock-beam-ring {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.5px;
+  padding: 2px;
   overflow: hidden;
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -43,7 +45,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 128px;
+  width: 132px;
   height: 44px;
   offset-path: inset(0 round 9999px);
   offset-anchor: 50% 50%;
@@ -51,12 +53,13 @@
   background: radial-gradient(
     ellipse 50% 50% at 64% 50%,
     rgba(221, 214, 254, 0.98) 0%,
-    rgba(167, 139, 250, 0.92) 22%,
-    rgba(124, 58, 237, 0.68) 52%,
+    rgba(167, 139, 250, 0.94) 24%,
+    rgba(124, 58, 237, 0.72) 54%,
     rgba(124, 58, 237, 0) 100%
   );
   animation: dockBeamOrbit 6.5s linear infinite;
-  will-change: offset-distance;
+  will-change: offset-distance, transform;
+  backface-visibility: hidden;
 }
 
 @keyframes dockBeamOrbit {
@@ -68,6 +71,15 @@
   }
 }
 
+.app-minimized .dock-beam-wrap {
+  display: none !important;
+}
+
+.app-minimized .dock-beam-glow {
+  animation: none !important;
+  will-change: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dock-beam-wrap {
     display: none;
@@ -75,5 +87,6 @@
 
   .dock-beam-glow {
     animation: none !important;
+    will-change: auto !important;
   }
 }

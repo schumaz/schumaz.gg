@@ -6,9 +6,14 @@ pub mod models;
 pub mod profile_provider;
 pub mod ws_listener;
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 use specta_typescript::Typescript;
 use tauri::Manager;
-use tauri_specta::{Builder, collect_commands, collect_events};
+use tauri_specta::{Builder, Event, collect_commands, collect_events};
 
 /// Flashes the Windows taskbar icon continuously until the user clicks/focuses the window.
 pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
@@ -33,7 +38,10 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_aram_tier_list,
             commands::get_aram_mayhem_augments,
             commands::get_ranked_tier_list,
-            commands::get_ranked_champion_build
+            commands::get_ranked_champion_build,
+            commands::get_hardware_acceleration_status,
+            commands::set_hardware_acceleration,
+            commands::restart_app
         ])
         .events(collect_events![
             models::LcuConnected,
@@ -45,7 +53,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             models::ChampSelectReconciled,
             models::ProfileRefreshRequested,
             models::GameflowPhaseChanged,
-            models::MatchEnded
+            models::MatchEnded,
+            models::WindowMinimizedChanged
         ])
         .dangerously_cast_bigints_to_number()
 }
@@ -66,17 +75,56 @@ pub fn run() {
         .export(Typescript::default(), "../src/types/bindings.ts")
         .expect("Failed to export TypeScript bindings");
 
+    let was_minimized = Arc::new(AtomicBool::new(false));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::Focused(true)) {
-                let _ = window.request_user_attention(None);
+        .on_window_event({
+            let was_minimized = Arc::clone(&was_minimized);
+            move |window, event| {
+                if matches!(event, tauri::WindowEvent::Focused(true)) {
+                    let _ = window.request_user_attention(None);
+                }
+
+                if window.label() == "main"
+                    && matches!(
+                        event,
+                        tauri::WindowEvent::Resized(_)
+                            | tauri::WindowEvent::Moved(_)
+                            | tauri::WindowEvent::Focused(_)
+                    )
+                {
+                    let minimized = window.is_minimized().unwrap_or(false)
+                        || !window.is_visible().unwrap_or(true);
+                    let prev = was_minimized.swap(minimized, Ordering::SeqCst);
+                    if prev != minimized {
+                        let _ = models::WindowMinimizedChanged(minimized).emit(window.app_handle());
+                    }
+                }
             }
         })
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
             let app_handle = app.handle().clone();
+
+            let graphics_config_path = commands::resolve_graphics_config_path(&app_handle);
+            let hardware_acceleration = graphics_config_path
+                .as_deref()
+                .map(commands::load_hardware_acceleration_from_path)
+                .unwrap_or(true);
+
+            app.manage(commands::GraphicsState::new(
+                hardware_acceleration,
+                graphics_config_path,
+            ));
+
+            if let Some(mut window_config) = app.config().app.windows.first().cloned() {
+                window_config.additional_browser_args = Some(
+                    commands::browser_args_for_hardware_acceleration(hardware_acceleration),
+                );
+                tauri::WebviewWindowBuilder::from_config(&app_handle, &window_config)?.build()?;
+            }
 
             // Background task 1: Monitor LCU process liveness
             let lcu_handle = app_handle.clone();
