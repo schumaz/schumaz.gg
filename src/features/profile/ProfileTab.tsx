@@ -89,10 +89,16 @@ export function ProfileTab({
   );
 
   const profileUiBlurPx = profileBlurPercentToPx(profileBlur);
-  const glassBlurStyle: CSSProperties = {
-    backdropFilter: `blur(${profileUiBlurPx}px)`,
-    WebkitBackdropFilter: `blur(${profileUiBlurPx}px)`,
-  };
+  const glassBlurStyle: CSSProperties =
+    profileUiBlurPx > 0
+      ? {
+          backdropFilter: `blur(${profileUiBlurPx}px)`,
+          WebkitBackdropFilter: `blur(${profileUiBlurPx}px)`,
+        }
+      : {
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
+        };
 
   return (
     <div

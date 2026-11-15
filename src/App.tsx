@@ -91,6 +91,7 @@ function App() {
 
   const playerProfile = usePlayerProfile(lcu.summoner, locale);
   const profileUiBlurPx = profileBlurPercentToPx(prefs.profileBlur);
+  const profileBlurOff = activeTab === "profile" && profileUiBlurPx <= 0;
 
   const handleInvertSpells = async () => {
     prefs.updatePreference("flashKey", preferences.flashKey === "D" ? "F" : "D");
@@ -112,8 +113,10 @@ function App() {
     <I18nProvider locale={locale} onLocaleChange={prefs.changeLanguage}>
       <main
         className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
-          isAppMinimized ? "app-minimized" : ""
-        } ${!prefs.hardwareAcceleration ? "gpu-effects-disabled" : ""}`}
+          profileBlurOff ? "profile-blur-off" : ""
+        } ${isAppMinimized ? "app-minimized" : ""} ${
+          !prefs.hardwareAcceleration ? "gpu-effects-disabled" : ""
+        }`}
         style={activeTab === "profile" ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties) : undefined}
       >
         <ProfileWallpaperBackdrop
@@ -223,7 +226,7 @@ function App() {
           onTabChange={setActiveTab}
           onAramClick={handleAramDockClick}
           onRankedClick={handleRankedDockClick}
-          animationsPaused={isAppMinimized}
+          animationsPaused={isAppMinimized || !prefs.hardwareAcceleration}
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 

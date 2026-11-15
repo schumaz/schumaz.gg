@@ -1,5 +1,5 @@
 /* ============================================================
-   NavigationDock — Traveling Purple Border Beam (GPU-Composited)
+   NavigationDock — Rotating Conic Border Beam (GPU-Composited)
    ============================================================ */
 
 .floating-dock {
@@ -35,6 +35,7 @@
   border-radius: inherit;
   padding: 2px;
   overflow: hidden;
+  contain: strict;
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -43,39 +44,40 @@
 
 .dock-beam-glow {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 132px;
-  height: 44px;
-  offset-path: inset(0 round 9999px);
-  offset-anchor: 50% 50%;
-  offset-rotate: auto;
-  background: radial-gradient(
-    ellipse 50% 50% at 64% 50%,
-    rgba(221, 214, 254, 0.98) 0%,
-    rgba(167, 139, 250, 0.94) 24%,
-    rgba(124, 58, 237, 0.72) 54%,
-    rgba(124, 58, 237, 0) 100%
+  top: 50%;
+  left: 50%;
+  width: 220%;
+  aspect-ratio: 1;
+  transform: translate3d(-50%, -50%, 0) rotate(0deg);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 255deg,
+    rgba(124, 58, 237, 0.55) 295deg,
+    rgba(167, 139, 250, 0.92) 332deg,
+    rgba(221, 214, 254, 0.98) 350deg,
+    transparent 360deg
   );
   animation: dockBeamOrbit 6.5s linear infinite;
-  will-change: offset-distance, transform;
+  will-change: transform;
   backface-visibility: hidden;
 }
 
 @keyframes dockBeamOrbit {
   0% {
-    offset-distance: 0%;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg);
   }
   100% {
-    offset-distance: 100%;
+    transform: translate3d(-50%, -50%, 0) rotate(360deg);
   }
 }
 
-.app-minimized .dock-beam-wrap {
+.app-minimized .dock-beam-wrap,
+.gpu-effects-disabled .dock-beam-wrap {
   display: none !important;
 }
 
-.app-minimized .dock-beam-glow {
+.app-minimized .dock-beam-glow,
+.gpu-effects-disabled .dock-beam-glow {
   animation: none !important;
   will-change: auto !important;
 }

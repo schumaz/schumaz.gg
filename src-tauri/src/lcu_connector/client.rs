@@ -1,5 +1,7 @@
 use irelia::rest::LcuClient;
 
+use crate::lcu_connector::discovery;
+
 pub type DefaultRequestClient = hyper_util::client::legacy::Client<
     hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
     http_body_util::Full<bytes::Bytes>,
@@ -13,14 +15,9 @@ pub struct LcuConnection {
 }
 
 impl LcuConnection {
-    /// Attempts to locate and connect to the active League Client process (LeagueClientUx.exe).
+    /// Connects to the active League Client using cached credentials/HTTP pool or lightweight discovery.
     pub fn connect() -> Result<Self, String> {
-        // Ensure rustls has a default crypto provider installed to avoid runtime ambiguity
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        LcuClient::connect()
-            .map(|client| Self { client })
-            .map_err(|err| format!("Failed to connect to LCU process: {:?}", err))
+        discovery::connect_lcu_client().map(|client| Self { client })
     }
 
     pub(super) fn raw_client(&self) -> &ConnectedLcuClient {
@@ -39,10 +36,10 @@ impl LcuConnection {
         endpoint: &str,
         context: &str,
     ) -> Result<Option<serde_json::Value>, String> {
-        self.client
-            .get(endpoint)
-            .await
-            .map_err(|err| format!("Error requesting {}: {:?}", context, err))
+        self.client.get(endpoint).await.map_err(|err| {
+            discovery::maybe_invalidate_on_error(&err);
+            format!("Error requesting {}: {:?}", context, err)
+        })
     }
 
     pub(super) async fn get_json_required(
@@ -61,11 +58,11 @@ impl LcuConnection {
         err_prefix: &str,
         empty_err: &str,
     ) -> Result<serde_json::Value, String> {
-        let response: Option<serde_json::Value> = self
-            .client
-            .post(endpoint, payload)
-            .await
-            .map_err(|err| format!("{}: {:?}", err_prefix, err))?;
+        let response: Option<serde_json::Value> =
+            self.client.post(endpoint, payload).await.map_err(|err| {
+                discovery::maybe_invalidate_on_error(&err);
+                format!("{}: {:?}", err_prefix, err)
+            })?;
 
         response.ok_or_else(|| empty_err.to_string())
     }
@@ -77,11 +74,11 @@ impl LcuConnection {
         err_prefix: &str,
         empty_err: &str,
     ) -> Result<serde_json::Value, String> {
-        let response: Option<serde_json::Value> = self
-            .client
-            .put(endpoint, payload)
-            .await
-            .map_err(|err| format!("{}: {:?}", err_prefix, err))?;
+        let response: Option<serde_json::Value> =
+            self.client.put(endpoint, payload).await.map_err(|err| {
+                discovery::maybe_invalidate_on_error(&err);
+                format!("{}: {:?}", err_prefix, err)
+            })?;
 
         response.ok_or_else(|| empty_err.to_string())
     }
@@ -103,6 +100,7 @@ impl LcuConnection {
                 if Self::is_eof_error(&err_str) {
                     Ok(())
                 } else {
+                    discovery::maybe_invalidate_on_error(&err);
                     Err(format!("{}: {}", err_prefix, err_str))
                 }
             }
@@ -125,6 +123,7 @@ impl LcuConnection {
                 if Self::is_eof_error(&err_str) {
                     Ok(())
                 } else {
+                    discovery::maybe_invalidate_on_error(&err);
                     Err(format!("{}: {}", err_prefix, err_str))
                 }
             }

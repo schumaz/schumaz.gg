@@ -212,7 +212,6 @@
 }
 
 .skeleton-block::after {
-  will-change: transform;
   backface-visibility: hidden;
   content: "";
   position: absolute;

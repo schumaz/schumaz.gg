@@ -2,6 +2,7 @@
 //! Handles locating the client, authenticating via Basic Auth, and performing REST calls.
 
 pub mod client;
+pub mod discovery;
 pub mod endpoints;
 pub mod missions_parser;
 pub mod missions_runner;
@@ -10,6 +11,7 @@ pub mod monitor;
 
 pub use crate::models::{LcuStatus, SummonerInfo};
 pub use client::{ConnectedLcuClient, DefaultRequestClient, LcuConnection};
+pub use discovery::{invalidate_lcu_credentials, shared_request_client};
 pub use endpoints::*;
 pub use missions_parser::*;
 pub use missions_runner::*;

@@ -100,6 +100,15 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
     expect(screen.getByTestId("top-masteries-card").style.backdropFilter).toBe("blur(32px)");
 
     fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
+    fireEvent.click(screen.getByTestId("profile-blur-value"));
+    const zeroInput = screen.getByTestId("profile-blur-input");
+    fireEvent.change(zeroInput, { target: { value: "0" } });
+    fireEvent.keyDown(zeroInput, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
+    expect(screen.getByTestId("top-masteries-card").style.backdropFilter).toBe("none");
+    expect(document.querySelector("main.profile-blur-off")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
     fireEvent.click(screen.getByTestId("wallpaper-visible-toggle"));
     expect(localStorage.getItem("schumaz_profile_wallpaper_visible")).toBe("false");
     fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
@@ -129,5 +138,21 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
     expect(screen.getByTestId("view-settings")).toHaveClass("active-tab");
     expect(screen.getByTestId("view-settings")).toHaveAttribute("aria-hidden", "false");
     expect(screen.getByTestId("view-profile")).toHaveClass("inactive-tab");
+  });
+
+  it("pauses NavigationDock border beam when GPU hardware acceleration is disabled", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
+      if (cmd === "get_hardware_acceleration_status") {
+        return Promise.resolve({ enabled: false, active_at_startup: false });
+      }
+      return defaultAppInvokeMock(cmd, args as Record<string, unknown>);
+    });
+
+    const { container } = render(<App />);
+
+    await waitFor(() => {
+      expect(container.querySelector("main.gpu-effects-disabled")).toBeInTheDocument();
+    });
+    expect(container.querySelector(".dock-beam-wrap")).not.toBeInTheDocument();
   });
 });

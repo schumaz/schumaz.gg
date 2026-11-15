@@ -249,6 +249,28 @@ img {
     visibility 0ms linear 220ms;
 }
 
+/* Pause animations, backdrop passes, and compositor hints in inactive tabs */
+.tab-content.inactive-tab *,
+.tab-content.inactive-tab *::before,
+.tab-content.inactive-tab *::after {
+  animation: none !important;
+  will-change: auto !important;
+}
+
+.tab-content.inactive-tab,
+.tab-content.inactive-tab * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.tab-content.inactive-tab .dot-orange.dot-pulsing::after,
+.tab-content.inactive-tab .idle-radar-ring,
+.tab-content.inactive-tab .idle-spinner-ring,
+.tab-content.inactive-tab .loading-bar-fill,
+.tab-content.inactive-tab .skeleton-block::after {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tab-content,
   .tab-content.active-tab,
@@ -291,12 +313,18 @@ img {
 .app-minimized .status-badge,
 .app-minimized .floating-dock,
 .app-minimized .profile-hero-card,
+.app-minimized .profile-section-card,
+.app-minimized .profile-matches-card,
+.app-minimized .ranked-lane-section-header,
 .app-minimized .card,
 .app-minimized .settings-modal-backdrop,
 .app-minimized .language-onboarding-backdrop,
 .gpu-effects-disabled .status-badge,
 .gpu-effects-disabled .floating-dock,
 .gpu-effects-disabled .profile-hero-card,
+.gpu-effects-disabled .profile-section-card,
+.gpu-effects-disabled .profile-matches-card,
+.gpu-effects-disabled .ranked-lane-section-header,
 .gpu-effects-disabled .card,
 .gpu-effects-disabled .settings-modal-backdrop,
 .gpu-effects-disabled .language-onboarding-backdrop {
@@ -304,7 +332,21 @@ img {
   -webkit-backdrop-filter: none !important;
 }
 
-.gpu-effects-disabled * {
+.gpu-effects-disabled *,
+.gpu-effects-disabled *::before,
+.gpu-effects-disabled *::after {
   will-change: auto !important;
 }
 
+.gpu-effects-disabled .dot-orange.dot-pulsing,
+.gpu-effects-disabled .dot-orange.dot-pulsing::after,
+.gpu-effects-disabled .idle-radar-ring,
+.gpu-effects-disabled .loading-bar-fill,
+.gpu-effects-disabled .skeleton-block::after {
+  animation: none !important;
+}
+
+.gpu-effects-disabled .dot-orange.dot-pulsing::after,
+.gpu-effects-disabled .idle-radar-ring {
+  display: none !important;
+}
