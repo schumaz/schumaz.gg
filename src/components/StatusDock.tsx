@@ -1,4 +1,5 @@
 import { SummonerInfo } from "../types";
+import { LoadingDots } from "./LoadingIndicators";
 
 interface StatusDockProps {
   summoner: SummonerInfo | null;
@@ -17,8 +18,9 @@ export function StatusDock({ summoner }: StatusDockProps) {
           </div>
         ) : (
           <div className="status-badge disconnected" data-testid="status-disconnected">
-            <span className="dot dot-orange"></span>
+            <span className="dot dot-orange dot-pulsing"></span>
             <span>Aguardando cliente do LoL</span>
+            <LoadingDots variant="warning" size="sm" testId="status-waiting-dots" />
           </div>
         )}
       </div>

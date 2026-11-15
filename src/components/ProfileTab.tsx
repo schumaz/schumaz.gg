@@ -2,6 +2,7 @@ import { CSSProperties, useMemo, useState } from "react";
 import { PlayerProfile, RecentMatchInfo, SummonerInfo } from "../types";
 import { profileBlurPercentToPx } from "../hooks/usePreferences";
 import { IdleIsland } from "./IdleState";
+import { LoadingBar, LoadingDots } from "./LoadingIndicators";
 
 interface ProfileTabProps {
   summoner: SummonerInfo | null;
@@ -181,12 +182,6 @@ export function ProfileTab({
   const winArcLength =
     winLossStats.total > 0 ? (winLossStats.wins / winLossStats.total) * donutCircumference : 0;
 
-  const refreshBtnLabel = loading
-    ? "Atualizando..."
-    : refreshCooldownSecs > 0
-      ? `Atualizar (${refreshCooldownSecs}s)`
-      : "Atualizar";
-
   const profileUiBlurPx = profileBlurPercentToPx(profileBlur);
   const glassBlurStyle: CSSProperties = {
     backdropFilter: `blur(${profileUiBlurPx}px)`,
@@ -203,6 +198,7 @@ export function ProfileTab({
       {!summoner ? (
         <IdleIsland
           testId="profile-waiting-client"
+          mode="waiting"
           badge="schumaz.gg · Perfil"
           title="Aguardando Cliente do LoL"
           description="Abra o cliente do League of Legends para carregar seu perfil, maestrias e partidas recentes."
@@ -226,6 +222,7 @@ export function ProfileTab({
       ) : loading && !profile ? (
         <IdleIsland
           testId="profile-loading"
+          mode="loading"
           badge="schumaz.gg · Perfil"
           title="Carregando Perfil"
           description="Obtendo ícone, nível, wallpaper do perfil, maestrias e histórico recente..."
@@ -249,6 +246,8 @@ export function ProfileTab({
         <div className="profile-layout" data-testid="profile-loaded">
           {/* Top Profile Hero Card */}
           <section className="card profile-hero-card" style={glassBlurStyle}>
+            <LoadingBar active={loading} testId="profile-loading-bar" />
+
             <div className="profile-hero-main">
               <div className="profile-identity">
                 <div className="profile-avatar-wrap">
@@ -345,7 +344,16 @@ export function ProfileTab({
                     onClick={onRefresh}
                     disabled={loading || refreshCooldownSecs > 0}
                   >
-                    {refreshBtnLabel}
+                    {loading ? (
+                      <>
+                        <span>Atualizando</span>
+                        <LoadingDots variant="inline" size="sm" testId="profile-refresh-dots" />
+                      </>
+                    ) : refreshCooldownSecs > 0 ? (
+                      `Atualizar (${refreshCooldownSecs}s)`
+                    ) : (
+                      "Atualizar"
+                    )}
                   </button>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { AramAugmentEntry, AramChampionRank, AramMode } from "../types";
+import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
 import { SearchInput } from "./SearchInput";
 
 export type AugmentRarityFilter = "all" | 1 | 4 | 8;
@@ -233,6 +234,10 @@ export function AramTab({
       ) : activeMode === "aram" ? (
         <div className="aram-layout" data-testid="aram-classic-view">
           <div className="card aram-toolbar-card">
+            <LoadingBar
+              active={isLoadingList && currentChampions.length > 0}
+              testId="aram-classic-loading-bar"
+            />
             <div className="aram-toolbar-left">
               <h2 className="page-hero-title">Ranking de Campeões</h2>
             </div>
@@ -252,9 +257,13 @@ export function AramTab({
 
           <div className="card aram-classic-list-card">
             {isLoadingList && currentChampions.length === 0 ? (
-              <div className="aram-state-box">
-                <div className="spinner aram-spinner" />
-                <span>Carregando ranking do ARAM...</span>
+              <div className="loading-skeleton-shell" data-testid="aram-classic-loading">
+                <div className="loading-banner">
+                  <div className="spinner aram-spinner" />
+                  <span>Carregando ranking do ARAM</span>
+                  <LoadingDots size="sm" testId="aram-classic-loading-dots" />
+                </div>
+                <ListSkeleton rows={7} variant="aram" testId="aram-classic-skeleton" />
               </div>
             ) : listError && currentChampions.length === 0 ? (
               <div className="aram-state-box">
@@ -341,9 +350,13 @@ export function AramTab({
 
               <div className="aram-scroll-body" data-testid="aram-mayhem-champions-list">
                 {isLoadingList && currentChampions.length === 0 ? (
-                  <div className="aram-state-box">
-                    <div className="spinner aram-spinner" />
-                    <span>Carregando campeões...</span>
+                  <div className="loading-skeleton-shell" data-testid="aram-mayhem-champions-loading">
+                    <div className="loading-banner">
+                      <div className="spinner aram-spinner" />
+                      <span>Carregando campeões</span>
+                      <LoadingDots size="sm" testId="aram-mayhem-champions-loading-dots" />
+                    </div>
+                    <ListSkeleton rows={7} variant="compact" testId="aram-mayhem-champions-skeleton" />
                   </div>
                 ) : listError && currentChampions.length === 0 ? (
                   <div className="aram-state-box">
@@ -468,9 +481,13 @@ export function AramTab({
 
                   <div className="aram-scroll-body" data-testid="aram-augments-list">
                     {augmentsLoading ? (
-                      <div className="aram-state-box">
-                        <div className="spinner aram-spinner" />
-                        <span>Carregando cartinhas...</span>
+                      <div className="loading-skeleton-shell" data-testid="aram-augments-loading">
+                        <div className="loading-banner">
+                          <div className="spinner aram-spinner" />
+                          <span>Carregando cartinhas</span>
+                          <LoadingDots size="sm" testId="aram-augments-loading-dots" />
+                        </div>
+                        <ListSkeleton rows={5} variant="augments" testId="aram-augments-skeleton" />
                       </div>
                     ) : augmentsError ? (
                       <div className="aram-state-box">

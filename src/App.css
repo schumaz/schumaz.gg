@@ -189,6 +189,21 @@ img {
   box-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
 }
 
+.dot-orange.dot-pulsing {
+  position: relative;
+  animation: statusDotPulse 2s ease-in-out infinite;
+}
+
+.dot-orange.dot-pulsing::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(251, 191, 36, 0.55);
+  animation: statusDotRing 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
 /* Workspace Central Area & Seamless Crossfade Viewport */
 .tabs-viewport {
   flex: 1;
@@ -237,7 +252,15 @@ img {
   .tab-content.active-tab,
   .tab-content.inactive-tab,
   .settings-modal-backdrop,
-  .settings-modal-dialog {
+  .settings-modal-dialog,
+  .dot-orange.dot-pulsing,
+  .dot-orange.dot-pulsing::after,
+  .idle-radar-ring,
+  .idle-spinner-ring,
+  .spinner,
+  .loading-dot,
+  .loading-bar-fill,
+  .skeleton-block::after {
     transition: none !important;
     animation: none !important;
   }
@@ -1284,6 +1307,7 @@ img {
 }
 
 .idle-icon-box {
+  position: relative;
   margin-bottom: 14px;
   color: var(--accent-primary-hover);
   display: inline-flex;
@@ -1294,6 +1318,42 @@ img {
   border-radius: 18px;
   border: 1px solid var(--accent-border);
   box-shadow: 0 0 24px rgba(124, 58, 237, 0.18);
+}
+
+.idle-icon-inner {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.idle-icon-box.is-waiting .idle-radar-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 21px;
+  border: 1.5px solid rgba(167, 139, 250, 0.5);
+  animation: idleRadarPulse 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+.idle-icon-box.is-loading .idle-spinner-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 22px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent-primary-hover);
+  border-right-color: rgba(124, 58, 237, 0.5);
+  animation: spin 1.05s linear infinite;
+  pointer-events: none;
+}
+
+.idle-activity-row {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 14px;
 }
 
 .idle-brand-pill {
@@ -2546,6 +2606,10 @@ img {
 }
 
 .profile-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 9999px;
   border: 1px solid var(--border-subtle);
@@ -3622,6 +3686,7 @@ img {
 }
 
 .aram-toolbar-card {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4297,9 +4362,20 @@ img {
   padding: 16px;
 }
 
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2.25px solid rgba(124, 58, 237, 0.22);
+  border-top-color: var(--accent-primary-hover);
+  border-right-color: var(--accent-primary);
+  animation: spin 0.78s linear infinite;
+  flex-shrink: 0;
+}
+
 .aram-spinner {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .aram-error-text {
@@ -4335,4 +4411,307 @@ img {
   .aram-aug-search {
     width: 100%;
   }
+}
+
+/* ============================================================
+   Interactive Loading & Waiting Micro-Animations
+   ============================================================ */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes statusDotPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes statusDotRing {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.95);
+  }
+  75%, 100% {
+    opacity: 0;
+    transform: scale(1.95);
+  }
+}
+
+@keyframes idleRadarPulse {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.98);
+  }
+  70%, 100% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+}
+
+@keyframes loadingDotWave {
+  0%, 70%, 100% {
+    opacity: 0.26;
+    transform: translateY(0) scale(0.84);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.12);
+  }
+}
+
+@keyframes loadingBarSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Sequential 3-dot indicator (... .. .) */
+.loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.loading-dots.size-sm {
+  gap: 3px;
+}
+
+.loading-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+  animation: loadingDotWave 1.2s ease-in-out infinite;
+}
+
+.loading-dots.size-sm .loading-dot {
+  width: 4px;
+  height: 4px;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+.loading-dots.variant-accent .loading-dot {
+  background-color: var(--accent-primary-hover);
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.55);
+}
+
+.loading-dots.variant-warning .loading-dot {
+  background-color: var(--accent-warning);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.45);
+}
+
+.loading-dots.variant-inline .loading-dot {
+  background-color: currentColor;
+}
+
+/* Indeterminate top progress bar for in-place reloads */
+.loading-bar-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  background: rgba(124, 58, 237, 0.14);
+  pointer-events: none;
+  z-index: 30;
+}
+
+.loading-bar-fill {
+  height: 100%;
+  width: 36%;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-primary) 35%,
+    var(--accent-primary-hover) 65%,
+    transparent 100%
+  );
+  box-shadow: 0 0 10px rgba(167, 139, 250, 0.6);
+  animation: loadingBarSweep 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Loading banner + skeleton rows for lists */
+.loading-status-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.loading-skeleton-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 4px;
+  overflow: hidden;
+}
+
+.loading-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: center;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.26);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.skeleton-block {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.skeleton-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(167, 139, 250, 0.14) 50%,
+    transparent 100%
+  );
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-rank {
+  width: 26px;
+  height: 12px;
+}
+
+.skeleton-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+
+.skeleton-line {
+  height: 13px;
+}
+
+.skeleton-stats-group {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skeleton-lane-pill {
+  width: 78px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.skeleton-stat-pill {
+  width: 54px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.skeleton-pill {
+  width: 48px;
+  height: 20px;
+  border-radius: 9999px;
+}
+
+.skeleton-pill.is-end {
+  margin-left: auto;
+}
+
+.skeleton-augment-row {
+  align-items: flex-start;
+  padding: 10px 12px;
+}
+
+.skeleton-augment-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.skeleton-tier-square {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.skeleton-augment-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-augment-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skeleton-line.is-sub {
+  width: 78%;
+  height: 10px;
 }

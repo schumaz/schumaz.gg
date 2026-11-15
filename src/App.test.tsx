@@ -280,6 +280,9 @@ describe("App Component", () => {
     // Initial idle screen displays only waiting for champion select
     expect(screen.getByText(/Aguardando Seleção de Campeões/i)).toBeInTheDocument();
     expect(screen.getByText("schumaz.gg · Runas")).toBeInTheDocument();
+    const runesWaiting = screen.getByTestId("runes-waiting-champ");
+    expect(runesWaiting.querySelector(".idle-radar-ring")).toBeInTheDocument();
+    expect(screen.getByTestId("runes-waiting-champ-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
     expect(screen.queryByText(/Estrutura dos Conjuntos de Itens na Loja/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("item-blocks")).not.toBeInTheDocument();
 

@@ -655,4 +655,72 @@ describe("useRanked hook state and filter preservation", () => {
     expect(syncChampSpy).not.toHaveBeenCalled();
     expect(syncPrefsSpy).not.toHaveBeenCalled();
   });
+
+  it("renders interactive loading indicators for initial tier list, in-place reload, and champion build", () => {
+    const baseProps = {
+      isActive: true,
+      filters: { lane: "all" as const, tier: "emerald_plus", region: "global", patch: "16.22" },
+      tierError: null,
+      buildError: null,
+      orderedSpells: [],
+      selectedRunePageIndex: 0,
+      selectedBuildIndex: 0,
+      onTierListFilterChange: vi.fn(),
+      onDetailFilterChange: vi.fn(),
+      onSelectChampion: vi.fn(),
+      onBackToTierList: vi.fn(),
+      onRetryTierList: vi.fn(),
+      onRetryBuild: vi.fn(),
+      onSelectRunePage: vi.fn(),
+      onSelectBuild: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <RankedTab
+        {...baseProps}
+        tierData={null}
+        tierLoading={true}
+        selectedChampion={null}
+        championBuild={null}
+        buildLoading={false}
+      />
+    );
+
+    expect(screen.getByTestId("ranked-tierlist-loading")).toHaveTextContent(
+      /Carregando tier list ranqueada/i
+    );
+    expect(screen.getByTestId("ranked-tierlist-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(screen.getByTestId("ranked-tierlist-skeleton")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByTestId("ranked-loading-bar")).not.toBeInTheDocument();
+
+    rerender(
+      <RankedTab
+        {...baseProps}
+        tierData={mockTierResponse}
+        tierLoading={true}
+        selectedChampion={null}
+        championBuild={null}
+        buildLoading={false}
+      />
+    );
+
+    expect(screen.getByTestId("ranked-loading-bar")).toHaveAttribute("role", "progressbar");
+    expect(screen.getByTestId("ranked-tierlist-scroll")).toBeInTheDocument();
+
+    rerender(
+      <RankedTab
+        {...baseProps}
+        tierData={mockTierResponse}
+        tierLoading={false}
+        selectedChampion={mockRankedChampions[2]}
+        championBuild={null}
+        buildLoading={true}
+      />
+    );
+
+    expect(screen.getByTestId("ranked-build-loading")).toHaveTextContent(
+      /Carregando runas e build de Ahri/i
+    );
+    expect(screen.getByTestId("ranked-build-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+  });
 });

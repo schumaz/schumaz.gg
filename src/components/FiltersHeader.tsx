@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChampionBuild, ChampSelectedPayload } from "../types";
 import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
+import { LoadingBar } from "./LoadingIndicators";
 import { RegionFlag } from "./RegionFlag";
 
 interface FiltersHeaderProps {
@@ -323,6 +324,8 @@ export function FiltersHeader({
 
   return (
     <section className="card champ-hero-card" data-testid="champ-hero">
+      <LoadingBar active={loading} testId="filters-loading-bar" />
+
       <div className="champ-hero-top">
         <div className="champ-hero-left">
           {onBackToTierList && (

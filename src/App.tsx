@@ -231,7 +231,12 @@ function App() {
               </div>
             </div>
           ) : (
-            <IdleState summoner={summoner} errorMsg={errorMsg} />
+            <IdleState
+              summoner={summoner}
+              errorMsg={errorMsg}
+              champSelect={champSelect}
+              loading={loading}
+            />
           )}
         </div>
 

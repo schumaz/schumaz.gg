@@ -309,6 +309,7 @@ describe("FiltersHeader", () => {
     expect(tierTrigger).toBeDisabled();
     fireEvent.click(tierTrigger);
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByTestId("filters-loading-bar")).toHaveAttribute("role", "progressbar");
   });
 
   it("renders custom Patch dropdown, labels the latest patch as '(Mais atual)', and hides 48h protection indicator when not active", () => {

@@ -336,4 +336,76 @@ describe("AramTab UI", () => {
     expect(screen.getByLabelText("Buscar campeão no ARAM Mayhem")).toHaveValue("");
     expect(screen.getByTestId("mayhem-champ-twistedfate")).toBeInTheDocument();
   });
+
+  it("renders interactive loading skeletons and dots in ARAM classic and Mayhem champions & augments", () => {
+    const baseProps = {
+      isActive: true,
+      showChooser: false,
+      tierErrors: {},
+      augmentsByChampion: {},
+      augmentsError: null,
+      onSelectMode: vi.fn(),
+      onSelectChampion: vi.fn(),
+      onRetryTierList: vi.fn(),
+      onRetryAugments: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <AramTab
+        {...baseProps}
+        savedMode="aram"
+        tierLists={{}}
+        tierLoading={{ aram: true }}
+        selectedChampionKey={null}
+        augmentsLoading={false}
+      />
+    );
+
+    expect(screen.getByTestId("aram-classic-loading")).toHaveTextContent(/Carregando ranking do ARAM/i);
+    expect(screen.getByTestId("aram-classic-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(screen.getByTestId("aram-classic-skeleton")).toHaveAttribute("aria-hidden", "true");
+
+    rerender(
+      <AramTab
+        {...baseProps}
+        savedMode="aram"
+        tierLists={{ aram: mockAramChampions }}
+        tierLoading={{ aram: true }}
+        selectedChampionKey={null}
+        augmentsLoading={false}
+      />
+    );
+
+    expect(screen.getByTestId("aram-classic-loading-bar")).toHaveAttribute("role", "progressbar");
+
+    rerender(
+      <AramTab
+        {...baseProps}
+        savedMode="aram_mayhem"
+        tierLists={{}}
+        tierLoading={{ aram_mayhem: true }}
+        selectedChampionKey={null}
+        augmentsLoading={false}
+      />
+    );
+
+    expect(screen.getByTestId("aram-mayhem-champions-loading")).toHaveTextContent(/Carregando campeões/i);
+    expect(screen.getByTestId("aram-mayhem-champions-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(screen.getByTestId("aram-mayhem-champions-skeleton")).toHaveAttribute("aria-hidden", "true");
+
+    rerender(
+      <AramTab
+        {...baseProps}
+        savedMode="aram_mayhem"
+        tierLists={{ aram_mayhem: mockMayhemChampions }}
+        tierLoading={{ aram_mayhem: false }}
+        selectedChampionKey="ahri"
+        augmentsLoading={true}
+      />
+    );
+
+    expect(screen.getByTestId("aram-augments-loading")).toHaveTextContent(/Carregando cartinhas/i);
+    expect(screen.getByTestId("aram-augments-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(screen.getByTestId("aram-augments-skeleton")).toHaveAttribute("aria-hidden", "true");
+  });
 });

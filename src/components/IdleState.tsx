@@ -1,11 +1,13 @@
 import { ReactNode } from "react";
-import { SummonerInfo } from "../types";
+import { ChampSelectedPayload, SummonerInfo } from "../types";
+import { LoadingDots } from "./LoadingIndicators";
 
 interface IdleIslandProps {
   badge?: string;
   title: string;
   description: string;
   icon: ReactNode;
+  mode?: "waiting" | "loading";
   errorMsg?: string | null;
   testId?: string;
 }
@@ -15,18 +17,35 @@ export function IdleIsland({
   title,
   description,
   icon,
+  mode = "waiting",
   errorMsg,
   testId,
 }: IdleIslandProps) {
+  const isWaiting = mode === "waiting";
+  const isLoading = mode === "loading";
+
   return (
     <div className="idle-state-container" data-testid={testId}>
-      <section className="card idle-card">
-        <div className="idle-icon-box" aria-hidden="true">
-          {icon}
+      <section className={`card idle-card ${isLoading ? "is-loading" : "is-waiting"}`}>
+        <div
+          className={`idle-icon-box ${isLoading ? "is-loading" : "is-waiting"}`}
+          aria-hidden="true"
+        >
+          {isWaiting && <span className="idle-radar-ring" />}
+          {isLoading && <span className="idle-spinner-ring" />}
+          <span className="idle-icon-inner">{icon}</span>
         </div>
         {badge && <span className="idle-brand-pill">{badge}</span>}
         <h2 className="idle-title">{title}</h2>
         <p className="card-desc idle-desc">{description}</p>
+
+        <div className="idle-activity-row" aria-hidden="true">
+          <LoadingDots
+            variant="accent"
+            size="md"
+            testId={testId ? `${testId}-dots` : "idle-waiting-dots"}
+          />
+        </div>
 
         {errorMsg && (
           <div className="alert alert-error idle-alert" role="alert">
@@ -41,14 +60,29 @@ export function IdleIsland({
 interface IdleStateProps {
   summoner: SummonerInfo | null;
   errorMsg: string | null;
+  champSelect?: ChampSelectedPayload | null;
+  loading?: boolean;
 }
 
-export function IdleState({ summoner: _summoner, errorMsg }: IdleStateProps) {
+export function IdleState({
+  summoner: _summoner,
+  errorMsg,
+  champSelect,
+  loading,
+}: IdleStateProps) {
+  const isFetchingBuild = Boolean(champSelect || loading);
+
   return (
     <IdleIsland
+      testId={isFetchingBuild ? "runes-loading-build" : "runes-waiting-champ"}
       badge="schumaz.gg · Runas"
-      title="Aguardando Seleção de Campeões"
-      description="Selecione ou confirme um campeão no LoL para carregar runas, feitiços e itens automaticamente."
+      mode={isFetchingBuild ? "loading" : "waiting"}
+      title={isFetchingBuild ? "Carregando Build" : "Aguardando Seleção de Campeões"}
+      description={
+        isFetchingBuild
+          ? "Buscando runas recomendadas, feitiços e conjuntos de itens para a partida..."
+          : "Selecione ou confirme um campeão no LoL para carregar runas, feitiços e itens automaticamente."
+      }
       errorMsg={errorMsg}
       icon={
         <svg

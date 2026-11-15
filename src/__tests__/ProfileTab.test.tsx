@@ -135,6 +135,10 @@ describe("ProfileTab Component", () => {
     expect(screen.getByText(/Aguardando Cliente do LoL/i)).toBeInTheDocument();
     expect(screen.getByText("schumaz.gg · Perfil")).toBeInTheDocument();
     expect(container.querySelector(".idle-card")).not.toHaveAttribute("style");
+    expect(waiting.querySelector(".idle-radar-ring")).toBeInTheDocument();
+    const dots = screen.getByTestId("profile-waiting-client-dots");
+    expect(dots).toHaveAttribute("aria-hidden", "true");
+    expect(dots.querySelectorAll(".loading-dot")).toHaveLength(3);
   });
 
   it("renders summoner icon, level, ranked stats with crest icons on the right, top 3 masteries, 10 matches, and omits wallpaper skin name text", () => {
@@ -291,5 +295,37 @@ describe("ProfileTab Component", () => {
 
     expect(screen.getByTestId("refresh-profile-btn")).toBeDisabled();
     expect(screen.getByTestId("refresh-profile-btn")).toHaveTextContent("Atualizar (25s)");
+  });
+
+  it("renders initial profile loading spinner ring and in-place refresh loading bar + dots", () => {
+    const { rerender } = render(
+      <ProfileTab
+        summoner={mockSummoner}
+        profile={null}
+        loading={true}
+        errorMsg={null}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    const loadingCard = screen.getByTestId("profile-loading");
+    expect(loadingCard.querySelector(".idle-spinner-ring")).toBeInTheDocument();
+    expect(screen.getByTestId("profile-loading-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+
+    rerender(
+      <ProfileTab
+        summoner={mockSummoner}
+        profile={mockProfile}
+        loading={true}
+        errorMsg={null}
+        onRefresh={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("profile-loading-bar")).toHaveAttribute("role", "progressbar");
+    const refreshBtn = screen.getByTestId("refresh-profile-btn");
+    expect(refreshBtn).toBeDisabled();
+    expect(refreshBtn).toHaveTextContent("Atualizando");
+    expect(screen.getByTestId("profile-refresh-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
   });
 });

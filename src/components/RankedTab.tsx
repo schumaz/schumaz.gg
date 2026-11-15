@@ -18,6 +18,7 @@ import {
   computePatchUiMeta,
 } from "./FiltersHeader";
 import { ItemBlocks } from "./ItemBlocks";
+import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
 import { RuneTree } from "./RuneTree";
 import { SearchInput } from "./SearchInput";
 import { SpellsBar } from "./SpellsBar";
@@ -470,9 +471,12 @@ export function RankedTab({
                   </button>
                 </div>
               ) : (
-                <div className="aram-state-box">
-                  <div className="spinner aram-spinner" />
-                  <span>Carregando runas e build de {selectedChampion.name}...</span>
+                <div className="aram-state-box" data-testid="ranked-build-loading">
+                  <div className="loading-status-line">
+                    <div className="spinner aram-spinner" />
+                    <span>Carregando runas e build de {selectedChampion.name}</span>
+                    <LoadingDots size="sm" testId="ranked-build-loading-dots" />
+                  </div>
                 </div>
               )}
             </div>
@@ -482,6 +486,8 @@ export function RankedTab({
         <div className="ranked-layout" data-testid="ranked-tierlist-view">
           {/* Header card: Big Branding Title + Right Accessories + Elo/Servidor/Patch + Lane & Tier Filters */}
           <section className="card ranked-toolbar-card" data-testid="ranked-filters-card">
+            <LoadingBar active={Boolean(tierLoading && tierData)} testId="ranked-loading-bar" />
+
             <div className="ranked-toolbar-top">
               <div className="ranked-hero-left">
                 <h2 className="page-hero-title">Tier List</h2>
@@ -675,11 +681,14 @@ export function RankedTab({
 
           {/* Main Tier List Container */}
           <div className="card ranked-list-card">
-
             {tierLoading && !tierData ? (
-              <div className="aram-state-box">
-                <div className="spinner aram-spinner" />
-                <span>Carregando tier list ranqueada...</span>
+              <div className="loading-skeleton-shell" data-testid="ranked-tierlist-loading">
+                <div className="loading-banner">
+                  <div className="spinner aram-spinner" />
+                  <span>Carregando tier list ranqueada</span>
+                  <LoadingDots size="sm" testId="ranked-tierlist-loading-dots" />
+                </div>
+                <ListSkeleton rows={7} variant="ranked" testId="ranked-tierlist-skeleton" />
               </div>
             ) : tierError && !tierData ? (
               <div className="aram-state-box">
