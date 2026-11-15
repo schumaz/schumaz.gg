@@ -12,11 +12,17 @@ pub fn is_offensive_ap_tag(tag: &str) -> bool {
 }
 
 pub fn is_universal_defense_tag(tag: &str) -> bool {
-    matches!(tag, "Armor" | "SpellBlock" | "Health" | "HealthRegen" | "Tenacity")
+    matches!(
+        tag,
+        "Armor" | "SpellBlock" | "Health" | "HealthRegen" | "Tenacity"
+    )
 }
 
 pub fn is_utility_mana_tag(tag: &str) -> bool {
-    matches!(tag, "Mana" | "AbilityHaste" | "CooldownReduction" | "NonbootsMovement")
+    matches!(
+        tag,
+        "Mana" | "AbilityHaste" | "CooldownReduction" | "NonbootsMovement"
+    )
 }
 
 /// Computes dynamic synergy affinity score between a candidate item and core tags (zero hardcoded IDs).
@@ -77,34 +83,66 @@ pub fn extract_core_archetype_tags(core_items: &[i32]) -> (Vec<String>, bool, bo
     let core_has_ad = core_tags.iter().any(|t| is_offensive_ad_tag(t));
     let core_is_pure_ad = core_has_ad && !core_has_ap;
     let core_is_pure_ap = core_has_ap && !core_has_ad;
-    (core_tags, core_has_ap, core_has_ad, core_is_pure_ad, core_is_pure_ap)
+    (
+        core_tags,
+        core_has_ap,
+        core_has_ad,
+        core_is_pure_ad,
+        core_is_pure_ap,
+    )
 }
 
 /// Dynamically builds a cohesive 6-item final build for a specific core trio
 /// using strict sequential slot selection (4th item from fourth_entries, 5th from fifth_entries,
 #[cfg(test)]
 mod tests {
+    use super::super::classification::TEST_CLASSIFICATION_MUTEX;
     use super::*;
-        use super::super::classification::TEST_CLASSIFICATION_MUTEX;
     use crate::build_provider::models::ItemClassificationCache;
 
     #[test]
     fn test_strict_offensive_archetype_blocking_remains_intact() {
         let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
         let mut cache = ItemClassificationCache::default();
-        cache.item_tags.insert(6697, vec!["Damage".to_string(), "ArmorPenetration".to_string()]);
-        cache.item_tags.insert(3089, vec!["SpellDamage".to_string()]);
-        cache.item_tags.insert(3135, vec!["SpellDamage".to_string(), "MagicPenetration".to_string()]);
-        cache.item_tags.insert(3031, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
-        cache.item_tags.insert(6676, vec!["Damage".to_string(), "CriticalStrike".to_string()]);
+        cache.item_tags.insert(
+            6697,
+            vec!["Damage".to_string(), "ArmorPenetration".to_string()],
+        );
+        cache
+            .item_tags
+            .insert(3089, vec!["SpellDamage".to_string()]);
+        cache.item_tags.insert(
+            3135,
+            vec!["SpellDamage".to_string(), "MagicPenetration".to_string()],
+        );
+        cache.item_tags.insert(
+            3031,
+            vec!["Damage".to_string(), "CriticalStrike".to_string()],
+        );
+        cache.item_tags.insert(
+            6676,
+            vec!["Damage".to_string(), "CriticalStrike".to_string()],
+        );
         set_dynamic_item_classifications(cache);
 
         let ad_core_tags = vec!["Damage".to_string(), "ArmorPenetration".to_string()];
-        assert_eq!(compute_item_affinity_score(3089, &ad_core_tags, true, false), -1_000_000);
-        assert_eq!(compute_item_affinity_score(3135, &ad_core_tags, true, false), -1_000_000);
+        assert_eq!(
+            compute_item_affinity_score(3089, &ad_core_tags, true, false),
+            -1_000_000
+        );
+        assert_eq!(
+            compute_item_affinity_score(3135, &ad_core_tags, true, false),
+            -1_000_000
+        );
 
         let ap_core_tags = vec!["SpellDamage".to_string()];
-        assert_eq!(compute_item_affinity_score(3031, &ap_core_tags, false, true), -1_000_000);
-        assert_eq!(compute_item_affinity_score(6676, &ap_core_tags, false, true), -1_000_000);
+        assert_eq!(
+            compute_item_affinity_score(3031, &ap_core_tags, false, true),
+            -1_000_000
+        );
+        assert_eq!(
+            compute_item_affinity_score(6676, &ap_core_tags, false, true),
+            -1_000_000
+        );
     }
 }

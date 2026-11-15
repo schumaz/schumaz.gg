@@ -1,337 +1,20 @@
-use super::aram::normalize_opgg_champion_key;
+mod cache;
+mod parser;
+
+pub use cache::*;
+pub use parser::*;
+
 use super::client::{
     OPGG_REST_API_BASE, fetch_opgg_rest_champion_analysis_from_base, fetch_opgg_versions_from_base,
     peek_latest_cached_opgg_version,
 };
 use crate::build_provider::models::DataDragonCache;
 use crate::build_provider::patch::resolve_effective_patch;
-use crate::models::{AppLocale, RankedChampionEntry, RankedLane, RankedTierListResponse};
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use crate::models::{AppLocale, RankedTierListResponse};
+use std::path::Path;
+use std::time::Instant;
 
-const RANKED_CACHE_TTL: Duration = Duration::from_secs(900);
 const TREND_PROBE_CHAMPION_ID: i32 = 103; // Ahri (high play-rate reference for patch release timestamp)
-
-type RankedCacheMap = HashMap<String, (Instant, RankedTierListResponse)>;
-
-static RANKED_TIER_CACHE: OnceLock<RwLock<RankedCacheMap>> = OnceLock::new();
-
-fn get_ranked_cache() -> &'static RwLock<RankedCacheMap> {
-    RANKED_TIER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-pub fn ranked_tier_list_file_path(
-    dir: &Path,
-    region: &str,
-    tier: &str,
-    manual_patch: Option<&str>,
-    patch_48h_protection: bool,
-    locale: AppLocale,
-) -> PathBuf {
-    let reg = crate::storage::sanitize_key_component(region);
-    let tr = crate::storage::sanitize_key_component(tier);
-    let pat = crate::storage::sanitize_key_component(manual_patch.unwrap_or("auto"));
-    let prot = if patch_48h_protection { "p1" } else { "p0" };
-    dir.join(format!(
-        "tier_{reg}_{tr}_{pat}_{prot}_{}.lz4",
-        locale.as_str()
-    ))
-}
-
-fn rehydrate_ranked_names(response: &mut RankedTierListResponse, ddragon: &DataDragonCache) {
-    for champ in &mut response.champions {
-        if let Some(meta) = ddragon.champions.get(&champ.id) {
-            champ.name = meta.display_name.clone();
-            if !meta.icon_url.is_empty() {
-                champ.icon_url = meta.icon_url.clone();
-            }
-        }
-    }
-}
-
-/// Pre-warms a valid (< 48h) Ranked Tier List from `.lz4` disk into RAM on startup.
-pub fn prewarm_ranked_tier_list_from_dir(
-    dir: &Path,
-    region: &str,
-    tier: &str,
-    manual_patch: Option<&str>,
-    patch_48h_protection: bool,
-    locale: AppLocale,
-    ddragon: &DataDragonCache,
-) -> bool {
-    let path = ranked_tier_list_file_path(
-        dir,
-        region,
-        tier,
-        manual_patch,
-        patch_48h_protection,
-        locale,
-    );
-    let Some(mut env) = crate::storage::read_lz4_envelope::<RankedTierListResponse>(&path) else {
-        return false;
-    };
-    let now = crate::storage::now_unix_secs();
-    if !crate::storage::is_envelope_fresh(
-        env.created_at_unix,
-        crate::storage::OPGG_CACHE_TTL_SECS,
-        now,
-    ) {
-        return false;
-    }
-    if manual_patch.is_none()
-        && let Some(latest) = peek_latest_cached_opgg_version(region)
-        && !env.payload.patch_fallback_applied
-        && env.patch != latest
-    {
-        return false;
-    }
-
-    rehydrate_ranked_names(&mut env.payload, ddragon);
-    let cache_key = format!(
-        "{}:{}:{}:{}:{}:{}",
-        OPGG_REST_API_BASE,
-        region,
-        tier,
-        manual_patch.unwrap_or(""),
-        patch_48h_protection,
-        locale.as_str()
-    );
-    if let Ok(mut guard) = get_ranked_cache().write() {
-        guard.insert(cache_key, (Instant::now(), env.payload));
-        return true;
-    }
-    false
-}
-
-fn round_pct(val: f64) -> f64 {
-    let pct = if val <= 1.0 { val * 100.0 } else { val };
-    (pct * 10.0).round() / 10.0
-}
-
-fn normalize_raw_pct(val: Option<f64>) -> f64 {
-    match val {
-        Some(v) if v.is_finite() => {
-            if v <= 1.0 {
-                v * 100.0
-            } else {
-                v
-            }
-        }
-        _ => -1.0,
-    }
-}
-
-pub fn parse_ranked_lane(raw: &str) -> Option<RankedLane> {
-    match raw.trim().to_uppercase().as_str() {
-        "TOP" => Some(RankedLane::Top),
-        "JUNGLE" | "JNG" => Some(RankedLane::Jungle),
-        "MID" | "MIDDLE" => Some(RankedLane::Mid),
-        "ADC" | "BOTTOM" | "BOT" => Some(RankedLane::Adc),
-        "SUPPORT" | "SUPP" | "UTILITY" => Some(RankedLane::Support),
-        _ => None,
-    }
-}
-
-fn lane_sort_order(lane: RankedLane) -> u8 {
-    match lane {
-        RankedLane::Top => 0,
-        RankedLane::Jungle => 1,
-        RankedLane::Mid => 2,
-        RankedLane::Adc => 3,
-        RankedLane::Support => 4,
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedResponse {
-    #[serde(default)]
-    data: Vec<RestRankedChampionItem>,
-    #[serde(default)]
-    meta: Option<RestRankedMeta>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedMeta {
-    #[serde(default)]
-    version: Option<String>,
-    #[serde(default)]
-    match_count: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedChampionItem {
-    id: i32,
-    #[serde(default)]
-    average_stats: Option<RestRankedTierFallbackStats>,
-    #[serde(default)]
-    positions: Vec<RestRankedPositionItem>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedTierFallbackStats {
-    #[serde(default)]
-    tier: Option<i32>,
-    #[serde(default)]
-    play: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedPositionItem {
-    name: String,
-    #[serde(default)]
-    stats: Option<RestRankedPositionStats>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedPositionStats {
-    #[serde(default)]
-    win_rate: Option<f64>,
-    #[serde(default)]
-    pick_rate: Option<f64>,
-    #[serde(default)]
-    ban_rate: Option<f64>,
-    #[serde(default)]
-    role_rate: Option<f64>,
-    #[serde(default)]
-    tier_data: Option<RestRankedTierData>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RestRankedTierData {
-    #[serde(default)]
-    tier: Option<i32>,
-    #[serde(default)]
-    rank: Option<i32>,
-}
-
-struct ParsedEntryWithPrecision {
-    entry: RankedChampionEntry,
-    raw_win_rate: f64,
-    raw_pick_rate: f64,
-}
-
-pub fn parse_ranked_tier_list(
-    json: &serde_json::Value,
-    ddragon: &DataDragonCache,
-) -> Result<Vec<RankedChampionEntry>, String> {
-    let parsed: RestRankedResponse = serde_json::from_value(json.clone())
-        .map_err(|e| format!("Failed to parse ranked tier list response: {}", e))?;
-
-    let mut items: Vec<ParsedEntryWithPrecision> = Vec::new();
-
-    for champ in parsed.data {
-        let dd_meta = ddragon.champions.get(&champ.id);
-        let name = dd_meta
-            .map(|m| m.display_name.clone())
-            .unwrap_or_else(|| format!("Champion {}", champ.id));
-        let key = dd_meta
-            .map(|m| normalize_opgg_champion_key(&m.key_name))
-            .unwrap_or_else(|| champ.id.to_string());
-        let icon_url = dd_meta.map(|m| m.icon_url.clone()).unwrap_or_default();
-        let fallback_tier = champ.average_stats.as_ref().and_then(|s| s.tier);
-
-        for pos in champ.positions {
-            let Some(lane) = parse_ranked_lane(&pos.name) else {
-                continue;
-            };
-            let Some(stats) = pos.stats else {
-                continue;
-            };
-
-            let raw_tier = stats
-                .tier_data
-                .as_ref()
-                .and_then(|td| td.tier)
-                .or(fallback_tier)
-                .unwrap_or(6);
-            // OP.GG ranked tier starts at 1 (1 = OP, 2 = Tier 1, 3 = Tier 2, ...).
-            // Normalize to 0-based canonical tiers (0 = OP, 1 = Tier 1, ..., 5 = Tier 5).
-            let normalized_tier = raw_tier.saturating_sub(1);
-            let rank = stats
-                .tier_data
-                .as_ref()
-                .and_then(|td| td.rank)
-                .unwrap_or(999);
-
-            let raw_win_rate = normalize_raw_pct(stats.win_rate);
-            let raw_pick_rate = normalize_raw_pct(stats.pick_rate);
-
-            items.push(ParsedEntryWithPrecision {
-                entry: RankedChampionEntry {
-                    id: champ.id,
-                    key: key.clone(),
-                    name: name.clone(),
-                    icon_url: icon_url.clone(),
-                    lane,
-                    tier: normalized_tier,
-                    rank,
-                    overall_rank: 0,
-                    win_rate: stats.win_rate.map(round_pct),
-                    pick_rate: stats.pick_rate.map(round_pct),
-                    ban_rate: stats.ban_rate.map(round_pct),
-                    role_rate: stats.role_rate.map(round_pct),
-                },
-                raw_win_rate,
-                raw_pick_rate,
-            });
-        }
-    }
-
-    // Global cross-lane OP ranking (matches OP.GG's "All Roles" tier list ordering):
-    // 1. Canonical tier ascending (OP -> Tier 1 -> Tier 2 ...)
-    // 2. Full-precision win rate descending
-    // 3. Full-precision pick rate descending
-    // 4. Per-lane rank ascending
-    // 5. Champion name & lane order for deterministic tie-breaking
-    items.sort_by(|a, b| {
-        let a_valid_rank = if a.entry.rank > 0 { 0 } else { 1 };
-        let b_valid_rank = if b.entry.rank > 0 { 0 } else { 1 };
-        a.entry
-            .tier
-            .cmp(&b.entry.tier)
-            .then_with(|| b.raw_win_rate.total_cmp(&a.raw_win_rate))
-            .then_with(|| b.raw_pick_rate.total_cmp(&a.raw_pick_rate))
-            .then_with(|| a_valid_rank.cmp(&b_valid_rank))
-            .then_with(|| a.entry.rank.cmp(&b.entry.rank))
-            .then_with(|| a.entry.name.cmp(&b.entry.name))
-            .then_with(|| lane_sort_order(a.entry.lane).cmp(&lane_sort_order(b.entry.lane)))
-    });
-
-    let entries = items
-        .into_iter()
-        .enumerate()
-        .map(|(idx, mut item)| {
-            item.entry.overall_rank = (idx + 1) as i32;
-            item.entry
-        })
-        .collect();
-
-    Ok(entries)
-}
-
-fn extract_ranked_meta_info(json: &serde_json::Value) -> (Option<String>, Option<u64>) {
-    let parsed: Result<RestRankedResponse, _> = serde_json::from_value(json.clone());
-    match parsed {
-        Ok(resp) => {
-            let version = resp
-                .meta
-                .as_ref()
-                .and_then(|m| m.version.clone())
-                .filter(|v| !v.trim().is_empty());
-            let match_count = resp.meta.as_ref().and_then(|m| m.match_count).or_else(|| {
-                resp.data
-                    .iter()
-                    .filter_map(|c| c.average_stats.as_ref().and_then(|s| s.play))
-                    .max()
-            });
-            (version, match_count)
-        }
-        Err(_) => (None, None),
-    }
-}
 
 async fn fetch_ranked_json(
     client: &reqwest::Client,
@@ -400,17 +83,17 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
         locale.as_str()
     );
 
-    if let Ok(guard) = get_ranked_cache().read()
+    if let Ok(guard) = cache::get_ranked_cache().read()
         && let Some((ts, cached)) = guard.get(&cache_key)
-        && ts.elapsed() < RANKED_CACHE_TTL
+        && ts.elapsed() < cache::RANKED_CACHE_TTL
     {
         let mut resp = cached.clone();
-        rehydrate_ranked_names(&mut resp, ddragon);
+        cache::rehydrate_ranked_names(&mut resp, ddragon);
         return Ok(resp);
     }
 
     let disk_env = ranked_dir.and_then(|dir| {
-        let path = ranked_tier_list_file_path(
+        let path = cache::ranked_tier_list_file_path(
             dir,
             target_region,
             target_tier,
@@ -437,8 +120,8 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
         };
         if patch_valid {
             let mut resp = env.payload.clone();
-            rehydrate_ranked_names(&mut resp, ddragon);
-            if let Ok(mut guard) = get_ranked_cache().write() {
+            cache::rehydrate_ranked_names(&mut resp, ddragon);
+            if let Ok(mut guard) = cache::get_ranked_cache().write() {
                 guard.insert(cache_key.clone(), (Instant::now(), resp.clone()));
             }
             return Ok(resp);
@@ -470,7 +153,7 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
                 fetch_ranked_json(client, rest_base, target_region, target_tier, probe_version)
                     .await?;
 
-            let (meta_version, match_count) = extract_ranked_meta_info(&probe_json);
+            let (meta_version, match_count) = parser::extract_ranked_meta_info(&probe_json);
             if effective_patch.is_empty()
                 && let Some(v) = meta_version
             {
@@ -544,14 +227,14 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
                 && !env.payload.champions.is_empty()
             {
                 let mut resp = env.payload;
-                rehydrate_ranked_names(&mut resp, ddragon);
+                cache::rehydrate_ranked_names(&mut resp, ddragon);
                 return Ok(resp);
             }
             return Err(err);
         }
     };
 
-    let champions = parse_ranked_tier_list(&final_json, ddragon)?;
+    let champions = parser::parse_ranked_tier_list(&final_json, ddragon)?;
     let response = RankedTierListResponse {
         region: target_region.to_string(),
         tier: target_tier.to_string(),
@@ -564,7 +247,7 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
 
     if !response.champions.is_empty() {
         if let Some(dir) = ranked_dir {
-            let path = ranked_tier_list_file_path(
+            let path = cache::ranked_tier_list_file_path(
                 dir,
                 target_region,
                 target_tier,
@@ -574,7 +257,7 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
             );
             let _ = crate::storage::write_lz4_envelope(&path, &effective_patch, &response);
         }
-        if let Ok(mut guard) = get_ranked_cache().write() {
+        if let Ok(mut guard) = cache::get_ranked_cache().write() {
             guard.insert(cache_key, (Instant::now(), response.clone()));
         }
     }
@@ -641,341 +324,9 @@ pub async fn fetch_ranked_tier_list(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::build_provider::patch::parse_iso8601_to_unix;
-    use crate::models::ChampionMetadata;
-    use wiremock::matchers::{method, path, query_param};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+#[path = "ranked/parser_tests.rs"]
+mod parser_tests;
 
-    fn test_ddragon() -> DataDragonCache {
-        let mut champions = HashMap::new();
-        champions.insert(
-            103,
-            ChampionMetadata {
-                champion_id: 103,
-                key_name: "Ahri".to_string(),
-                display_name: "Ahri".to_string(),
-                icon_url: "https://ddragon.example/Ahri.png".to_string(),
-            },
-        );
-        champions.insert(
-            245,
-            ChampionMetadata {
-                champion_id: 245,
-                key_name: "Ekko".to_string(),
-                display_name: "Ekko".to_string(),
-                icon_url: "https://ddragon.example/Ekko.png".to_string(),
-            },
-        );
-        champions.insert(
-            86,
-            ChampionMetadata {
-                champion_id: 86,
-                key_name: "Garen".to_string(),
-                display_name: "Garen".to_string(),
-                icon_url: "https://ddragon.example/Garen.png".to_string(),
-            },
-        );
-        DataDragonCache {
-            version: "16.22.1".to_string(),
-            champions,
-            runes: HashMap::new(),
-            spells: HashMap::new(),
-        }
-    }
-
-    #[test]
-    fn test_parse_ranked_tier_list_normalizes_tiers_and_assigns_cross_lane_overall_rank() {
-        let json = serde_json::json!({
-            "data": [
-                {
-                    "id": 103,
-                    "positions": [
-                        {
-                            "name": "MID",
-                            "stats": {
-                                "win_rate": 0.512,
-                                "pick_rate": 0.115,
-                                "ban_rate": 0.036,
-                                "role_rate": 0.94,
-                                "tier_data": { "tier": 1, "rank": 1 }
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": 245,
-                    "positions": [
-                        {
-                            "name": "MID",
-                            "stats": {
-                                "win_rate": 0.522,
-                                "pick_rate": 0.053,
-                                "ban_rate": 0.034,
-                                "role_rate": 0.45,
-                                "tier_data": { "tier": 2, "rank": 4 }
-                            }
-                        },
-                        {
-                            "name": "JUNGLE",
-                            "stats": {
-                                "win_rate": 0.508,
-                                "pick_rate": 0.061,
-                                "ban_rate": 0.034,
-                                "role_rate": 0.55,
-                                "tier_data": { "tier": 3, "rank": 12 }
-                            }
-                        }
-                    ]
-                },
-                {
-                    "id": 86,
-                    "positions": [
-                        {
-                            "name": "TOP",
-                            "stats": {
-                                "win_rate": 0.507,
-                                "pick_rate": 0.066,
-                                "ban_rate": 0.044,
-                                "role_rate": 0.89,
-                                "tier_data": { "tier": 1, "rank": 3 }
-                            }
-                        }
-                    ]
-                }
-            ]
-        });
-
-        let list = parse_ranked_tier_list(&json, &test_ddragon()).unwrap();
-        assert_eq!(list.len(), 4);
-
-        assert_eq!(list[0].lane, RankedLane::Mid);
-        assert_eq!(list[0].name, "Ahri");
-        assert_eq!(list[0].tier, 0);
-        assert_eq!(list[0].rank, 1);
-        assert_eq!(list[0].overall_rank, 1);
-        assert_eq!(list[0].pick_rate, Some(11.5));
-        assert_eq!(list[0].ban_rate, Some(3.6));
-
-        assert_eq!(list[1].lane, RankedLane::Top);
-        assert_eq!(list[1].name, "Garen");
-        assert_eq!(list[1].tier, 0);
-        assert_eq!(list[1].rank, 3);
-        assert_eq!(list[1].overall_rank, 2);
-        assert_eq!(list[1].win_rate, Some(50.7));
-
-        assert_eq!(list[2].lane, RankedLane::Mid);
-        assert_eq!(list[2].name, "Ekko");
-        assert_eq!(list[2].tier, 1);
-        assert_eq!(list[2].overall_rank, 3);
-
-        assert_eq!(list[3].lane, RankedLane::Jungle);
-        assert_eq!(list[3].name, "Ekko");
-        assert_eq!(list[3].tier, 2);
-        assert_eq!(list[3].overall_rank, 4);
-    }
-
-    #[tokio::test]
-    async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_override() {
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked/versions"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "data": ["16.22", "16.21"]
-            })))
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked"))
-            .and(query_param("tier", "emerald_plus"))
-            .and(query_param("version", "16.22"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "meta": { "version": "16.22", "match_count": 150 },
-                "data": [
-                    {
-                        "id": 103,
-                        "positions": [
-                            { "name": "MID", "stats": { "win_rate": 0.49, "pick_rate": 0.05, "tier_data": { "tier": 2, "rank": 5 } } }
-                        ]
-                    }
-                ]
-            })))
-            .mount(&mock_server)
-            .await;
-
-        let created_at = "2026-11-14T08:00:00Z";
-        let now_unix = parse_iso8601_to_unix(created_at).unwrap() + 10 * 3600;
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked/103/mid"))
-            .and(query_param("tier", "emerald_plus"))
-            .and(query_param("version", "16.22"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "data": {
-                    "trends": {
-                        "win": [{ "created_at": created_at }]
-                    }
-                }
-            })))
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked"))
-            .and(query_param("tier", "emerald_plus"))
-            .and(query_param("version", "16.21"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "meta": { "version": "16.21", "match_count": 500000 },
-                "data": [
-                    {
-                        "id": 103,
-                        "positions": [
-                            { "name": "MID", "stats": { "win_rate": 0.52, "pick_rate": 0.11, "tier_data": { "tier": 1, "rank": 1 } } }
-                        ]
-                    }
-                ]
-            })))
-            .mount(&mock_server)
-            .await;
-
-        let client = reqwest::Client::new();
-        let ddragon = test_ddragon();
-
-        let protected = fetch_ranked_tier_list_with_base(
-            &client,
-            &mock_server.uri(),
-            Some("global"),
-            Some("emerald_plus"),
-            None,
-            &ddragon,
-            true,
-            now_unix,
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(protected.active_patch, "16.21");
-        assert!(protected.patch_fallback_applied);
-        assert_eq!(protected.patch_protection_remaining_hours, Some(38));
-        assert_eq!(protected.champions[0].tier, 0);
-
-        let manual = fetch_ranked_tier_list_with_base(
-            &client,
-            &mock_server.uri(),
-            Some("global"),
-            Some("emerald_plus"),
-            Some("16.22"),
-            &ddragon,
-            true,
-            now_unix,
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(manual.active_patch, "16.22");
-        assert!(!manual.patch_fallback_applied);
-        assert_eq!(manual.patch_protection_remaining_hours, None);
-        assert_eq!(manual.champions[0].tier, 1);
-    }
-
-    #[tokio::test]
-    async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
-        let dir =
-            std::env::temp_dir().join(format!("schumazgg_ranked_disk_test_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked/versions"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "data": ["16.25"]
-            })))
-            .mount(&mock_server)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "meta": { "version": "16.25", "match_count": 50000 },
-                "data": [{
-                    "id": 103,
-                    "positions": [{ "name": "MID", "stats": { "win_rate": 0.53, "pick_rate": 0.1, "tier_data": { "tier": 1, "rank": 1 } } }]
-                }]
-            })))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let client = reqwest::Client::new();
-        let dd = test_ddragon();
-        let now = crate::storage::now_unix_secs();
-
-        let first = fetch_ranked_tier_list_with_base_and_dir(
-            &client,
-            &mock_server.uri(),
-            Some("global"),
-            Some("emerald_plus"),
-            None,
-            &dd,
-            false,
-            now,
-            AppLocale::PtBr,
-            Some(&dir),
-        )
-        .await
-        .unwrap();
-        assert_eq!(first.champions.len(), 1);
-        assert_eq!(first.active_patch, "16.25");
-
-        // Clear RAM and verify disk hit with 0 network calls within 48h
-        if let Ok(mut g) = get_ranked_cache().write() {
-            g.clear();
-        }
-        let disk_hit = fetch_ranked_tier_list_with_base_and_dir(
-            &client,
-            &mock_server.uri(),
-            Some("global"),
-            Some("emerald_plus"),
-            None,
-            &dd,
-            false,
-            now + 26 * 3600,
-            AppLocale::PtBr,
-            Some(&dir),
-        )
-        .await
-        .unwrap();
-        assert_eq!(disk_hit.champions[0].id, 103);
-
-        // Now test Stale-While-Error when >48h expired and network returns 503
-        if let Ok(mut g) = get_ranked_cache().write() {
-            g.clear();
-        }
-        let offline = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/global/champions/ranked"))
-            .respond_with(ResponseTemplate::new(503))
-            .mount(&offline)
-            .await;
-
-        let rescued = fetch_ranked_tier_list_with_base_and_dir(
-            &client,
-            &offline.uri(),
-            Some("global"),
-            Some("emerald_plus"),
-            None,
-            &dd,
-            false,
-            now + 49 * 3600,
-            AppLocale::PtBr,
-            Some(&dir),
-        )
-        .await
-        .unwrap();
-        assert_eq!(rescued.champions[0].id, 103);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-}
+#[cfg(test)]
+#[path = "ranked/service_tests.rs"]
+mod service_tests;

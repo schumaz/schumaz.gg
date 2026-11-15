@@ -1,4 +1,4 @@
-﻿use super::super::models::ItemStatEntry;
+use super::super::models::ItemStatEntry;
 
 pub fn extract_all_core_items_from_text(text: &str) -> Vec<ItemStatEntry> {
     let mut entries = Vec::new();
@@ -226,4 +226,3 @@ pub fn parse_json_item_entries(val: Option<&serde_json::Value>) -> Vec<ItemStatE
 // 3. 3 Botas Mais Feitas (Always strictly ordered by most absolute games played: play descending)
 // 4. Build Final (6 items: 3 Core items + #1 most played 4th item + #1 most played 5th item + #1 most played 6th item)
 // 5. Itens Situacionais / Úteis (Non-boot items not in core or final build, strictly ordered by play descending)
-

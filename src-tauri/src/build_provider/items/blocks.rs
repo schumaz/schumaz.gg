@@ -1,10 +1,7 @@
 ﻿use super::super::models::{ItemBlock, ItemStatEntry};
 use super::classification::*;
+use super::starters_boots::{select_starter_items, select_top_boots};
 use std::collections::{HashMap, HashSet};
-
-fn is_consumable_starter_id(id: i32) -> bool {
-    matches!(id, 2003 | 2031 | 2033 | 2055)
-}
 
 pub fn build_5_item_blocks(
     starter_entry: Option<ItemStatEntry>,
@@ -24,6 +21,13 @@ pub fn build_5_item_blocks(
     )
 }
 
+#[derive(Debug, Clone)]
+struct ItemAggregate {
+    id: i32,
+    play: i64,
+    first_seen_index: usize,
+}
+
 /// Builds the 5 item blocks using explicit OP.GG Core builds and separate Fourth, Fifth, and Sixth item lists.
 #[allow(clippy::too_many_arguments)]
 pub fn build_5_item_blocks_with_depth_lists(
@@ -36,103 +40,7 @@ pub fn build_5_item_blocks_with_depth_lists(
     damage_type: &str,
     position: &str,
 ) -> Vec<ItemBlock> {
-    // 1. Itens Iniciais:
-    // - Support: Only Potion (2003 / 2031 / 2033) from the #1 most played starter entry
-    // - Jungle: #1 most played Jungle Pet (1101..=1103) + potion from its most played entry (if any)
-    // - Standard lanes & ARAM / ARAM Mayhem: Reflect faithfully the #1 most played starter
-    //   combination from OP.GG without forcing ARAM-exclusive items (2051) or mandatory potions.
-    let norm_pos = position.to_lowercase();
-    let is_support = norm_pos == "support" || norm_pos == "supp" || norm_pos == "utility";
-    let is_jungle = norm_pos == "jungle" || norm_pos == "jng";
-
-    let mut sorted_starter_entries: Vec<(usize, &ItemStatEntry)> =
-        starter_entries.iter().enumerate().collect();
-    sorted_starter_entries.sort_by(|a, b| b.1.play.cmp(&a.1.play).then_with(|| a.0.cmp(&b.0)));
-
-    let starter_ids: Vec<i32> = if is_support {
-        let potion_id = sorted_starter_entries
-            .first()
-            .and_then(|(_, entry)| {
-                entry
-                    .ids
-                    .iter()
-                    .copied()
-                    .find(|&id| matches!(id, 2003 | 2031 | 2033))
-            })
-            .unwrap_or(2003);
-        vec![potion_id]
-    } else if is_jungle {
-        let mut pet_counts: HashMap<i32, (i64, usize)> = HashMap::new();
-        let mut pet_seen = 0;
-        for (_, entry) in &sorted_starter_entries {
-            for &id in &entry.ids {
-                if matches!(id, 1101..=1103) {
-                    let slot = pet_counts.entry(id).or_insert_with(|| {
-                        let i = pet_seen;
-                        pet_seen += 1;
-                        (0, i)
-                    });
-                    slot.0 += entry.play.max(1);
-                }
-            }
-        }
-        let mut sorted_pets: Vec<(i32, i64, usize)> = pet_counts
-            .into_iter()
-            .map(|(id, (p, idx))| (id, p, idx))
-            .collect();
-        sorted_pets.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-        let best_pet = sorted_pets.first().map(|&(id, _, _)| id).unwrap_or(1103);
-
-        // Preserve the potion from the most-played starter entry containing the chosen pet
-        let top_pet_entry = sorted_starter_entries
-            .iter()
-            .find(|(_, e)| e.ids.contains(&best_pet))
-            .or_else(|| sorted_starter_entries.first());
-
-        if let Some((_, entry)) = top_pet_entry {
-            if let Some(&potion_id) = entry
-                .ids
-                .iter()
-                .find(|&&id| matches!(id, 2003 | 2031 | 2033))
-            {
-                vec![best_pet, potion_id]
-            } else {
-                vec![best_pet]
-            }
-        } else {
-            vec![best_pet, 2003]
-        }
-    } else if let Some((_, top_entry)) = sorted_starter_entries.first() {
-        let mut non_consumables: Vec<i32> = Vec::new();
-        let mut consumables: Vec<i32> = Vec::new();
-        for &id in &top_entry.ids {
-            if is_consumable_starter_id(id) {
-                if !consumables.contains(&id) {
-                    consumables.push(id);
-                }
-            } else if !matches!(id, 1101..=1103)
-                && !matches!(id, 3865..=3877)
-                && !non_consumables.contains(&id)
-            {
-                non_consumables.push(id);
-            }
-        }
-        let mut combined = non_consumables;
-        combined.extend(consumables);
-        if combined.is_empty() {
-            if damage_type == "AP" {
-                vec![1056, 2003]
-            } else {
-                vec![1055, 2003]
-            }
-        } else {
-            combined
-        }
-    } else if damage_type == "AP" {
-        vec![1056, 2003]
-    } else {
-        vec![1055, 2003]
-    };
+    let starter_ids = select_starter_items(&starter_entries, damage_type, position);
 
     // Resolve Tear upgrade upfront so contextual filtering uses normalized completed IDs
     let all_entries_for_tear: Vec<ItemStatEntry> = candidate_entries
@@ -196,62 +104,16 @@ pub fn build_5_item_blocks_with_depth_lists(
     let is_starter = |id: i32| -> bool { known_starters.contains(&id) || is_starter_item(id) };
 
     // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
-    let mut boot_map: HashMap<i32, (i64, usize)> = HashMap::new();
-    let mut boot_seen_counter = 0;
-    for entry in &boot_entries {
-        for &id in &entry.ids {
-            if is_boot(id) || (!is_starter(id) && !is_comp(id)) {
-                let slot = boot_map.entry(id).or_insert_with(|| {
-                    let idx = boot_seen_counter;
-                    boot_seen_counter += 1;
-                    (0, idx)
-                });
-                slot.0 += entry.play.max(1);
-            }
-        }
-    }
-    // Only supplement with candidate_entries if boot_entries provided fewer than 3 boots
-    if boot_map.len() < 3 {
-        for entry in &candidate_entries {
-            for &id in &entry.ids {
-                if is_boot(id) {
-                    let slot = boot_map.entry(id).or_insert_with(|| {
-                        let idx = boot_seen_counter;
-                        boot_seen_counter += 1;
-                        (0, idx)
-                    });
-                    slot.0 += entry.play.max(1);
-                }
-            }
-        }
-    }
-    let mut boot_pairs: Vec<(i32, i64, usize)> = boot_map
-        .into_iter()
-        .map(|(id, (play, idx))| (id, play, idx))
-        .collect();
-    boot_pairs.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-    let mut boots_list: Vec<i32> = boot_pairs.into_iter().map(|(id, _, _)| id).collect();
-
-    let archetype_boots = if damage_type == "AP" {
-        vec![3020, 3158, 3111, 3047]
-    } else {
-        vec![3006, 3047, 3111, 3009]
-    };
-    for b in archetype_boots {
-        if boots_list.len() < 3 && !boots_list.contains(&b) {
-            boots_list.push(b);
-        }
-    }
-    boots_list.truncate(3);
+    let boots_list = select_top_boots(
+        &boot_entries,
+        &candidate_entries,
+        damage_type,
+        &is_boot,
+        &is_starter,
+        &is_comp,
+    );
 
     // 3. Aggregate all non-boot, non-starter candidate items with play counts
-    #[derive(Debug, Clone)]
-    struct ItemAggregate {
-        id: i32,
-        play: i64,
-        first_seen_index: usize,
-    }
-
     let mut item_map: HashMap<i32, (i64, usize)> = HashMap::new();
     let mut item_seen_counter = 0;
     for entry in candidate_entries
@@ -295,11 +157,7 @@ pub fn build_5_item_blocks_with_depth_lists(
     });
 
     // Block 2: Primeiros 3 Itens
-    // The 3 core items must strictly appear in sequential order of progression:
-    // (1st most built item -> 2nd item after the 1st -> 3rd item after the 2nd).
     let mut clean_core: Vec<i32> = Vec::new();
-
-    // Check if candidate_entries contains multi-item core combinations (length >= 2 non-boot items)
     let mut core_combos: Vec<&ItemStatEntry> = candidate_entries
         .iter()
         .filter(|e| {
@@ -332,7 +190,6 @@ pub fn build_5_item_blocks_with_depth_lists(
         }
     }
 
-    // Fill up to 3 core items from the top sorted candidates if needed
     for cand in &all_candidates {
         let norm_id = if cand.id == 3070 {
             tear_upgrade
@@ -356,8 +213,6 @@ pub fn build_5_item_blocks_with_depth_lists(
     }
 
     // Block 4: Build Final (6 items: 3 Core items + most built 4th + most built 5th + most built 6th)
-    // The first 3 items MUST be identical to clean_core in the EXACT SAME sequential order,
-    // followed by the top valid non-duplicate item from fourth_items, fifth_items, and sixth_items.
     let mut final_build: Vec<i32> = clean_core.clone();
 
     let pick_top_from_depth_list =
@@ -391,7 +246,6 @@ pub fn build_5_item_blocks_with_depth_lists(
         }
     }
 
-    // Fallback: fill remaining slots up to 6 items from top candidates sorted by play count
     for cand in &all_candidates {
         if final_build.len() < 6
             && !final_build.contains(&cand.id)
@@ -414,8 +268,6 @@ pub fn build_5_item_blocks_with_depth_lists(
     }
 
     // Block 5: Itens Situacionais / Úteis
-    // Strictly non-boot items that are NOT in clean_core and NOT in final_build,
-    // sorted strictly in descending order of absolute games played (play count)!
     let mut situational_candidates: Vec<&ItemAggregate> = all_candidates
         .iter()
         .filter(|cand| {
@@ -454,7 +306,6 @@ pub fn build_5_item_blocks_with_depth_lists(
             break;
         }
     }
-
     situational_items.truncate(6);
 
     vec![
@@ -486,6 +337,12 @@ pub fn build_5_item_blocks_with_depth_lists(
     ]
 }
 
+#[cfg(test)]
+#[path = "blocks_boots_tests.rs"]
+mod boots_tests;
+#[cfg(test)]
+#[path = "blocks_starter_tests.rs"]
+mod starter_tests;
 #[cfg(test)]
 #[path = "blocks_tests.rs"]
 mod tests;
