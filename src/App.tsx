@@ -2,6 +2,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import "./App.css";
 
 import { ActiveTab, FlashKeyPreference, commands } from "./types";
+import { I18nProvider } from "./i18n";
 import { profileBlurPercentToPx, usePreferences } from "./hooks/usePreferences";
 import { useLcuEvents } from "./hooks/useLcuEvents";
 import { usePlayerProfile } from "./hooks/usePlayerProfile";
@@ -21,6 +22,7 @@ import {
   NavigationDock,
   AramTab,
   RankedTab,
+  LanguageOnboardingModal,
 } from "./components";
 
 // Re-export all types and utilities for seamless backward compatibility
@@ -56,6 +58,11 @@ function App() {
   };
 
   const {
+    locale,
+    needsLanguageOnboarding,
+    previewOnboardingLocale,
+    confirmLanguageOnboarding,
+    changeLanguage,
     preferences,
     updatePreference,
     profileBlur,
@@ -86,14 +93,16 @@ function App() {
   } = useLcuEvents(preferences.flashKey, {
     onChampionPulled: () => setActiveTab("runes"),
     onMatchEnded: () => setActiveTab("profile"),
+    locale,
   });
 
   const currentChampionId = champSelect?.champion_id ?? build?.champion_id ?? null;
-  const aram = useAram(activeTab === "aram", currentChampionId);
+  const aram = useAram(activeTab === "aram", currentChampionId, locale);
   const ranked = useRanked(
     activeTab === "ranked",
     preferences.flashKey,
-    preferences.patch48hProtection ?? true
+    preferences.patch48hProtection ?? true,
+    locale
   );
 
   useEffect(() => {
@@ -106,7 +115,7 @@ function App() {
     profileError,
     refreshCooldownSecs,
     refreshProfile,
-  } = usePlayerProfile(summoner);
+  } = usePlayerProfile(summoner, locale);
 
   useEffect(() => {
     setSplashFallbackUsed(false);
@@ -146,175 +155,188 @@ function App() {
   };
 
   return (
-    <main
-      className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
-        isAppMinimized ? "app-minimized" : ""
-      } ${!hardwareAcceleration ? "gpu-effects-disabled" : ""}`}
-      style={
-        activeTab === "profile"
-          ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties)
-          : undefined
-      }
-    >
-      {/* Full-Screen Profile Wallpaper Backdrop (fixed 1px blur) */}
-      {showFullScreenWallpaper && (
-        <div className="profile-wallpaper-backdrop" data-testid="profile-wallpaper">
-          <img
-            src={activeSplashUrl}
-            alt=""
-            aria-hidden="true"
-            className="profile-wallpaper-img"
-            style={{ filter: "blur(1px) saturate(1.05)" }}
-            onError={() => {
-              if (
-                !splashFallbackUsed &&
-                profile?.background_splash_fallback_url &&
-                profile.background_splash_fallback_url !== activeSplashUrl
-              ) {
-                setSplashFallbackUsed(true);
-              } else {
-                setSplashBroken(true);
-              }
-            }}
+    <I18nProvider locale={locale} onLocaleChange={changeLanguage}>
+      <main
+        className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
+          isAppMinimized ? "app-minimized" : ""
+        } ${!hardwareAcceleration ? "gpu-effects-disabled" : ""}`}
+        style={
+          activeTab === "profile"
+            ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties)
+            : undefined
+        }
+      >
+        {/* Full-Screen Profile Wallpaper Backdrop (fixed 1px blur) */}
+        {showFullScreenWallpaper && (
+          <div className="profile-wallpaper-backdrop" data-testid="profile-wallpaper">
+            <img
+              src={activeSplashUrl}
+              alt=""
+              aria-hidden="true"
+              className="profile-wallpaper-img"
+              style={{ filter: "blur(1px) saturate(1.05)" }}
+              onError={() => {
+                if (
+                  !splashFallbackUsed &&
+                  profile?.background_splash_fallback_url &&
+                  profile.background_splash_fallback_url !== activeSplashUrl
+                ) {
+                  setSplashFallbackUsed(true);
+                } else {
+                  setSplashBroken(true);
+                }
+              }}
+            />
+            <div className="profile-wallpaper-scrim" />
+          </div>
+        )}
+
+        <StatusDock summoner={summoner} />
+
+        {/* Main Content Area with Seamless Crossfade Transition */}
+        <div className="tabs-viewport">
+          {/* View 1: "Perfil" Tab (Default Startup Screen) */}
+          <ProfileTab
+            summoner={summoner}
+            profile={profile}
+            loading={profileLoading}
+            errorMsg={profileError}
+            onRefresh={refreshProfile}
+            refreshCooldownSecs={refreshCooldownSecs}
+            profileBlur={profileBlur}
+            isActive={activeTab === "profile"}
           />
-          <div className="profile-wallpaper-scrim" />
-        </div>
-      )}
 
-      <StatusDock summoner={summoner} />
+          {/* View 2: "Runas" Tab (Match Dashboard) */}
+          <div
+            className={`tab-content ${activeTab === "runes" ? "active-tab" : "inactive-tab"}`}
+            data-testid="view-runes"
+            aria-hidden={activeTab !== "runes"}
+          >
+            {build ? (
+              <div className="dashboard-layout">
+                <FiltersHeader
+                  build={build}
+                  champSelect={champSelect}
+                  loading={loading}
+                  onFilterChange={handleFilterChange}
+                />
 
-      {/* Main Content Area with Seamless Crossfade Transition */}
-      <div className="tabs-viewport">
-        {/* View 1: "Perfil" Tab (Default Startup Screen) */}
-        <ProfileTab
-          summoner={summoner}
-          profile={profile}
-          loading={profileLoading}
-          errorMsg={profileError}
-          onRefresh={refreshProfile}
-          refreshCooldownSecs={refreshCooldownSecs}
-          profileBlur={profileBlur}
-          isActive={activeTab === "profile"}
-        />
+                <div className="dashboard-split-grid">
+                  <div className="dashboard-col dashboard-col-left">
+                    <RuneTree
+                      build={build}
+                      selectedRunePageIndex={selectedRunePageIndex}
+                      onSelectRunePage={handleSelectRunePage}
+                    />
 
-        {/* View 2: "Runas" Tab (Match Dashboard) */}
-        <div
-          className={`tab-content ${activeTab === "runes" ? "active-tab" : "inactive-tab"}`}
-          data-testid="view-runes"
-          aria-hidden={activeTab !== "runes"}
-        >
-          {build ? (
-            <div className="dashboard-layout">
-              <FiltersHeader
-                build={build}
-                champSelect={champSelect}
-                loading={loading}
-                onFilterChange={handleFilterChange}
-              />
+                    <SpellsBar
+                      orderedSpells={orderedSpells}
+                      spellChoices={build.spell_choices}
+                      selectedSecondarySpellId={selectedSecondarySpellId}
+                      onInvertSpells={handleInvertSpells}
+                      onSelectSecondarySpell={handleSelectSecondarySpell}
+                    />
+                  </div>
 
-              <div className="dashboard-split-grid">
-                <div className="dashboard-col dashboard-col-left">
-                  <RuneTree
-                    build={build}
-                    selectedRunePageIndex={selectedRunePageIndex}
-                    onSelectRunePage={handleSelectRunePage}
-                  />
-
-                  <SpellsBar
-                    orderedSpells={orderedSpells}
-                    spellChoices={build.spell_choices}
-                    selectedSecondarySpellId={selectedSecondarySpellId}
-                    onInvertSpells={handleInvertSpells}
-                    onSelectSecondarySpell={handleSelectSecondarySpell}
-                  />
-                </div>
-
-                <div className="dashboard-col dashboard-col-right">
-                  <ItemBlocks
-                    build={build}
-                    selectedBuildIndex={selectedBuildIndex}
-                    onSelectBuild={handleSelectBuild}
-                  />
+                  <div className="dashboard-col dashboard-col-right">
+                    <ItemBlocks
+                      build={build}
+                      selectedBuildIndex={selectedBuildIndex}
+                      onSelectBuild={handleSelectBuild}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <IdleState
-              summoner={summoner}
-              errorMsg={errorMsg}
-              champSelect={champSelect}
-              loading={loading}
-            />
-          )}
+            ) : (
+              <IdleState
+                summoner={summoner}
+                errorMsg={errorMsg}
+                champSelect={champSelect}
+                loading={loading}
+              />
+            )}
+          </div>
+
+          {/* View 3: "Ranqueada" Tab (Tier List + Read-Only Champion Build Preview) */}
+          <RankedTab
+            isActive={activeTab === "ranked"}
+            filters={ranked.filters}
+            tierData={ranked.tierData}
+            tierLoading={ranked.tierLoading}
+            tierError={ranked.tierError}
+            selectedChampion={ranked.selectedChampion}
+            championBuild={ranked.championBuild}
+            buildLoading={ranked.buildLoading}
+            buildError={ranked.buildError}
+            orderedSpells={ranked.orderedSpells}
+            selectedRunePageIndex={ranked.selectedRunePageIndex}
+            selectedBuildIndex={ranked.selectedBuildIndex}
+            onTierListFilterChange={ranked.handleTierListFilterChange}
+            onDetailFilterChange={ranked.handleDetailFilterChange}
+            onSelectChampion={ranked.selectChampion}
+            onBackToTierList={ranked.clearSelectedChampion}
+            onRetryTierList={ranked.retryTierList}
+            onRetryBuild={ranked.retryChampionBuild}
+            onSelectRunePage={ranked.setSelectedRunePageIndex}
+            onSelectBuild={ranked.setSelectedBuildIndex}
+          />
+
+          {/* View 4: "Aram" Tab (ARAM & ARAM Mayhem) */}
+          <AramTab
+            isActive={activeTab === "aram"}
+            savedMode={aram.savedMode}
+            showChooser={aram.showChooser}
+            tierLists={aram.tierLists}
+            tierLoading={aram.tierLoading}
+            tierErrors={aram.tierErrors}
+            selectedChampionKey={aram.selectedChampionKey}
+            augmentsByChampion={aram.augmentsByChampion}
+            augmentsLoading={aram.augmentsLoading}
+            augmentsError={aram.augmentsError}
+            onSelectMode={aram.selectMode}
+            onSelectChampion={aram.selectChampion}
+            onRetryTierList={aram.retryTierList}
+            onRetryAugments={aram.retryAugments}
+          />
+
+          {/* View 5: "Configurações" Tab (Settings & Preferences) */}
+          <SettingsTab
+            preferences={preferences}
+            onUpdatePreference={updatePreference}
+            locale={locale}
+            onChangeLanguage={changeLanguage}
+            profileBlur={profileBlur}
+            onProfileBlurChange={updateProfileBlur}
+            wallpaperVisible={wallpaperVisible}
+            onWallpaperVisibleChange={updateWallpaperVisible}
+            hardwareAcceleration={hardwareAcceleration}
+            onHardwareAccelerationChange={updateHardwareAcceleration}
+            gpuRestartRequired={gpuRestartRequired}
+            onRestartApp={restartApp}
+            isActive={activeTab === "settings"}
+          />
         </div>
 
-        {/* View 3: "Ranqueada" Tab (Tier List + Read-Only Champion Build Preview) */}
-        <RankedTab
-          isActive={activeTab === "ranked"}
-          filters={ranked.filters}
-          tierData={ranked.tierData}
-          tierLoading={ranked.tierLoading}
-          tierError={ranked.tierError}
-          selectedChampion={ranked.selectedChampion}
-          championBuild={ranked.championBuild}
-          buildLoading={ranked.buildLoading}
-          buildError={ranked.buildError}
-          orderedSpells={ranked.orderedSpells}
-          selectedRunePageIndex={ranked.selectedRunePageIndex}
-          selectedBuildIndex={ranked.selectedBuildIndex}
-          onTierListFilterChange={ranked.handleTierListFilterChange}
-          onDetailFilterChange={ranked.handleDetailFilterChange}
-          onSelectChampion={ranked.selectChampion}
-          onBackToTierList={ranked.clearSelectedChampion}
-          onRetryTierList={ranked.retryTierList}
-          onRetryBuild={ranked.retryChampionBuild}
-          onSelectRunePage={ranked.setSelectedRunePageIndex}
-          onSelectBuild={ranked.setSelectedBuildIndex}
+        {/* Persistent Bottom Navigation Dock */}
+        <NavigationDock
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onAramClick={handleAramDockClick}
+          onRankedClick={handleRankedDockClick}
+          animationsPaused={isAppMinimized}
         />
 
-        {/* View 4: "Aram" Tab (ARAM & ARAM Mayhem) */}
-        <AramTab
-          isActive={activeTab === "aram"}
-          savedMode={aram.savedMode}
-          showChooser={aram.showChooser}
-          tierLists={aram.tierLists}
-          tierLoading={aram.tierLoading}
-          tierErrors={aram.tierErrors}
-          selectedChampionKey={aram.selectedChampionKey}
-          augmentsByChampion={aram.augmentsByChampion}
-          augmentsLoading={aram.augmentsLoading}
-          augmentsError={aram.augmentsError}
-          onSelectMode={aram.selectMode}
-          onSelectChampion={aram.selectChampion}
-          onRetryTierList={aram.retryTierList}
-          onRetryAugments={aram.retryAugments}
-        />
-
-        {/* View 5: "Configurações" Tab (Settings & Preferences) */}
-        <SettingsTab
-          preferences={preferences}
-          onUpdatePreference={updatePreference}
-          profileBlur={profileBlur}
-          onProfileBlurChange={updateProfileBlur}
-          wallpaperVisible={wallpaperVisible}
-          onWallpaperVisibleChange={updateWallpaperVisible}
-          hardwareAcceleration={hardwareAcceleration}
-          onHardwareAccelerationChange={updateHardwareAcceleration}
-          gpuRestartRequired={gpuRestartRequired}
-          onRestartApp={restartApp}
-          isActive={activeTab === "settings"}
-        />
-      </div>
-
-      {/* Persistent Bottom Navigation Dock */}
-      <NavigationDock
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onAramClick={handleAramDockClick}
-        onRankedClick={handleRankedDockClick}
-        animationsPaused={isAppMinimized}
-      />
-    </main>
+        {/* First-Launch Language Onboarding Overlay (with blur backdrop) */}
+        {needsLanguageOnboarding && (
+          <LanguageOnboardingModal
+            selectedLocale={locale}
+            onSelectLocale={previewOnboardingLocale}
+            onConfirm={confirmLanguageOnboarding}
+          />
+        )}
+      </main>
+    </I18nProvider>
   );
 }
 

@@ -456,6 +456,7 @@ describe("RankedTab UI", () => {
 describe("useRanked hook state and filter preservation", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("schumaz_language", "pt_BR");
     vi.restoreAllMocks();
   });
 

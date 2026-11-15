@@ -105,6 +105,7 @@ describe("NavigationDock Aram label and icon", () => {
 describe("useAram persistence and click behavior", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("schumaz_language", "pt_BR");
     vi.restoreAllMocks();
   });
 

@@ -2,6 +2,8 @@ export * from "./StatusDock";
 export * from "./ProfileTab";
 export * from "./FilterDropdown";
 export * from "./RegionFlag";
+export * from "./LanguageFlag";
+export * from "./LanguageOnboardingModal";
 export * from "./FiltersHeader";
 export * from "./RuneTree";
 export * from "./SpellsBar";

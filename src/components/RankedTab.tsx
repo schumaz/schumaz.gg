@@ -1,5 +1,6 @@
 import "./RankedTab.css";
 import { useMemo, useState } from "react";
+import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import {
   ChampionBuild,
   RankedChampionEntry,
@@ -12,10 +13,10 @@ import { getChampionTierClass, getChampionTierLabel } from "./AramTab";
 import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
 import {
   FiltersHeader,
-  REGION_OPTIONS,
-  TIER_OPTIONS,
   buildIconImg,
   computePatchUiMeta,
+  getRegionOptions,
+  getTierOptions,
 } from "./FiltersHeader";
 import { ItemBlocks } from "./ItemBlocks";
 import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
@@ -23,77 +24,91 @@ import { RuneTree } from "./RuneTree";
 import { SearchInput } from "./SearchInput";
 import { SpellsBar } from "./SpellsBar";
 
+type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;
+const defaultTranslate: TranslatorFn = (key, params) => translate("pt_BR", key, params);
+
 const CDRAGON_POSITION_SVG_BASE =
   "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/svg";
 
 export const LANE_ORDER: RankedLane[] = ["top", "jungle", "mid", "adc", "support"];
 
-export const LANE_META: Record<RankedLane, { label: string; shortLabel: string; iconUrl: string }> =
-  {
+export function getLaneMeta(
+  t: TranslatorFn = defaultTranslate
+): Record<RankedLane, { label: string; shortLabel: string; iconUrl: string }> {
+  return {
     top: {
-      label: "Topo",
-      shortLabel: "Topo",
+      label: t("filters.lanes.top"),
+      shortLabel: t("filters.lanes.topShort"),
       iconUrl: `${CDRAGON_POSITION_SVG_BASE}/position-top-light.svg`,
     },
     jungle: {
-      label: "Selva",
-      shortLabel: "Selva",
+      label: t("filters.lanes.jungle"),
+      shortLabel: t("filters.lanes.jungleShort"),
       iconUrl: `${CDRAGON_POSITION_SVG_BASE}/position-jungle-light.svg`,
     },
     mid: {
-      label: "Meio",
-      shortLabel: "Meio",
+      label: t("filters.lanes.mid"),
+      shortLabel: t("filters.lanes.midShort"),
       iconUrl: `${CDRAGON_POSITION_SVG_BASE}/position-middle-light.svg`,
     },
     adc: {
-      label: "Atirador (Bot)",
-      shortLabel: "Atirador",
+      label: t("filters.lanes.adc"),
+      shortLabel: t("filters.lanes.adcShort"),
       iconUrl: `${CDRAGON_POSITION_SVG_BASE}/position-bottom-light.svg`,
     },
     support: {
-      label: "Suporte",
-      shortLabel: "Suporte",
+      label: t("filters.lanes.support"),
+      shortLabel: t("filters.lanes.supportShort"),
       iconUrl: `${CDRAGON_POSITION_SVG_BASE}/position-utility-light.svg`,
     },
   };
+}
 
-export const CHAMPION_TIER_FILTER_OPTIONS: FilterDropdownOption[] = [
-  {
-    value: "all",
-    label: "Todos",
-    icon: <span className="ranked-tier-filter-dot tier-all" />,
-  },
-  {
-    value: "0",
-    label: "OP",
-    icon: <span className="ranked-tier-filter-dot tier-op" />,
-  },
-  {
-    value: "1",
-    label: "Tier 1",
-    icon: <span className="ranked-tier-filter-dot tier-1" />,
-  },
-  {
-    value: "2",
-    label: "Tier 2",
-    icon: <span className="ranked-tier-filter-dot tier-2" />,
-  },
-  {
-    value: "3",
-    label: "Tier 3",
-    icon: <span className="ranked-tier-filter-dot tier-3" />,
-  },
-  {
-    value: "4",
-    label: "Tier 4",
-    icon: <span className="ranked-tier-filter-dot tier-4" />,
-  },
-  {
-    value: "5",
-    label: "Tier 5",
-    icon: <span className="ranked-tier-filter-dot tier-5" />,
-  },
-];
+export const LANE_META = getLaneMeta();
+
+export function getChampionTierFilterOptions(
+  t: TranslatorFn = defaultTranslate
+): FilterDropdownOption[] {
+  return [
+    {
+      value: "all",
+      label: t("ranked.allTiers"),
+      icon: <span className="ranked-tier-filter-dot tier-all" />,
+    },
+    {
+      value: "0",
+      label: "OP",
+      icon: <span className="ranked-tier-filter-dot tier-op" />,
+    },
+    {
+      value: "1",
+      label: "Tier 1",
+      icon: <span className="ranked-tier-filter-dot tier-1" />,
+    },
+    {
+      value: "2",
+      label: "Tier 2",
+      icon: <span className="ranked-tier-filter-dot tier-2" />,
+    },
+    {
+      value: "3",
+      label: "Tier 3",
+      icon: <span className="ranked-tier-filter-dot tier-3" />,
+    },
+    {
+      value: "4",
+      label: "Tier 4",
+      icon: <span className="ranked-tier-filter-dot tier-4" />,
+    },
+    {
+      value: "5",
+      label: "Tier 5",
+      icon: <span className="ranked-tier-filter-dot tier-5" />,
+    },
+  ];
+}
+
+export const CHAMPION_TIER_FILTER_OPTIONS = getChampionTierFilterOptions();
 
 interface RankedTabProps {
   isActive: boolean;
@@ -213,9 +228,15 @@ export function RankedTab({
   onSelectRunePage,
   onSelectBuild,
 }: RankedTabProps) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
+
+  const laneMeta = useMemo(() => getLaneMeta(t), [t]);
+  const tierOptions = useMemo(() => getTierOptions(t), [t]);
+  const regionOptions = useMemo(() => getRegionOptions(t), [t]);
+  const championTierFilterOptions = useMemo(() => getChampionTierFilterOptions(t), [t]);
 
   const {
     patchOptions,
@@ -228,6 +249,7 @@ export function RankedTab({
     availablePatches: tierData?.available_patches,
     patchFallbackApplied: tierData?.patch_fallback_applied,
     remainingHours: tierData?.patch_protection_remaining_hours,
+    t,
   });
 
   const activePatchValue = tierData?.active_patch || filters.patch || patchOptions[0] || "";
@@ -256,13 +278,20 @@ export function RankedTab({
     return groupByTier(filteredChampions, isAllLanes ? "all" : "lane");
   }, [filteredChampions, isAllLanes]);
 
-  const activeLaneMeta = filters.lane !== "all" ? LANE_META[filters.lane] : null;
+  const activeLaneMeta = filters.lane !== "all" ? laneMeta[filters.lane] : null;
 
   const detailStatusTag = selectedChampion
     ? isAllLanes && (selectedChampion.overall_rank ?? 0) > 0
-      ? `${getChampionTierLabel(selectedChampion.tier)} · #${selectedChampion.overall_rank} Geral`
-      : `${getChampionTierLabel(selectedChampion.tier)} · #${selectedChampion.rank} ${LANE_META[selectedChampion.lane].shortLabel}`
-    : "Consulta Ranqueada";
+      ? t("ranked.detailStatusGeneral", {
+          tier: getChampionTierLabel(selectedChampion.tier),
+          rank: selectedChampion.overall_rank ?? 0,
+        })
+      : t("ranked.detailStatusLane", {
+          tier: getChampionTierLabel(selectedChampion.tier),
+          rank: selectedChampion.rank,
+          lane: laneMeta[selectedChampion.lane].shortLabel,
+        })
+    : t("ranked.detailStatusFallback");
 
   const renderTierGroups = (
     groups: Array<{ tier: number; items: RankedChampionEntry[] }>,
@@ -280,14 +309,15 @@ export function RankedTab({
             {getChampionTierLabel(group.tier)}
           </span>
           <span className="ranked-tier-group-count">
-            {group.items.length} {group.items.length === 1 ? "campeão" : "campeões"}
+            {group.items.length}{" "}
+            {group.items.length === 1 ? t("common.championSingular") : t("common.championPlural")}
           </span>
         </div>
 
         <div className="ranked-tier-rows">
           {group.items.map((champ) => {
             runningGlobalRank += 1;
-            const laneInfo = LANE_META[champ.lane];
+            const laneInfo = laneMeta[champ.lane];
             const displayRank = isAllLanes
               ? (champ.overall_rank ?? 0) > 0
                 ? champ.overall_rank
@@ -321,7 +351,10 @@ export function RankedTab({
                       className="ranked-champ-lane-pill"
                       title={
                         champ.rank > 0
-                          ? `Rank #${champ.rank} em ${laneInfo.shortLabel}`
+                          ? t("ranked.rankInLaneTitle", {
+                              rank: champ.rank,
+                              lane: laneInfo.shortLabel,
+                            })
                           : laneInfo.shortLabel
                       }
                       data-testid={`ranked-champ-lane-${champ.lane}-${champ.key}`}
@@ -393,7 +426,7 @@ export function RankedTab({
                 onFilterChange={onDetailFilterChange}
                 onBackToTierList={onBackToTierList}
                 statusTagText={detailStatusTag}
-                queueModeLabel="Summoner's Rift (Ranqueada)"
+                queueModeLabel={t("filters.queueRankedSr")}
               />
 
               <div className="dashboard-split-grid">
@@ -445,7 +478,7 @@ export function RankedTab({
                   >
                     <polyline points="15 18 9 12 15 6" />
                   </svg>
-                  <span>Voltar</span>
+                  <span>{t("common.back")}</span>
                 </button>
                 <div className="ranked-detail-champ-summary">
                   <div className="dd-icon-frame aram-champ-frame">
@@ -467,14 +500,14 @@ export function RankedTab({
                     className="aram-retry-btn"
                     onClick={onRetryBuild}
                   >
-                    Tentar novamente
+                    {t("common.retry")}
                   </button>
                 </div>
               ) : (
                 <div className="aram-state-box" data-testid="ranked-build-loading">
                   <div className="loading-status-line">
                     <div className="spinner aram-spinner" />
-                    <span>Carregando runas e build de {selectedChampion.name}</span>
+                    <span>{t("ranked.loadingBuild", { name: selectedChampion.name })}</span>
                     <LoadingDots size="sm" testId="ranked-build-loading-dots" />
                   </div>
                 </div>
@@ -490,7 +523,7 @@ export function RankedTab({
 
             <div className="ranked-toolbar-top">
               <div className="ranked-hero-left">
-                <h2 className="page-hero-title">Tier List</h2>
+                <h2 className="page-hero-title">{t("ranked.title")}</h2>
               </div>
 
               <div className="ranked-hero-right">
@@ -501,19 +534,19 @@ export function RankedTab({
                       title={protectionTooltipText}
                       data-testid="ranked-patch-fallback-badge"
                     >
-                      🛡️ Volume Protegido ({activePatchValue})
+                      🛡️ {t("filters.protectedVolume", { patch: activePatchValue })}
                       {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
                     </span>
                   )}
-                  <span className="ranked-mode-badge">Ranqueada</span>
+                  <span className="ranked-mode-badge">{t("ranked.modeBadge")}</span>
                 </div>
 
                 <SearchInput
                   value={search}
                   onChange={setSearch}
-                  placeholder="Buscar campeão..."
-                  ariaLabel="Buscar campeão na Ranqueada"
-                  clearAriaLabel="Limpar busca na Ranqueada"
+                  placeholder={t("common.searchChampionPlaceholder")}
+                  ariaLabel={t("ranked.searchAria")}
+                  clearAriaLabel={t("ranked.clearSearchAria")}
                   testId="ranked-toolbar-search-wrap"
                 />
               </div>
@@ -526,14 +559,14 @@ export function RankedTab({
                   htmlFor="ranked-filter-tier"
                   className="filter-label"
                 >
-                  Elo:
+                  {t("filters.eloLabel")}
                 </label>
                 <FilterDropdown
                   id="ranked-filter-tier"
                   labelId="ranked-filter-tier-label"
                   testId="ranked-filter-tier"
                   value={filters.tier}
-                  options={TIER_OPTIONS}
+                  options={tierOptions}
                   disabled={tierLoading}
                   onChange={(val) => onTierListFilterChange("tier", val)}
                 />
@@ -545,14 +578,14 @@ export function RankedTab({
                   htmlFor="ranked-filter-region"
                   className="filter-label"
                 >
-                  Servidor:
+                  {t("filters.regionLabel")}
                 </label>
                 <FilterDropdown
                   id="ranked-filter-region"
                   labelId="ranked-filter-region-label"
                   testId="ranked-filter-region"
                   value={filters.region}
-                  options={REGION_OPTIONS}
+                  options={regionOptions}
                   disabled={tierLoading}
                   onChange={(val) => onTierListFilterChange("region", val)}
                 />
@@ -564,7 +597,7 @@ export function RankedTab({
                   htmlFor="ranked-filter-patch"
                   className="filter-label"
                 >
-                  Patch:
+                  {t("filters.patchLabel")}
                 </label>
                 <FilterDropdown
                   id="ranked-filter-patch"
@@ -623,7 +656,7 @@ export function RankedTab({
               <div
                 className="ranked-lane-tabs"
                 role="group"
-                aria-label="Filtrar por rota"
+                aria-label={t("ranked.filterByLaneAria")}
                 data-testid="ranked-lane-tabs"
               >
                 <button
@@ -632,10 +665,10 @@ export function RankedTab({
                   onClick={() => onTierListFilterChange("position", "all")}
                   data-testid="ranked-lane-tab-all"
                 >
-                  <span>Todas as Rotas</span>
+                  <span>{t("ranked.allLanes")}</span>
                 </button>
                 {LANE_ORDER.map((lane) => {
-                  const meta = LANE_META[lane];
+                  const meta = laneMeta[lane];
                   const isSelected = filters.lane === lane;
                   return (
                     <button
@@ -664,14 +697,14 @@ export function RankedTab({
                   htmlFor="ranked-filter-champ-tier"
                   className="filter-label"
                 >
-                  Tier:
+                  {t("filters.tierLabel")}
                 </label>
                 <FilterDropdown
                   id="ranked-filter-champ-tier"
                   labelId="ranked-filter-champ-tier-label"
                   testId="ranked-filter-champ-tier"
                   value={tierFilter}
-                  options={CHAMPION_TIER_FILTER_OPTIONS}
+                  options={championTierFilterOptions}
                   disabled={tierLoading && !tierData}
                   onChange={setTierFilter}
                 />
@@ -685,7 +718,7 @@ export function RankedTab({
               <div className="loading-skeleton-shell" data-testid="ranked-tierlist-loading">
                 <div className="loading-banner">
                   <div className="spinner aram-spinner" />
-                  <span>Carregando tier list ranqueada</span>
+                  <span>{t("ranked.loadingTierList")}</span>
                   <LoadingDots size="sm" testId="ranked-tierlist-loading-dots" />
                 </div>
                 <ListSkeleton rows={7} variant="ranked" testId="ranked-tierlist-skeleton" />
@@ -698,17 +731,17 @@ export function RankedTab({
                   className="aram-retry-btn"
                   onClick={onRetryTierList}
                 >
-                  Tentar novamente
+                  {t("common.retry")}
                 </button>
               </div>
             ) : tierGroups.length === 0 ? (
               <div className="aram-state-box">
                 <span>
                   {search.trim()
-                    ? `Nenhum campeão encontrado para "${search}".`
+                    ? t("ranked.noChampFoundSearch", { query: search })
                     : tierFilter !== "all"
-                      ? "Nenhum campeão encontrado para o tier selecionado."
-                      : "Nenhum dado ranqueado disponível para esses filtros."}
+                      ? t("ranked.noChampFoundTier")
+                      : t("ranked.noDataAvailable")}
                 </span>
               </div>
             ) : (

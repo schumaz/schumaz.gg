@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation } from "../i18n";
 
 interface SearchInputProps {
   value: string;
@@ -15,11 +16,13 @@ export function SearchInput({
   onChange,
   placeholder,
   ariaLabel,
-  clearAriaLabel = "Limpar busca",
+  clearAriaLabel,
   className = "",
   testId,
 }: SearchInputProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const resolvedClearAriaLabel = clearAriaLabel ?? t("common.clearSearch");
 
   const handleClear = () => {
     onChange("");
@@ -27,10 +30,7 @@ export function SearchInput({
   };
 
   return (
-    <div
-      className={`aram-search-wrap ${className}`.trim()}
-      data-testid={testId}
-    >
+    <div className={`aram-search-wrap ${className}`.trim()} data-testid={testId}>
       <svg
         className="aram-search-icon"
         viewBox="0 0 24 24"
@@ -58,8 +58,8 @@ export function SearchInput({
           type="button"
           className="aram-search-clear"
           onClick={handleClear}
-          aria-label={clearAriaLabel}
-          title={clearAriaLabel}
+          aria-label={resolvedClearAriaLabel}
+          title={resolvedClearAriaLabel}
         >
           <svg
             viewBox="0 0 24 24"

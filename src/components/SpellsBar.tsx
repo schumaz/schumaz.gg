@@ -1,4 +1,5 @@
 import { SpellMetadata } from "../types";
+import { useTranslation } from "../i18n";
 
 interface SpellsBarProps {
   orderedSpells: SpellMetadata[];
@@ -17,19 +18,21 @@ export function SpellsBar({
   onSelectSecondarySpell,
   readOnly = false,
 }: SpellsBarProps) {
+  const { t } = useTranslation();
+
   return (
     <section className="card spells-card" data-testid="spells-card">
       <div className="spells-card-header">
-        <h2>Feitiços de Invocador</h2>
+        <h2>{t("spells.title")}</h2>
         {!readOnly && onInvertSpells && (
           <button
             type="button"
             className="invert-spells-btn"
             data-testid="invert-spells-btn"
             onClick={onInvertSpells}
-            title="Inverter a posição dos feitiços entre as teclas D e F"
+            title={t("spells.invertTitle")}
           >
-            <span className="invert-spells-icon">⇄</span> Inverter Feitiços
+            <span className="invert-spells-icon">⇄</span> {t("spells.invertBtn")}
           </button>
         )}
       </div>
@@ -56,11 +59,11 @@ export function SpellsBar({
             <div className="spells-fallback">
               <div className="spell-item">
                 {!readOnly && <span className="spell-key-indicator">D</span>}
-                <span className="spell-name">Feitiço 1</span>
+                <span className="spell-name">{t("spells.spell1Fallback")}</span>
               </div>
               <div className="spell-item">
                 {!readOnly && <span className="spell-key-indicator">F</span>}
-                <span className="spell-name">Feitiço 2</span>
+                <span className="spell-name">{t("spells.spell2Fallback")}</span>
               </div>
             </div>
           )}
@@ -69,7 +72,7 @@ export function SpellsBar({
         {spellChoices && spellChoices.length > 0 && (
           <div className="secondary-spell-selector" data-testid="secondary-spell-selector">
             <h4 className="secondary-spell-title">
-              {readOnly ? "Feitiços que Pode Usar" : "Escolha de Segundo Feitiço"}
+              {readOnly ? t("spells.secondaryReadOnlyTitle") : t("spells.secondaryEditTitle")}
             </h4>
             <div className="secondary-spell-options">
               {spellChoices.map((choice, idx) => {
@@ -79,7 +82,7 @@ export function SpellsBar({
                       key={`sec-spell-${choice.id}-${idx}`}
                       className="secondary-spell-pill"
                       data-testid={`sec-spell-info-${choice.id}`}
-                      title={idx === 0 ? "Mais Usado" : "Alternativo"}
+                      title={idx === 0 ? t("spells.mostUsed") : t("spells.alternative")}
                     >
                       {choice.icon_url && (
                         <div className="dd-icon-frame secondary-spell-frame">
@@ -105,7 +108,7 @@ export function SpellsBar({
                     className={`secondary-spell-btn ${isSelected ? "active" : ""}`}
                     data-testid={`sec-spell-btn-${choice.id}`}
                     onClick={() => onSelectSecondarySpell?.(choice.id)}
-                    title={idx === 0 ? "Mais Usado" : "Segundo Mais Usado"}
+                    title={idx === 0 ? t("spells.mostUsed") : t("spells.secondMostUsed")}
                   >
                     {choice.icon_url && (
                       <div className="dd-icon-frame secondary-spell-frame">

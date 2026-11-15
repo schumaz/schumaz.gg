@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
+  AppLocale,
   ChampionBuild,
   ChampSelectedPayload,
   FlashKeyPreference,
@@ -7,6 +8,7 @@ import {
   commands,
   events,
 } from "../types";
+import { translate } from "../i18n";
 import { computeOrderedSpells } from "../utils/spells";
 
 export function isInGamePhase(phase: string): boolean {
@@ -16,12 +18,14 @@ export function isInGamePhase(phase: string): boolean {
 export interface UseLcuEventsOptions {
   onChampionPulled?: () => void;
   onMatchEnded?: () => void;
+  locale?: AppLocale;
 }
 
 export function useLcuEvents(
   flashKey: FlashKeyPreference,
   options?: UseLcuEventsOptions
 ) {
+  const activeLocale: AppLocale = options?.locale ?? "pt_BR";
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
   const [build, setBuild] = useState<ChampionBuild | null>(null);
@@ -35,21 +39,29 @@ export function useLcuEvents(
 
   const activeChampIdRef = useRef<number | null>(null);
   const buildRef = useRef<ChampionBuild | null>(null);
+  const champSelectRef = useRef<ChampSelectedPayload | null>(null);
   const latestFetchSeqRef = useRef(0);
   const prevSyncedChampRef = useRef<number | null>(null);
   const gameflowPhaseRef = useRef<string>("");
   const hasAutoNavigatedRef = useRef<boolean>(false);
   const onChampionPulledRef = useRef(options?.onChampionPulled);
   const onMatchEndedRef = useRef(options?.onMatchEnded);
+  const activeLocaleRef = useRef<AppLocale>(activeLocale);
+  const prevLocaleRef = useRef<AppLocale>(activeLocale);
 
   useEffect(() => {
     onChampionPulledRef.current = options?.onChampionPulled;
     onMatchEndedRef.current = options?.onMatchEnded;
-  }, [options?.onChampionPulled, options?.onMatchEnded]);
+    activeLocaleRef.current = activeLocale;
+  }, [options?.onChampionPulled, options?.onMatchEnded, activeLocale]);
 
   useEffect(() => {
     buildRef.current = build;
   }, [build]);
+
+  useEffect(() => {
+    champSelectRef.current = champSelect;
+  }, [champSelect]);
 
   useEffect(() => {
     const displayedId = champSelect?.champion_id ?? build?.champion_id ?? null;
@@ -103,7 +115,7 @@ export function useLcuEvents(
         setErrorMsg(
           typeof err === "string"
             ? err
-            : "Erro ao carregar build com os filtros selecionados."
+            : translate(activeLocaleRef.current, "idle.fetchFilterError")
         );
       }
     } finally {
@@ -112,6 +124,41 @@ export function useLcuEvents(
       }
     }
   };
+
+  // Re-localize active Champ Select build when language changes
+  useEffect(() => {
+    if (prevLocaleRef.current === activeLocale) return;
+    prevLocaleRef.current = activeLocale;
+    const currentBuild = buildRef.current;
+    if (!currentBuild) return;
+    const currentCs = champSelectRef.current;
+    const champId = currentCs?.champion_id || currentBuild.champion_id;
+    const qId = currentCs?.queue_id || (currentBuild.supports_runes === false ? 2400 : 420);
+    const isAram =
+      currentCs?.queue_mode === "Aram" ||
+      currentCs?.queue_mode === "AramMayhem" ||
+      qId === 450 ||
+      qId === 2400 ||
+      currentBuild.supports_runes === false;
+
+    const fetchSeq = ++latestFetchSeqRef.current;
+    commands
+      .updateBuildFilters(
+        champId,
+        qId,
+        isAram ? null : currentBuild.active_position || null,
+        currentBuild.active_tier || null,
+        currentBuild.active_region || null,
+        currentBuild.patch_fallback_applied ? null : currentBuild.active_patch || null
+      )
+      .then((updatedBuild) => {
+        if (updatedBuild && latestFetchSeqRef.current === fetchSeq) {
+          buildRef.current = updatedBuild;
+          setBuild(updatedBuild);
+        }
+      })
+      .catch(() => {});
+  }, [activeLocale]);
 
   useEffect(() => {
     // Initial check for summoner status

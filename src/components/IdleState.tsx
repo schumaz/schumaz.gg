@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { ChampSelectedPayload, SummonerInfo } from "../types";
+import { useTranslation } from "../i18n";
 import { LoadingDots } from "./LoadingIndicators";
 
 interface IdleIslandProps {
@@ -21,6 +22,7 @@ export function IdleIsland({
   errorMsg,
   testId,
 }: IdleIslandProps) {
+  const { t } = useTranslation();
   const isWaiting = mode === "waiting";
   const isLoading = mode === "loading";
 
@@ -49,7 +51,7 @@ export function IdleIsland({
 
         {errorMsg && (
           <div className="alert alert-error idle-alert" role="alert">
-            <strong>Erro: </strong> {errorMsg}
+            <strong>{t("common.errorPrefix")} </strong> {errorMsg}
           </div>
         )}
       </section>
@@ -70,19 +72,16 @@ export function IdleState({
   champSelect,
   loading,
 }: IdleStateProps) {
+  const { t } = useTranslation();
   const isFetchingBuild = Boolean(champSelect || loading);
 
   return (
     <IdleIsland
       testId={isFetchingBuild ? "runes-loading-build" : "runes-waiting-champ"}
-      badge="schumaz.gg · Runas"
+      badge={t("idle.runesBadge")}
       mode={isFetchingBuild ? "loading" : "waiting"}
-      title={isFetchingBuild ? "Carregando Build" : "Aguardando Seleção de Campeões"}
-      description={
-        isFetchingBuild
-          ? "Buscando runas recomendadas, feitiços e conjuntos de itens para a partida..."
-          : "Selecione ou confirme um campeão no LoL para carregar runas, feitiços e itens automaticamente."
-      }
+      title={isFetchingBuild ? t("idle.loadingTitle") : t("idle.waitingTitle")}
+      description={isFetchingBuild ? t("idle.loadingDesc") : t("idle.waitingDesc")}
       errorMsg={errorMsg}
       icon={
         <svg

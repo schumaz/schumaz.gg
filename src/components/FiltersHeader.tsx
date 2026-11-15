@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../types";
 import { FilterDropdown, FilterDropdownOption } from "./FilterDropdown";
 import { LoadingBar } from "./LoadingIndicators";
@@ -16,6 +17,10 @@ interface FiltersHeaderProps {
   statusTagText?: string;
   queueModeLabel?: string;
 }
+
+type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;
+
+const defaultTranslate: TranslatorFn = (key, params) => translate("pt_BR", key, params);
 
 const CDRAGON_MINI_CRESTS_BASE =
   "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests";
@@ -36,197 +41,209 @@ export function buildIconImg(src: string, className = "filter-option-icon") {
   );
 }
 
-export const TIER_OPTIONS: FilterDropdownOption[] = [
-  {
-    value: "all",
-    label: "Todos os Elos",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/unranked.svg`),
-  },
-  {
-    value: "challenger",
-    label: "Desafiante",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/challenger.svg`),
-  },
-  {
-    value: "grandmaster",
-    label: "Grão-Mestre",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/grandmaster.svg`),
-  },
-  {
-    value: "master_plus",
-    label: "Mestre +",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/master.svg`),
-  },
-  {
-    value: "diamond_plus",
-    label: "Diamante +",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/diamond.svg`),
-  },
-  {
-    value: "emerald_plus",
-    label: "Esmeralda +",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/emerald.svg`),
-  },
-  {
-    value: "platinum_plus",
-    label: "Platina +",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/platinum.svg`),
-  },
-  {
-    value: "gold_plus",
-    label: "Ouro +",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/gold.svg`),
-  },
-  {
-    value: "silver",
-    label: "Prata",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/silver.svg`),
-  },
-  {
-    value: "bronze",
-    label: "Bronze",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/bronze.svg`),
-  },
-  {
-    value: "iron",
-    label: "Ferro",
-    icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/iron.svg`),
-  },
-];
+export function getTierOptions(t: TranslatorFn = defaultTranslate): FilterDropdownOption[] {
+  return [
+    {
+      value: "all",
+      label: t("filters.tiers.all"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/unranked.svg`),
+    },
+    {
+      value: "challenger",
+      label: t("filters.tiers.challenger"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/challenger.svg`),
+    },
+    {
+      value: "grandmaster",
+      label: t("filters.tiers.grandmaster"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/grandmaster.svg`),
+    },
+    {
+      value: "master_plus",
+      label: t("filters.tiers.master_plus"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/master.svg`),
+    },
+    {
+      value: "diamond_plus",
+      label: t("filters.tiers.diamond_plus"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/diamond.svg`),
+    },
+    {
+      value: "emerald_plus",
+      label: t("filters.tiers.emerald_plus"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/emerald.svg`),
+    },
+    {
+      value: "platinum_plus",
+      label: t("filters.tiers.platinum_plus"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/platinum.svg`),
+    },
+    {
+      value: "gold_plus",
+      label: t("filters.tiers.gold_plus"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/gold.svg`),
+    },
+    {
+      value: "silver",
+      label: t("filters.tiers.silver"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/silver.svg`),
+    },
+    {
+      value: "bronze",
+      label: t("filters.tiers.bronze"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/bronze.svg`),
+    },
+    {
+      value: "iron",
+      label: t("filters.tiers.iron"),
+      icon: buildIconImg(`${CDRAGON_MINI_CRESTS_BASE}/iron.svg`),
+    },
+  ];
+}
 
-export const POSITION_OPTIONS: FilterDropdownOption[] = [
-  {
-    value: "top",
-    label: "Topo",
-    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-top-light.svg`),
-  },
-  {
-    value: "jungle",
-    label: "Selva",
-    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-jungle-light.svg`),
-  },
-  {
-    value: "mid",
-    label: "Meio",
-    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-middle-light.svg`),
-  },
-  {
-    value: "adc",
-    label: "Atirador (Bot)",
-    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-bottom-light.svg`),
-  },
-  {
-    value: "support",
-    label: "Suporte",
-    icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-utility-light.svg`),
-  },
-];
+export function getPositionOptions(t: TranslatorFn = defaultTranslate): FilterDropdownOption[] {
+  return [
+    {
+      value: "top",
+      label: t("filters.lanes.top"),
+      icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-top-light.svg`),
+    },
+    {
+      value: "jungle",
+      label: t("filters.lanes.jungle"),
+      icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-jungle-light.svg`),
+    },
+    {
+      value: "mid",
+      label: t("filters.lanes.mid"),
+      icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-middle-light.svg`),
+    },
+    {
+      value: "adc",
+      label: t("filters.lanes.adc"),
+      icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-bottom-light.svg`),
+    },
+    {
+      value: "support",
+      label: t("filters.lanes.support"),
+      icon: buildIconImg(`${CDRAGON_POSITION_SVG_BASE}/position-utility-light.svg`),
+    },
+  ];
+}
 
-export const REGION_OPTIONS: FilterDropdownOption[] = [
-  {
-    value: "global",
-    label: "Global",
-    title: "Mundial (Global)",
-    icon: <RegionFlag region="global" />,
-  },
-  {
-    value: "br",
-    label: "BR",
-    title: "Brasil (BR)",
-    icon: <RegionFlag region="br" />,
-  },
-  {
-    value: "kr",
-    label: "KR",
-    title: "Coreia (KR)",
-    icon: <RegionFlag region="kr" />,
-  },
-  {
-    value: "na",
-    label: "NA",
-    title: "América do Norte (NA)",
-    icon: <RegionFlag region="na" />,
-  },
-  {
-    value: "euw",
-    label: "EUW",
-    title: "Europa Ocidental (EUW)",
-    icon: <RegionFlag region="euw" />,
-  },
-  {
-    value: "eune",
-    label: "EUNE",
-    title: "Europa Nórdica e Oriental (EUNE)",
-    icon: <RegionFlag region="eune" />,
-  },
-  {
-    value: "lan",
-    label: "LAN",
-    title: "América Latina Norte (LAN)",
-    icon: <RegionFlag region="lan" />,
-  },
-  {
-    value: "las",
-    label: "LAS",
-    title: "América Latina Sul (LAS)",
-    icon: <RegionFlag region="las" />,
-  },
-  {
-    value: "oce",
-    label: "OCE",
-    title: "Oceania (OCE)",
-    icon: <RegionFlag region="oce" />,
-  },
-  {
-    value: "tr",
-    label: "TR",
-    title: "Turquia (TR)",
-    icon: <RegionFlag region="tr" />,
-  },
-  {
-    value: "ru",
-    label: "RU",
-    title: "Rússia (RU)",
-    icon: <RegionFlag region="ru" />,
-  },
-  {
-    value: "jp",
-    label: "JP",
-    title: "Japão (JP)",
-    icon: <RegionFlag region="jp" />,
-  },
-  {
-    value: "me",
-    label: "ME",
-    title: "Oriente Médio (ME)",
-    icon: <RegionFlag region="me" />,
-  },
-  {
-    value: "sg",
-    label: "SG",
-    title: "Singapura (SG)",
-    icon: <RegionFlag region="sg" />,
-  },
-  {
-    value: "tw",
-    label: "TW",
-    title: "Taiwan (TW)",
-    icon: <RegionFlag region="tw" />,
-  },
-  {
-    value: "vn",
-    label: "VN",
-    title: "Vietnã (VN)",
-    icon: <RegionFlag region="vn" />,
-  },
-];
+export function getRegionOptions(t: TranslatorFn = defaultTranslate): FilterDropdownOption[] {
+  return [
+    {
+      value: "global",
+      label: t("filters.regions.globalLabel"),
+      title: t("filters.regions.globalTitle"),
+      icon: <RegionFlag region="global" />,
+    },
+    {
+      value: "br",
+      label: "BR",
+      title: t("filters.regions.brTitle"),
+      icon: <RegionFlag region="br" />,
+    },
+    {
+      value: "kr",
+      label: "KR",
+      title: t("filters.regions.krTitle"),
+      icon: <RegionFlag region="kr" />,
+    },
+    {
+      value: "na",
+      label: "NA",
+      title: t("filters.regions.naTitle"),
+      icon: <RegionFlag region="na" />,
+    },
+    {
+      value: "euw",
+      label: "EUW",
+      title: t("filters.regions.euwTitle"),
+      icon: <RegionFlag region="euw" />,
+    },
+    {
+      value: "eune",
+      label: "EUNE",
+      title: t("filters.regions.euneTitle"),
+      icon: <RegionFlag region="eune" />,
+    },
+    {
+      value: "lan",
+      label: "LAN",
+      title: t("filters.regions.lanTitle"),
+      icon: <RegionFlag region="lan" />,
+    },
+    {
+      value: "las",
+      label: "LAS",
+      title: t("filters.regions.lasTitle"),
+      icon: <RegionFlag region="las" />,
+    },
+    {
+      value: "oce",
+      label: "OCE",
+      title: t("filters.regions.oceTitle"),
+      icon: <RegionFlag region="oce" />,
+    },
+    {
+      value: "tr",
+      label: "TR",
+      title: t("filters.regions.trTitle"),
+      icon: <RegionFlag region="tr" />,
+    },
+    {
+      value: "ru",
+      label: "RU",
+      title: t("filters.regions.ruTitle"),
+      icon: <RegionFlag region="ru" />,
+    },
+    {
+      value: "jp",
+      label: "JP",
+      title: t("filters.regions.jpTitle"),
+      icon: <RegionFlag region="jp" />,
+    },
+    {
+      value: "me",
+      label: "ME",
+      title: t("filters.regions.meTitle"),
+      icon: <RegionFlag region="me" />,
+    },
+    {
+      value: "sg",
+      label: "SG",
+      title: t("filters.regions.sgTitle"),
+      icon: <RegionFlag region="sg" />,
+    },
+    {
+      value: "tw",
+      label: "TW",
+      title: t("filters.regions.twTitle"),
+      icon: <RegionFlag region="tw" />,
+    },
+    {
+      value: "vn",
+      label: "VN",
+      title: t("filters.regions.vnTitle"),
+      icon: <RegionFlag region="vn" />,
+    },
+  ];
+}
+
+export const TIER_OPTIONS: FilterDropdownOption[] = getTierOptions();
+export const POSITION_OPTIONS: FilterDropdownOption[] = getPositionOptions();
+export const REGION_OPTIONS: FilterDropdownOption[] = getRegionOptions();
 
 export function computePatchUiMeta(params: {
   activePatch?: string | null;
   availablePatches?: string[] | null;
   patchFallbackApplied?: boolean | null;
   remainingHours?: number | null;
+  t?: TranslatorFn;
 }) {
+  const t = params.t ?? defaultTranslate;
   const patchOptions =
     params.availablePatches && params.availablePatches.length > 0
       ? params.availablePatches
@@ -236,7 +253,10 @@ export function computePatchUiMeta(params: {
 
   const patchDropdownOptions: FilterDropdownOption[] = patchOptions.map((p, idx) => ({
     value: p,
-    label: idx === 0 ? `Patch ${p} (Mais atual)` : `Patch ${p}`,
+    label:
+      idx === 0
+        ? t("filters.latestPatch", { patch: p })
+        : t("filters.patchOption", { patch: p }),
   }));
 
   const hasKnownLatest = Boolean(params.availablePatches && params.availablePatches.length > 0);
@@ -255,16 +275,16 @@ export function computePatchUiMeta(params: {
   const remainingHoursShort =
     remainingHours !== null
       ? remainingHours === 1
-        ? "Falta 1h"
-        : `Faltam ${remainingHours}h`
+        ? t("filters.remaining1h")
+        : t("filters.remainingNh", { hours: remainingHours })
       : null;
 
   const protectionTooltipText =
     remainingHours !== null
-      ? `O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava. ${
-          remainingHours === 1 ? "Falta 1 hora" : `Faltam ${remainingHours} horas`
-        } para liberar o acesso automático ao patch mais novo.`
-      : "O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava.";
+      ? remainingHours === 1
+        ? t("filters.protectionTooltipWithHours1")
+        : t("filters.protectionTooltipWithHoursN", { hours: remainingHours })
+      : t("filters.protectionTooltipBase");
 
   return {
     patchOptions,
@@ -284,6 +304,7 @@ export function FiltersHeader({
   statusTagText,
   queueModeLabel,
 }: FiltersHeaderProps) {
+  const { t } = useTranslation();
   const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
 
   const isAram =
@@ -292,6 +313,10 @@ export function FiltersHeader({
     champSelect?.queue_id === 450 ||
     champSelect?.queue_id === 2400 ||
     build.supports_runes === false;
+
+  const tierOptions = getTierOptions(t);
+  const positionOptions = getPositionOptions(t);
+  const regionOptions = getRegionOptions(t);
 
   const {
     patchOptions,
@@ -304,10 +329,11 @@ export function FiltersHeader({
     availablePatches: build?.available_patches,
     patchFallbackApplied: build?.patch_fallback_applied,
     remainingHours: build?.patch_protection_remaining_hours,
+    t,
   });
 
   const resolvedTagText =
-    statusTagText ?? (champSelect?.locked_in ? "Confirmado (Lock-in)" : "Selecionando (Hover)");
+    statusTagText ?? (champSelect?.locked_in ? t("filters.lockedIn") : t("filters.hovering"));
   const resolvedTagClass = statusTagText
     ? "tag hovering"
     : `tag ${champSelect?.locked_in ? "locked" : "hovering"}`;
@@ -315,12 +341,12 @@ export function FiltersHeader({
   const resolvedQueueLabel =
     queueModeLabel ??
     (champSelect?.queue_mode === "AramMayhem"
-      ? "ARAM Mayhem (Howling Abyss)"
+      ? t("filters.queueAramMayhem")
       : champSelect?.queue_mode === "Aram"
-      ? "ARAM (Howling Abyss)"
+      ? t("filters.queueAram")
       : champSelect?.queue_mode === "PracticeTool"
-      ? "Modo Treino (Build Ranqueada)"
-      : "Summoner's Rift (Ranqueada / Normal)");
+      ? t("filters.queuePracticeTool")
+      : t("filters.queueSr"));
 
   return (
     <section className="card champ-hero-card" data-testid="champ-hero">
@@ -334,7 +360,7 @@ export function FiltersHeader({
               className="ranked-back-btn"
               data-testid="ranked-back-btn"
               onClick={onBackToTierList}
-              title="Voltar para Tier List Ranqueada"
+              title={t("filters.backToTierListTitle")}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -349,7 +375,7 @@ export function FiltersHeader({
               >
                 <polyline points="15 18 9 12 15 6" />
               </svg>
-              <span>Voltar</span>
+              <span>{t("common.back")}</span>
             </button>
           )}
 
@@ -382,7 +408,7 @@ export function FiltersHeader({
             <span className="badge-meta">{resolvedQueueLabel}</span>
             {(build.pick_rate ?? 0) > 0 && (
               <span className="badge badge-neutral badge-stat">
-                {(build.pick_rate ?? 0).toFixed(1)}% Pick Rate
+                {t("filters.pickRate", { rate: (build.pick_rate ?? 0).toFixed(1) })}
               </span>
             )}
             {isPatchProtectionActive && (
@@ -391,7 +417,7 @@ export function FiltersHeader({
                 title={protectionTooltipText}
                 data-testid="patch-fallback-badge"
               >
-                🛡️ Volume Protegido ({build.active_patch})
+                🛡️ {t("filters.protectedVolume", { patch: build.active_patch ?? "" })}
                 {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
               </span>
             )}
@@ -403,14 +429,14 @@ export function FiltersHeader({
       <div className="champ-filters-bar" data-testid="champ-filters-bar">
         <div className="filter-group">
           <label id="filter-tier-label" htmlFor="filter-tier" className="filter-label">
-            Elo:
+            {t("filters.eloLabel")}
           </label>
           <FilterDropdown
             id="filter-tier"
             labelId="filter-tier-label"
             testId="filter-tier"
             value={build.active_tier || "emerald_plus"}
-            options={TIER_OPTIONS}
+            options={tierOptions}
             disabled={loading}
             onChange={(val) => onFilterChange("tier", val)}
           />
@@ -419,14 +445,14 @@ export function FiltersHeader({
         {!isAram && (
           <div className="filter-group">
             <label id="filter-position-label" htmlFor="filter-position" className="filter-label">
-              Rota:
+              {t("filters.laneLabel")}
             </label>
             <FilterDropdown
               id="filter-position"
               labelId="filter-position-label"
               testId="filter-position"
               value={build.active_position || "mid"}
-              options={POSITION_OPTIONS}
+              options={positionOptions}
               disabled={loading}
               onChange={(val) => onFilterChange("position", val)}
             />
@@ -435,14 +461,14 @@ export function FiltersHeader({
 
         <div className="filter-group">
           <label id="filter-region-label" htmlFor="filter-region" className="filter-label">
-            Servidor:
+            {t("filters.regionLabel")}
           </label>
           <FilterDropdown
             id="filter-region"
             labelId="filter-region-label"
             testId="filter-region"
             value={build.active_region || "global"}
-            options={REGION_OPTIONS}
+            options={regionOptions}
             disabled={loading}
             onChange={(val) => onFilterChange("region", val)}
           />
@@ -450,7 +476,7 @@ export function FiltersHeader({
 
         <div className="filter-group filter-group-patch">
           <label id="filter-patch-label" htmlFor="filter-patch" className="filter-label">
-            Patch:
+            {t("filters.patchLabel")}
           </label>
           <FilterDropdown
             id="filter-patch"

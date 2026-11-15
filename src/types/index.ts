@@ -1,6 +1,7 @@
 export type ActiveTab = "profile" | "runes" | "ranked" | "aram" | "settings";
 
 export type {
+  AppLocale,
   AramAugmentEntry,
   AramChampionRank,
   AramMode,
@@ -48,8 +49,10 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   flashKey: "D",
   patch48hProtection: true,
   autoMarkDailyMissionsRead: false,
+  language: "en_US",
 };
 
 export const PREFERENCES_STORAGE_KEY = "schumaz_user_preferences";
+export const LANGUAGE_STORAGE_KEY = "schumaz_language";
 export const ARAM_SUBMODE_STORAGE_KEY = "schumaz_aram_submode";
 export const RANKED_FILTERS_STORAGE_KEY = "schumaz_ranked_filters";

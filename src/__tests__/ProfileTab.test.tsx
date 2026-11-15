@@ -117,6 +117,7 @@ const mockProfile: PlayerProfile = {
 describe("ProfileTab Component", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem("schumaz_language", "pt_BR");
   });
 
   it("renders waiting state with unified island branding when League client is disconnected", () => {

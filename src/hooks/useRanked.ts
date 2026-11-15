@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppLocale,
   ChampionBuild,
   FlashKeyPreference,
   RANKED_FILTERS_STORAGE_KEY,
@@ -8,6 +9,7 @@ import {
   RankedTierListResponse,
   commands,
 } from "../types";
+import { translate } from "../i18n";
 import { computeOrderedSpells } from "../utils/spells";
 
 export type RankedLaneFilter = "all" | RankedLane;
@@ -69,7 +71,8 @@ export function saveRankedFilters(filters: RankedFilters): void {
 export function useRanked(
   isActive: boolean,
   flashKey: FlashKeyPreference,
-  patch48hProtection: boolean
+  patch48hProtection: boolean,
+  locale: AppLocale = "pt_BR"
 ) {
   const [filters, setFilters] = useState<RankedFilters>(loadSavedRankedFilters);
   const [tierData, setTierData] = useState<RankedTierListResponse | null>(null);
@@ -88,6 +91,11 @@ export function useRanked(
   const tierSeqRef = useRef(0);
   const buildSeqRef = useRef(0);
   const loadedCacheKeyRef = useRef<string | null>(null);
+  const prevLocaleRef = useRef<AppLocale>(locale);
+  const selectedChampionRef = useRef<RankedChampionEntry | null>(selectedChampion);
+  selectedChampionRef.current = selectedChampion;
+  const filtersRef = useRef<RankedFilters>(filters);
+  filtersRef.current = filters;
 
   const buildCacheKey = useCallback(
     (f: RankedFilters, protection: boolean) =>
@@ -124,9 +132,7 @@ export function useRanked(
       } catch (err: unknown) {
         if (tierSeqRef.current === seq) {
           const msg =
-            typeof err === "string"
-              ? err
-              : "Não foi possível carregar o ranking ranqueado no momento.";
+            typeof err === "string" ? err : translate(locale, "ranked.fetchTierListError");
           setTierError(msg);
         }
       } finally {
@@ -135,7 +141,7 @@ export function useRanked(
         }
       }
     },
-    [buildCacheKey, patch48hProtection]
+    [buildCacheKey, patch48hProtection, locale]
   );
 
   const fetchChampionBuild = useCallback(
@@ -162,9 +168,7 @@ export function useRanked(
       } catch (err: unknown) {
         if (buildSeqRef.current === seq) {
           const msg =
-            typeof err === "string"
-              ? err
-              : "Não foi possível carregar a build desse campeão.";
+            typeof err === "string" ? err : translate(locale, "ranked.fetchBuildError");
           setBuildError(msg);
         }
       } finally {
@@ -173,8 +177,21 @@ export function useRanked(
         }
       }
     },
-    []
+    [locale]
   );
+
+  // Refresh localized champion build if user switches language while inspecting a champion
+  useEffect(() => {
+    if (prevLocaleRef.current === locale) return;
+    prevLocaleRef.current = locale;
+    if (selectedChampionRef.current) {
+      fetchChampionBuild(
+        selectedChampionRef.current,
+        selectedChampionRef.current.lane,
+        filtersRef.current
+      );
+    }
+  }, [locale, fetchChampionBuild]);
 
   // Trigger tier list fetch whenever the tab is active and filters/protection key changed
   useEffect(() => {

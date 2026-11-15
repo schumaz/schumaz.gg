@@ -292,3 +292,66 @@ fn test_parse_ddragon_item_classifications_handles_special_recipe_evolutions() {
     set_dynamic_item_classifications(cache);
     assert_eq!(normalize_tear_item_dynamic(9942), 9904);
 }
+
+#[test]
+fn test_en_us_localization_for_shards_spells_and_build_labels() {
+    assert_eq!(
+        get_stat_shard_metadata_for_locale(5008, AppLocale::EnUs)
+            .unwrap()
+            .name,
+        "Adaptive Force"
+    );
+    assert_eq!(
+        get_stat_shard_metadata_for_locale(5005, AppLocale::EnUs)
+            .unwrap()
+            .name,
+        "Attack Speed"
+    );
+    assert_eq!(
+        get_stat_shard_metadata_for_locale(5001, AppLocale::EnUs)
+            .unwrap()
+            .name,
+        "Health Scaling"
+    );
+
+    assert_eq!(
+        get_spell_metadata_for_locale("16.22.1", 14, AppLocale::EnUs).name,
+        "Ignite"
+    );
+    assert_eq!(
+        get_spell_metadata_for_locale("16.22.1", 32, AppLocale::EnUs).name,
+        "Mark"
+    );
+    assert_eq!(
+        get_spell_metadata_for_locale("16.22.1", 7, AppLocale::EnUs).name,
+        "Heal"
+    );
+
+    let mut build = build_fallback_champion_build(103, "Ahri", 420);
+    build.build_options.push(UnifiedBuildOption {
+        name: "Build 1 (Mais Feita)".to_string(),
+        ..Default::default()
+    });
+    let cache = DataDragonCache {
+        version: "16.22.1".to_string(),
+        champions: HashMap::new(),
+        runes: HashMap::new(),
+        spells: HashMap::new(),
+    };
+
+    enrich_build_with_ddragon_with_flash_key_and_locale(
+        &mut build,
+        &cache,
+        FlashKeyPreference::D,
+        AppLocale::EnUs,
+    );
+
+    let titles: Vec<&str> = build.item_blocks.iter().map(|b| b.title.as_str()).collect();
+    assert!(titles.contains(&"Starter Items"));
+    assert!(titles.contains(&"First 3 Items"));
+    assert!(titles.contains(&"Top 3 Boots"));
+    assert!(titles.contains(&"Final Build"));
+    assert!(titles.contains(&"Situational / Utility Items"));
+    assert_eq!(build.build_options[0].name, "Build 1 (Most Popular)");
+    assert_eq!(build.spells[1].name, "Ignite");
+}

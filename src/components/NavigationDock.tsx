@@ -1,5 +1,6 @@
 import "./NavigationDock.css";
 import { ActiveTab } from "../types";
+import { useTranslation } from "../i18n";
 
 interface NavigationDockProps {
   activeTab: ActiveTab;
@@ -19,8 +20,10 @@ export function NavigationDock({
   onAramClick,
   animationsPaused = false,
 }: NavigationDockProps) {
+  const { t } = useTranslation();
+
   return (
-    <nav className="floating-dock" aria-label="Navegação Principal">
+    <nav className="floating-dock" aria-label={t("nav.ariaLabel")}>
       {!animationsPaused && (
         <span className="dock-beam-wrap" aria-hidden="true">
           <span className="dock-beam-ring">
@@ -49,7 +52,7 @@ export function NavigationDock({
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
           <circle cx="12" cy="7" r="4" />
         </svg>
-        <span>Perfil</span>
+        <span>{t("nav.profile")}</span>
       </button>
 
       <button
@@ -73,7 +76,7 @@ export function NavigationDock({
           <polyline points="2 17 12 22 22 17" />
           <polyline points="2 12 12 17 22 12" />
         </svg>
-        <span>Runas</span>
+        <span>{t("nav.runes")}</span>
       </button>
 
       <button
@@ -106,7 +109,7 @@ export function NavigationDock({
           <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
           <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
         </svg>
-        <span>Ranqueada</span>
+        <span>{t("nav.ranked")}</span>
       </button>
 
       <button
@@ -128,7 +131,7 @@ export function NavigationDock({
           width={18}
           height={18}
         />
-        <span>Aram</span>
+        <span>{t("nav.aram")}</span>
       </button>
 
       <button
@@ -151,7 +154,7 @@ export function NavigationDock({
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
-        <span>Configurações</span>
+        <span>{t("nav.settings")}</span>
       </button>
     </nav>
   );

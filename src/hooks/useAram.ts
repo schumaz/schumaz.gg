@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ARAM_SUBMODE_STORAGE_KEY,
+  AppLocale,
   AramAugmentEntry,
   AramChampionRank,
   AramMode,
   commands,
 } from "../types";
+import { translate } from "../i18n";
 
 export function loadSavedAramMode(): AramMode | null {
   try {
@@ -27,7 +29,11 @@ export function saveAramMode(mode: AramMode): void {
   }
 }
 
-export function useAram(isActive: boolean, currentChampionId: number | null) {
+export function useAram(
+  isActive: boolean,
+  currentChampionId: number | null,
+  locale: AppLocale = "pt_BR"
+) {
   const [savedMode, setSavedMode] = useState<AramMode | null>(loadSavedAramMode);
   const [showChooser, setShowChooser] = useState<boolean>(() => loadSavedAramMode() === null);
 
@@ -48,68 +54,86 @@ export function useAram(isActive: boolean, currentChampionId: number | null) {
   const augmentsSeqRef = useRef(0);
   const wasMayhemVisibleRef = useRef(false);
   const lastAutoChampionIdRef = useRef<number | null>(null);
+  const prevLocaleRef = useRef<AppLocale>(locale);
+  const selectedChampionKeyRef = useRef<string | null>(selectedChampionKey);
+  selectedChampionKeyRef.current = selectedChampionKey;
 
-  const fetchTierList = useCallback(async (mode: AramMode, force = false) => {
-    if (!force && tierCacheRef.current[mode]?.length) {
-      return;
-    }
-    if (tierFetchingRef.current[mode]) {
-      return;
-    }
-
-    tierFetchingRef.current[mode] = true;
-    setTierLoading((prev) => ({ ...prev, [mode]: true }));
-    setTierErrors((prev) => ({ ...prev, [mode]: null }));
-
-    try {
-      const data = await commands.getAramTierList(mode);
-      tierCacheRef.current[mode] = data;
-      setTierLists((prev) => ({ ...prev, [mode]: data }));
-    } catch (err: unknown) {
-      const msg =
-        typeof err === "string" ? err : "Não foi possível carregar o ranking no momento.";
-      setTierErrors((prev) => ({ ...prev, [mode]: msg }));
-    } finally {
-      tierFetchingRef.current[mode] = false;
-      setTierLoading((prev) => ({ ...prev, [mode]: false }));
-    }
-  }, []);
-
-  const fetchAugmentsForChampion = useCallback(async (championKey: string, force = false) => {
-    const normalizedKey = championKey.trim().toLowerCase();
-    if (!normalizedKey) return;
-
-    setSelectedChampionKey(normalizedKey);
-    setAugmentsError(null);
-
-    if (!force && augmentsCacheRef.current[normalizedKey]) {
-      setAugmentsLoading(false);
-      return;
-    }
-
-    const seq = ++augmentsSeqRef.current;
-    setAugmentsLoading(true);
-
-    try {
-      const data = await commands.getAramMayhemAugments(normalizedKey);
-      augmentsCacheRef.current[normalizedKey] = data;
-      if (augmentsSeqRef.current === seq) {
-        setAugmentsByChampion((prev) => ({ ...prev, [normalizedKey]: data }));
+  const fetchTierList = useCallback(
+    async (mode: AramMode, force = false) => {
+      if (!force && tierCacheRef.current[mode]?.length) {
+        return;
       }
-    } catch (err: unknown) {
-      if (augmentsSeqRef.current === seq) {
+      if (tierFetchingRef.current[mode]) {
+        return;
+      }
+
+      tierFetchingRef.current[mode] = true;
+      setTierLoading((prev) => ({ ...prev, [mode]: true }));
+      setTierErrors((prev) => ({ ...prev, [mode]: null }));
+
+      try {
+        const data = await commands.getAramTierList(mode);
+        tierCacheRef.current[mode] = data;
+        setTierLists((prev) => ({ ...prev, [mode]: data }));
+      } catch (err: unknown) {
         const msg =
-          typeof err === "string"
-            ? err
-            : "Não foi possível carregar os aprimoramentos desse campeão.";
-        setAugmentsError(msg);
+          typeof err === "string" ? err : translate(locale, "aram.fetchTierListError");
+        setTierErrors((prev) => ({ ...prev, [mode]: msg }));
+      } finally {
+        tierFetchingRef.current[mode] = false;
+        setTierLoading((prev) => ({ ...prev, [mode]: false }));
       }
-    } finally {
-      if (augmentsSeqRef.current === seq) {
+    },
+    [locale]
+  );
+
+  const fetchAugmentsForChampion = useCallback(
+    async (championKey: string, force = false) => {
+      const normalizedKey = championKey.trim().toLowerCase();
+      if (!normalizedKey) return;
+
+      setSelectedChampionKey(normalizedKey);
+      setAugmentsError(null);
+
+      if (!force && augmentsCacheRef.current[normalizedKey]) {
         setAugmentsLoading(false);
+        return;
       }
+
+      const seq = ++augmentsSeqRef.current;
+      setAugmentsLoading(true);
+
+      try {
+        const data = await commands.getAramMayhemAugments(normalizedKey);
+        augmentsCacheRef.current[normalizedKey] = data;
+        if (augmentsSeqRef.current === seq) {
+          setAugmentsByChampion((prev) => ({ ...prev, [normalizedKey]: data }));
+        }
+      } catch (err: unknown) {
+        if (augmentsSeqRef.current === seq) {
+          const msg =
+            typeof err === "string" ? err : translate(locale, "aram.fetchAugmentsError");
+          setAugmentsError(msg);
+        }
+      } finally {
+        if (augmentsSeqRef.current === seq) {
+          setAugmentsLoading(false);
+        }
+      }
+    },
+    [locale]
+  );
+
+  // Invalidate augment cache when locale changes and re-fetch if a champion is selected
+  useEffect(() => {
+    if (prevLocaleRef.current === locale) return;
+    prevLocaleRef.current = locale;
+    augmentsCacheRef.current = {};
+    setAugmentsByChampion({});
+    if (selectedChampionKeyRef.current) {
+      fetchAugmentsForChampion(selectedChampionKeyRef.current, true);
     }
-  }, []);
+  }, [locale, fetchAugmentsForChampion]);
 
   // Trigger tier list fetch when viewing a sub-tab that hasn't loaded yet
   useEffect(() => {

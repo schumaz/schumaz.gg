@@ -1,4 +1,5 @@
 import { ChampionBuild } from "../types";
+import { TranslationKey, useTranslation } from "../i18n";
 
 interface RuneTreeProps {
   build: ChampionBuild;
@@ -7,29 +8,29 @@ interface RuneTreeProps {
   readOnly?: boolean;
 }
 
-function getSimplifiedShardName(id: number, fallbackName: string): string {
+function getSimplifiedShardKey(id: number): TranslationKey | null {
   switch (id) {
     case 5008:
-      return "Adaptativa";
+      return "runes.shards.adaptive";
     case 5005:
-      return "Vel. Atq.";
+      return "runes.shards.attackSpeed";
     case 5007:
-      return "Acel. Hab.";
+      return "runes.shards.abilityHaste";
     case 5002:
-      return "Armadura";
+      return "runes.shards.armor";
     case 5003:
-      return "Res. Mágica";
+      return "runes.shards.magicResist";
     case 5001:
     case 5013:
-      return "Vida Esc.";
+      return "runes.shards.healthScaling";
     case 5010:
-      return "Vel. Mov.";
+      return "runes.shards.moveSpeed";
     case 5011:
-      return "Vida";
+      return "runes.shards.health";
     case 5012:
-      return "Tenacidade";
+      return "runes.shards.tenacity";
     default:
-      return fallbackName;
+      return null;
   }
 }
 
@@ -39,24 +40,29 @@ export function RuneTree({
   onSelectRunePage,
   readOnly = false,
 }: RuneTreeProps) {
+  const { t, formatNumber } = useTranslation();
+
   if (build.supports_runes === false) {
     return (
       <section className="card runes-tree-card mayhem-notice-card" data-testid="runes-tree">
         <div className="mayhem-notice-content">
-          <div className="mayhem-badge">⚡ ARAM Mayhem</div>
-          <h3 className="mayhem-title">Runas Desativadas</h3>
+          <div className="mayhem-badge">{t("runes.mayhemBadge")}</div>
+          <h3 className="mayhem-title">{t("runes.mayhemDisabledTitle")}</h3>
           <p className="card-desc">
-            O modo <strong>ARAM Mayhem</strong> não suporta ajuste de runas no lobby da Riot Games.
-            A partida utiliza o sistema dinâmico de <strong>Aprimoramentos (Augments)</strong> durante o jogo.
+            {t("runes.mayhemDisabledPrefix")}
+            <strong>{t("runes.mayhemDisabledMode")}</strong>
+            {t("runes.mayhemDisabledMiddle")}
+            <strong>{t("runes.mayhemDisabledAugments")}</strong>
+            {t("runes.mayhemDisabledSuffix")}
           </p>
           <div className="mayhem-info-box">
             <div className="mayhem-info-item">
               <span className="mayhem-check">✓</span>
-              <span>Feitiços dinâmicos recomendados por volume de partidas</span>
+              <span>{t("runes.mayhemInfoSpells")}</span>
             </div>
             <div className="mayhem-info-item">
               <span className="mayhem-check">✓</span>
-              <span>Builds, Core Trio e Itens da loja aplicados automaticamente</span>
+              <span>{t("runes.mayhemInfoItems")}</span>
             </div>
           </div>
         </div>
@@ -70,11 +76,13 @@ export function RuneTree({
       : null;
 
   const primaryStyleName =
-    activeRunePage?.primary_style_name || build.primary_style_name || "Árvore Primária";
+    activeRunePage?.primary_style_name ||
+    build.primary_style_name ||
+    t("runes.primaryTreeFallback");
   const primaryStyleIcon =
     activeRunePage?.primary_style_icon_url || build.primary_style_icon_url;
   const subStyleName =
-    activeRunePage?.sub_style_name || build.sub_style_name || "Árvore Secundária";
+    activeRunePage?.sub_style_name || build.sub_style_name || t("runes.subTreeFallback");
   const subStyleIcon =
     activeRunePage?.sub_style_icon_url || build.sub_style_icon_url;
   const perksList = activeRunePage?.perks || build.perks || [];
@@ -90,11 +98,11 @@ export function RuneTree({
               const subIcon = page.sub_style_icon_url;
               const label = readOnly
                 ? idx === 0
-                  ? "Página 1 (Mais Usada)"
-                  : `Página ${idx + 1}`
+                  ? t("runes.pageMostUsed")
+                  : t("runes.pageNumber", { num: idx + 1 })
                 : idx === 0
-                  ? "Opção 1 (Mais Usada)"
-                  : `Opção ${idx + 1}`;
+                  ? t("runes.optionMostUsed")
+                  : t("runes.optionNumber", { num: idx + 1 });
               return (
                 <button
                   key={`rune-page-${idx}`}
@@ -108,14 +116,14 @@ export function RuneTree({
                     {keystone?.icon_url && (
                       <img
                         src={keystone.icon_url}
-                        alt={keystone.name || "Keystone"}
+                        alt={keystone.name || t("runes.keystoneFallback")}
                         className="rune-page-keystone-icon"
                       />
                     )}
                     {subIcon && (
                       <img
                         src={subIcon}
-                        alt={page.sub_style_name || "Secundária"}
+                        alt={page.sub_style_name || t("runes.secondaryFallback")}
                         className="rune-page-sub-icon"
                       />
                     )}
@@ -123,7 +131,11 @@ export function RuneTree({
                   <div className="rune-page-btn-info">
                     <span className="rune-page-label">{label}</span>
                     <span className="rune-page-games">
-                      {page.play ? `${page.play.toLocaleString()} partidas` : `${page.pick_rate}%`}
+                      {page.play
+                        ? `${formatNumber(page.play)} ${t(
+                            page.play === 1 ? "common.gamesSingular" : "common.gamesPlural"
+                          )}`
+                        : `${page.pick_rate}%`}
                     </span>
                   </div>
                 </button>
@@ -201,18 +213,20 @@ export function RuneTree({
 
           {/* Stat Shards (Slots 6, 7, 8) */}
           <div className="stat-shards-section">
-            <h4>Fragmentos de Atributo</h4>
+            <h4>{t("runes.statShardsTitle")}</h4>
             <div className="stat-shards-list">
-              {perksList.slice(6, 9).map((shard, index) => (
-                <div key={`shard-${index}-${shard.id}`} className="shard-item" title={shard.name}>
-                  {shard.icon_url && (
-                    <img src={shard.icon_url} alt={shard.name} className="shard-icon" />
-                  )}
-                  <span className="shard-name">
-                    {getSimplifiedShardName(shard.id, shard.name)}
-                  </span>
-                </div>
-              ))}
+              {perksList.slice(6, 9).map((shard, index) => {
+                const shardKey = getSimplifiedShardKey(shard.id);
+                const shardLabel = shardKey ? t(shardKey) : shard.name;
+                return (
+                  <div key={`shard-${index}-${shard.id}`} className="shard-item" title={shard.name}>
+                    {shard.icon_url && (
+                      <img src={shard.icon_url} alt={shard.name} className="shard-icon" />
+                    )}
+                    <span className="shard-name">{shardLabel}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

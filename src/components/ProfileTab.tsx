@@ -1,4 +1,5 @@
 import { CSSProperties, useMemo, useState } from "react";
+import { useTranslation } from "../i18n";
 import { PlayerProfile, RecentMatchInfo, SummonerInfo } from "../types";
 import { profileBlurPercentToPx } from "../hooks/usePreferences";
 import { IdleIsland } from "./IdleState";
@@ -47,37 +48,10 @@ function getRankedMiniCrestUrl(tier: string): string {
   return `${CDRAGON_RANKED_MINI_CRESTS_BASE}/${normalizeRankTierKey(tier)}.svg`;
 }
 
-function formatPoints(points: number): string {
-  return points.toLocaleString("pt-BR");
-}
-
 function formatDuration(secs: number): string {
   const mins = Math.floor(Math.max(0, secs) / 60);
   const rem = Math.max(0, secs) % 60;
   return `${mins}m ${rem.toString().padStart(2, "0")}s`;
-}
-
-function formatRelativeTime(creationMs: number): string {
-  if (!creationMs) return "";
-  const diffMs = Date.now() - creationMs;
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 60) return `há ${Math.max(1, mins)}min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `há ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `há ${days}d`;
-}
-
-function formatCompactNumber(val: number): string {
-  if (val >= 1000) {
-    return `${(val / 1000).toFixed(1).replace(".", ",")}k`;
-  }
-  return String(val);
-}
-
-function formatKdaRatio(kills: number, deaths: number, assists: number): string {
-  if (deaths === 0) return "Perfeito";
-  return `${((kills + assists) / deaths).toFixed(2)} KDA`;
 }
 
 function getMultiKillBadge(match: RecentMatchInfo): string | null {
@@ -98,18 +72,22 @@ export function ProfileTab({
   profileBlur = 10,
   isActive = true,
 }: ProfileTabProps) {
+  const { t, formatNumber, formatCompactNumber, formatRelativeTime } = useTranslation();
   const [selectedMode, setSelectedMode] = useState<string>("all");
   const [expandedGameId, setExpandedGameId] = useState<number | null>(null);
 
   // Defensive exclusion of Practice Tool on frontend as well
   const validMatches = useMemo(() => {
     if (!profile?.recent_matches) return [];
-    return profile.recent_matches.filter(
-      (m) =>
+    return profile.recent_matches.filter((m) => {
+      const modeLabelLower = m.game_mode_label.toLowerCase();
+      return (
         m.queue_id >= 0 &&
         m.game_mode_key.toLowerCase() !== "practicetool" &&
-        !m.game_mode_label.toLowerCase().includes("treino")
-    );
+        !modeLabelLower.includes("treino") &&
+        !modeLabelLower.includes("practice")
+      );
+    });
   }, [profile]);
 
   const availableModes = useMemo(() => {
@@ -199,9 +177,9 @@ export function ProfileTab({
         <IdleIsland
           testId="profile-waiting-client"
           mode="waiting"
-          badge="schumaz.gg · Perfil"
-          title="Aguardando Cliente do LoL"
-          description="Abra o cliente do League of Legends para carregar seu perfil, maestrias e partidas recentes."
+          badge={t("profile.badge")}
+          title={t("profile.waitingTitle")}
+          description={t("profile.waitingDesc")}
           errorMsg={errorMsg}
           icon={
             <svg
@@ -223,9 +201,9 @@ export function ProfileTab({
         <IdleIsland
           testId="profile-loading"
           mode="loading"
-          badge="schumaz.gg · Perfil"
-          title="Carregando Perfil"
-          description="Obtendo ícone, nível, wallpaper do perfil, maestrias e histórico recente..."
+          badge={t("profile.badge")}
+          title={t("profile.loadingTitle")}
+          description={t("profile.loadingDesc")}
           icon={
             <svg
               viewBox="0 0 24 24"
@@ -255,7 +233,7 @@ export function ProfileTab({
                     <div className="dd-icon-frame profile-avatar-frame">
                       <img
                         src={profile.profile_icon_url}
-                        alt="Ícone do Invocador"
+                        alt={t("profile.summonerIconAlt")}
                         className="profile-avatar-img"
                       />
                     </div>
@@ -265,7 +243,7 @@ export function ProfileTab({
                     </div>
                   )}
                   <span className="profile-level-badge" data-testid="profile-level">
-                    Nv. {summoner.summonerLevel}
+                    {t("profile.levelPrefix", { level: summoner.summonerLevel })}
                   </span>
                 </div>
 
@@ -291,8 +269,11 @@ export function ProfileTab({
                       const rankedWr =
                         totalRanked > 0 ? Math.round((rank.wins / totalRanked) * 100) : 0;
                       const rankDisplay = isUnranked
-                        ? "Sem Ranque"
+                        ? t("profile.unranked")
                         : `${rank.tier_label}${rank.division ? ` ${rank.division}` : ""}`;
+                      const lpLabel = t("profile.lpLabel");
+                      const winShort = t("profile.winShort");
+                      const lossShort = t("profile.lossShort");
 
                       return (
                         <div
@@ -301,14 +282,17 @@ export function ProfileTab({
                           data-testid={`ranked-pill-${rank.queue_type}`}
                           title={
                             isUnranked
-                              ? `${rank.queue_label}: Sem Ranque`
-                              : `${rank.queue_label}: ${rankDisplay} — ${rank.league_points} PDL · ${rank.wins}V ${rank.losses}D (${rankedWr}%)`
+                              ? `${rank.queue_label}: ${t("profile.unranked")}`
+                              : `${rank.queue_label}: ${rankDisplay} — ${rank.league_points} ${lpLabel} · ${rank.wins}${winShort} ${rank.losses}${lossShort} (${rankedWr}%)`
                           }
                         >
                           <div className="ranked-crest-wrap">
                             <img
                               src={getRankedCrestUrl(rank.tier)}
-                              alt={`Ícone do ranque ${rank.queue_label}: ${rankDisplay}`}
+                              alt={t("profile.rankIconAlt", {
+                                queue: rank.queue_label,
+                                rank: rankDisplay,
+                              })}
                               className={`ranked-crest-img ${isUnranked ? "unranked" : ""}`}
                               onError={(e) => {
                                 const img = e.currentTarget;
@@ -326,7 +310,9 @@ export function ProfileTab({
                             <span className="ranked-tier-text">{rankDisplay}</span>
                             {!isUnranked && (
                               <span className="ranked-lp-meta">
-                                {rank.league_points} PDL · {rank.wins}V {rank.losses}D ({rankedWr}%)
+                                {rank.league_points} {lpLabel} · {rank.wins}
+                                {winShort} {rank.losses}
+                                {lossShort} ({rankedWr}%)
                               </span>
                             )}
                           </div>
@@ -346,13 +332,13 @@ export function ProfileTab({
                   >
                     {loading ? (
                       <>
-                        <span>Atualizando</span>
+                        <span>{t("profile.refreshing")}</span>
                         <LoadingDots variant="inline" size="sm" testId="profile-refresh-dots" />
                       </>
                     ) : refreshCooldownSecs > 0 ? (
-                      `Atualizar (${refreshCooldownSecs}s)`
+                      t("profile.refreshCooldown", { secs: refreshCooldownSecs })
                     ) : (
-                      "Atualizar"
+                      t("profile.refresh")
                     )}
                   </button>
                 </div>
@@ -364,11 +350,18 @@ export function ProfileTab({
           <div className="profile-split-grid">
             {/* Left Column: Win/Loss Chart & Recent Form + Top 3 Masteries */}
             <div className="profile-col profile-col-left">
-              <section className="card profile-section-card" data-testid="winloss-chart-card" style={glassBlurStyle}>
+              <section
+                className="card profile-section-card"
+                data-testid="winloss-chart-card"
+                style={glassBlurStyle}
+              >
                 <div className="profile-card-header">
-                  <h3>Desempenho Win / Loss</h3>
+                  <h3>{t("profile.winLossTitle")}</h3>
                   <span className="profile-card-subtitle">
-                    {winLossStats.total} {winLossStats.total === 1 ? "partida" : "partidas"}
+                    {winLossStats.total}{" "}
+                    {winLossStats.total === 1
+                      ? t("common.gamesSingular")
+                      : t("common.gamesPlural")}
                   </span>
                 </div>
 
@@ -381,7 +374,11 @@ export function ProfileTab({
                           className="winloss-donut-svg"
                           data-testid="winloss-donut-svg"
                           role="img"
-                          aria-label={`Taxa de vitória ${winLossStats.winRate}% (${winLossStats.wins} vitórias e ${winLossStats.losses} derrotas)`}
+                          aria-label={t("profile.winRateAria", {
+                            rate: winLossStats.winRate,
+                            wins: winLossStats.wins,
+                            losses: winLossStats.losses,
+                          })}
                         >
                           <circle
                             cx="50"
@@ -412,7 +409,7 @@ export function ProfileTab({
                             {winLossStats.winRate}%
                           </text>
                           <text x="50" y="62" textAnchor="middle" className="donut-center-label">
-                            Win Rate
+                            {t("profile.winRateLabel")}
                           </text>
                         </svg>
                       </div>
@@ -420,12 +417,12 @@ export function ProfileTab({
                       <div className="winloss-metrics">
                         <div className="winloss-stat-line">
                           <span className="winloss-dot win" />
-                          <span>Vitórias</span>
+                          <span>{t("profile.winsLabel")}</span>
                           <strong data-testid="win-count">{winLossStats.wins}</strong>
                         </div>
                         <div className="winloss-stat-line">
                           <span className="winloss-dot loss" />
-                          <span>Derrotas</span>
+                          <span>{t("profile.lossesLabel")}</span>
                           <strong data-testid="loss-count">{winLossStats.losses}</strong>
                         </div>
                         {highlightedChampion && (
@@ -443,14 +440,17 @@ export function ProfileTab({
                               </div>
                             )}
                             <div className="highlighted-champ-text">
-                              <span className="highlighted-label">Destaque</span>
+                              <span className="highlighted-label">
+                                {t("profile.highlightLabel")}
+                              </span>
                               <strong>{highlightedChampion.name}</strong>
                               <span className="highlighted-sub">
-                                {highlightedChampion.games}J ·{" "}
-                                {Math.round(
-                                  (highlightedChampion.wins / highlightedChampion.games) * 100
-                                )}
-                                % WR
+                                {t("profile.highlightSub", {
+                                  games: highlightedChampion.games,
+                                  wr: Math.round(
+                                    (highlightedChampion.wins / highlightedChampion.games) * 100
+                                  ),
+                                })}
                               </span>
                             </div>
                           </div>
@@ -460,31 +460,35 @@ export function ProfileTab({
 
                     {/* Idea 3: Recent Form Streak Pills */}
                     <div className="recent-streak-block" data-testid="recent-streak">
-                      <span className="recent-streak-label">Sequência recente</span>
+                      <span className="recent-streak-label">{t("profile.recentStreak")}</span>
                       <div className="recent-streak-pills">
                         {filteredMatches.map((m) => (
                           <span
                             key={m.game_id}
                             className={`streak-pill ${m.win ? "win" : "loss"}`}
                             title={`${m.champion_name} (${m.kills}/${m.deaths}/${m.assists}) — ${
-                              m.win ? "Vitória" : "Derrota"
+                              m.win ? t("profile.victory") : t("profile.defeat")
                             }`}
                           >
-                            {m.win ? "V" : "D"}
+                            {m.win ? t("profile.winShort") : t("profile.lossShort")}
                           </span>
                         ))}
                       </div>
                     </div>
                   </>
                 ) : (
-                  <p className="text-muted">Sem partidas para o filtro selecionado.</p>
+                  <p className="text-muted">{t("profile.noMatchesFilter")}</p>
                 )}
               </section>
 
-              <section className="card profile-section-card" data-testid="top-masteries-card" style={glassBlurStyle}>
+              <section
+                className="card profile-section-card"
+                data-testid="top-masteries-card"
+                style={glassBlurStyle}
+              >
                 <div className="profile-card-header">
-                  <h3>Top 3 Maestrias</h3>
-                  <span className="profile-card-subtitle">Maiores pontuações</span>
+                  <h3>{t("profile.topMasteriesTitle")}</h3>
+                  <span className="profile-card-subtitle">{t("profile.topMasteriesSubtitle")}</span>
                 </div>
 
                 {profile && profile.top_masteries.length > 0 ? (
@@ -512,18 +516,21 @@ export function ProfileTab({
                         <div className="mastery-info">
                           <span className="mastery-champ-name">{mastery.champion_name}</span>
                           <span className="mastery-points">
-                            {formatPoints(mastery.champion_points)} pts
+                            {t("profile.pointsSuffix", {
+                              points: formatNumber(mastery.champion_points),
+                            })}
                           </span>
                         </div>
-                        <span className="mastery-level-pill">Nv. {mastery.champion_level}</span>
+                        <span className="mastery-level-pill">
+                          {t("profile.levelPrefix", { level: mastery.champion_level })}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted">Nenhuma maestria encontrada.</p>
+                  <p className="text-muted">{t("profile.noMasteries")}</p>
                 )}
               </section>
-
             </div>
 
             {/* Right Column: Mode Filters + Scrollable Last 10 Matches */}
@@ -531,16 +538,19 @@ export function ProfileTab({
               <section className="card profile-matches-card" style={glassBlurStyle}>
                 <div className="profile-matches-header">
                   <div>
-                    <h3>Últimas 10 Partidas</h3>
+                    <h3>{t("profile.recentMatchesTitle")}</h3>
                     <span className="profile-card-subtitle">
-                      Exibindo {filteredMatches.length} de {validMatches.length} partidas
+                      {t("profile.showingMatches", {
+                        shown: filteredMatches.length,
+                        total: validMatches.length,
+                      })}
                     </span>
                   </div>
 
                   <div
                     className="mode-filter-chips"
                     role="group"
-                    aria-label="Filtrar partidas por modo de jogo"
+                    aria-label={t("profile.filterMatchesAria")}
                     data-testid="match-mode-filters"
                   >
                     <button
@@ -550,7 +560,7 @@ export function ProfileTab({
                       aria-pressed={activeMode === "all"}
                       data-testid="mode-filter-all"
                     >
-                      Todos ({validMatches.length})
+                      {t("profile.allModes", { count: validMatches.length })}
                     </button>
                     {availableModes.map((mode) => (
                       <button
@@ -574,6 +584,12 @@ export function ProfileTab({
                       const multiKill = getMultiKillBadge(match);
                       const mins = Math.max(1, match.game_duration_secs / 60);
                       const csPerMin = (match.cs / mins).toFixed(1);
+                      const kdaText =
+                        match.deaths === 0
+                          ? t("profile.perfectKda")
+                          : t("profile.kdaRatio", {
+                              ratio: ((match.kills + match.assists) / match.deaths).toFixed(2),
+                            });
 
                       return (
                         <div
@@ -610,7 +626,7 @@ export function ProfileTab({
                                   <div className="dd-icon-frame match-spell-frame">
                                     <img
                                       src={match.spell1_icon_url}
-                                      alt="Feitiço 1"
+                                      alt={t("profile.spell1Alt")}
                                       className="match-spell-icon"
                                     />
                                   </div>
@@ -619,7 +635,7 @@ export function ProfileTab({
                                   <div className="dd-icon-frame match-spell-frame">
                                     <img
                                       src={match.spell2_icon_url}
-                                      alt="Feitiço 2"
+                                      alt={t("profile.spell2Alt")}
                                       className="match-spell-icon"
                                     />
                                   </div>
@@ -632,7 +648,7 @@ export function ProfileTab({
                                 <span
                                   className={`match-result-tag ${match.win ? "win" : "loss"}`}
                                 >
-                                  {match.win ? "Vitória" : "Derrota"}
+                                  {match.win ? t("profile.victory") : t("profile.defeat")}
                                 </span>
                                 <strong className="match-champ-name">{match.champion_name}</strong>
                                 <span className="match-mode-pill">{match.game_mode_label}</span>
@@ -654,12 +670,11 @@ export function ProfileTab({
                                 {match.assists}
                               </span>
                               <span className="match-kda-ratio">
-                                {formatKdaRatio(match.kills, match.deaths, match.assists)} ·{" "}
-                                {match.cs} CS
+                                {kdaText} · {match.cs} CS
                               </span>
                             </div>
 
-                            <div className="match-items-grid" aria-label="Itens finais">
+                            <div className="match-items-grid" aria-label={t("profile.finalItemsAria")}>
                               {Array.from({ length: 6 }).map((_, slotIdx) => {
                                 const iconUrl = match.item_icon_urls[slotIdx] || "";
                                 const itemId = match.item_ids[slotIdx] || 0;
@@ -668,7 +683,7 @@ export function ProfileTab({
                                     {itemId > 0 && iconUrl ? (
                                       <img
                                         src={iconUrl}
-                                        alt={`Item ${itemId}`}
+                                        alt={t("common.itemAlt", { id: itemId })}
                                         className="match-item-img"
                                       />
                                     ) : (
@@ -687,27 +702,28 @@ export function ProfileTab({
                               data-testid={`match-details-${match.game_id}`}
                             >
                               <div className="match-detail-stat">
-                                <span>Nível</span>
+                                <span>{t("profile.detailLevel")}</span>
                                 <strong>{match.champ_level}</strong>
                               </div>
                               <div className="match-detail-stat">
-                                <span>Dano</span>
+                                <span>{t("profile.detailDamage")}</span>
                                 <strong>
                                   {formatCompactNumber(match.total_damage_dealt_to_champions)}
                                 </strong>
                               </div>
                               <div className="match-detail-stat">
-                                <span>Ouro</span>
+                                <span>{t("profile.detailGold")}</span>
                                 <strong>{formatCompactNumber(match.gold_earned)}</strong>
                               </div>
                               <div className="match-detail-stat">
-                                <span>Visão</span>
+                                <span>{t("profile.detailVision")}</span>
                                 <strong>
-                                  {match.vision_score} ({match.wards_placed} sent.)
+                                  {match.vision_score} (
+                                  {t("profile.wardsPlacedShort", { count: match.wards_placed })})
                                 </strong>
                               </div>
                               <div className="match-detail-stat">
-                                <span>CS/min</span>
+                                <span>{t("profile.detailCsPerMin")}</span>
                                 <strong>{csPerMin}</strong>
                               </div>
                             </div>
@@ -717,7 +733,7 @@ export function ProfileTab({
                     })
                   ) : (
                     <div className="matches-empty">
-                      <p className="text-muted">Nenhuma partida encontrada para este modo.</p>
+                      <p className="text-muted">{t("profile.noMatchesMode")}</p>
                     </div>
                   )}
                 </div>

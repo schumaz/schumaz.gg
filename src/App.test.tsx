@@ -260,6 +260,7 @@ describe("App Component", () => {
   beforeEach(() => {
     eventListeners = {};
     localStorage.clear();
+    localStorage.setItem("schumaz_language", "pt_BR");
   });
 
   it("renders schumaz.gg title, initial LCU disconnected status, and starts on Perfil tab", () => {

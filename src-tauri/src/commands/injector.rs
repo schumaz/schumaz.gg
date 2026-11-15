@@ -109,13 +109,32 @@ pub async fn inject_item_build(
 pub async fn sync_user_preferences(preferences: models::UserPreferences) {
     let prev = lcu_injector::get_user_preferences();
     let should_auto_mark = preferences.auto_mark_daily_missions_read;
+    let target_locale = preferences.language;
     lcu_injector::set_user_preferences(preferences);
+    if prev.language != target_locale {
+        let client = build_provider::shared_http_client().clone();
+        tauri::async_runtime::spawn(async move {
+            let _ =
+                build_provider::get_or_init_ddragon_cache_for_locale(&client, target_locale).await;
+        });
+    }
     if should_auto_mark {
         if !prev.auto_mark_daily_missions_read {
             lcu_connector::reset_auto_mark_session_state();
         }
         lcu_connector::spawn_auto_mark_daily_missions_if_enabled();
     }
+}
+
+/// Tauri command to update the active backend locale (`pt_BR` | `en_US`) and pre-warm DataDragon cache.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_locale(locale: models::AppLocale) {
+    lcu_injector::set_active_locale(locale);
+    let client = build_provider::shared_http_client().clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = build_provider::get_or_init_ddragon_cache_for_locale(&client, locale).await;
+    });
 }
 
 #[cfg(test)]

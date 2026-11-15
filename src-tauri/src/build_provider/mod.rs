@@ -108,7 +108,7 @@ pub async fn get_recommended_build_with_filters_and_fast_spells(
         tier,
         region,
         patch,
-        ddragon_cache,
+        &ddragon_cache,
         OPGG_REST_API_BASE,
         OPGG_MCP_ENDPOINT,
         fast_spells_tx,
@@ -209,8 +209,10 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
     } else {
         position.unwrap_or("").trim()
     };
+    let active_locale = crate::lcu_injector::get_active_locale();
     let build_cache_key = format!(
-        "{}:{}:{}:{}:{}:{}:{}:{}:{}",
+        "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+        active_locale.as_str(),
         rest_base,
         mcp_endpoint,
         champion_id,
@@ -228,7 +230,13 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_protection(
     {
         let mut build = cached.clone();
         let prefs = crate::lcu_injector::get_user_preferences();
-        apply_build_spells_with_preference(&mut build, ddragon_cache, prefs.flash_key);
+        apply_build_spells_with_preference_and_locale(
+            &mut build,
+            ddragon_cache,
+            prefs.flash_key,
+            prefs.language,
+        );
+        localize_build_labels(&mut build, prefs.language);
         if let Some(tx) = fast_spells_tx.take() {
             let _ = tx.send(FastSpellRecommendation {
                 champion_id,
@@ -730,7 +738,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "data": ["16.22", "16.21"]
             })))
-            .expect(1)
+            .expect(0..=1)
             .mount(&mock_server)
             .await;
 

@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { ChampionBuild } from "../types";
+import { useTranslation } from "../i18n";
 import { BuildSelector } from "./BuildSelector";
 
 interface ItemBlocksProps {
@@ -15,6 +16,8 @@ export function ItemBlocks({
   onSelectBuild,
   readOnly = false,
 }: ItemBlocksProps) {
+  const { t, formatNumber } = useTranslation();
+
   const activeBuildOption =
     build.build_options && build.build_options.length > selectedBuildIndex
       ? build.build_options[selectedBuildIndex]
@@ -24,11 +27,17 @@ export function ItemBlocks({
   if (activeBuildOption) {
     if (typeof activeBuildOption.pick_rate === "number" && activeBuildOption.pick_rate > 0) {
       activeBuildMetaParts.push(
-        `${activeBuildOption.pick_rate.toFixed(1)}% ${readOnly ? "uso" : "escolha"}`
+        `${activeBuildOption.pick_rate.toFixed(1)}% ${
+          readOnly ? t("items.usageLabel") : t("items.pickLabel")
+        }`
       );
     }
     if (activeBuildOption.play > 0) {
-      activeBuildMetaParts.push(`${activeBuildOption.play.toLocaleString()} partidas`);
+      activeBuildMetaParts.push(
+        `${formatNumber(activeBuildOption.play)} ${t(
+          activeBuildOption.play === 1 ? "common.gamesSingular" : "common.gamesPlural"
+        )}`
+      );
     }
   }
   const activeBuildMetaText = activeBuildMetaParts.join(" · ");
@@ -37,7 +46,7 @@ export function ItemBlocks({
     <section className="card item-blocks-preview" data-testid="item-blocks">
       <div className="item-blocks-header">
         <div className="item-blocks-title-row">
-          <h2>{readOnly ? "Build Recomendada" : "Build na Loja"}</h2>
+          <h2>{readOnly ? t("items.titleReadOnly") : t("items.titleShop")}</h2>
           {activeBuildMetaText && (
             <span className="item-blocks-meta-pill" data-testid="active-build-meta">
               {activeBuildMetaText}
@@ -53,14 +62,32 @@ export function ItemBlocks({
 
       <div className="grid-blocks">
         {build.item_blocks.map((block, bIndex) => {
-          const isStarterBlock = block.title.includes("Itens Iniciais");
-          const isCoreBlock = block.title.includes("Primeiros 3 Itens");
-          const isBootsBlock = block.title.includes("Botas");
-          const isFinalBlock = block.title.includes("Build Final");
+          const isStarterBlock =
+            block.title.includes("Itens Iniciais") || block.title.includes("Starter Items");
+          const isCoreBlock =
+            block.title.includes("Primeiros 3 Itens") || block.title.includes("First 3 Items");
+          const isBootsBlock =
+            block.title.includes("Botas") || block.title.includes("Boots");
+          const isFinalBlock =
+            block.title.includes("Build Final") || block.title.includes("Final Build");
           const isSituationalBlock =
             block.title.includes("Itens Situacionais") ||
             block.title.includes("Úteis") ||
-            block.title.includes("Uteis");
+            block.title.includes("Uteis") ||
+            block.title.includes("Situational") ||
+            block.title.includes("Utility");
+
+          const localizedTitle = isStarterBlock
+            ? t("items.blockStarter")
+            : isCoreBlock
+            ? t("items.blockCore")
+            : isBootsBlock
+            ? t("items.blockBoots")
+            : isFinalBlock
+            ? t("items.blockFinal")
+            : isSituationalBlock
+            ? t("items.blockSituational")
+            : block.title;
 
           let activeIds = block.item_ids;
           let activeIcons = block.item_icon_urls;
@@ -109,18 +136,18 @@ export function ItemBlocks({
             : "block-span-full";
 
           const blockTag = isCoreBlock
-            ? "Core Trio"
+            ? t("items.coreTrioTag")
             : isFinalBlock
-            ? `${activeIds.length} Itens`
+            ? t("items.itemsCountTag", { count: activeIds.length })
             : isSituationalBlock
-            ? "Opcional"
+            ? t("items.optionalTag")
             : null;
 
           return (
             <div key={block.title || bIndex} className={`block-item ${blockKindClass}`}>
               <div className="block-header-row">
-                <h4 title={`${bIndex + 1}. ${block.title}`}>
-                  {bIndex + 1}. {block.title}
+                <h4 title={`${bIndex + 1}. ${localizedTitle}`}>
+                  {bIndex + 1}. {localizedTitle}
                 </h4>
                 {blockTag && (
                   <span className={`block-badge ${isCoreBlock ? "block-badge-accent" : ""}`}>
@@ -138,11 +165,11 @@ export function ItemBlocks({
                           →
                         </span>
                       )}
-                      <div className="item-icon-box" title={block.title}>
+                      <div className="item-icon-box" title={localizedTitle}>
                         {iconUrl ? (
                           <img
                             src={iconUrl}
-                            alt={`Item ${itemId}`}
+                            alt={t("common.itemAlt", { id: itemId })}
                             className="shop-item-icon"
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = "none";

@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
+import { TranslationKey, TranslationParams, translate, useTranslation } from "../i18n";
 import { AramAugmentEntry, AramChampionRank, AramMode } from "../types";
 import { ListSkeleton, LoadingBar, LoadingDots } from "./LoadingIndicators";
 import { SearchInput } from "./SearchInput";
 
 export type AugmentRarityFilter = "all" | 1 | 4 | 8;
+
+type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;
+const defaultTranslate: TranslatorFn = (key, params) => translate("pt_BR", key, params);
 
 export const LEAGUE_ARAM_ICON_URL =
   "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/aram/img/game-select-icon-active.png";
@@ -82,19 +86,22 @@ export function getAugmentTierClass(tier: number): string {
   }
 }
 
-export function getAugmentRarityInfo(rarity: number | null | undefined): {
+export function getAugmentRarityInfo(
+  rarity: number | null | undefined,
+  t: TranslatorFn = defaultTranslate
+): {
   label: string;
   className: string;
 } {
   switch (rarity) {
     case 1:
-      return { label: "Prata", className: "rarity-silver" };
+      return { label: t("aram.raritySilver"), className: "rarity-silver" };
     case 4:
-      return { label: "Ouro", className: "rarity-gold" };
+      return { label: t("aram.rarityGold"), className: "rarity-gold" };
     case 8:
-      return { label: "Prismática", className: "rarity-prismatic" };
+      return { label: t("aram.rarityPrismatic"), className: "rarity-prismatic" };
     default:
-      return { label: "Especial", className: "rarity-neutral" };
+      return { label: t("aram.raritySpecial"), className: "rarity-neutral" };
   }
 }
 
@@ -125,6 +132,7 @@ export function AramTab({
   onRetryTierList,
   onRetryAugments,
 }: AramTabProps) {
+  const { t } = useTranslation();
   const [aramSearch, setAramSearch] = useState("");
   const [mayhemChampSearch, setMayhemChampSearch] = useState("");
   const [augmentSearch, setAugmentSearch] = useState("");
@@ -169,6 +177,13 @@ export function AramTab({
     });
   }, [selectedChampionKey, augmentsByChampion, rarityFilter, augmentSearch]);
 
+  const rarityFilterOptions = [
+    { id: "all" as const, label: t("aram.rarityAll"), dot: "" },
+    { id: 1 as const, label: t("aram.raritySilver"), dot: "dot-silver" },
+    { id: 4 as const, label: t("aram.rarityGold"), dot: "dot-gold" },
+    { id: 8 as const, label: t("aram.rarityPrismatic"), dot: "dot-prismatic" },
+  ];
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -178,11 +193,8 @@ export function AramTab({
       {showChooser ? (
         <div className="aram-chooser-wrapper" data-testid="aram-mode-chooser">
           <div className="aram-chooser-header">
-            <h2 className="aram-chooser-title">Escolha o modo ARAM</h2>
-            <p className="aram-chooser-subtitle">
-              Sua escolha fica salva para os próximos acessos. Para trocar depois, clique novamente
-              em Aram na barra inferior.
-            </p>
+            <h2 className="aram-chooser-title">{t("aram.chooserTitle")}</h2>
+            <p className="aram-chooser-subtitle">{t("aram.chooserSubtitle")}</p>
           </div>
 
           <div className="aram-chooser-grid">
@@ -200,12 +212,12 @@ export function AramTab({
                     className="aram-choice-icon-img"
                   />
                 </div>
-                {savedMode === "aram" && <span className="aram-saved-pill">Salva</span>}
+                {savedMode === "aram" && (
+                  <span className="aram-saved-pill">{t("aram.savedBadge")}</span>
+                )}
               </div>
-              <h3 className="aram-choice-name">ARAM</h3>
-              <p className="aram-choice-desc">
-                Lista de campeões ordenados pelo desempenho geral em Howling Abyss.
-              </p>
+              <h3 className="aram-choice-name">{t("aram.aramTitle")}</h3>
+              <p className="aram-choice-desc">{t("aram.aramDesc")}</p>
             </button>
 
             <button
@@ -222,12 +234,12 @@ export function AramTab({
                     className="aram-choice-icon-img"
                   />
                 </div>
-                {savedMode === "aram_mayhem" && <span className="aram-saved-pill">Salva</span>}
+                {savedMode === "aram_mayhem" && (
+                  <span className="aram-saved-pill">{t("aram.savedBadge")}</span>
+                )}
               </div>
-              <h3 className="aram-choice-name">ARAM Mayhem</h3>
-              <p className="aram-choice-desc">
-                Ranking de campeões e as melhores cartinhas de aprimoramento por raridade.
-              </p>
+              <h3 className="aram-choice-name">{t("aram.mayhemTitle")}</h3>
+              <p className="aram-choice-desc">{t("aram.mayhemDesc")}</p>
             </button>
           </div>
         </div>
@@ -239,18 +251,18 @@ export function AramTab({
               testId="aram-classic-loading-bar"
             />
             <div className="aram-toolbar-left">
-              <h2 className="page-hero-title">Ranking de Campeões</h2>
+              <h2 className="page-hero-title">{t("aram.classicRankingTitle")}</h2>
             </div>
 
             <div className="aram-hero-right">
-              <span className="aram-mode-badge">ARAM</span>
+              <span className="aram-mode-badge">{t("aram.aramTitle")}</span>
 
               <SearchInput
                 value={aramSearch}
                 onChange={setAramSearch}
-                placeholder="Buscar campeão..."
-                ariaLabel="Buscar campeão no ARAM"
-                clearAriaLabel="Limpar busca de campeão no ARAM"
+                placeholder={t("common.searchChampionPlaceholder")}
+                ariaLabel={t("aram.searchAramAria")}
+                clearAriaLabel={t("aram.clearSearchAramAria")}
               />
             </div>
           </div>
@@ -260,7 +272,7 @@ export function AramTab({
               <div className="loading-skeleton-shell" data-testid="aram-classic-loading">
                 <div className="loading-banner">
                   <div className="spinner aram-spinner" />
-                  <span>Carregando ranking do ARAM</span>
+                  <span>{t("aram.loadingRanking")}</span>
                   <LoadingDots size="sm" testId="aram-classic-loading-dots" />
                 </div>
                 <ListSkeleton rows={7} variant="aram" testId="aram-classic-skeleton" />
@@ -273,12 +285,12 @@ export function AramTab({
                   className="aram-retry-btn"
                   onClick={() => onRetryTierList("aram")}
                 >
-                  Tentar novamente
+                  {t("common.retry")}
                 </button>
               </div>
             ) : filteredAramChampions.length === 0 ? (
               <div className="aram-state-box">
-                <span>Nenhum campeão encontrado para &quot;{aramSearch}&quot;.</span>
+                <span>{t("aram.noChampFoundSearch", { query: aramSearch })}</span>
               </div>
             ) : (
               <div className="aram-classic-list" data-testid="aram-classic-list">
@@ -335,15 +347,15 @@ export function AramTab({
             <section className="card aram-mayhem-col aram-mayhem-champions-col">
               <div className="aram-panel-header">
                 <div className="aram-panel-title-row">
-                  <h2 className="aram-mayhem-hero-title">Cartinhas</h2>
-                  <span className="aram-mode-badge is-mayhem">ARAM Mayhem</span>
+                  <h2 className="aram-mayhem-hero-title">{t("aram.augmentsColumnTitle")}</h2>
+                  <span className="aram-mode-badge is-mayhem">{t("aram.mayhemTitle")}</span>
                 </div>
                 <SearchInput
                   value={mayhemChampSearch}
                   onChange={setMayhemChampSearch}
-                  placeholder="Buscar campeão..."
-                  ariaLabel="Buscar campeão no ARAM Mayhem"
-                  clearAriaLabel="Limpar busca de campeão no ARAM Mayhem"
+                  placeholder={t("common.searchChampionPlaceholder")}
+                  ariaLabel={t("aram.searchMayhemAria")}
+                  clearAriaLabel={t("aram.clearSearchMayhemAria")}
                   className="is-full"
                 />
               </div>
@@ -353,7 +365,7 @@ export function AramTab({
                   <div className="loading-skeleton-shell" data-testid="aram-mayhem-champions-loading">
                     <div className="loading-banner">
                       <div className="spinner aram-spinner" />
-                      <span>Carregando campeões</span>
+                      <span>{t("aram.loadingChampions")}</span>
                       <LoadingDots size="sm" testId="aram-mayhem-champions-loading-dots" />
                     </div>
                     <ListSkeleton rows={7} variant="compact" testId="aram-mayhem-champions-skeleton" />
@@ -366,12 +378,12 @@ export function AramTab({
                       className="aram-retry-btn"
                       onClick={() => onRetryTierList("aram_mayhem")}
                     >
-                      Tentar novamente
+                      {t("common.retry")}
                     </button>
                   </div>
                 ) : filteredMayhemChampions.length === 0 ? (
                   <div className="aram-state-box">
-                    <span>Nenhum campeão encontrado.</span>
+                    <span>{t("aram.noChampFound")}</span>
                   </div>
                 ) : (
                   filteredMayhemChampions.map((champ) => {
@@ -404,11 +416,11 @@ export function AramTab({
               </div>
             </section>
 
-            {/* Right Column: Champion Augments ("Cartinhas") */}
+            {/* Right Column: Champion Augments ("Cartinhas" / "Augments") */}
             <section className="card aram-mayhem-col aram-mayhem-augments-col">
               {!selectedChampionKey ? (
                 <div className="aram-state-box" data-testid="aram-mayhem-empty-augments">
-                  <span>Selecione um campeão ao lado para ver as melhores cartinhas.</span>
+                  <span>{t("aram.selectChampPrompt")}</span>
                 </div>
               ) : (
                 <>
@@ -427,9 +439,7 @@ export function AramTab({
                         <h3 className="aram-panel-title">
                           {selectedChampion?.name ?? selectedChampionKey}
                         </h3>
-                        <span className="aram-hero-sub">
-                          Melhores cartinhas do rank mais forte ao mais fraco
-                        </span>
+                        <span className="aram-hero-sub">{t("aram.augmentsSubtitle")}</span>
                       </div>
                       {selectedChampion && (
                         <span
@@ -446,16 +456,9 @@ export function AramTab({
                       <div
                         className="segmented-control aram-rarity-filter"
                         role="group"
-                        aria-label="Filtrar cartinhas por raridade"
+                        aria-label={t("aram.filterRarityAria")}
                       >
-                        {(
-                          [
-                            { id: "all", label: "Todas", dot: "" },
-                            { id: 1, label: "Prata", dot: "dot-silver" },
-                            { id: 4, label: "Ouro", dot: "dot-gold" },
-                            { id: 8, label: "Prismática", dot: "dot-prismatic" },
-                          ] as const
-                        ).map((opt) => (
+                        {rarityFilterOptions.map((opt) => (
                           <button
                             key={String(opt.id)}
                             type="button"
@@ -471,9 +474,9 @@ export function AramTab({
                       <SearchInput
                         value={augmentSearch}
                         onChange={setAugmentSearch}
-                        placeholder="Buscar cartinha..."
-                        ariaLabel="Buscar cartinha"
-                        clearAriaLabel="Limpar busca de cartinha"
+                        placeholder={t("aram.searchAugmentPlaceholder")}
+                        ariaLabel={t("aram.searchAugmentAria")}
+                        clearAriaLabel={t("aram.clearSearchAugmentAria")}
                         className="aram-aug-search"
                       />
                     </div>
@@ -484,7 +487,7 @@ export function AramTab({
                       <div className="loading-skeleton-shell" data-testid="aram-augments-loading">
                         <div className="loading-banner">
                           <div className="spinner aram-spinner" />
-                          <span>Carregando cartinhas</span>
+                          <span>{t("aram.loadingAugments")}</span>
                           <LoadingDots size="sm" testId="aram-augments-loading-dots" />
                         </div>
                         <ListSkeleton rows={5} variant="augments" testId="aram-augments-skeleton" />
@@ -497,16 +500,16 @@ export function AramTab({
                           className="aram-retry-btn"
                           onClick={onRetryAugments}
                         >
-                          Tentar novamente
+                          {t("common.retry")}
                         </button>
                       </div>
                     ) : currentAugments.length === 0 ? (
                       <div className="aram-state-box">
-                        <span>Nenhuma cartinha encontrada com esses filtros.</span>
+                        <span>{t("aram.noAugmentsFound")}</span>
                       </div>
                     ) : (
                       currentAugments.map((aug) => {
-                        const rarityInfo = getAugmentRarityInfo(aug.rarity);
+                        const rarityInfo = getAugmentRarityInfo(aug.rarity, t);
                         return (
                           <div key={aug.id} className="aram-augment-row">
                             <div className={`aram-augment-icon-frame ${rarityInfo.className}`}>
@@ -530,7 +533,9 @@ export function AramTab({
                                 </span>
                                 {(aug.popular ?? 0) > 0 && (
                                   <span className="aram-aug-pick">
-                                    {(aug.popular ?? 0).toFixed(1)}% escolha
+                                    {t("aram.augmentPickRate", {
+                                      rate: (aug.popular ?? 0).toFixed(1),
+                                    })}
                                   </span>
                                 )}
                               </div>

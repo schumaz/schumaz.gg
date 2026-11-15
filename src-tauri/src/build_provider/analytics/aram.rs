@@ -1,5 +1,5 @@
 use crate::build_provider::models::DataDragonCache;
-use crate::models::{AramAugmentEntry, AramChampionRank, AramMode};
+use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank, AramMode};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
@@ -25,6 +25,10 @@ fn get_tier_cache() -> &'static RwLock<TierCacheMap> {
 
 fn get_augments_cache() -> &'static RwLock<AugmentsCacheMap> {
     ARAM_AUGMENTS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+pub fn aram_mayhem_augments_web_base(locale: AppLocale) -> &'static str {
+    locale.opgg_aram_mayhem_augments_base()
 }
 
 pub fn normalize_opgg_champion_key(raw: &str) -> String {
@@ -456,17 +460,18 @@ pub async fn fetch_aram_tier_list(
     .await
 }
 
-pub async fn fetch_aram_mayhem_augments_with_base(
+pub async fn fetch_aram_mayhem_augments_with_base_and_locale(
     client: &reqwest::Client,
     champion_key: &str,
     web_base: &str,
+    locale: AppLocale,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let normalized = normalize_opgg_champion_key(champion_key);
     if normalized.is_empty() {
         return Err("Champion key cannot be empty".to_string());
     }
 
-    let cache_key = format!("{}:{}", web_base, normalized);
+    let cache_key = format!("{}:{}:{}", locale.as_str(), web_base, normalized);
     if let Ok(guard) = get_augments_cache().read()
         && let Some((ts, cached)) = guard.get(&cache_key)
         && ts.elapsed() < ARAM_CACHE_TTL
@@ -501,12 +506,40 @@ pub async fn fetch_aram_mayhem_augments_with_base(
     Ok(augments)
 }
 
+pub async fn fetch_aram_mayhem_augments_with_base(
+    client: &reqwest::Client,
+    champion_key: &str,
+    web_base: &str,
+) -> Result<Vec<AramAugmentEntry>, String> {
+    fetch_aram_mayhem_augments_with_base_and_locale(
+        client,
+        champion_key,
+        web_base,
+        crate::lcu_injector::get_active_locale(),
+    )
+    .await
+}
+
+pub async fn fetch_aram_mayhem_augments_for_locale(
+    client: &reqwest::Client,
+    champion_key: &str,
+    locale: AppLocale,
+) -> Result<Vec<AramAugmentEntry>, String> {
+    fetch_aram_mayhem_augments_with_base_and_locale(
+        client,
+        champion_key,
+        aram_mayhem_augments_web_base(locale),
+        locale,
+    )
+    .await
+}
+
 pub async fn fetch_aram_mayhem_augments(
     client: &reqwest::Client,
     champion_key: &str,
 ) -> Result<Vec<AramAugmentEntry>, String> {
-    fetch_aram_mayhem_augments_with_base(client, champion_key, OPGG_ARAM_MAYHEM_AUGMENTS_WEB_BASE)
-        .await
+    let locale = crate::lcu_injector::get_active_locale();
+    fetch_aram_mayhem_augments_for_locale(client, champion_key, locale).await
 }
 
 #[cfg(test)]
@@ -542,6 +575,18 @@ mod tests {
             runes: HashMap::new(),
             spells: HashMap::new(),
         }
+    }
+
+    #[test]
+    fn test_aram_mayhem_augments_web_base_varies_by_locale() {
+        assert_eq!(
+            aram_mayhem_augments_web_base(AppLocale::PtBr),
+            "https://op.gg/pt/lol/modes/aram-mayhem"
+        );
+        assert_eq!(
+            aram_mayhem_augments_web_base(AppLocale::EnUs),
+            "https://op.gg/lol/modes/aram-mayhem"
+        );
     }
 
     #[test]
@@ -602,27 +647,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_aram_mayhem_augments_with_mock_server() {
+    async fn test_fetch_aram_mayhem_augments_with_mock_server_and_locale_cache_isolation() {
         let mock_server = MockServer::start().await;
-        let inner = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Coice","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Dano extra."}]}]"#;
-        let escaped = serde_json::to_string(inner).unwrap();
-        let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
+        let inner_pt = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Coice","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Dano extra."}]}]"#;
+        let html_pt = format!(
+            r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+            serde_json::to_string(inner_pt).unwrap()
+        );
+
+        let inner_en = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Recoil","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Extra damage."}]}]"#;
+        let html_en = format!(
+            r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+            serde_json::to_string(inner_en).unwrap()
+        );
 
         Mock::given(method("GET"))
-            .and(path("/twistedfate/augments"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(html))
+            .and(path("/pt/twistedfate/augments"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(html_pt))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/en/twistedfate/augments"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(html_en))
             .expect(1)
             .mount(&mock_server)
             .await;
 
         let client = reqwest::Client::new();
-        let augments =
-            fetch_aram_mayhem_augments_with_base(&client, "Twisted Fate", &mock_server.uri())
-                .await
-                .unwrap();
+        let pt_augments = fetch_aram_mayhem_augments_with_base_and_locale(
+            &client,
+            "Twisted Fate",
+            &format!("{}/pt", mock_server.uri()),
+            AppLocale::PtBr,
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(augments.len(), 1);
-        assert_eq!(augments[0].id, 3075);
-        assert_eq!(augments[0].name, "Coice");
+        let en_augments = fetch_aram_mayhem_augments_with_base_and_locale(
+            &client,
+            "Twisted Fate",
+            &format!("{}/en", mock_server.uri()),
+            AppLocale::EnUs,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(pt_augments[0].name, "Coice");
+        assert_eq!(en_augments[0].name, "Recoil");
     }
 }

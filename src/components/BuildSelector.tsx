@@ -1,4 +1,5 @@
 import { UnifiedBuildOption } from "../types";
+import { useTranslation } from "../i18n";
 
 interface BuildSelectorProps {
   buildOptions?: UnifiedBuildOption[];
@@ -19,7 +20,22 @@ export function BuildSelector({
   selectedBuildIndex,
   onSelectBuild,
 }: BuildSelectorProps) {
+  const { t, formatNumber } = useTranslation();
+
   if (!buildOptions || buildOptions.length <= 1) return null;
+
+  const resolveOptionName = (rawName: string, idx: number): string => {
+    if (
+      rawName === "Build 1 (Mais Feita)" ||
+      rawName === "Build 1 (Most Popular)"
+    ) {
+      return t("items.build1MostPopular");
+    }
+    if (idx === 0 && !rawName) {
+      return t("items.build1MostPopular");
+    }
+    return rawName || t("items.buildOptionNumber", { num: idx + 1 });
+  };
 
   return (
     <div className="unified-build-selector" data-testid="unified-build-selector">
@@ -31,6 +47,7 @@ export function BuildSelector({
       >
         {buildOptions.map((opt, optIdx) => {
           const isSelected = selectedBuildIndex === optIdx;
+          const displayName = resolveOptionName(opt.name, optIdx);
           const pickLabel =
             typeof opt.pick_rate === "number" && opt.pick_rate > 0
               ? `${opt.pick_rate.toFixed(1)}%`
@@ -45,13 +62,15 @@ export function BuildSelector({
               className={`unified-build-pill ${isSelected ? "active" : ""}`}
               data-testid={`build-opt-btn-${optIdx}`}
               onClick={() => onSelectBuild(optIdx)}
-              title={`${opt.name} · ${opt.play.toLocaleString()} partidas${
+              title={`${displayName} · ${formatNumber(opt.play)} ${t(
+                opt.play === 1 ? "common.gamesSingular" : "common.gamesPlural"
+              )}${
                 typeof opt.pick_rate === "number" ? ` (${opt.pick_rate.toFixed(1)}%)` : ""
               }`}
             >
               <div className="build-pill-top">
-                <span className="build-pill-name" title={opt.name}>
-                  {opt.name}
+                <span className="build-pill-name" title={displayName}>
+                  {displayName}
                 </span>
               </div>
 
@@ -64,7 +83,7 @@ export function BuildSelector({
                     >
                       <img
                         src={iconUrl}
-                        alt={`Item ${opt.core_item_ids[iconIdx]}`}
+                        alt={t("common.itemAlt", { id: opt.core_item_ids[iconIdx] })}
                         className="build-pill-mini-icon"
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = "none";

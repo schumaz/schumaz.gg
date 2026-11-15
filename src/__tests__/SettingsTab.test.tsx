@@ -1,4 +1,6 @@
-﻿import { describe, it, expect, vi } from "vitest";
+﻿import { useState } from "react";
+import { describe, it, expect, vi } from "vitest";
+import { AppLocale, I18nProvider } from "../i18n";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SettingsTab, isBlurSliderDisabled } from "../components/SettingsTab";
 import { DEFAULT_PREFERENCES } from "../types";
@@ -227,6 +229,7 @@ describe("SettingsTab", () => {
       miscCard.querySelectorAll(".settings-subsection")
     ).map((el) => el.getAttribute("data-testid"));
     expect(miscSubsections).toEqual([
+      "settings-subgroup-language",
       "settings-subgroup-graphics",
       "settings-subgroup-daily-missions",
     ]);
@@ -322,5 +325,62 @@ describe("SettingsTab", () => {
 
     expect(screen.queryByTestId("profile-blur-input")).not.toBeInTheDocument();
     expect(screen.getByTestId("profile-blur-slider")).toBeDisabled();
+  });
+  it("renders language selector with Brazil & USA flags in Diversos and switches UI language dynamically", () => {
+    const handleLanguageChange = vi.fn();
+    const handleUpdate = vi.fn();
+
+    function Wrapper() {
+      const [locale, setLocale] = useState<AppLocale>("pt_BR");
+      return (
+        <I18nProvider
+          locale={locale}
+          onLocaleChange={(next) => {
+            setLocale(next);
+            handleLanguageChange(next);
+          }}
+        >
+          <SettingsTab
+            preferences={{ ...DEFAULT_PREFERENCES, language: locale }}
+            onUpdatePreference={handleUpdate}
+            locale={locale}
+            onChangeLanguage={(next) => {
+              setLocale(next);
+              handleLanguageChange(next);
+            }}
+          />
+        </I18nProvider>
+      );
+    }
+
+    render(<Wrapper />);
+
+    const miscGroup = screen.getByTestId("settings-group-misc");
+    const langSubgroup = screen.getByTestId("settings-subgroup-language");
+    expect(miscGroup).toContainElement(langSubgroup);
+
+    const ptBtn = screen.getByTestId("settings-lang-pt_BR");
+    const enBtn = screen.getByTestId("settings-lang-en_US");
+    expect(ptBtn).toHaveAttribute("aria-pressed", "true");
+    expect(enBtn).toHaveAttribute("aria-pressed", "false");
+    expect(ptBtn.querySelector("img")).toHaveAttribute("src", expect.stringMatching(/br\.svg|data:image/i));
+    expect(enBtn.querySelector("img")).toHaveAttribute("src", expect.stringMatching(/us\.svg|data:image/i));
+    expect(miscGroup).toHaveTextContent("Diversos");
+
+    // Switch to English
+    fireEvent.click(enBtn);
+    expect(handleLanguageChange).toHaveBeenCalledWith("en_US");
+    expect(enBtn).toHaveAttribute("aria-pressed", "true");
+    expect(ptBtn).toHaveAttribute("aria-pressed", "false");
+    expect(miscGroup).toHaveTextContent("Miscellaneous");
+    expect(langSubgroup).toHaveTextContent("App Language");
+    expect(screen.getByLabelText("Auto-Inject Runes")).toBeInTheDocument();
+
+    // Switch back to Portuguese
+    fireEvent.click(ptBtn);
+    expect(handleLanguageChange).toHaveBeenCalledWith("pt_BR");
+    expect(ptBtn).toHaveAttribute("aria-pressed", "true");
+    expect(miscGroup).toHaveTextContent("Diversos");
+    expect(langSubgroup).toHaveTextContent("Idioma do Aplicativo");
   });
 });

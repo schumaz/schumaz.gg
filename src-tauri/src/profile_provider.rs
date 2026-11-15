@@ -4,15 +4,15 @@ use std::time::Duration;
 
 use tokio::sync::Mutex;
 
-use crate::build_provider::{self, ddragon::resolve_spell_metadata};
+use crate::build_provider::{self, ddragon::resolve_spell_metadata_for_locale};
 use crate::lcu_connector::LcuConnection;
 use crate::models::{
-    ChampionMasteryInfo, DataDragonCache, PlayerProfile, RankedQueueStats, RecentMatchInfo,
+    AppLocale, ChampionMasteryInfo, DataDragonCache, PlayerProfile, RankedQueueStats, RecentMatchInfo,
 };
 
-static SKIN_NAME_CACHE: OnceLock<Mutex<HashMap<(String, i32), String>>> = OnceLock::new();
+static SKIN_NAME_CACHE: OnceLock<Mutex<HashMap<(AppLocale, String, i32), String>>> = OnceLock::new();
 
-fn skin_cache() -> &'static Mutex<HashMap<(String, i32), String>> {
+fn skin_cache() -> &'static Mutex<HashMap<(AppLocale, String, i32), String>> {
     SKIN_NAME_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -52,8 +52,12 @@ pub fn resolve_background_splash_urls(
             "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{}_0.jpg",
             champ.key_name
         );
+        let classic_suffix = match crate::lcu_injector::get_active_locale() {
+            AppLocale::PtBr => "Clássica",
+            AppLocale::EnUs => "Classic",
+        };
         let default_label = if skin_num == 0 {
-            format!("{} (Clássica)", champ.display_name)
+            format!("{} ({})", champ.display_name, classic_suffix)
         } else {
             format!("{} #{}", champ.display_name, skin_num)
         };
@@ -75,19 +79,20 @@ pub fn resolve_background_splash_urls(
     }
 }
 
-/// Fetches the localized PT-BR skin name from DataDragon `champion/{key_name}.json` with caching and short timeout.
-pub async fn fetch_skin_name(
+/// Fetches the localized skin name from DataDragon `champion/{key_name}.json` with caching and short timeout.
+pub async fn fetch_skin_name_for_locale(
     client: &reqwest::Client,
     version: &str,
     key_name: &str,
     skin_num: i32,
     background_skin_id: i32,
+    locale: AppLocale,
 ) -> Option<String> {
     if version.is_empty() || key_name.is_empty() || background_skin_id <= 0 {
         return None;
     }
 
-    let cache_key = (key_name.to_string(), skin_num);
+    let cache_key = (locale, key_name.to_string(), skin_num);
     {
         let guard = skin_cache().lock().await;
         if let Some(cached) = guard.get(&cache_key) {
@@ -96,8 +101,10 @@ pub async fn fetch_skin_name(
     }
 
     let url = format!(
-        "https://ddragon.leagueoflegends.com/cdn/{}/data/pt_BR/champion/{}.json",
-        version, key_name
+        "https://ddragon.leagueoflegends.com/cdn/{}/data/{}/champion/{}.json",
+        version,
+        locale.ddragon_code(),
+        key_name
     );
 
     let res = tokio::time::timeout(Duration::from_millis(1800), client.get(&url).send())
@@ -126,7 +133,11 @@ pub async fn fetch_skin_name(
         .unwrap_or(key_name);
 
     let formatted = if raw_name.eq_ignore_ascii_case("default") {
-        format!("{} (Clássica)", champ_name)
+        let classic = match locale {
+            AppLocale::PtBr => "Clássica",
+            AppLocale::EnUs => "Classic",
+        };
+        format!("{} ({})", champ_name, classic)
     } else {
         raw_name.to_string()
     };
@@ -136,35 +147,74 @@ pub async fn fetch_skin_name(
     Some(formatted)
 }
 
-/// Translates LCU ranked tier keys to localized PT-BR labels.
-pub fn translate_ranked_tier(tier: &str) -> String {
-    match tier.trim().to_ascii_uppercase().as_str() {
-        "IRON" => "Ferro",
-        "BRONZE" => "Bronze",
-        "SILVER" => "Prata",
-        "GOLD" => "Ouro",
-        "PLATINUM" => "Platina",
-        "EMERALD" => "Esmeralda",
-        "DIAMOND" => "Diamante",
-        "MASTER" => "Mestre",
-        "GRANDMASTER" => "Grão-Mestre",
-        "CHALLENGER" => "Desafiante",
-        _ => "Sem Ranque",
+pub async fn fetch_skin_name(
+    client: &reqwest::Client,
+    version: &str,
+    key_name: &str,
+    skin_num: i32,
+    background_skin_id: i32,
+) -> Option<String> {
+    fetch_skin_name_for_locale(
+        client,
+        version,
+        key_name,
+        skin_num,
+        background_skin_id,
+        crate::lcu_injector::get_active_locale(),
+    )
+    .await
+}
+
+/// Translates LCU ranked tier keys to localized labels for `locale`.
+pub fn translate_ranked_tier_for_locale(tier: &str, locale: AppLocale) -> String {
+    match locale {
+        AppLocale::PtBr => match tier.trim().to_ascii_uppercase().as_str() {
+            "IRON" => "Ferro",
+            "BRONZE" => "Bronze",
+            "SILVER" => "Prata",
+            "GOLD" => "Ouro",
+            "PLATINUM" => "Platina",
+            "EMERALD" => "Esmeralda",
+            "DIAMOND" => "Diamante",
+            "MASTER" => "Mestre",
+            "GRANDMASTER" => "Grão-Mestre",
+            "CHALLENGER" => "Desafiante",
+            _ => "Sem Ranque",
+        },
+        AppLocale::EnUs => match tier.trim().to_ascii_uppercase().as_str() {
+            "IRON" => "Iron",
+            "BRONZE" => "Bronze",
+            "SILVER" => "Silver",
+            "GOLD" => "Gold",
+            "PLATINUM" => "Platinum",
+            "EMERALD" => "Emerald",
+            "DIAMOND" => "Diamond",
+            "MASTER" => "Master",
+            "GRANDMASTER" => "Grandmaster",
+            "CHALLENGER" => "Challenger",
+            _ => "Unranked",
+        },
     }
     .to_string()
+}
+
+/// Translates LCU ranked tier keys to localized PT-BR labels.
+pub fn translate_ranked_tier(tier: &str) -> String {
+    translate_ranked_tier_for_locale(tier, AppLocale::PtBr)
 }
 
 fn parse_single_ranked_entry(
     queue_type: &str,
     queue_label: &str,
     entry: Option<&serde_json::Value>,
+    locale: AppLocale,
 ) -> RankedQueueStats {
     let Some(val) = entry else {
         return RankedQueueStats {
             queue_type: queue_type.to_string(),
             queue_label: queue_label.to_string(),
             tier: "UNRANKED".to_string(),
-            tier_label: "Sem Ranque".to_string(),
+            tier_label: translate_ranked_tier_for_locale("UNRANKED", locale),
             division: String::new(),
             league_points: 0,
             wins: 0,
@@ -200,7 +250,7 @@ fn parse_single_ranked_entry(
     RankedQueueStats {
         queue_type: queue_type.to_string(),
         queue_label: queue_label.to_string(),
-        tier_label: translate_ranked_tier(&tier),
+        tier_label: translate_ranked_tier_for_locale(&tier, locale),
         tier,
         division,
         league_points: val
@@ -212,8 +262,11 @@ fn parse_single_ranked_entry(
     }
 }
 
-/// Parses `/lol-ranked/v1/current-ranked-stats` supporting both `queues` array and `queueMap` object.
-pub fn parse_ranked_stats(ranked_json: &serde_json::Value) -> Vec<RankedQueueStats> {
+/// Parses `/lol-ranked/v1/current-ranked-stats` for `locale`.
+pub fn parse_ranked_stats_for_locale(
+    ranked_json: &serde_json::Value,
+    locale: AppLocale,
+) -> Vec<RankedQueueStats> {
     let find_queue = |target_type: &str| -> Option<&serde_json::Value> {
         if let Some(queues) = ranked_json.get("queues").and_then(|q| q.as_array())
             && let Some(found) = queues.iter().find(|item| {
@@ -230,9 +283,14 @@ pub fn parse_ranked_stats(ranked_json: &serde_json::Value) -> Vec<RankedQueueSta
     };
 
     vec![
-        parse_single_ranked_entry("RANKED_SOLO_5x5", "Solo/Duo", find_queue("RANKED_SOLO_5x5")),
-        parse_single_ranked_entry("RANKED_FLEX_SR", "Flex", find_queue("RANKED_FLEX_SR")),
+        parse_single_ranked_entry("RANKED_SOLO_5x5", "Solo/Duo", find_queue("RANKED_SOLO_5x5"), locale),
+        parse_single_ranked_entry("RANKED_FLEX_SR", "Flex", find_queue("RANKED_FLEX_SR"), locale),
     ]
+}
+
+/// Parses `/lol-ranked/v1/current-ranked-stats` supporting both `queues` array and `queueMap` object.
+pub fn parse_ranked_stats(ranked_json: &serde_json::Value) -> Vec<RankedQueueStats> {
+    parse_ranked_stats_for_locale(ranked_json, AppLocale::PtBr)
 }
 
 /// Parses LCU champion mastery payloads (array or wrapped object) and returns Top N sorted by points.
@@ -339,8 +397,12 @@ pub fn is_practice_tool_match(game_json: &serde_json::Value) -> bool {
     false
 }
 
-/// Maps LCU `queueId` and `gameMode` to normalized filter key and localized PT-BR mode label.
-pub fn map_queue_mode(queue_id: i32, game_mode: &str) -> (String, String) {
+/// Maps LCU `queueId` and `gameMode` to normalized filter key and localized mode label.
+pub fn map_queue_mode_for_locale(
+    queue_id: i32,
+    game_mode: &str,
+    locale: AppLocale,
+) -> (String, String) {
     match queue_id {
         420 => ("ranked_solo".to_string(), "Solo/Duo".to_string()),
         440 => ("ranked_flex".to_string(), "Flex".to_string()),
@@ -349,9 +411,30 @@ pub fn map_queue_mode(queue_id: i32, game_mode: &str) -> (String, String) {
         2400 => ("aram_mayhem".to_string(), "ARAM Mayhem".to_string()),
         1700 | 1710 => ("arena".to_string(), "Arena".to_string()),
         900 | 1010 | 1900 => ("urf".to_string(), "URF".to_string()),
-        1300 => ("nexus_blitz".to_string(), "Blitz do Nexus".to_string()),
-        1400 => ("ultbook".to_string(), "Livro Supremo".to_string()),
-        830..=890 => ("coop_vs_ai".to_string(), "Co-op vs IA".to_string()),
+        1300 => (
+            "nexus_blitz".to_string(),
+            match locale {
+                AppLocale::PtBr => "Blitz do Nexus",
+                AppLocale::EnUs => "Nexus Blitz",
+            }
+            .to_string(),
+        ),
+        1400 => (
+            "ultbook".to_string(),
+            match locale {
+                AppLocale::PtBr => "Livro Supremo",
+                AppLocale::EnUs => "Ultimate Spellbook",
+            }
+            .to_string(),
+        ),
+        830..=890 => (
+            "coop_vs_ai".to_string(),
+            match locale {
+                AppLocale::PtBr => "Co-op vs IA",
+                AppLocale::EnUs => "Co-op vs AI",
+            }
+            .to_string(),
+        ),
         _ => {
             let mode_upper = game_mode.trim().to_ascii_uppercase();
             if mode_upper.contains("MAYHEM") || mode_upper == "KIWI" {
@@ -365,12 +448,24 @@ pub fn map_queue_mode(queue_id: i32, game_mode: &str) -> (String, String) {
             } else if mode_upper == "CLASSIC" || mode_upper == "SWIFTPLAY" {
                 ("normal".to_string(), "Normal".to_string())
             } else if mode_upper.is_empty() {
-                ("other".to_string(), "Outro".to_string())
+                (
+                    "other".to_string(),
+                    match locale {
+                        AppLocale::PtBr => "Outro",
+                        AppLocale::EnUs => "Other",
+                    }
+                    .to_string(),
+                )
             } else {
                 (mode_upper.to_ascii_lowercase(), mode_upper)
             }
         }
     }
+}
+
+/// Maps LCU `queueId` and `gameMode` to normalized filter key and localized PT-BR mode label.
+pub fn map_queue_mode(queue_id: i32, game_mode: &str) -> (String, String) {
+    map_queue_mode_for_locale(queue_id, game_mode, AppLocale::PtBr)
 }
 
 fn find_local_participant<'a>(
@@ -404,11 +499,12 @@ fn find_local_participant<'a>(
 }
 
 /// Parses LCU match history JSON, excludes Practice Tool matches, and enriches up to `limit` matches.
-pub fn parse_recent_matches(
+pub fn parse_recent_matches_for_locale(
     history_json: &serde_json::Value,
     summoner_id: u64,
     cache: &DataDragonCache,
     limit: usize,
+    locale: AppLocale,
 ) -> Vec<RecentMatchInfo> {
     let games = history_json
         .pointer("/games/games")
@@ -429,7 +525,7 @@ pub fn parse_recent_matches(
             let game_id = game.get("gameId").and_then(|v| v.as_u64()).unwrap_or(0);
             let queue_id = game.get("queueId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let game_mode = game.get("gameMode").and_then(|v| v.as_str()).unwrap_or("");
-            let (game_mode_key, game_mode_label) = map_queue_mode(queue_id, game_mode);
+            let (game_mode_key, game_mode_label) = map_queue_mode_for_locale(queue_id, game_mode, locale);
 
             let champion_id = participant
                 .get("championId")
@@ -437,7 +533,13 @@ pub fn parse_recent_matches(
                 .unwrap_or(0) as i32;
             let (champion_name, champion_icon_url) = match cache.champions.get(&champion_id) {
                 Some(meta) => (meta.display_name.clone(), meta.icon_url.clone()),
-                None => (format!("Campeão {}", champion_id), String::new()),
+                None => (
+                    match locale {
+                        AppLocale::PtBr => format!("Campeão {}", champion_id),
+                        AppLocale::EnUs => format!("Champion {}", champion_id),
+                    },
+                    String::new(),
+                ),
             };
 
             let spell1_id = participant
@@ -449,12 +551,12 @@ pub fn parse_recent_matches(
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0) as i32;
             let spell1_icon_url = if spell1_id > 0 {
-                resolve_spell_metadata(cache, spell1_id).icon_url
+                resolve_spell_metadata_for_locale(cache, spell1_id, locale).icon_url
             } else {
                 String::new()
             };
             let spell2_icon_url = if spell2_id > 0 {
-                resolve_spell_metadata(cache, spell2_id).icon_url
+                resolve_spell_metadata_for_locale(cache, spell2_id, locale).icon_url
             } else {
                 String::new()
             };
@@ -560,8 +662,19 @@ pub fn parse_recent_matches(
     matches
 }
 
+/// Parses LCU match history JSON, excludes Practice Tool matches, and enriches up to `limit` matches.
+pub fn parse_recent_matches(
+    history_json: &serde_json::Value,
+    summoner_id: u64,
+    cache: &DataDragonCache,
+    limit: usize,
+) -> Vec<RecentMatchInfo> {
+    parse_recent_matches_for_locale(history_json, summoner_id, cache, limit, AppLocale::PtBr)
+}
+
 /// Fetches and assembles the full `PlayerProfile` from an active LCU connection + DataDragon cache.
 pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, String> {
+    let locale = crate::lcu_injector::get_active_locale();
     let (summoner, puuid) = conn.get_current_summoner_with_puuid().await?;
     let http_client = build_provider::shared_http_client();
 
@@ -569,8 +682,8 @@ pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, 
         version: "16.22.1".to_string(),
         ..Default::default()
     };
-    let cache = match build_provider::get_or_init_ddragon_cache(http_client).await {
-        Ok(c) => c.clone(),
+    let cache = match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
+        Ok(c) => c.as_ref().clone(),
         Err(_) => default_cache,
     };
 
@@ -593,8 +706,8 @@ pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, 
 
     let ranked_stats = ranked_res
         .as_ref()
-        .map(parse_ranked_stats)
-        .unwrap_or_else(|_| parse_ranked_stats(&serde_json::Value::Null));
+        .map(|val| parse_ranked_stats_for_locale(val, locale))
+        .unwrap_or_else(|_| parse_ranked_stats_for_locale(&serde_json::Value::Null, locale));
 
     let top_masteries = masteries_res
         .as_ref()
@@ -603,7 +716,7 @@ pub async fn load_player_profile(conn: &LcuConnection) -> Result<PlayerProfile, 
 
     let recent_matches = history_res
         .as_ref()
-        .map(|val| parse_recent_matches(val, summoner.summoner_id, &cache, 10))
+        .map(|val| parse_recent_matches_for_locale(val, summoner.summoner_id, &cache, 10, locale))
         .unwrap_or_default();
 
     let profile_icon_url = if !cache.version.is_empty() {
@@ -849,5 +962,25 @@ mod tests {
         assert_eq!(parsed[0].cs, 195);
         assert_eq!(parsed[0].item_ids.len(), 6);
         assert_eq!(parsed[0].double_kills, 1);
+    }
+
+    #[test]
+    fn test_profile_localization_for_en_us() {
+        assert_eq!(
+            translate_ranked_tier_for_locale("EMERALD", AppLocale::EnUs),
+            "Emerald"
+        );
+        assert_eq!(
+            translate_ranked_tier_for_locale("NONE", AppLocale::EnUs),
+            "Unranked"
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(1400, "", AppLocale::EnUs).1,
+            "Ultimate Spellbook"
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(1300, "", AppLocale::EnUs).1,
+            "Nexus Blitz"
+        );
     }
 }

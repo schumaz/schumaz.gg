@@ -15,7 +15,7 @@ pub async fn get_ranked_tier_list(
         region.as_deref(),
         tier.as_deref(),
         patch.as_deref(),
-        ddragon,
+        &ddragon,
     )
     .await
 }

@@ -1,46 +1,77 @@
 ﻿use super::items::*;
 use super::models::*;
 use crate::lcu_injector::FlashKeyPreference;
+use crate::models::AppLocale;
 use std::collections::HashMap;
+use std::sync::{Arc, OnceLock, RwLock};
 
 pub const DDRAGON_BASE_URL: &str = "https://ddragon.leagueoflegends.com";
-pub static DDRAGON_CACHE: tokio::sync::OnceCell<DataDragonCache> =
-    tokio::sync::OnceCell::const_new();
 
-/// Returns metadata for a known stat shard ID if valid.
-pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
-    let (name, icon) = match id {
+pub static DDRAGON_CACHE: OnceLock<RwLock<HashMap<AppLocale, Arc<DataDragonCache>>>> =
+    OnceLock::new();
+static DDRAGON_FETCH_MUTEX: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+pub fn get_ddragon_cache_store() -> &'static RwLock<HashMap<AppLocale, Arc<DataDragonCache>>> {
+    DDRAGON_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn get_ddragon_fetch_mutex() -> &'static tokio::sync::Mutex<()> {
+    DDRAGON_FETCH_MUTEX.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+/// Returns metadata for a known stat shard ID localized for `locale`.
+pub fn get_stat_shard_metadata_for_locale(id: i32, locale: AppLocale) -> Option<RuneMetadata> {
+    let (pt_name, en_name, icon) = match id {
         5008 => (
             "Força Adaptativa",
+            "Adaptive Force",
             "perk-images/StatMods/StatModsAdaptiveForceIcon.png",
         ),
         5005 => (
             "Velocidade de Ataque",
+            "Attack Speed",
             "perk-images/StatMods/StatModsAttackSpeedIcon.png",
         ),
         5007 => (
             "Aceleração de Habilidade",
+            "Ability Haste",
             "perk-images/StatMods/StatModsCDRScalingIcon.png",
         ),
-        5002 => ("Armadura", "perk-images/StatMods/StatModsArmorIcon.png"),
+        5002 => (
+            "Armadura",
+            "Armor",
+            "perk-images/StatMods/StatModsArmorIcon.png",
+        ),
         5003 => (
             "Resistência Mágica",
+            "Magic Resist",
             "perk-images/StatMods/StatModsMagicResIcon.png",
         ),
         5001 | 5013 => (
             "Vida Escalonável",
+            "Health Scaling",
             "perk-images/StatMods/StatModsHealthScalingIcon.png",
         ),
         5010 => (
             "Velocidade de Movimento",
+            "Move Speed",
             "perk-images/StatMods/StatModsMovementSpeedIcon.png",
         ),
-        5011 => ("Vida", "perk-images/StatMods/StatModsHealthPlusIcon.png"),
+        5011 => (
+            "Vida",
+            "Health",
+            "perk-images/StatMods/StatModsHealthPlusIcon.png",
+        ),
         5012 => (
             "Tenacidade",
+            "Tenacity and Slow Resist",
             "perk-images/StatMods/StatModsTenacityIcon.png",
         ),
         _ => return None,
+    };
+    let name = match locale {
+        AppLocale::PtBr => pt_name,
+        AppLocale::EnUs => en_name,
     };
     Some(RuneMetadata {
         id,
@@ -50,37 +81,63 @@ pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
     })
 }
 
-/// Resolves rune or shard metadata from the DataDragon runes cache or shard catalog.
-pub fn resolve_rune_metadata(runes_map: &HashMap<i32, RuneMetadata>, perk_id: i32) -> RuneMetadata {
+/// Returns metadata for a known stat shard ID if valid (PT-BR default fallback).
+pub fn get_stat_shard_metadata(id: i32) -> Option<RuneMetadata> {
+    get_stat_shard_metadata_for_locale(id, AppLocale::PtBr)
+}
+
+/// Resolves rune or shard metadata from the DataDragon runes cache or shard catalog for `locale`.
+pub fn resolve_rune_metadata_for_locale(
+    runes_map: &HashMap<i32, RuneMetadata>,
+    perk_id: i32,
+    locale: AppLocale,
+) -> RuneMetadata {
     if let Some(meta) = runes_map.get(&perk_id) {
         return meta.clone();
     }
-    if let Some(shard) = get_stat_shard_metadata(perk_id) {
+    if let Some(shard) = get_stat_shard_metadata_for_locale(perk_id, locale) {
         return shard;
     }
+    let fallback_name = match locale {
+        AppLocale::PtBr => format!("Runa {}", perk_id),
+        AppLocale::EnUs => format!("Rune {}", perk_id),
+    };
     RuneMetadata {
         id: perk_id,
         key: format!("perk_{}", perk_id),
-        name: format!("Runa {}", perk_id),
+        name: fallback_name,
         icon_url: String::new(),
     }
 }
 
-/// Resolves summoner spell metadata and official Riot CDN icon (official PT-BR fallback).
-pub fn get_spell_metadata(version: &str, spell_id: i32) -> SpellMetadata {
-    let (name, icon_name) = match spell_id {
-        4 => ("Flash", "SummonerFlash"),
-        14 => ("Incendiar", "SummonerDot"),
-        12 => ("Teleporte", "SummonerTeleport"),
-        11 => ("Golpear", "SummonerSmite"),
-        7 => ("Curar", "SummonerHeal"),
-        21 => ("Barreira", "SummonerBarrier"),
-        3 => ("Exaustão", "SummonerExhaust"),
-        6 => ("Fantasma", "SummonerHaste"),
-        1 => ("Purificar", "SummonerBoost"),
-        13 => ("Clareza", "SummonerMana"),
-        32 => ("Marca", "SummonerSnowball"),
-        _ => ("Feitiço", "SummonerFlash"),
+/// Resolves rune or shard metadata from the DataDragon runes cache or shard catalog.
+pub fn resolve_rune_metadata(runes_map: &HashMap<i32, RuneMetadata>, perk_id: i32) -> RuneMetadata {
+    resolve_rune_metadata_for_locale(runes_map, perk_id, AppLocale::PtBr)
+}
+
+/// Resolves summoner spell metadata and official Riot CDN icon localized for `locale`.
+pub fn get_spell_metadata_for_locale(
+    version: &str,
+    spell_id: i32,
+    locale: AppLocale,
+) -> SpellMetadata {
+    let (pt_name, en_name, icon_name) = match spell_id {
+        4 => ("Flash", "Flash", "SummonerFlash"),
+        14 => ("Incendiar", "Ignite", "SummonerDot"),
+        12 => ("Teleporte", "Teleport", "SummonerTeleport"),
+        11 => ("Golpear", "Smite", "SummonerSmite"),
+        7 => ("Curar", "Heal", "SummonerHeal"),
+        21 => ("Barreira", "Barrier", "SummonerBarrier"),
+        3 => ("Exaustão", "Exhaust", "SummonerExhaust"),
+        6 => ("Fantasma", "Ghost", "SummonerHaste"),
+        1 => ("Purificar", "Cleanse", "SummonerBoost"),
+        13 => ("Clareza", "Clarity", "SummonerMana"),
+        32 => ("Marca", "Mark", "SummonerSnowball"),
+        _ => ("Feitiço", "Spell", "SummonerFlash"),
+    };
+    let name = match locale {
+        AppLocale::PtBr => pt_name,
+        AppLocale::EnUs => en_name,
     };
     SpellMetadata {
         id: spell_id,
@@ -92,16 +149,29 @@ pub fn get_spell_metadata(version: &str, spell_id: i32) -> SpellMetadata {
     }
 }
 
-/// Resolves summoner spell metadata preferring DataDragon `pt_BR/summoner.json` when available,
-/// falling back to the built-in official PT-BR catalog.
-pub fn resolve_spell_metadata(cache: &DataDragonCache, spell_id: i32) -> SpellMetadata {
+/// Resolves summoner spell metadata and official Riot CDN icon (official PT-BR fallback).
+pub fn get_spell_metadata(version: &str, spell_id: i32) -> SpellMetadata {
+    get_spell_metadata_for_locale(version, spell_id, AppLocale::PtBr)
+}
+
+/// Resolves summoner spell metadata preferring DataDragon `{locale}/summoner.json` when available.
+pub fn resolve_spell_metadata_for_locale(
+    cache: &DataDragonCache,
+    spell_id: i32,
+    locale: AppLocale,
+) -> SpellMetadata {
     if let Some(meta) = cache.spells.get(&spell_id) {
         return meta.clone();
     }
-    get_spell_metadata(&cache.version, spell_id)
+    get_spell_metadata_for_locale(&cache.version, spell_id, locale)
 }
 
-/// Parses DataDragon `pt_BR/summoner.json` into a lookup map keyed by numeric spell ID.
+/// Resolves summoner spell metadata preferring DataDragon `summoner.json` when available.
+pub fn resolve_spell_metadata(cache: &DataDragonCache, spell_id: i32) -> SpellMetadata {
+    resolve_spell_metadata_for_locale(cache, spell_id, AppLocale::PtBr)
+}
+
+/// Parses DataDragon `{locale}/summoner.json` into a lookup map keyed by numeric spell ID.
 pub fn parse_ddragon_summoners(
     summoners_json: &serde_json::Value,
     version: &str,
@@ -143,12 +213,35 @@ pub fn parse_ddragon_summoners(
     Ok(map)
 }
 
+/// Translates item block titles and build option labels according to `locale`.
+pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
+    if locale != AppLocale::EnUs {
+        return;
+    }
+    for block in &mut build.item_blocks {
+        block.title = match block.title.as_str() {
+            "Itens Iniciais" => "Starter Items".to_string(),
+            "Primeiros 3 Itens" => "First 3 Items".to_string(),
+            "3 Botas Mais Feitas" => "Top 3 Boots".to_string(),
+            "Build Final" => "Final Build".to_string(),
+            "Itens Situacionais / Úteis" => "Situational / Utility Items".to_string(),
+            _ => block.title.clone(),
+        };
+    }
+    for opt in &mut build.build_options {
+        if opt.name == "Build 1 (Mais Feita)" {
+            opt.name = "Build 1 (Most Popular)".to_string();
+        }
+    }
+}
+
 /// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots
-/// and enriches `spells` and `spell_choices` using DataDragon cache.
-pub fn apply_build_spells_with_preference(
+/// and enriches `spells` and `spell_choices` using DataDragon cache and `locale`.
+pub fn apply_build_spells_with_preference_and_locale(
     build: &mut ChampionBuild,
     cache: &DataDragonCache,
     flash_key: FlashKeyPreference,
+    locale: AppLocale,
 ) {
     let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
     let (s1, s2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
@@ -161,8 +254,8 @@ pub fn apply_build_spells_with_preference(
     build.spell2_id = s2;
 
     build.spells = vec![
-        resolve_spell_metadata(cache, build.spell1_id),
-        resolve_spell_metadata(cache, build.spell2_id),
+        resolve_spell_metadata_for_locale(cache, build.spell1_id, locale),
+        resolve_spell_metadata_for_locale(cache, build.spell2_id, locale),
     ];
 
     if build.spell_choices.is_empty() {
@@ -191,24 +284,33 @@ pub fn apply_build_spells_with_preference(
             14
         };
         build.spell_choices = vec![
-            resolve_spell_metadata(cache, non_primary),
-            resolve_spell_metadata(cache, second_alt),
+            resolve_spell_metadata_for_locale(cache, non_primary, locale),
+            resolve_spell_metadata_for_locale(cache, second_alt, locale),
         ];
     } else {
         build.spell_choices = build
             .spell_choices
             .iter()
-            .map(|s| resolve_spell_metadata(cache, s.id))
+            .map(|s| resolve_spell_metadata_for_locale(cache, s.id, locale))
             .collect();
     }
 }
 
-/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items)
-/// using an explicit `FlashKeyPreference`.
-pub fn enrich_build_with_ddragon_with_flash_key(
+/// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots.
+pub fn apply_build_spells_with_preference(
     build: &mut ChampionBuild,
     cache: &DataDragonCache,
     flash_key: FlashKeyPreference,
+) {
+    apply_build_spells_with_preference_and_locale(build, cache, flash_key, AppLocale::PtBr);
+}
+
+/// Enriches a ChampionBuild with visual assets from DataDragon using explicit `FlashKeyPreference` and `AppLocale`.
+pub fn enrich_build_with_ddragon_with_flash_key_and_locale(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    flash_key: FlashKeyPreference,
+    locale: AppLocale,
 ) {
     if let Some(champ) = cache.champions.get(&build.champion_id) {
         build.champion_icon_url = champ.icon_url.clone();
@@ -234,7 +336,7 @@ pub fn enrich_build_with_ddragon_with_flash_key(
     build.perks = build
         .selected_perk_ids
         .iter()
-        .map(|id| resolve_rune_metadata(&cache.runes, *id))
+        .map(|id| resolve_rune_metadata_for_locale(&cache.runes, *id, locale))
         .collect();
 
     for page in &mut build.rune_pages {
@@ -249,11 +351,11 @@ pub fn enrich_build_with_ddragon_with_flash_key(
         page.perks = page
             .selected_perk_ids
             .iter()
-            .map(|id| resolve_rune_metadata(&cache.runes, *id))
+            .map(|id| resolve_rune_metadata_for_locale(&cache.runes, *id, locale))
             .collect();
     }
 
-    apply_build_spells_with_preference(build, cache, flash_key);
+    apply_build_spells_with_preference_and_locale(build, cache, flash_key, locale);
 
     for block in &mut build.item_blocks {
         block.item_icon_urls = block
@@ -326,12 +428,29 @@ pub fn enrich_build_with_ddragon_with_flash_key(
             })
             .collect();
     }
+
+    localize_build_labels(build, locale);
 }
 
-/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items).
+/// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items)
+/// using an explicit `FlashKeyPreference` (PT-BR default for backwards compatibility in tests).
+pub fn enrich_build_with_ddragon_with_flash_key(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    flash_key: FlashKeyPreference,
+) {
+    enrich_build_with_ddragon_with_flash_key_and_locale(build, cache, flash_key, AppLocale::PtBr);
+}
+
+/// Enriches a ChampionBuild with visual assets from DataDragon using the active user preferences & locale.
 pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCache) {
     let prefs = crate::lcu_injector::get_user_preferences();
-    enrich_build_with_ddragon_with_flash_key(build, cache, prefs.flash_key);
+    enrich_build_with_ddragon_with_flash_key_and_locale(
+        build,
+        cache,
+        prefs.flash_key,
+        prefs.language,
+    );
 }
 
 /// Parses the latest DataDragon version string from `/api/versions.json`.
@@ -580,10 +699,11 @@ pub fn parse_ddragon_champion_by_id(
     })
 }
 
-/// Loads the DataDragonCache from a specific base URL (mockable in tests).
-pub async fn load_ddragon_cache_from_base_url(
+/// Loads the DataDragonCache for a specific `locale` from a base URL (mockable in tests).
+pub async fn load_ddragon_cache_from_base_url_for_locale(
     client: &reqwest::Client,
     base_url: &str,
+    locale: AppLocale,
 ) -> Result<DataDragonCache, String> {
     // 1. Fetch latest version
     let versions_url = format!("{}/api/versions.json", base_url);
@@ -597,12 +717,22 @@ pub async fn load_ddragon_cache_from_base_url(
         .map_err(|e| format!("Failed to parse versions.json: {}", e))?;
 
     let version = parse_latest_ddragon_version(&versions_res)?;
+    let dd_locale = locale.ddragon_code();
 
-    // 2. Fetch champions, runes, items, and summoner spells concurrently in pt_BR
-    let champions_url = format!("{}/cdn/{}/data/pt_BR/champion.json", base_url, version);
-    let runes_url = format!("{}/cdn/{}/data/pt_BR/runesReforged.json", base_url, version);
-    let items_url = format!("{}/cdn/{}/data/pt_BR/item.json", base_url, version);
-    let summoners_url = format!("{}/cdn/{}/data/pt_BR/summoner.json", base_url, version);
+    // 2. Fetch champions, runes, items, and summoner spells concurrently in target locale
+    let champions_url = format!(
+        "{}/cdn/{}/data/{}/champion.json",
+        base_url, version, dd_locale
+    );
+    let runes_url = format!(
+        "{}/cdn/{}/data/{}/runesReforged.json",
+        base_url, version, dd_locale
+    );
+    let items_url = format!("{}/cdn/{}/data/{}/item.json", base_url, version, dd_locale);
+    let summoners_url = format!(
+        "{}/cdn/{}/data/{}/summoner.json",
+        base_url, version, dd_locale
+    );
 
     let champions_fut = async {
         client
@@ -661,15 +791,47 @@ pub async fn load_ddragon_cache_from_base_url(
     })
 }
 
-/// Gets the cached DataDragon data or initializes it if not yet loaded.
+/// Loads the DataDragonCache from a specific base URL (PT-BR default for backwards compatibility).
+pub async fn load_ddragon_cache_from_base_url(
+    client: &reqwest::Client,
+    base_url: &str,
+) -> Result<DataDragonCache, String> {
+    load_ddragon_cache_from_base_url_for_locale(client, base_url, AppLocale::PtBr).await
+}
+
+/// Gets the cached DataDragon data for `locale` or initializes it from Riot's CDN.
+pub async fn get_or_init_ddragon_cache_for_locale(
+    client: &reqwest::Client,
+    locale: AppLocale,
+) -> Result<Arc<DataDragonCache>, String> {
+    if let Ok(guard) = get_ddragon_cache_store().read()
+        && let Some(cached) = guard.get(&locale)
+    {
+        return Ok(Arc::clone(cached));
+    }
+
+    let _init_guard = get_ddragon_fetch_mutex().lock().await;
+    if let Ok(guard) = get_ddragon_cache_store().read()
+        && let Some(cached) = guard.get(&locale)
+    {
+        return Ok(Arc::clone(cached));
+    }
+
+    let loaded = Arc::new(
+        load_ddragon_cache_from_base_url_for_locale(client, DDRAGON_BASE_URL, locale).await?,
+    );
+    if let Ok(mut guard) = get_ddragon_cache_store().write() {
+        guard.insert(locale, Arc::clone(&loaded));
+    }
+    Ok(loaded)
+}
+
+/// Gets the cached DataDragon data for the currently active locale or initializes it if not yet loaded.
 pub async fn get_or_init_ddragon_cache(
     client: &reqwest::Client,
-) -> Result<&'static DataDragonCache, String> {
-    DDRAGON_CACHE
-        .get_or_try_init(|| async {
-            load_ddragon_cache_from_base_url(client, DDRAGON_BASE_URL).await
-        })
-        .await
+) -> Result<Arc<DataDragonCache>, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    get_or_init_ddragon_cache_for_locale(client, locale).await
 }
 
 #[cfg(test)]

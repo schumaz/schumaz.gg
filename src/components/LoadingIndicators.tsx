@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n";
+
 interface LoadingDotsProps {
   variant?: "accent" | "warning" | "inline";
   size?: "sm" | "md";
@@ -35,13 +37,15 @@ export function LoadingBar({
   className = "",
   testId,
 }: LoadingBarProps) {
+  const { t } = useTranslation();
+
   if (!active) return null;
 
   return (
     <div
       className={`loading-bar-track ${className}`.trim()}
       role="progressbar"
-      aria-label="Carregando"
+      aria-label={t("common.loading")}
       aria-busy="true"
       data-testid={testId}
     >

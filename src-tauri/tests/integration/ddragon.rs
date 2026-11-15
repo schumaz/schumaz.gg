@@ -161,3 +161,84 @@ async fn test_load_ddragon_cache_loads_pt_br_summoner_spells() {
             .ends_with("/cdn/16.22.1/img/spell/SummonerSnowball.png")
     );
 }
+
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn test_load_ddragon_cache_loads_en_us_locale() {
+    let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+    let mock_server = MockServer::start().await;
+
+    let versions_json = serde_json::json!(["16.22.1"]);
+    let champion_json = serde_json::json!({
+        "data": {
+            "MonkeyKing": {
+                "id": "MonkeyKing",
+                "key": "62",
+                "name": "Wukong",
+                "image": { "full": "MonkeyKing.png" }
+            }
+        }
+    });
+    let runes_json = serde_json::json!([
+        {
+            "id": 8000,
+            "key": "Precision",
+            "icon": "Precision.png",
+            "name": "Precision",
+            "slots": []
+        }
+    ]);
+    let summoner_json = serde_json::json!({
+        "data": {
+            "SummonerDot": {
+                "id": "SummonerDot",
+                "name": "Ignite",
+                "key": "14",
+                "image": { "full": "SummonerDot.png" }
+            },
+            "SummonerSnowball": {
+                "id": "SummonerSnowball",
+                "name": "Mark",
+                "key": "32",
+                "image": { "full": "SummonerSnowball.png" }
+            }
+        }
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/api/versions.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(versions_json))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.22.1/data/en_US/champion.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(champion_json))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.22.1/data/en_US/runesReforged.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(runes_json))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.22.1/data/en_US/summoner.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(summoner_json))
+        .mount(&mock_server)
+        .await;
+
+    let client = reqwest::Client::new();
+    let cache = load_ddragon_cache_from_base_url_for_locale(
+        &client,
+        &mock_server.uri(),
+        schumazgg_lib::models::AppLocale::EnUs,
+    )
+    .await
+    .expect("Loading en_US ddragon cache should succeed");
+
+    assert_eq!(cache.runes.get(&8000).unwrap().name, "Precision");
+    assert_eq!(cache.spells.get(&14).unwrap().name, "Ignite");
+    assert_eq!(cache.spells.get(&32).unwrap().name, "Mark");
+}

@@ -1,7 +1,9 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { UserPreferences } from "../types";
+import { AppLocale, UserPreferences } from "../types";
 import { clampProfileBlur } from "../hooks/usePreferences";
+import { useTranslation } from "../i18n";
+import { LanguageFlag } from "./LanguageFlag";
 
 export function isBlurSliderDisabled(wallpaperVisible: boolean): boolean {
   return !wallpaperVisible;
@@ -13,6 +15,8 @@ interface SettingsTabProps {
     key: K,
     value: UserPreferences[K]
   ) => void;
+  locale?: AppLocale;
+  onChangeLanguage?: (locale: AppLocale) => void;
   profileBlur?: number;
   onProfileBlurChange?: (blurPercent: number) => void;
   wallpaperVisible?: boolean;
@@ -27,6 +31,8 @@ interface SettingsTabProps {
 export function SettingsTab({
   preferences,
   onUpdatePreference,
+  locale: propLocale,
+  onChangeLanguage,
   profileBlur = 10,
   onProfileBlurChange,
   wallpaperVisible = true,
@@ -37,6 +43,9 @@ export function SettingsTab({
   onRestartApp,
   isActive = true,
 }: SettingsTabProps) {
+  const { t, locale: contextLocale, setLocale } = useTranslation();
+  const activeLocale = propLocale ?? preferences.language ?? contextLocale;
+
   const [isEditingBlur, setIsEditingBlur] = useState(false);
   const [draftBlur, setDraftBlur] = useState(String(profileBlur));
   const [showDisablePatchProtectionModal, setShowDisablePatchProtectionModal] = useState(false);
@@ -122,6 +131,15 @@ export function SettingsTab({
     setIsEditingBlur(false);
   };
 
+  const handleSelectLanguage = (nextLocale: AppLocale) => {
+    if (onChangeLanguage) {
+      onChangeLanguage(nextLocale);
+    } else {
+      setLocale(nextLocale);
+      onUpdatePreference("language", nextLocale);
+    }
+  };
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -129,16 +147,14 @@ export function SettingsTab({
       aria-hidden={!isActive}
     >
       <div className="settings-container">
-        {/* Group 1: Perfil (First Tab) */}
+        {/* Group 1: Profile */}
         <div className="settings-section-group" data-testid="settings-group-profile">
-          <h2 className="settings-section-title">Perfil</h2>
+          <h2 className="settings-section-title">{t("settings.profileGroupTitle")}</h2>
 
           <section className="card settings-group-card" data-testid="settings-subgroup-appearance">
             <div className="settings-group-header">
-              <h3>Aparência do Perfil</h3>
-              <p className="card-desc">
-                Ajuste a intensidade do desfoque e a exibição do plano de fundo da aba Perfil.
-              </p>
+              <h3>{t("settings.profileAppearanceTitle")}</h3>
+              <p className="card-desc">{t("settings.profileAppearanceDesc")}</p>
             </div>
 
             <div className="settings-list">
@@ -147,11 +163,11 @@ export function SettingsTab({
                 aria-disabled={blurDisabled}
               >
                 <div className="settings-item-text">
-                  <span className="settings-item-title">Nível de Desfoque (Blur)</span>
+                  <span className="settings-item-title">{t("settings.blurTitle")}</span>
                   <span className="settings-item-desc">
                     {blurDisabled
-                      ? "Ative a opção Fundo Visível para ajustar o desfoque."
-                      : "Deslize ou clique no número para digitar entre 0% e 100%."}
+                      ? t("settings.blurDescDisabled")
+                      : t("settings.blurDescEnabled")}
                   </span>
                 </div>
                 <div className="settings-slider-control">
@@ -164,12 +180,8 @@ export function SettingsTab({
                     disabled={blurDisabled}
                     onChange={(e) => handleProfileBlurChange(Number(e.target.value))}
                     className="blur-range-slider"
-                    title={
-                      blurDisabled
-                        ? "Ative a opção Fundo Visível para ajustar o desfoque"
-                        : undefined
-                    }
-                    aria-label="Nível de Desfoque da Interface do Perfil"
+                    title={blurDisabled ? t("settings.blurDisabledTitle") : undefined}
+                    aria-label={t("settings.blurSliderAria")}
                     data-testid="profile-blur-slider"
                   />
                   {isEditingBlur && !blurDisabled ? (
@@ -200,7 +212,7 @@ export function SettingsTab({
                           }
                         }}
                         className="slider-value-input"
-                        aria-label="Digitar nível de desfoque em porcentagem"
+                        aria-label={t("settings.blurInputAria")}
                         data-testid="profile-blur-input"
                       />
                       <span className="slider-value-percent">%</span>
@@ -213,10 +225,10 @@ export function SettingsTab({
                       disabled={blurDisabled}
                       title={
                         blurDisabled
-                          ? "Ative a opção Fundo Visível para ajustar o desfoque"
-                          : "Clique para digitar o valor"
+                          ? t("settings.blurDisabledTitle")
+                          : t("settings.blurEditTitle")
                       }
-                      aria-label="Editar nível de desfoque em porcentagem"
+                      aria-label={t("settings.blurEditAria")}
                       data-testid="profile-blur-value"
                     >
                       {profileBlur}%
@@ -227,15 +239,13 @@ export function SettingsTab({
 
               <label className="settings-item">
                 <div className="settings-item-text">
-                  <span className="settings-item-title">Fundo Visível</span>
-                  <span className="settings-item-desc">
-                    Exibe o papel de parede do seu perfil em tela inteira na aba Perfil.
-                  </span>
+                  <span className="settings-item-title">{t("settings.wallpaperTitle")}</span>
+                  <span className="settings-item-desc">{t("settings.wallpaperDesc")}</span>
                 </div>
                 <input
                   type="checkbox"
                   className="toggle-switch"
-                  aria-label="Fundo Visível"
+                  aria-label={t("settings.wallpaperTitle")}
                   data-testid="wallpaper-visible-toggle"
                   checked={wallpaperVisible}
                   onChange={(e) => onWallpaperVisibleChange?.(e.target.checked)}
@@ -245,25 +255,27 @@ export function SettingsTab({
           </section>
         </div>
 
-        {/* Group 2: Runas (Second Tab — single unified island) */}
+        {/* Group 2: Runes */}
         <div className="settings-section-group" data-testid="settings-group-runes">
-          <h2 className="settings-section-title">Runas</h2>
+          <h2 className="settings-section-title">{t("settings.runesGroupTitle")}</h2>
 
           <section
             className="card settings-group-card settings-runes-card"
             data-testid="settings-subgroup-runes"
           >
-            {/* Subsection 2.1: Posicionamento do Flash */}
+            {/* Subsection 2.1: Flash Placement */}
             <div className="settings-subsection" data-testid="settings-subgroup-flash">
               <div className="settings-group-header">
-                <h3>Posicionamento do Flash</h3>
-                <p className="card-desc">
-                  Tecla designada para o feitiço Flash ao aplicar as recomendações.
-                </p>
+                <h3>{t("settings.flashTitle")}</h3>
+                <p className="card-desc">{t("settings.flashDesc")}</p>
               </div>
 
               <div className="segmented-control-container">
-                <div className="segmented-control" role="group" aria-label="Preferência de Tecla do Flash">
+                <div
+                  className="segmented-control"
+                  role="group"
+                  aria-label={t("settings.flashAria")}
+                >
                   <button
                     type="button"
                     className={`segment-btn ${preferences.flashKey === "D" ? "active" : ""}`}
@@ -288,27 +300,23 @@ export function SettingsTab({
 
             <div className="settings-card-divider" />
 
-            {/* Subsection 2.2: Injeção Automática */}
+            {/* Subsection 2.2: Auto Injection */}
             <div className="settings-subsection" data-testid="settings-subgroup-auto-inject">
               <div className="settings-group-header">
-                <h3>Injeção Automática</h3>
-                <p className="card-desc">
-                  Sincronização e aplicação automática de dados no cliente durante a seleção de campeões.
-                </p>
+                <h3>{t("settings.autoInjectTitle")}</h3>
+                <p className="card-desc">{t("settings.autoInjectDesc")}</p>
               </div>
 
               <div className="settings-list">
                 <label className="settings-item">
                   <div className="settings-item-text">
-                    <span className="settings-item-title">Injetar Runas Automaticamente</span>
-                    <span className="settings-item-desc">
-                      Aplica a página de runas recomendada diretamente na conta do jogador.
-                    </span>
+                    <span className="settings-item-title">{t("settings.autoRunesTitle")}</span>
+                    <span className="settings-item-desc">{t("settings.autoRunesDesc")}</span>
                   </div>
                   <input
                     type="checkbox"
                     className="toggle-switch"
-                    aria-label="Injetar Runas Automaticamente"
+                    aria-label={t("settings.autoRunesTitle")}
                     checked={preferences.autoInjectRunes}
                     onChange={(e) => onUpdatePreference("autoInjectRunes", e.target.checked)}
                   />
@@ -316,15 +324,13 @@ export function SettingsTab({
 
                 <label className="settings-item">
                   <div className="settings-item-text">
-                    <span className="settings-item-title">Injetar Feitiços de Invocador</span>
-                    <span className="settings-item-desc">
-                      Configura os feitiços de invocador otimizados para a rota e fila da partida.
-                    </span>
+                    <span className="settings-item-title">{t("settings.autoSpellsTitle")}</span>
+                    <span className="settings-item-desc">{t("settings.autoSpellsDesc")}</span>
                   </div>
                   <input
                     type="checkbox"
                     className="toggle-switch"
-                    aria-label="Injetar Feitiços de Invocador"
+                    aria-label={t("settings.autoSpellsTitle")}
                     checked={preferences.autoInjectSpells}
                     onChange={(e) => onUpdatePreference("autoInjectSpells", e.target.checked)}
                   />
@@ -332,15 +338,13 @@ export function SettingsTab({
 
                 <label className="settings-item">
                   <div className="settings-item-text">
-                    <span className="settings-item-title">Injetar Conjuntos de Itens na Loja</span>
-                    <span className="settings-item-desc">
-                      Gera blocos de itens recomendados na loja in-game da partida.
-                    </span>
+                    <span className="settings-item-title">{t("settings.autoItemsTitle")}</span>
+                    <span className="settings-item-desc">{t("settings.autoItemsDesc")}</span>
                   </div>
                   <input
                     type="checkbox"
                     className="toggle-switch"
-                    aria-label="Injetar Conjuntos de Itens na Loja"
+                    aria-label={t("settings.autoItemsTitle")}
                     checked={preferences.autoInjectItems}
                     onChange={(e) => onUpdatePreference("autoInjectItems", e.target.checked)}
                   />
@@ -350,27 +354,27 @@ export function SettingsTab({
 
             <div className="settings-card-divider" />
 
-            {/* Subsection 2.3: Proteção de Patch (48h) */}
+            {/* Subsection 2.3: Patch Protection (48h) */}
             <div className="settings-subsection" data-testid="settings-subgroup-patch-protection">
               <div className="settings-group-header">
-                <h3>Proteção de Patch (48h)</h3>
-                <p className="card-desc">
-                  Controle de integridade na coleta automática de dados ao lançar um novo patch.
-                </p>
+                <h3>{t("settings.patchProtectionSectionTitle")}</h3>
+                <p className="card-desc">{t("settings.patchProtectionSectionDesc")}</p>
               </div>
 
               <div className="settings-list">
                 <label className="settings-item">
                   <div className="settings-item-text">
-                    <span className="settings-item-title">Proteção de 48h para Novos Patches</span>
+                    <span className="settings-item-title">
+                      {t("settings.patchProtectionToggleTitle")}
+                    </span>
                     <span className="settings-item-desc">
-                      Mantém o patch anterior consolidado nas primeiras 48 horas após um novo patch quando o volume de dados ainda é baixo.
+                      {t("settings.patchProtectionToggleDesc")}
                     </span>
                   </div>
                   <input
                     type="checkbox"
                     className="toggle-switch"
-                    aria-label="Proteção de 48h para Novos Patches"
+                    aria-label={t("settings.patchProtectionToggleTitle")}
                     data-testid="patch-48h-protection-toggle"
                     checked={patch48hProtection}
                     onChange={(e) => {
@@ -387,33 +391,69 @@ export function SettingsTab({
           </section>
         </div>
 
-        {/* Group 3: Diversos */}
+        {/* Group 3: Miscellaneous */}
         <div className="settings-section-group" data-testid="settings-group-misc">
-          <h2 className="settings-section-title">Diversos</h2>
+          <h2 className="settings-section-title">{t("settings.miscGroupTitle")}</h2>
 
           <section className="card settings-group-card" data-testid="settings-subgroup-misc">
+            {/* Subsection 3.1: Language */}
+            <div className="settings-subsection" data-testid="settings-subgroup-language">
+              <div className="settings-group-header">
+                <h3>{t("settings.languageTitle")}</h3>
+                <p className="card-desc">{t("settings.languageDesc")}</p>
+              </div>
+
+              <div
+                className="settings-language-selector"
+                role="group"
+                aria-label={t("settings.languageAria")}
+              >
+                <button
+                  type="button"
+                  className={`settings-language-btn ${activeLocale === "pt_BR" ? "active" : ""}`}
+                  data-testid="settings-lang-pt_BR"
+                  aria-pressed={activeLocale === "pt_BR"}
+                  onClick={() => handleSelectLanguage("pt_BR")}
+                >
+                  <span className="settings-language-flag-wrap">
+                    <LanguageFlag locale="pt_BR" className="settings-language-flag" />
+                  </span>
+                  <span className="settings-language-label">{t("settings.languagePtBr")}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`settings-language-btn ${activeLocale === "en_US" ? "active" : ""}`}
+                  data-testid="settings-lang-en_US"
+                  aria-pressed={activeLocale === "en_US"}
+                  onClick={() => handleSelectLanguage("en_US")}
+                >
+                  <span className="settings-language-flag-wrap">
+                    <LanguageFlag locale="en_US" className="settings-language-flag" />
+                  </span>
+                  <span className="settings-language-label">{t("settings.languageEnUs")}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-card-divider" />
+
             <div className="settings-subsection" data-testid="settings-subgroup-graphics">
               <div className="settings-group-header">
-                <h3>Gráficos e Desempenho</h3>
-                <p className="card-desc">
-                  Controle o uso de aceleração por hardware para renderização da interface.
-                </p>
+                <h3>{t("settings.graphicsTitle")}</h3>
+                <p className="card-desc">{t("settings.graphicsDesc")}</p>
               </div>
 
               <div className="settings-list">
                 <label className="settings-item">
                   <div className="settings-item-text">
-                    <span className="settings-item-title">
-                      Renderização Acelerada por Hardware (GPU)
-                    </span>
-                    <span className="settings-item-desc">
-                      Usa a GPU para renderizar animações, transições e efeitos de desfoque com maior fluidez. Desative para economizar recursos gráficos ou evitar conflitos de driver.
-                    </span>
+                    <span className="settings-item-title">{t("settings.gpuTitle")}</span>
+                    <span className="settings-item-desc">{t("settings.gpuDesc")}</span>
                   </div>
                   <input
                     type="checkbox"
                     className="toggle-switch"
-                    aria-label="Renderização Acelerada por Hardware (GPU)"
+                    aria-label={t("settings.gpuTitle")}
                     data-testid="hardware-acceleration-toggle"
                     checked={hardwareAcceleration}
                     onChange={(e) => onHardwareAccelerationChange?.(e.target.checked)}
@@ -427,16 +467,14 @@ export function SettingsTab({
                   role="status"
                   data-testid="gpu-restart-banner"
                 >
-                  <span className="settings-restart-text">
-                    Reinicie o aplicativo para aplicar completamente a alteração de aceleração por GPU.
-                  </span>
+                  <span className="settings-restart-text">{t("settings.gpuRestartBanner")}</span>
                   <button
                     type="button"
                     className="settings-restart-btn"
                     data-testid="gpu-restart-btn"
                     onClick={() => onRestartApp?.()}
                   >
-                    Reiniciar agora
+                    {t("settings.gpuRestartBtn")}
                   </button>
                 </div>
               )}
@@ -446,26 +484,20 @@ export function SettingsTab({
 
             <div className="settings-subsection" data-testid="settings-subgroup-daily-missions">
               <div className="settings-group-header">
-                <h3>Missões e Objetivos</h3>
-                <p className="card-desc">
-                  Limpeza automática de notificações e indicadores de novidade em missões e objetivos no cliente do LoL.
-                </p>
+                <h3>{t("settings.missionsTitle")}</h3>
+                <p className="card-desc">{t("settings.missionsDesc")}</p>
               </div>
 
               <div className="settings-list">
                 <label className="settings-item">
                   <div className="settings-item-text">
-                    <span className="settings-item-title">
-                      Marcar Missões e Objetivos como Lidos Automaticamente
-                    </span>
-                    <span className="settings-item-desc">
-                      Marca automaticamente todas as missões e objetivos não lidos como vistos ao conectar e ao receber novas missões no cliente do LoL, zerando o contador de notificação.
-                    </span>
+                    <span className="settings-item-title">{t("settings.missionsToggleTitle")}</span>
+                    <span className="settings-item-desc">{t("settings.missionsToggleDesc")}</span>
                   </div>
                   <input
                     type="checkbox"
                     className="toggle-switch"
-                    aria-label="Marcar Missões e Objetivos como Lidos Automaticamente"
+                    aria-label={t("settings.missionsToggleTitle")}
                     data-testid="auto-mark-daily-missions-toggle"
                     checked={autoMarkDailyMissionsRead}
                     onChange={(e) =>
@@ -503,12 +535,13 @@ export function SettingsTab({
                   !
                 </span>
                 <h3 id="patch-48h-modal-title" className="settings-modal-title">
-                  Desativar Proteção de 48h?
+                  {t("settings.patchModalTitle")}
                 </h3>
               </div>
 
               <p id="patch-48h-modal-desc" className="settings-modal-desc">
-                <strong>NÃO é recomendado</strong> desativar essa opção, pois desfavorece o uso do app devido ao baixo volume de dados no início do patch.
+                <strong>{t("settings.patchModalStrong")}</strong>
+                {t("settings.patchModalBody")}
               </p>
 
               <div className="settings-modal-actions">
@@ -518,7 +551,7 @@ export function SettingsTab({
                   data-testid="patch-48h-revert-btn"
                   onClick={() => setShowDisablePatchProtectionModal(false)}
                 >
-                  Reverter
+                  {t("settings.patchModalRevert")}
                 </button>
                 <button
                   type="button"
@@ -529,7 +562,7 @@ export function SettingsTab({
                     onUpdatePreference("patch48hProtection", false);
                   }}
                 >
-                  Aceitar desativação
+                  {t("settings.patchModalAccept")}
                 </button>
               </div>
             </div>

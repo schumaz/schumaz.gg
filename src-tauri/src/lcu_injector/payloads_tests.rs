@@ -375,3 +375,66 @@ fn test_build_item_sets_payload_respects_core_and_final_selections() {
 
     clear_champion_selections();
 }
+
+#[test]
+fn test_build_item_sets_payload_respects_en_us_localized_block_titles() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
+    clear_champion_selections();
+    let build = ChampionBuild {
+        champion_id: 103,
+        champion_name: "Ahri".to_string(),
+        item_blocks: vec![
+            crate::build_provider::ItemBlock {
+                title: "Starter Items".to_string(),
+                item_ids: vec![1056, 2003],
+                item_icon_urls: vec![],
+            },
+            crate::build_provider::ItemBlock {
+                title: "First 3 Items".to_string(),
+                item_ids: vec![3118, 4645, 3089],
+                item_icon_urls: vec![],
+            },
+            crate::build_provider::ItemBlock {
+                title: "Top 3 Boots".to_string(),
+                item_ids: vec![3020, 3158, 3111],
+                item_icon_urls: vec![],
+            },
+            crate::build_provider::ItemBlock {
+                title: "Final Build".to_string(),
+                item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
+                item_icon_urls: vec![],
+            },
+            crate::build_provider::ItemBlock {
+                title: "Situational / Utility Items".to_string(),
+                item_ids: vec![3102, 3165],
+                item_icon_urls: vec![],
+            },
+        ],
+        build_options: vec![
+            crate::build_provider::UnifiedBuildOption {
+                name: "Build 1 (Most Popular)".to_string(),
+                core_item_ids: vec![3118, 4645, 3089],
+                final_item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
+                situational_item_ids: vec![3102, 3165],
+                ..Default::default()
+            },
+            crate::build_provider::UnifiedBuildOption {
+                name: "Build 2".to_string(),
+                core_item_ids: vec![3157, 3089, 4629],
+                final_item_ids: vec![3157, 3089, 4629, 3118, 3135, 3102],
+                situational_item_ids: vec![4646, 6653],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    set_selected_build(103, 1);
+    let payload = build_item_sets_payload(12345, &build);
+    let blocks = payload["itemSets"][0]["blocks"].as_array().unwrap();
+    assert_eq!(blocks[1]["items"][0]["id"], "3157");
+    assert_eq!(blocks[3]["items"][5]["id"], "3102");
+    assert_eq!(blocks[4]["items"][0]["id"], "4646");
+
+    clear_champion_selections();
+}

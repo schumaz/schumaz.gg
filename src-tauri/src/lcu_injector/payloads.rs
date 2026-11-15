@@ -1,10 +1,25 @@
-﻿use crate::build_provider::ChampionBuild;
-use serde_json::json;
-use super::preferences::FlashKeyPreference;
+﻿use super::preferences::FlashKeyPreference;
 use super::selections::get_champion_selections;
 use super::spell_rules::{apply_flash_key_preference, apply_jungle_smite_and_flash_preference};
+use crate::build_provider::ChampionBuild;
+use serde_json::json;
 
 pub const SCHUMAZ_PAGE_SUFFIX: &str = " | schumaz.gg";
+
+fn is_core_block_title(title: &str) -> bool {
+    title.contains("Primeiros 3 Itens") || title.contains("First 3 Items")
+}
+
+fn is_final_block_title(title: &str) -> bool {
+    title.contains("Build Final") || title.contains("Final Build")
+}
+
+fn is_situational_block_title(title: &str) -> bool {
+    title.contains("Itens Situacionais")
+        || title.contains("Úteis")
+        || title.contains("Uteis")
+        || title.contains("Situational")
+}
 
 /// Builds the JSON payload for creating/replacing a rune page from individual components.
 pub fn build_rune_page_payload_from_parts(
@@ -174,31 +189,29 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
     for block in &build.item_blocks {
         let mut item_ids = block.item_ids.clone();
 
-        // If unified build option is selected, use it for both Primeiros 3 Itens and Build Final
+        // If unified build option is selected, use it for both Core Trio and Final Build
         if let Some(sel) = selections.as_ref()
             && let Some(b_idx) = sel.build_index
             && b_idx < build.build_options.len()
         {
-            if block.title.contains("Primeiros 3 Itens") {
+            if is_core_block_title(&block.title) {
                 item_ids = build.build_options[b_idx].core_item_ids.clone();
-            } else if block.title.contains("Build Final") {
+            } else if is_final_block_title(&block.title) {
                 item_ids = build.build_options[b_idx].final_item_ids.clone();
-            } else if (block.title.contains("Itens Situacionais")
-                || block.title.contains("Úteis")
-                || block.title.contains("Uteis"))
+            } else if is_situational_block_title(&block.title)
                 && !build.build_options[b_idx].situational_item_ids.is_empty()
             {
                 item_ids = build.build_options[b_idx].situational_item_ids.clone();
             }
         } else {
             // Fallback for independent core / final build options
-            if block.title.contains("Primeiros 3 Itens")
+            if is_core_block_title(&block.title)
                 && let Some(sel) = selections.as_ref()
                 && let Some(core_idx) = sel.core_build_index
                 && core_idx < build.core_build_options.len()
             {
                 item_ids = build.core_build_options[core_idx].item_ids.clone();
-            } else if block.title.contains("Build Final")
+            } else if is_final_block_title(&block.title)
                 && let Some(sel) = selections.as_ref()
                 && let Some(final_idx) = sel.final_build_index
                 && final_idx < build.final_build_options.len()

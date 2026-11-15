@@ -1,16 +1,44 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AppLocale,
   DEFAULT_PREFERENCES,
   FlashKeyPreference,
+  LANGUAGE_STORAGE_KEY,
   PREFERENCES_STORAGE_KEY,
   UserPreferences,
   commands,
 } from "../types";
+import { DEFAULT_ONBOARDING_LOCALE, isValidAppLocale } from "../i18n";
 
 export const PROFILE_BLUR_STORAGE_KEY = "schumaz_profile_ui_blur";
 export const WALLPAPER_VISIBLE_STORAGE_KEY = "schumaz_profile_wallpaper_visible";
 export const DEFAULT_PROFILE_BLUR = 10;
 export const MAX_PROFILE_BLUR_PX = 32;
+
+export interface InitialLanguageState {
+  locale: AppLocale;
+  needsOnboarding: boolean;
+}
+
+export function loadInitialLanguageState(): InitialLanguageState {
+  try {
+    const raw = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (isValidAppLocale(raw)) {
+      return { locale: raw, needsOnboarding: false };
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return { locale: DEFAULT_ONBOARDING_LOCALE, needsOnboarding: true };
+}
+
+export function saveLanguageToStorage(locale: AppLocale): void {
+  try {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, locale);
+  } catch {
+    // Ignore localStorage quota errors
+  }
+}
 
 export function clampProfileBlur(val: number): number {
   if (!Number.isFinite(val)) return DEFAULT_PROFILE_BLUR;
@@ -44,7 +72,8 @@ export function loadInitialWallpaperVisible(): boolean {
   return true;
 }
 
-export function loadInitialPreferences(): UserPreferences {
+export function loadInitialPreferences(resolvedLocale?: AppLocale): UserPreferences {
+  const fallbackLanguage = resolvedLocale ?? loadInitialLanguageState().locale;
   try {
     const raw = localStorage.getItem(PREFERENCES_STORAGE_KEY);
     if (raw) {
@@ -71,19 +100,32 @@ export function loadInitialPreferences(): UserPreferences {
           typeof parsed.autoMarkDailyMissionsRead === "boolean"
             ? parsed.autoMarkDailyMissionsRead
             : DEFAULT_PREFERENCES.autoMarkDailyMissionsRead,
+        language: resolvedLocale
+          ? resolvedLocale
+          : isValidAppLocale(parsed.language)
+          ? parsed.language
+          : fallbackLanguage,
       };
     }
   } catch {
     // Fallback to default preferences if reading localStorage fails
   }
-  return DEFAULT_PREFERENCES;
+  return { ...DEFAULT_PREFERENCES, language: fallbackLanguage };
 }
 
 export function usePreferences(
   onFlashKeyChange?: (newKey: FlashKeyPreference) => void,
-  onPatchProtectionChange?: (enabled: boolean) => void
+  onPatchProtectionChange?: (enabled: boolean) => void,
+  onLocaleChange?: (locale: AppLocale) => void
 ) {
-  const [preferences, setPreferences] = useState<UserPreferences>(loadInitialPreferences);
+  const [initialLangState] = useState<InitialLanguageState>(loadInitialLanguageState);
+  const [locale, setLocale] = useState<AppLocale>(initialLangState.locale);
+  const [needsLanguageOnboarding, setNeedsLanguageOnboarding] = useState<boolean>(
+    initialLangState.needsOnboarding
+  );
+  const [preferences, setPreferences] = useState<UserPreferences>(() =>
+    loadInitialPreferences(initialLangState.locale)
+  );
   const [profileBlur, setProfileBlur] = useState<number>(loadInitialProfileBlur);
   const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(loadInitialWallpaperVisible);
   const [hardwareAcceleration, setHardwareAcceleration] = useState<boolean>(true);
@@ -91,8 +133,15 @@ export function usePreferences(
   const gpuActiveAtStartupRef = useRef<boolean>(true);
 
   useEffect(() => {
+    document.documentElement.lang = locale === "pt_BR" ? "pt-BR" : "en-US";
+  }, [locale]);
+
+  useEffect(() => {
     // Sync initial preferences with backend
     commands.syncUserPreferences(preferences).catch(() => {});
+    if (typeof commands.setLocale === "function") {
+      Promise.resolve(commands.setLocale(locale)).catch(() => {});
+    }
 
     if (typeof commands.getHardwareAccelerationStatus === "function") {
       commands
@@ -108,10 +157,24 @@ export function usePreferences(
     }
   }, []);
 
+  const persistPreferences = useCallback((next: UserPreferences) => {
+    try {
+      localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore localStorage quota errors
+    }
+    commands.syncUserPreferences(next).catch(() => {});
+  }, []);
+
   const updatePreference = <K extends keyof UserPreferences>(
     key: K,
     value: UserPreferences[K]
   ) => {
+    if (key === "language" && isValidAppLocale(value)) {
+      changeLanguage(value);
+      return;
+    }
+
     setPreferences((prev) => {
       const next = { ...prev, [key]: value };
       try {
@@ -134,6 +197,57 @@ export function usePreferences(
       onFlashKeyChange(value as FlashKeyPreference);
     }
   };
+
+  const previewOnboardingLocale = useCallback((nextLocale: AppLocale) => {
+    setLocale(nextLocale);
+    setPreferences((prev) => ({ ...prev, language: nextLocale }));
+  }, []);
+
+  const confirmLanguageOnboarding = useCallback(() => {
+    saveLanguageToStorage(locale);
+    setNeedsLanguageOnboarding(false);
+    setPreferences((prev) => {
+      const next = { ...prev, language: locale };
+      persistPreferences(next);
+      return next;
+    });
+    if (typeof commands.setLocale === "function") {
+      Promise.resolve(commands.setLocale(locale))
+        .then(() => {
+          onLocaleChange?.(locale);
+        })
+        .catch(() => {
+          onLocaleChange?.(locale);
+        });
+    } else {
+      onLocaleChange?.(locale);
+    }
+  }, [locale, persistPreferences, onLocaleChange]);
+
+  const changeLanguage = useCallback(
+    (nextLocale: AppLocale) => {
+      setLocale(nextLocale);
+      saveLanguageToStorage(nextLocale);
+      setNeedsLanguageOnboarding(false);
+      setPreferences((prev) => {
+        const next = { ...prev, language: nextLocale };
+        persistPreferences(next);
+        return next;
+      });
+      if (typeof commands.setLocale === "function") {
+        Promise.resolve(commands.setLocale(nextLocale))
+          .then(() => {
+            onLocaleChange?.(nextLocale);
+          })
+          .catch(() => {
+            onLocaleChange?.(nextLocale);
+          });
+      } else {
+        onLocaleChange?.(nextLocale);
+      }
+    },
+    [persistPreferences, onLocaleChange]
+  );
 
   const updateProfileBlur = (blurPercent: number) => {
     const clamped = clampProfileBlur(blurPercent);
@@ -179,6 +293,11 @@ export function usePreferences(
   };
 
   return {
+    locale,
+    needsLanguageOnboarding,
+    previewOnboardingLocale,
+    confirmLanguageOnboarding,
+    changeLanguage,
     preferences,
     updatePreference,
     profileBlur,
