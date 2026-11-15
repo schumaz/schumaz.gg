@@ -68,8 +68,8 @@ export function AramMayhemView({
         <section className="card aram-mayhem-col aram-mayhem-champions-col">
           <div className="aram-panel-header">
             <div className="aram-panel-title-row">
-              <h2 className="aram-mayhem-hero-title">{t("aram.augmentsColumnTitle")}</h2>
               <span className="aram-mode-badge is-mayhem">{t("aram.mayhemTitle")}</span>
+              <h2 className="aram-mayhem-hero-title">{t("aram.augmentsColumnTitle")}</h2>
             </div>
             <SearchInput
               value={mayhemChampSearch}

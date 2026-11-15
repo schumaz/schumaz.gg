@@ -483,24 +483,17 @@
 
 .aram-panel-title-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 38px;
-}
-
-.aram-mayhem-title-wrap {
-  display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 6px;
   min-width: 0;
-  flex: 1;
 }
 
 .card .aram-mayhem-hero-title,
 .aram-mayhem-hero-title {
   margin: 0;
-  font-size: clamp(2.4rem, 4.8vw, 4.4rem);
+  width: 100%;
+  font-size: clamp(2.15rem, 4.1vw, 4.1rem);
   font-weight: 800;
   line-height: 1.05;
   padding-bottom: 2px;
@@ -870,4 +863,3 @@
     width: 100%;
   }
 }
-

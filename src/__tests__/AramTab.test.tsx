@@ -126,8 +126,13 @@ describe("AramTab UI", () => {
     );
 
     const mayhemView = screen.getByTestId("aram-mayhem-view");
-    const cartinhasHeading = within(mayhemView).getByRole("heading", { name: "Cartinhas" });
+    const titleRow = mayhemView.querySelector(".aram-panel-title-row") as HTMLElement;
+    expect(titleRow).toBeTruthy();
+    const mayhemBadge = within(titleRow).getByText("ARAM Mayhem");
+    expect(mayhemBadge).toHaveClass("aram-mode-badge", "is-mayhem");
+    const cartinhasHeading = within(titleRow).getByRole("heading", { name: "Cartinhas" });
     expect(cartinhasHeading).toHaveClass("aram-mayhem-hero-title");
+    expect(Array.from(titleRow.children)).toEqual([mayhemBadge, cartinhasHeading]);
     expect(
       within(mayhemView).queryByText("Busque o campeão para ver as cartinhas")
     ).not.toBeInTheDocument();
