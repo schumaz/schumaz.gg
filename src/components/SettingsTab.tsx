@@ -416,7 +416,7 @@ export function SettingsTab({
                   onClick={() => handleSelectLanguage("pt_BR")}
                 >
                   <span className="settings-language-flag-wrap">
-                    <LanguageFlag locale="pt_BR" className="settings-language-flag" />
+                    <LanguageFlag locale="pt_BR" variant="compact" className="settings-language-flag" />
                   </span>
                   <span className="settings-language-label">{t("settings.languagePtBr")}</span>
                 </button>
@@ -429,7 +429,7 @@ export function SettingsTab({
                   onClick={() => handleSelectLanguage("en_US")}
                 >
                   <span className="settings-language-flag-wrap">
-                    <LanguageFlag locale="en_US" className="settings-language-flag" />
+                    <LanguageFlag locale="en_US" variant="compact" className="settings-language-flag" />
                   </span>
                   <span className="settings-language-label">{t("settings.languageEnUs")}</span>
                 </button>
