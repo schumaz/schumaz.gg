@@ -6,8 +6,17 @@ function getDocumentHidden(): boolean {
   return document.visibilityState === "hidden";
 }
 
+function getWindowUnfocused(): boolean {
+  if (typeof document === "undefined") return false;
+  if (typeof document.hasFocus === "function") {
+    return !document.hasFocus();
+  }
+  return false;
+}
+
 export function useWindowMinimized(): boolean {
   const [isDocumentHidden, setIsDocumentHidden] = useState<boolean>(getDocumentHidden);
+  const [isWindowUnfocused, setIsWindowUnfocused] = useState<boolean>(getWindowUnfocused);
   const [isWindowMinimized, setIsWindowMinimized] = useState<boolean>(false);
 
   useEffect(() => {
@@ -20,6 +29,25 @@ export function useWindowMinimized(): boolean {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleBlur = () => {
+      setIsWindowUnfocused(true);
+    };
+
+    const handleFocus = () => {
+      setIsWindowUnfocused(false);
+    };
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -45,7 +73,7 @@ export function useWindowMinimized(): boolean {
           .catch(() => {});
       }
     } catch {
-      // Non-Tauri environments (e.g. Vitest / browser) safely fall back to visibilitychange
+      // Non-Tauri environments (e.g. Vitest / browser) safely fall back to visibilitychange & blur/focus
     }
 
     return () => {
@@ -56,5 +84,5 @@ export function useWindowMinimized(): boolean {
     };
   }, []);
 
-  return isDocumentHidden || isWindowMinimized;
+  return isDocumentHidden || isWindowUnfocused || isWindowMinimized;
 }

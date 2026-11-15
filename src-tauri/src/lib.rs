@@ -15,6 +15,15 @@ use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri_specta::{Builder, Event, collect_commands, collect_events};
 
+/// Returns true when the main window should pause UI animations (minimized, hidden, or unfocused).
+pub fn should_pause_window_animations(
+    is_minimized: bool,
+    is_visible: bool,
+    is_focused: bool,
+) -> bool {
+    is_minimized || !is_visible || !is_focused
+}
+
 /// Flashes the Windows taskbar icon continuously until the user clicks/focuses the window.
 pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
     if let Some(window) = app_handle.get_webview_window("main") {
@@ -75,12 +84,12 @@ pub fn run() {
         .export(Typescript::default(), "../src/types/bindings.ts")
         .expect("Failed to export TypeScript bindings");
 
-    let was_minimized = Arc::new(AtomicBool::new(false));
+    let was_paused = Arc::new(AtomicBool::new(false));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .on_window_event({
-            let was_minimized = Arc::clone(&was_minimized);
+            let was_paused = Arc::clone(&was_paused);
             move |window, event| {
                 if matches!(event, tauri::WindowEvent::Focused(true)) {
                     let _ = window.request_user_attention(None);
@@ -94,11 +103,17 @@ pub fn run() {
                             | tauri::WindowEvent::Focused(_)
                     )
                 {
-                    let minimized = window.is_minimized().unwrap_or(false)
-                        || !window.is_visible().unwrap_or(true);
-                    let prev = was_minimized.swap(minimized, Ordering::SeqCst);
-                    if prev != minimized {
-                        let _ = models::WindowMinimizedChanged(minimized).emit(window.app_handle());
+                    let is_minimized = window.is_minimized().unwrap_or(false);
+                    let is_visible = window.is_visible().unwrap_or(true);
+                    let is_focused = match event {
+                        tauri::WindowEvent::Focused(focused) => *focused,
+                        _ => window.is_focused().unwrap_or(true),
+                    };
+                    let paused =
+                        should_pause_window_animations(is_minimized, is_visible, is_focused);
+                    let prev = was_paused.swap(paused, Ordering::SeqCst);
+                    if prev != paused {
+                        let _ = models::WindowMinimizedChanged(paused).emit(window.app_handle());
                     }
                 }
             }
@@ -152,4 +167,18 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_should_pause_window_animations_when_minimized_hidden_or_unfocused() {
+        assert!(!should_pause_window_animations(false, true, true));
+        assert!(should_pause_window_animations(true, true, true));
+        assert!(should_pause_window_animations(false, false, true));
+        assert!(should_pause_window_animations(false, true, false));
+        assert!(should_pause_window_animations(true, false, false));
+    }
 }

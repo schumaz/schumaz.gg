@@ -19,6 +19,7 @@ describe("useWindowMinimized and NavigationDock animation suspension", () => {
     document,
     "visibilityState"
   );
+  const originalHasFocus = document.hasFocus;
 
   const setDocumentVisibility = (state: DocumentVisibilityState) => {
     Object.defineProperty(document, "visibilityState", {
@@ -34,6 +35,7 @@ describe("useWindowMinimized and NavigationDock animation suspension", () => {
       configurable: true,
       get: () => "visible",
     });
+    document.hasFocus = vi.fn(() => true);
   });
 
   afterEach(() => {
@@ -42,9 +44,10 @@ describe("useWindowMinimized and NavigationDock animation suspension", () => {
     } else {
       delete (document as unknown as Record<string, unknown>).visibilityState;
     }
+    document.hasFocus = originalHasFocus;
   });
 
-  it("tracks both Tauri window-minimized-changed events and document visibilityState", async () => {
+  it("tracks Tauri window-minimized-changed events, document visibilityState, and window focus/blur", async () => {
     const { result, unmount } = renderHook(() => useWindowMinimized());
     expect(result.current).toBe(false);
 
@@ -52,13 +55,13 @@ describe("useWindowMinimized and NavigationDock animation suspension", () => {
       expect(listeners["window-minimized-changed"]).toBeDefined();
     });
 
-    // Minimized via Tauri window event
+    // Minimized or unfocused via Tauri window event
     act(() => {
       listeners["window-minimized-changed"]({ payload: true });
     });
     expect(result.current).toBe(true);
 
-    // Restored via Tauri window event
+    // Restored and focused via Tauri window event
     act(() => {
       listeners["window-minimized-changed"]({ payload: false });
     });
@@ -76,8 +79,31 @@ describe("useWindowMinimized and NavigationDock animation suspension", () => {
     });
     expect(result.current).toBe(false);
 
+    // Unfocused via clicking another app (even while visible on another monitor)
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(result.current).toBe(true);
+
+    // Focused back
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(result.current).toBe(false);
+
     unmount();
     expect(listeners["window-minimized-changed"]).toBeUndefined();
+  });
+
+  it("initializes as paused when document starts without focus", () => {
+    document.hasFocus = vi.fn(() => false);
+    const { result } = renderHook(() => useWindowMinimized());
+    expect(result.current).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(result.current).toBe(false);
   });
 
   it("does not render dock beam animation nodes when animationsPaused is true", () => {
