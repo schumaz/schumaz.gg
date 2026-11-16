@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { lcuIpc, updaterIpc, type UpdaterUpdateHandle } from "../services/ipc";
+import {
+  lcuIpc,
+  updaterIpc,
+  type AppDistributionInfo,
+  type UpdaterUpdateHandle,
+} from "../services/ipc";
 
 export const UPDATE_BLOCKED_PHASES = new Set([
   "ChampSelect",
@@ -15,6 +20,8 @@ export function isUpdateDownloadBlockedPhase(
   return isInChampSelect || UPDATE_BLOCKED_PHASES.has(gameflowPhase);
 }
 
+export type UpdateCheckResult = "idle" | "up-to-date" | "error";
+
 export type AppUpdateState =
   | { status: "idle" }
   | { status: "checking" }
@@ -23,6 +30,10 @@ export type AppUpdateState =
   | { status: "ready"; version: string }
   | { status: "installing"; version: string }
   | { status: "portable-available"; version: string; releasesUrl: string };
+
+export interface CheckForUpdatesOptions {
+  manual?: boolean;
+}
 
 export interface UseAppUpdaterOptions {
   enabled?: boolean;
@@ -38,10 +49,13 @@ export function useAppUpdater({
   isInChampSelect,
 }: UseAppUpdaterOptions) {
   const [updateState, setUpdateState] = useState<AppUpdateState>({ status: "idle" });
+  const [distributionInfo, setDistributionInfo] = useState<AppDistributionInfo | null>(null);
+  const [lastCheckResult, setLastCheckResult] = useState<UpdateCheckResult>("idle");
   const isBlocked = isUpdateDownloadBlockedPhase(gameflowPhase, isInChampSelect);
 
   const activeUpdateRef = useRef<UpdaterUpdateHandle | null>(null);
   const dismissedVersionRef = useRef<string | null>(null);
+  const distributionInfoRef = useRef<AppDistributionInfo | null>(null);
   const isPortableRef = useRef(false);
   const downloadStartedRef = useRef(false);
   const installingRef = useRef(false);
@@ -99,77 +113,96 @@ export function useAppUpdater({
         }
         if (isMountedRef.current && checkSeqRef.current === seq) {
           setUpdateState({ status: "idle" });
+          setLastCheckResult("error");
         }
       }
     },
     [closeActiveUpdate]
   );
 
-  const checkForUpdates = useCallback(async () => {
-    const seq = ++checkSeqRef.current;
-    await closeActiveUpdate();
-    if (!isMountedRef.current || checkSeqRef.current !== seq) return;
+  const checkForUpdates = useCallback(
+    async (options?: CheckForUpdatesOptions) => {
+      if (installingRef.current) return;
 
-    setUpdateState({ status: "checking" });
-
-    try {
-      const distInfo = await updaterIpc.getDistributionInfo();
-      if (!distInfo || !isMountedRef.current || checkSeqRef.current !== seq) {
-        if (isMountedRef.current && checkSeqRef.current === seq) {
-          setUpdateState({ status: "idle" });
-        }
-        return;
+      const manual = Boolean(options?.manual);
+      if (manual) {
+        dismissedVersionRef.current = null;
       }
 
-      isPortableRef.current = distInfo.isPortable;
-      const update = await updaterIpc.checkForUpdate();
-      if (!update) {
-        if (isMountedRef.current && checkSeqRef.current === seq) {
-          setUpdateState({ status: "idle" });
-        }
-        return;
-      }
-
-      if (
-        !isMountedRef.current ||
-        checkSeqRef.current !== seq ||
-        dismissedVersionRef.current === update.version
-      ) {
-        await update.close().catch(() => {});
-        if (isMountedRef.current && checkSeqRef.current === seq) {
-          setUpdateState({ status: "idle" });
-        }
-        return;
-      }
-
-      if (distInfo.isPortable) {
-        const version = update.version;
-        await update.close().catch(() => {});
-        if (isMountedRef.current && checkSeqRef.current === seq) {
-          setUpdateState({
-            status: "portable-available",
-            version,
-            releasesUrl: distInfo.releasesUrl,
-          });
-        }
-        return;
-      }
-
-      activeUpdateRef.current = update;
-      if (blockedRef.current) {
-        setUpdateState({ status: "deferred", version: update.version });
-        return;
-      }
-
-      await startBackgroundDownload(update, seq);
-    } catch {
-      // Network, endpoint, or signature validation failure: fail silently
+      const seq = ++checkSeqRef.current;
       await closeActiveUpdate();
-      if (isMountedRef.current && checkSeqRef.current === seq) {
-        setUpdateState({ status: "idle" });
+      if (!isMountedRef.current || checkSeqRef.current !== seq) return;
+
+      setLastCheckResult("idle");
+      setUpdateState({ status: "checking" });
+
+      try {
+        const fetchedDistInfo = await updaterIpc.getDistributionInfo().catch(() => null);
+        const distInfo = fetchedDistInfo ?? distributionInfoRef.current;
+        if (!distInfo || !isMountedRef.current || checkSeqRef.current !== seq) {
+          if (isMountedRef.current && checkSeqRef.current === seq) {
+            setUpdateState({ status: "idle" });
+            setLastCheckResult(manual ? "error" : "idle");
+          }
+          return;
+        }
+
+        distributionInfoRef.current = distInfo;
+        isPortableRef.current = distInfo.isPortable;
+        setDistributionInfo(distInfo);
+
+        const update = await updaterIpc.checkForUpdate();
+        if (!update) {
+          if (isMountedRef.current && checkSeqRef.current === seq) {
+            setUpdateState({ status: "idle" });
+            setLastCheckResult("up-to-date");
+          }
+          return;
+        }
+
+        if (
+          !isMountedRef.current ||
+          checkSeqRef.current !== seq ||
+          dismissedVersionRef.current === update.version
+        ) {
+          await update.close().catch(() => {});
+          if (isMountedRef.current && checkSeqRef.current === seq) {
+            setUpdateState({ status: "idle" });
+          }
+          return;
+        }
+
+        if (distInfo.isPortable) {
+          const version = update.version;
+          await update.close().catch(() => {});
+          if (isMountedRef.current && checkSeqRef.current === seq) {
+            setUpdateState({
+              status: "portable-available",
+              version,
+              releasesUrl: distInfo.releasesUrl,
+            });
+          }
+          return;
+        }
+
+        activeUpdateRef.current = update;
+        if (blockedRef.current) {
+          setUpdateState({ status: "deferred", version: update.version });
+          return;
+        }
+
+        await startBackgroundDownload(update, seq);
+      } catch {
+        // Network, endpoint, or signature validation failure: fail silently
+        await closeActiveUpdate();
+        if (isMountedRef.current && checkSeqRef.current === seq) {
+          setUpdateState({ status: "idle" });
+          setLastCheckResult("error");
+        }
       }
-    }
-  }, [closeActiveUpdate, startBackgroundDownload]);
+    },
+    [closeActiveUpdate, startBackgroundDownload]
+  );
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -181,6 +214,23 @@ export function useAppUpdater({
       }
     };
   }, [closeActiveUpdate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void updaterIpc
+      .getDistributionInfo()
+      .then((info) => {
+        if (cancelled || !isMountedRef.current || !info) return;
+        distributionInfoRef.current = info;
+        isPortableRef.current = info.isPortable;
+        setDistributionInfo(info);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!enabled || !lcuInitialChecked || hasCheckedStartupRef.current) return;
@@ -212,6 +262,7 @@ export function useAppUpdater({
       await closeActiveUpdate();
       if (isMountedRef.current) {
         setUpdateState({ status: "idle" });
+        setLastCheckResult("error");
       }
     }
   }, [updateState.status, closeActiveUpdate]);
@@ -229,11 +280,14 @@ export function useAppUpdater({
     await closeActiveUpdate();
     if (isMountedRef.current) {
       setUpdateState({ status: "idle" });
+      setLastCheckResult("idle");
     }
   }, [updateState, closeActiveUpdate]);
 
   return {
     updateState,
+    distributionInfo,
+    lastCheckResult,
     installAndRestart,
     openPortableRelease,
     dismissUpdate,

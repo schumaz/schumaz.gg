@@ -271,6 +271,18 @@ function App({ forceStartupLoading }: AppProps = {}) {
             gpuRestartRequired={prefs.gpuRestartRequired}
             onRestartApp={prefs.restartApp}
             isActive={activeTab === "settings"}
+            updateState={updater.updateState}
+            distributionInfo={updater.distributionInfo}
+            lastUpdateCheckResult={updater.lastCheckResult}
+            onCheckForUpdates={() => {
+              void updater.checkForUpdates({ manual: true });
+            }}
+            onRestartToUpdate={() => {
+              void updater.installAndRestart();
+            }}
+            onOpenPortableRelease={() => {
+              void updater.openPortableRelease();
+            }}
           />
         </div>
 

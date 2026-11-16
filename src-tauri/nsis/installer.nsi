@@ -526,7 +526,10 @@ Function .onInit
   ${EndIf}
 
   !if "${DISPLAYLANGUAGESELECTOR}" == "true"
-    !insertmacro MUI_LANGDLL_DISPLAY
+    ${If} $PassiveMode <> 1
+    ${AndIf} $UpdateMode <> 1
+      !insertmacro MUI_LANGDLL_DISPLAY
+    ${EndIf}
   !endif
 
   !insertmacro SetContext
@@ -781,6 +784,9 @@ ${GetSize} "$INSTDIR" "/M=uninstall.exe /S=0K /G=0" $0 $1 $2
   !ifmacrodef NSIS_HOOK_POSTINSTALL
     !insertmacro NSIS_HOOK_POSTINSTALL
   !endif
+
+  ; Save selected installer language for future updates and uninstalls
+  !insertmacro MUI_LANGDLL_SAVELANGUAGE
 
   ; Auto close this page for passive mode
   ${If} $PassiveMode = 1

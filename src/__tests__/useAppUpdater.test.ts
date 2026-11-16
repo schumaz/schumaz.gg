@@ -32,6 +32,32 @@ describe("useAppUpdater", () => {
     expect(isUpdateDownloadBlockedPhase("", false)).toBe(false);
   });
 
+  it("loads distributionInfo on initialization even when automatic startup check is disabled", async () => {
+    const distInfo = {
+      isPortable: false,
+      currentVersion: "0.1.0-beta.1",
+      releasesUrl: "https://github.com/schumaz/schumaz.gg/releases/latest",
+    };
+    vi.spyOn(updaterIpc, "getDistributionInfo").mockResolvedValue(distInfo);
+    const checkSpy = vi.spyOn(updaterIpc, "checkForUpdate").mockResolvedValue(null);
+
+    const { result } = renderHook(() =>
+      useAppUpdater({
+        enabled: false,
+        lcuInitialChecked: false,
+        gameflowPhase: "Lobby",
+        isInChampSelect: false,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.distributionInfo).toEqual(distInfo);
+    });
+    expect(result.current.lastCheckResult).toBe("idle");
+    expect(result.current.updateState).toEqual({ status: "idle" });
+    expect(checkSpy).not.toHaveBeenCalled();
+  });
+
   it("downloads silently in background when installed (NSIS) and installs on restart", async () => {
     const mockHandle = createMockUpdateHandle("0.2.0");
     vi.spyOn(updaterIpc, "getDistributionInfo").mockResolvedValue({
@@ -170,6 +196,76 @@ describe("useAppUpdater", () => {
     });
   });
 
+  it("clears dismissedVersionRef on manual checkForUpdates({ manual: true }) so dismissed versions reappear", async () => {
+    const firstHandle = createMockUpdateHandle("0.2.0");
+    const autoRetryHandle = createMockUpdateHandle("0.2.0");
+    const manualRetryHandle = createMockUpdateHandle("0.2.0");
+    vi.spyOn(updaterIpc, "getDistributionInfo").mockResolvedValue({
+      isPortable: false,
+      currentVersion: "0.1.0",
+      releasesUrl: "https://github.com/schumaz/schumaz.gg/releases/latest",
+    });
+    vi.spyOn(updaterIpc, "checkForUpdate")
+      .mockResolvedValueOnce(firstHandle)
+      .mockResolvedValueOnce(autoRetryHandle)
+      .mockResolvedValueOnce(manualRetryHandle);
+
+    const { result } = renderHook(() =>
+      useAppUpdater({
+        enabled: true,
+        lcuInitialChecked: true,
+        gameflowPhase: "Lobby",
+        isInChampSelect: false,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.updateState).toEqual({ status: "ready", version: "0.2.0" });
+    });
+
+    await act(async () => {
+      await result.current.dismissUpdate();
+    });
+
+    // Non-manual check respects dismissedVersionRef
+    await act(async () => {
+      await result.current.checkForUpdates();
+    });
+    expect(autoRetryHandle.close).toHaveBeenCalledTimes(1);
+    expect(result.current.updateState).toEqual({ status: "idle" });
+
+    // Manual check clears dismissedVersionRef
+    await act(async () => {
+      await result.current.checkForUpdates({ manual: true });
+    });
+    await waitFor(() => {
+      expect(result.current.updateState).toEqual({ status: "ready", version: "0.2.0" });
+    });
+  });
+
+  it("sets lastCheckResult to up-to-date when no update is available", async () => {
+    vi.spyOn(updaterIpc, "getDistributionInfo").mockResolvedValue({
+      isPortable: false,
+      currentVersion: "0.1.0",
+      releasesUrl: "https://github.com/schumaz/schumaz.gg/releases/latest",
+    });
+    vi.spyOn(updaterIpc, "checkForUpdate").mockResolvedValue(null);
+
+    const { result } = renderHook(() =>
+      useAppUpdater({
+        enabled: true,
+        lcuInitialChecked: true,
+        gameflowPhase: "Lobby",
+        isInChampSelect: false,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.lastCheckResult).toBe("up-to-date");
+    });
+    expect(result.current.updateState).toEqual({ status: "idle" });
+  });
+
   it("never downloads or installs in portable mode, closes handle, and opens GitHub Release via opener", async () => {
     const mockHandle = createMockUpdateHandle("0.2.0");
     vi.spyOn(updaterIpc, "getDistributionInfo").mockResolvedValue({
@@ -212,7 +308,7 @@ describe("useAppUpdater", () => {
     );
   });
 
-  it("handles network or signature failures silently and cleans up the update resource", async () => {
+  it("handles network or signature failures silently, sets lastCheckResult to error, and cleans up", async () => {
     const mockHandle = createMockUpdateHandle("0.2.0");
     vi.mocked(mockHandle.download).mockRejectedValue(
       new Error("signature mismatch")
@@ -237,5 +333,6 @@ describe("useAppUpdater", () => {
       expect(mockHandle.close).toHaveBeenCalledTimes(1);
     });
     expect(result.current.updateState).toEqual({ status: "idle" });
+    expect(result.current.lastCheckResult).toBe("error");
   });
 });

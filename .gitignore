@@ -11,6 +11,7 @@ target/
 
 # Tauri build artifacts
 src-tauri/target/
+dist-release/
 
 # Node / Frontend
 node_modules/
@@ -20,7 +21,6 @@ dist/
 # Environment & Signing files
 .env
 .env.*
-!.env.example
 *.key
 
 # IDE & Editor files

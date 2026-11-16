@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { AppLocale, UserPreferences } from "../../types";
+import type { AppUpdateState, UpdateCheckResult } from "../../hooks/useAppUpdater";
+import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
 import { SettingsProfileSection, isBlurSliderDisabled } from "./SettingsProfileSection";
 import { SettingsRunesSection } from "./SettingsRunesSection";
@@ -25,6 +27,12 @@ interface SettingsTabProps {
   gpuRestartRequired?: boolean;
   onRestartApp?: () => void;
   isActive?: boolean;
+  updateState?: AppUpdateState;
+  distributionInfo?: AppDistributionInfo | null;
+  lastUpdateCheckResult?: UpdateCheckResult;
+  onCheckForUpdates?: () => void;
+  onRestartToUpdate?: () => void;
+  onOpenPortableRelease?: () => void;
 }
 
 export function SettingsTab({
@@ -41,6 +49,12 @@ export function SettingsTab({
   gpuRestartRequired = false,
   onRestartApp,
   isActive = true,
+  updateState,
+  distributionInfo,
+  lastUpdateCheckResult,
+  onCheckForUpdates,
+  onRestartToUpdate,
+  onOpenPortableRelease,
 }: SettingsTabProps) {
   const { locale: contextLocale, setLocale } = useTranslation();
   const activeLocale = propLocale ?? preferences.language ?? contextLocale;
@@ -105,6 +119,12 @@ export function SettingsTab({
           onRestartApp={onRestartApp}
           autoMarkDailyMissionsRead={autoMarkDailyMissionsRead}
           onUpdatePreference={onUpdatePreference}
+          updateState={updateState}
+          distributionInfo={distributionInfo}
+          lastUpdateCheckResult={lastUpdateCheckResult}
+          onCheckForUpdates={onCheckForUpdates}
+          onRestartToUpdate={onRestartToUpdate}
+          onOpenPortableRelease={onOpenPortableRelease}
         />
       </div>
 

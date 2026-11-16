@@ -29,7 +29,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "createUpdaterArtifacts": true,
     "publisher": "schumaZ",
     "copyright": "Copyright © 2026 schumaZ",
@@ -48,7 +48,13 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "template": "nsis/installer.nsi"
+        "template": "nsis/installer.nsi",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "languages": ["PortugueseBR", "English"],
+        "displayLanguageSelector": true,
+        "startMenuFolder": "schumaz.gg",
+        "compression": "lzma"
       }
     }
   },

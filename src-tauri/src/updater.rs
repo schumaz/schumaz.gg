@@ -190,6 +190,24 @@ mod tests {
     }
 
     #[test]
+    fn test_installed_nsis_in_custom_install_location_is_not_portable() {
+        let exe = Path::new(r"D:\Apps\schumaz.gg\schumazgg.exe");
+        let local = Path::new(r"C:\Users\Alice\AppData\Local");
+        let entry = WindowsUninstallEntry {
+            install_location: Some(r#""D:\Apps\schumaz.gg""#.to_string()),
+            uninstall_string: Some(r#""D:\Apps\schumaz.gg\uninstall.exe""#.to_string()),
+        };
+
+        assert!(!evaluate_portable_mode(
+            false,
+            true,
+            Some(exe),
+            Some(local),
+            Some(&entry)
+        ));
+    }
+
+    #[test]
     fn test_exe_outside_local_appdata_without_uninstall_entry_is_portable() {
         let exe = Path::new(r"D:\Games\schumazgg-portable\schumazgg.exe");
         let local = Path::new(r"C:\Users\Alice\AppData\Local");
