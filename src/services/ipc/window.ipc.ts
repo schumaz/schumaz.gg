@@ -1,5 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { commands, events, type WindowMinimizedChanged } from "../../types/bindings";
+import {
+  commands,
+  events,
+  type BootstrapProgress,
+  type BootstrapStatus,
+  type WindowMinimizedChanged,
+} from "../../types/bindings";
 import type { UnlistenFn } from "./lcu.ipc";
 
 export function isTauriWindowAvailable(): boolean {
@@ -10,6 +16,27 @@ export function isTauriWindowAvailable(): boolean {
  * Typed IPC adapter for Tauri window state events, native controls, and app lifecycle commands.
  */
 export const windowIpc = {
+  async getBootstrapStatus(): Promise<BootstrapStatus | null> {
+    if (typeof commands?.getBootstrapStatus !== "function") {
+      return null;
+    }
+    return commands.getBootstrapStatus();
+  },
+
+  async onBootstrapProgress(
+    handler: (status: BootstrapProgress) => void
+  ): Promise<UnlistenFn> {
+    const listener = events?.bootstrapProgress?.listen;
+    if (typeof listener !== "function") {
+      return () => {};
+    }
+    return listener((event) => {
+      if (event?.payload) {
+        handler(event.payload);
+      }
+    });
+  },
+
   async onWindowMinimizedChanged(
     handler: (minimized: WindowMinimizedChanged) => void
   ): Promise<UnlistenFn> {

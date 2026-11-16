@@ -45,6 +45,8 @@ export const commands = {
 	 *  without emitting Champ Select events or injecting into LCU.
 	 */
 	getRankedChampionBuild: (championId: number, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_ranked_champion_build", { championId, position, tier, region, patch }),
+	/**  Returns the current backend startup/prewarm bootstrap status. */
+	getBootstrapStatus: () => __TAURI_INVOKE<BootstrapStatus>("get_bootstrap_status"),
 	/**  Returns the saved GPU hardware acceleration setting and whether it was active at startup. */
 	getHardwareAccelerationStatus: () => __TAURI_INVOKE<HardwareAccelerationStatus>("get_hardware_acceleration_status"),
 	/**  Saves the GPU hardware acceleration preference to `UserSettings.ini` for the next startup. */
@@ -67,6 +69,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	bootstrapProgress: makeEvent<BootstrapProgress, BootstrapProgress>("bootstrap-progress"),
 	buildInjected: makeEvent<BuildInjected, BuildInjected>("build-injected"),
 	champSelectEnded: makeEvent<ChampSelectEnded, ChampSelectEnded>("champ-select-ended"),
 	champSelectReconciled: makeEvent<ChampSelectReconciled_Serialize, ChampSelectReconciled_Deserialize>("champ-select-reconciled"),
@@ -153,6 +156,15 @@ export type AramChampionRank_Serialize = {
 };
 
 export type AramMode = "aram" | "aram_mayhem";
+
+export type BootstrapProgress = BootstrapStatus;
+
+export type BootstrapStatus = {
+	stage: string,
+	progress: number,
+	diskReady: boolean,
+	networkReady: boolean,
+};
 
 export type BuildInjected = InjectionReport;
 

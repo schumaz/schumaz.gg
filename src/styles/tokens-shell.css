@@ -380,7 +380,9 @@ img {
 .app-minimized .dot-orange.dot-pulsing::after,
 .app-minimized .idle-radar-ring,
 .app-minimized .loading-bar-fill,
-.app-minimized .skeleton-block::after {
+.app-minimized .skeleton-block::after,
+.app-minimized .startup-icon-halo,
+.app-minimized .startup-progress-fill::after {
   display: none !important;
 }
 
@@ -416,11 +418,14 @@ img {
 .gpu-effects-disabled .dot-orange.dot-pulsing::after,
 .gpu-effects-disabled .idle-radar-ring,
 .gpu-effects-disabled .loading-bar-fill,
-.gpu-effects-disabled .skeleton-block::after {
+.gpu-effects-disabled .skeleton-block::after,
+.gpu-effects-disabled .startup-icon-halo,
+.gpu-effects-disabled .startup-progress-fill::after {
   animation: none !important;
 }
 
 .gpu-effects-disabled .dot-orange.dot-pulsing::after,
-.gpu-effects-disabled .idle-radar-ring {
+.gpu-effects-disabled .idle-radar-ring,
+.gpu-effects-disabled .startup-icon-halo {
   display: none !important;
 }

@@ -1,10 +1,18 @@
+use crate::app_bootstrap::BootstrapState;
 use crate::lcu_injector;
-use crate::models::{AppLocale, FlashKeyPreference};
+use crate::models::{AppLocale, BootstrapStatus, FlashKeyPreference};
 use crate::storage::{
     self, AppSettings, GraphicsState, HardwareAccelerationStatus, LegacyLocalStoragePayload,
     NavigationStatePatch,
 };
 use tauri::{AppHandle, State};
+
+/// Returns the current backend startup/prewarm bootstrap status.
+#[tauri::command]
+#[specta::specta]
+pub fn get_bootstrap_status(state: State<'_, BootstrapState>) -> BootstrapStatus {
+    state.snapshot()
+}
 
 /// Returns the saved GPU hardware acceleration setting and whether it was active at startup.
 #[tauri::command]

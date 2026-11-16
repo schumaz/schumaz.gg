@@ -8,6 +8,8 @@ export type {
   AramChampionRank,
   AramChampionRank_Serialize,
   AramMode,
+  BootstrapProgress,
+  BootstrapStatus,
   BuildInjected,
   CachedProfileResult,
   ChampSelectEnded,

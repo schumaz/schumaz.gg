@@ -1,12 +1,19 @@
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import appIconUrl from "./assets/app-icon.png";
 import { ActiveTab, FlashKeyPreference } from "./types";
 import { injectorIpc } from "./services/ipc";
 import { I18nProvider } from "./i18n";
+import { useAppBootstrap } from "./hooks/useAppBootstrap";
 import { useWindowMinimized } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
-import { ARAM_DOCK_ICON_URL, NavigationDock, StatusDock } from "./components/ui";
+import {
+  ARAM_DOCK_ICON_URL,
+  NavigationDock,
+  StartupLoadingScreen,
+  StatusDock,
+} from "./components/ui";
 import {
   FlashOnboardingModal,
   LanguageOnboardingModal,
@@ -22,7 +29,11 @@ import { RankedTab, useRanked } from "./features/ranked";
 export * from "./types";
 export * from "./utils/spells";
 
-function App() {
+export interface AppProps {
+  forceStartupLoading?: boolean;
+}
+
+function App({ forceStartupLoading }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
   const isAppMinimized = useWindowMinimized();
   const rankedPatchChangeRef = useRef<(() => void) | null>(null);
@@ -96,6 +107,30 @@ function App() {
   }, [ranked.handlePatchProtectionChange]);
 
   const playerProfile = usePlayerProfile(lcu.summoner, locale);
+
+  const startupEnabled = forceStartupLoading ?? import.meta.env.MODE !== "test";
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const criticalImageUrls = useMemo(() => {
+    const urls = [appIconUrl, resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)];
+    if (prefs.wallpaperVisible && playerProfile.profile?.background_splash_url) {
+      urls.push(resolveCachedAssetUrl(playerProfile.profile.background_splash_url));
+    }
+    return urls;
+  }, [prefs.wallpaperVisible, playerProfile.profile?.background_splash_url]);
+
+  const boot = useAppBootstrap({
+    enabled: startupEnabled,
+    preferencesReady: prefs.preferencesReady,
+    lcuInitialChecked: lcu.lcuInitialChecked,
+    profileInitialReady: playerProfile.profileInitialReady,
+    criticalImageUrls,
+    reducedMotion: prefersReducedMotion || !prefs.hardwareAcceleration,
+  });
+
   const profileUiBlurPx = profileBlurPercentToPx(prefs.profileBlur);
   const profileBlurOff = activeTab === "profile" && profileUiBlurPx <= 0;
 
@@ -134,7 +169,7 @@ function App() {
 
         <StatusDock summoner={lcu.summoner} />
 
-        <div className="tabs-viewport">
+        <div className="tabs-viewport" aria-hidden={boot.isBooting || undefined}>
           <ProfileTab
             summoner={lcu.summoner}
             profile={playerProfile.profile}
@@ -232,11 +267,17 @@ function App() {
           onTabChange={setActiveTab}
           onAramClick={handleAramDockClick}
           onRankedClick={handleRankedDockClick}
-          animationsPaused={isAppMinimized || !prefs.hardwareAcceleration}
+          animationsPaused={isAppMinimized || !prefs.hardwareAcceleration || boot.isBooting}
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 
-        {prefs.needsLanguageOnboarding ? (
+        {boot.isBooting ? (
+          <StartupLoadingScreen
+            progress={boot.progress}
+            stageKey={boot.stageKey}
+            isExiting={boot.isExiting}
+          />
+        ) : prefs.needsLanguageOnboarding ? (
           <LanguageOnboardingModal
             selectedLocale={locale}
             onSelectLocale={prefs.previewOnboardingLocale}

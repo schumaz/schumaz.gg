@@ -31,6 +31,7 @@ export function useLcuEvents(
 ) {
   const activeLocale: AppLocale = options?.locale ?? "pt_BR";
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
+  const [lcuInitialChecked, setLcuInitialChecked] = useState<boolean>(false);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
   const [build, setBuild] = useState<ChampionBuild | null>(null);
   const [gameflowPhase, setGameflowPhase] = useState<string>("");
@@ -126,14 +127,18 @@ export function useLcuEvents(
   }, [activeLocale]);
 
   useEffect(() => {
+    let active = true;
     lcuIpc
       .getSummonerStatus()
       .then((data) => {
-        if (data) setSummoner(data);
+        if (active && data) setSummoner(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLcuInitialChecked(true);
+      });
 
-    return subscribeToLcuEvents({
+    const unlisten = subscribeToLcuEvents({
       activeChampIdRef,
       buildRef,
       latestFetchSeqRef,
@@ -151,6 +156,11 @@ export function useLcuEvents(
       setSelectedBuildIndex,
       setErrorMsg,
     });
+
+    return () => {
+      active = false;
+      unlisten();
+    };
   }, []);
 
   const orderedSpells = computeOrderedSpells(
@@ -180,6 +190,7 @@ export function useLcuEvents(
 
   return {
     summoner,
+    lcuInitialChecked,
     champSelect,
     build,
     gameflowPhase,

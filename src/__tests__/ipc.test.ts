@@ -118,6 +118,9 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     await settingsIpc.setLocale("pt_BR");
     expect(invoke).toHaveBeenCalledWith("set_locale", { locale: "pt_BR" });
 
+    await windowIpc.getBootstrapStatus();
+    expect(invoke).toHaveBeenCalledWith("get_bootstrap_status");
+
     await windowIpc.restartApp();
     expect(invoke).toHaveBeenCalledWith("restart_app");
   });
@@ -147,6 +150,19 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     listeners["window-minimized-changed"]({ payload: true });
     expect(onMinimized).toHaveBeenCalledWith(true);
     unlistenMinimized();
+
+    const onBootstrap = vi.fn();
+    const unlistenBootstrap = await windowIpc.onBootstrapProgress(onBootstrap);
+    listeners["bootstrap-progress"]({
+      payload: { stage: "ready", progress: 100, diskReady: true, networkReady: true },
+    });
+    expect(onBootstrap).toHaveBeenCalledWith({
+      stage: "ready",
+      progress: 100,
+      diskReady: true,
+      networkReady: true,
+    });
+    unlistenBootstrap();
 
     expect(assetsIpc.convertAssetFileSrc("v1_abc.png")).toBe("schumaz-asset://localhost/v1_abc.png");
     expect(convertFileSrc).toHaveBeenCalledWith("v1_abc.png", "schumaz-asset");

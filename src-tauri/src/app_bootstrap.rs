@@ -12,6 +12,40 @@ use crate::{
 };
 
 #[derive(Clone, Default)]
+pub struct BootstrapState {
+    inner: Arc<Mutex<models::BootstrapStatus>>,
+}
+
+impl BootstrapState {
+    pub fn snapshot(&self) -> models::BootstrapStatus {
+        self.inner
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn update(
+        &self,
+        app_handle: &tauri::AppHandle,
+        stage: &str,
+        progress: u8,
+        disk_ready: bool,
+        network_ready: bool,
+    ) {
+        let next = models::BootstrapStatus {
+            stage: stage.to_string(),
+            progress: progress.min(100),
+            disk_ready,
+            network_ready,
+        };
+        if let Ok(mut guard) = self.inner.lock() {
+            *guard = next.clone();
+        }
+        let _ = models::BootstrapProgress(next).emit(app_handle);
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct WindowRuntimeState {
     pub was_paused: Arc<AtomicBool>,
     pub window_tracker: Arc<Mutex<storage::WindowSettings>>,
@@ -166,14 +200,19 @@ pub fn handle_window_event(
 }
 
 fn spawn_prewarm_task(
+    app_handle: tauri::AppHandle,
+    bootstrap_state: BootstrapState,
     paths: storage::AppPaths,
     settings: storage::AppSettings,
     active_locale: models::AppLocale,
 ) {
     tauri::async_runtime::spawn(async move {
         let ddragon_opt = build_provider::ddragon::prewarm_ddragon_from_disk(active_locale);
+        bootstrap_state.update(&app_handle, "ddragon_disk", 40, false, false);
+
         profile_provider::prewarm_skins_from_disk(active_locale);
         let _ = profile_provider::get_cached_profile_for_last_summoner(active_locale);
+        bootstrap_state.update(&app_handle, "profile_disk", 60, false, false);
 
         if let Some(ref dd) = ddragon_opt {
             build_provider::analytics::ranked::prewarm_ranked_tier_list_from_dir(
@@ -191,6 +230,7 @@ fn spawn_prewarm_task(
                 dd,
             );
         }
+        bootstrap_state.update(&app_handle, "tier_lists_disk", 80, true, false);
 
         let client = build_provider::shared_http_client();
         let (_, opgg_versions) = tokio::join!(
@@ -199,6 +239,7 @@ fn spawn_prewarm_task(
         );
 
         storage::run_garbage_collector(&paths, &opgg_versions, storage::now_unix_secs());
+        bootstrap_state.update(&app_handle, "ready", 100, true, true);
     });
 }
 
@@ -208,6 +249,8 @@ pub fn setup_app(
     window_tracker: &Arc<Mutex<storage::WindowSettings>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
+    let bootstrap_state = BootstrapState::default();
+    app.manage(bootstrap_state.clone());
 
     // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/ & Cache/ subfolders
     let paths = storage::AppPaths::resolve_from_app(&app_handle).map_err(std::io::Error::other)?;
@@ -232,6 +275,8 @@ pub fn setup_app(
     app.manage(storage::GraphicsState::new(
         settings.graphics.hardware_acceleration,
     ));
+
+    bootstrap_state.update(&app_handle, "settings_loaded", 20, false, false);
 
     // 3. Validate window bounds against connected monitors in logical coordinates
     let monitors: Vec<storage::MonitorRect> = app
@@ -279,7 +324,7 @@ pub fn setup_app(
     });
 
     // Background task 3: Pre-warming (0ms disk hydration -> network version check -> GC)
-    spawn_prewarm_task(paths, settings, active_locale);
+    spawn_prewarm_task(app_handle, bootstrap_state, paths, settings, active_locale);
 
     Ok(())
 }
@@ -295,5 +340,15 @@ mod tests {
         assert!(should_pause_window_animations(false, false, true));
         assert!(should_pause_window_animations(false, true, false));
         assert!(should_pause_window_animations(true, false, false));
+    }
+
+    #[test]
+    fn test_bootstrap_state_defaults_and_snapshot() {
+        let state = BootstrapState::default();
+        let snap = state.snapshot();
+        assert_eq!(snap.stage, "initializing");
+        assert_eq!(snap.progress, 0);
+        assert!(!snap.disk_ready);
+        assert!(!snap.network_ready);
     }
 }

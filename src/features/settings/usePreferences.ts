@@ -50,6 +50,7 @@ export function usePreferences(
   const [gpuRestartRequired, setGpuRestartRequired] = useState<boolean>(false);
   const [navigationState, setNavigationState] = useState<NavigationState | null>(null);
   const [iniBacked, setIniBacked] = useState<boolean>(false);
+  const [preferencesReady, setPreferencesReady] = useState<boolean>(false);
 
   const gpuActiveAtStartupRef = useRef<boolean>(true);
   const usingIniRef = useRef<boolean>(false);
@@ -63,36 +64,42 @@ export function usePreferences(
   useEffect(() => {
     let active = true;
     const initialize = async () => {
-      const settings = await fetchInitialIniSettings();
-      if (active && settings) {
-        usingIniRef.current = true;
-        setIniBacked(true);
-        const hydrated = extractHydratedIniSettings(settings);
-        setLocale(hydrated.resolvedLocale);
-        setNeedsLanguageOnboarding(hydrated.needsOnboarding);
-        setNeedsFlashOnboarding(hydrated.needsFlashOnboarding);
-        setPreferences(hydrated.preferences);
-        profileBlurRef.current = hydrated.blur;
-        setProfileBlur(hydrated.blur);
-        wallpaperVisibleRef.current = hydrated.wallpaperVisible;
-        setWallpaperVisible(hydrated.wallpaperVisible);
-        setHardwareAcceleration(hydrated.hardwareAcceleration);
-        setNavigationState(hydrated.navigation);
-      } else if (active) {
-        settingsIpc.syncUserPreferences(preferences).catch(() => {});
-        settingsIpc.setLocale(locale).catch(() => {});
-      }
+      try {
+        const settings = await fetchInitialIniSettings();
+        if (active && settings) {
+          usingIniRef.current = true;
+          setIniBacked(true);
+          const hydrated = extractHydratedIniSettings(settings);
+          setLocale(hydrated.resolvedLocale);
+          setNeedsLanguageOnboarding(hydrated.needsOnboarding);
+          setNeedsFlashOnboarding(hydrated.needsFlashOnboarding);
+          setPreferences(hydrated.preferences);
+          profileBlurRef.current = hydrated.blur;
+          setProfileBlur(hydrated.blur);
+          wallpaperVisibleRef.current = hydrated.wallpaperVisible;
+          setWallpaperVisible(hydrated.wallpaperVisible);
+          setHardwareAcceleration(hydrated.hardwareAcceleration);
+          setNavigationState(hydrated.navigation);
+        } else if (active) {
+          settingsIpc.syncUserPreferences(preferences).catch(() => {});
+          settingsIpc.setLocale(locale).catch(() => {});
+        }
 
-      settingsIpc
-        .getHardwareAccelerationStatus()
-        .then((status) => {
+        try {
+          const status = await settingsIpc.getHardwareAccelerationStatus();
           if (active && status && typeof status.enabled === "boolean") {
             gpuActiveAtStartupRef.current = status.active_at_startup;
             setHardwareAcceleration(status.enabled);
             setGpuRestartRequired(status.enabled !== status.active_at_startup);
           }
-        })
-        .catch(() => {});
+        } catch {
+          // Ignore in non-Tauri environments
+        }
+      } finally {
+        if (active) {
+          setPreferencesReady(true);
+        }
+      }
     };
 
     initialize();
@@ -280,5 +287,6 @@ export function usePreferences(
     navigationState,
     updateNavigationState,
     iniBacked,
+    preferencesReady,
   };
 }

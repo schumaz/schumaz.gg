@@ -33,6 +33,18 @@ export interface CoreTranslations {
     itemAlt: string;
     searchChampionPlaceholder: string;
   };
+  startup: {
+    ariaLabel: string;
+    stages: {
+      initializing: string;
+      settings: string;
+      cache: string;
+      client: string;
+      assets: string;
+      syncing: string;
+      ready: string;
+    };
+  };
   onboarding: {
     badge: string;
     title: string;

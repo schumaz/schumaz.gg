@@ -32,6 +32,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_aram_mayhem_augments,
             commands::get_ranked_tier_list,
             commands::get_ranked_champion_build,
+            commands::get_bootstrap_status,
             commands::get_hardware_acceleration_status,
             commands::set_hardware_acceleration,
             commands::get_app_settings,
@@ -43,6 +44,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::restart_app
         ])
         .events(collect_events![
+            models::BootstrapProgress,
             models::LcuConnected,
             models::LcuDisconnected,
             models::ChampSelected,

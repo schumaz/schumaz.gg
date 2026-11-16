@@ -14,6 +14,18 @@ export const ptCore: CoreTranslations = {
     itemAlt: "Item {id}",
     searchChampionPlaceholder: "Buscar campeão...",
   },
+  startup: {
+    ariaLabel: "Carregando schumaz.gg",
+    stages: {
+      initializing: "Inicializando...",
+      settings: "Carregando preferências...",
+      cache: "Preparando cache local...",
+      client: "Verificando cliente do LoL...",
+      assets: "Carregando recursos da interface...",
+      syncing: "Sincronizando dados...",
+      ready: "Pronto",
+    },
+  },
   onboarding: {
     badge: "schumaz.gg",
     title: "Escolha seu idioma",

@@ -29,6 +29,7 @@ export function usePlayerProfile(
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [refreshCooldownSecs, setRefreshCooldownSecs] = useState(0);
+  const [profileInitialReady, setProfileInitialReady] = useState(false);
 
   const fetchSeqRef = useRef(0);
   const lastSummonerIdRef = useRef<number | null>(null);
@@ -78,7 +79,10 @@ export function usePlayerProfile(
 
   // Instant 0ms startup hydration from disk cache before LCU connects
   useEffect(() => {
-    if (summonerRef.current !== null) return;
+    if (summonerRef.current !== null) {
+      setProfileInitialReady(true);
+      return;
+    }
     let active = true;
     profileIpc
       .getCachedPlayerProfile(null)
@@ -92,7 +96,10 @@ export function usePlayerProfile(
           setProfile(cached.profile);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setProfileInitialReady(true);
+      });
     return () => {
       active = false;
     };
@@ -165,6 +172,7 @@ export function usePlayerProfile(
           ) {
             setProfile(cached.profile);
             setProfileError(null);
+            setProfileInitialReady(true);
             if (!cached.isStale) return;
             await fetchProfile(false, true, false);
             return;
@@ -175,6 +183,9 @@ export function usePlayerProfile(
 
         if (!cancelled && fetchSeqRef.current === connectSeq) {
           await fetchProfile(false, false, true);
+        }
+        if (!cancelled) {
+          setProfileInitialReady(true);
         }
       };
 
@@ -213,5 +224,6 @@ export function usePlayerProfile(
     profileError,
     refreshCooldownSecs,
     refreshProfile,
+    profileInitialReady,
   };
 }

@@ -14,6 +14,18 @@ export const enCore: CoreTranslations = {
     itemAlt: "Item {id}",
     searchChampionPlaceholder: "Search champion...",
   },
+  startup: {
+    ariaLabel: "Loading schumaz.gg",
+    stages: {
+      initializing: "Initializing...",
+      settings: "Loading preferences...",
+      cache: "Preparing local cache...",
+      client: "Checking LoL client...",
+      assets: "Loading interface assets...",
+      syncing: "Syncing data...",
+      ready: "Ready",
+    },
+  },
   onboarding: {
     badge: "schumaz.gg",
     title: "Choose your language",
