@@ -28,6 +28,7 @@ pub(super) const SEC_NAVIGATION: &str = "/Script/SchumazGG.NavigationState";
 pub struct GeneralSettings {
     pub language: Option<AppLocale>,
     pub language_onboarding_completed: bool,
+    pub flash_onboarding_completed: bool,
     pub legacy_storage_migrated: bool,
 }
 

@@ -19,6 +19,10 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         fmt_bool(s.general.language_onboarding_completed)
     ));
     out.push_str(&format!(
+        "bFlashOnboardingCompleted={}\n",
+        fmt_bool(s.general.flash_onboarding_completed)
+    ));
+    out.push_str(&format!(
         "bLegacyStorageMigrated={}\n\n",
         fmt_bool(s.general.legacy_storage_migrated)
     ));

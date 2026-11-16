@@ -41,6 +41,11 @@ pub fn parse_user_settings_ini(content: &str) -> AppSettings {
                         saw_explicit_onboarding = true;
                     }
                 }
+                "bFlashOnboardingCompleted" => {
+                    if let Some(b) = parse_bool(val) {
+                        settings.general.flash_onboarding_completed = b;
+                    }
+                }
                 "bLegacyStorageMigrated" => {
                     if let Some(b) = parse_bool(val) {
                         settings.general.legacy_storage_migrated = b;
@@ -211,6 +216,7 @@ mod tests {
         let mut s = AppSettings::default();
         s.general.language = Some(AppLocale::PtBr);
         s.general.language_onboarding_completed = true;
+        s.general.flash_onboarding_completed = true;
         s.general.legacy_storage_migrated = true;
         s.automation.auto_inject_runes = false;
         s.automation.flash_key = FlashKeyPreference::F;
@@ -242,6 +248,18 @@ mod tests {
         let ini = serialize_user_settings_ini(&s);
         let parsed = parse_user_settings_ini(&ini);
         assert_eq!(parsed, s);
+
+        // Existing INI without bFlashOnboardingCompleted keeps flash_onboarding_completed = false
+        // so existing users still see the Flash onboarding modal once.
+        let legacy_ini = "
+[/Script/SchumazGG.GeneralSettings]
+Language=pt_BR
+bLanguageOnboardingCompleted=True
+bLegacyStorageMigrated=True
+";
+        let parsed_legacy = parse_user_settings_ini(legacy_ini);
+        assert!(parsed_legacy.general.language_onboarding_completed);
+        assert!(!parsed_legacy.general.flash_onboarding_completed);
 
         // Corrupt / malformed manual edits fall back per-key without losing valid keys
         let edited = format!(

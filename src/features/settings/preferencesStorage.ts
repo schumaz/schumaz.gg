@@ -3,6 +3,7 @@ import {
   AppLocale,
   AppSettings,
   DEFAULT_PREFERENCES,
+  FLASH_ONBOARDING_STORAGE_KEY,
   LANGUAGE_STORAGE_KEY,
   NavigationState,
   NavigationStatePatch,
@@ -69,6 +70,7 @@ export function clearLegacyLocalStorageKeys(): void {
     for (const key of LEGACY_LOCAL_STORAGE_KEYS) {
       localStorage.removeItem(key);
     }
+    localStorage.removeItem(FLASH_ONBOARDING_STORAGE_KEY);
   } catch {
     // Ignore storage access errors
   }
@@ -94,6 +96,22 @@ export function loadInitialLanguageState(): InitialLanguageState {
 export function saveLanguageToStorage(locale: AppLocale): void {
   try {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, locale);
+  } catch {
+    // Ignore localStorage quota errors
+  }
+}
+
+export function loadInitialFlashOnboardingNeeded(): boolean {
+  try {
+    return localStorage.getItem(FLASH_ONBOARDING_STORAGE_KEY) !== "true";
+  } catch {
+    return true;
+  }
+}
+
+export function saveFlashOnboardingCompletedToStorage(): void {
+  try {
+    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
   } catch {
     // Ignore localStorage quota errors
   }

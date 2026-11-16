@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App from "../../../App";
+import App, { FLASH_ONBOARDING_STORAGE_KEY } from "../../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { defaultAppInvokeMock, mockAhriBuild } from "../../../__tests__/appTestFixtures";
 
@@ -26,6 +26,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     eventListeners = {};
     localStorage.clear();
     localStorage.setItem("schumaz_language", "pt_BR");
+    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
   });
 
   it("swaps summoner spell slots and supports inverting spells with immediate injection in champion select", async () => {

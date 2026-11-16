@@ -25,6 +25,15 @@ export const enCore: CoreTranslations = {
     portugueseName: "Português",
     portugueseRegion: "Brazil (PT-BR)",
     ariaGroup: "Language selection",
+    flashTitle: "Which key do you use for Flash?",
+    flashSubtitle:
+      "Select the key where Flash will be placed when applying summoner spells. You can change this later in Settings.",
+    flashConfirmBtn: "Continue",
+    flashAriaGroup: "Flash key selection",
+    flashOptionDTitle: "Flash on D",
+    flashOptionDDesc: "Slot 1 (D Key)",
+    flashOptionFTitle: "Flash on F",
+    flashOptionFDesc: "Slot 2 (F Key)",
   },
   nav: {
     ariaLabel: "Main Navigation",

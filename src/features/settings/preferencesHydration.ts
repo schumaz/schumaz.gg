@@ -11,6 +11,7 @@ import {
 export interface HydratedIniSettings {
   resolvedLocale: AppLocale;
   needsOnboarding: boolean;
+  needsFlashOnboarding: boolean;
   preferences: UserPreferences;
   blur: number;
   wallpaperVisible: boolean;
@@ -30,6 +31,7 @@ export function extractHydratedIniSettings(settings: AppSettings): HydratedIniSe
   return {
     resolvedLocale,
     needsOnboarding: !settings.general.languageOnboardingCompleted,
+    needsFlashOnboarding: !settings.general.flashOnboardingCompleted,
     preferences: {
       ...settings.automation,
       language: resolvedLocale,

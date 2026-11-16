@@ -21,6 +21,7 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     general: {
       language: "pt_BR",
       languageOnboardingCompleted: true,
+      flashOnboardingCompleted: true,
       legacyStorageMigrated: true,
     },
     automation: {

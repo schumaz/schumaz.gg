@@ -2,6 +2,7 @@ import {
   commands,
   type AppLocale,
   type AppSettings,
+  type FlashKeyPreference,
   type HardwareAccelerationStatus,
   type LegacyLocalStoragePayload,
   type NavigationStatePatch,
@@ -37,6 +38,10 @@ export const settingsIpc = {
 
   async completeLanguageOnboarding(locale: AppLocale): Promise<AppSettings> {
     return commands.completeLanguageOnboarding(locale);
+  },
+
+  async completeFlashOnboarding(flashKey: FlashKeyPreference): Promise<AppSettings> {
+    return commands.completeFlashOnboarding(flashKey);
   },
 
   async migrateLegacyLocalStorage(payload: LegacyLocalStoragePayload): Promise<AppSettings> {

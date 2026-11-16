@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import App, { LANGUAGE_STORAGE_KEY } from "../App";
+import App, { FLASH_ONBOARDING_STORAGE_KEY, LANGUAGE_STORAGE_KEY } from "../App";
 import { invoke } from "@tauri-apps/api/core";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -17,7 +17,7 @@ describe("First-Launch Language Onboarding Screen", () => {
     vi.clearAllMocks();
   });
 
-  it("opens in English on first launch, updates UI immediately on flag click without saving, and persists only on Continue", async () => {
+  it("opens in English on first launch, updates UI immediately on flag click without saving, and transitions to Flash onboarding on Continue", async () => {
     render(<App />);
 
     // 1. Blurred onboarding overlay appears on first open with initial language = English (en_US)
@@ -67,7 +67,7 @@ describe("First-Launch Language Onboarding Screen", () => {
     expect(continueBtn).toHaveTextContent("Continue");
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBeNull();
 
-    // Switch back to Portuguese and click Continue to persist and dismiss
+    // Switch back to Portuguese and click Continue to persist and advance to Flash onboarding
     fireEvent.click(ptBtn);
     fireEvent.click(continueBtn);
 
@@ -78,9 +78,10 @@ describe("First-Launch Language Onboarding Screen", () => {
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("pt_BR");
     expect(invoke).toHaveBeenCalledWith("set_locale", { locale: "pt_BR" });
     expect(screen.getByRole("button", { name: /^Configurações$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("flash-onboarding-modal")).toHaveTextContent("Em qual tecla você usa o Flash?");
   });
 
-  it("persists English when clicking Continue directly on first launch and skips onboarding on subsequent launches", async () => {
+  it("persists English and Flash key sequentially on first launch and skips both onboarding screens on subsequent launches", async () => {
     const { unmount } = render(<App />);
 
     expect(screen.getByTestId("language-onboarding-modal")).toBeInTheDocument();
@@ -93,10 +94,21 @@ describe("First-Launch Language Onboarding Screen", () => {
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("en_US");
     expect(invoke).toHaveBeenCalledWith("set_locale", { locale: "en_US" });
 
-    // Re-mounting App skips onboarding since language is already persisted
+    // Flash onboarding opens right after language selection in English
+    const flashModal = screen.getByTestId("flash-onboarding-modal");
+    expect(flashModal).toHaveTextContent("Which key do you use for Flash?");
+    fireEvent.click(screen.getByTestId("flash-onboarding-continue-btn"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("flash-onboarding-modal")).not.toBeInTheDocument();
+    });
+    expect(localStorage.getItem(FLASH_ONBOARDING_STORAGE_KEY)).toBe("true");
+
+    // Re-mounting App skips both onboarding screens since both are persisted
     unmount();
     render(<App />);
     expect(screen.queryByTestId("language-onboarding-modal")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("flash-onboarding-modal")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Settings$/i })).toBeInTheDocument();
   });
 });

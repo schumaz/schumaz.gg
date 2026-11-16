@@ -43,6 +43,14 @@ export interface CoreTranslations {
     portugueseName: string;
     portugueseRegion: string;
     ariaGroup: string;
+    flashTitle: string;
+    flashSubtitle: string;
+    flashConfirmBtn: string;
+    flashAriaGroup: string;
+    flashOptionDTitle: string;
+    flashOptionDDesc: string;
+    flashOptionFTitle: string;
+    flashOptionFDesc: string;
   };
   nav: {
     ariaLabel: string;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App from "../../../App";
+import App, { FLASH_ONBOARDING_STORAGE_KEY } from "../../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { defaultAppInvokeMock, mockAhriBuild } from "../../../__tests__/appTestFixtures";
 
@@ -26,6 +26,7 @@ describe("App — ARAM Modes & Match Lifecycle Navigation", () => {
     eventListeners = {};
     localStorage.clear();
     localStorage.setItem("schumaz_language", "pt_BR");
+    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
   });
 
   it("hides Rota selector, omits position in filter updates, and forwards active queueId to inject_item_build in ARAM (450)", async () => {

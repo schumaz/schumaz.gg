@@ -15,11 +15,13 @@ import {
   WALLPAPER_VISIBLE_STORAGE_KEY,
   clampProfileBlur,
   isValidAppSettings,
+  loadInitialFlashOnboardingNeeded,
   loadInitialLanguageState,
   loadInitialPreferences,
   loadInitialProfileBlur,
   loadInitialWallpaperVisible,
   mergeNavigationState,
+  saveFlashOnboardingCompletedToStorage,
   saveLanguageToStorage,
 } from "./preferencesStorage";
 import { extractHydratedIniSettings, fetchInitialIniSettings } from "./preferencesHydration";
@@ -35,6 +37,9 @@ export function usePreferences(
   const [locale, setLocale] = useState<AppLocale>(initialLangState.locale);
   const [needsLanguageOnboarding, setNeedsLanguageOnboarding] = useState<boolean>(
     initialLangState.needsOnboarding
+  );
+  const [needsFlashOnboarding, setNeedsFlashOnboarding] = useState<boolean>(
+    loadInitialFlashOnboardingNeeded
   );
   const [preferences, setPreferences] = useState<UserPreferences>(() =>
     loadInitialPreferences(initialLangState.locale)
@@ -65,6 +70,7 @@ export function usePreferences(
         const hydrated = extractHydratedIniSettings(settings);
         setLocale(hydrated.resolvedLocale);
         setNeedsLanguageOnboarding(hydrated.needsOnboarding);
+        setNeedsFlashOnboarding(hydrated.needsFlashOnboarding);
         setPreferences(hydrated.preferences);
         profileBlurRef.current = hydrated.blur;
         setProfileBlur(hydrated.blur);
@@ -169,6 +175,33 @@ export function usePreferences(
     settingsIpc.setLocale(locale).then(notify).catch(notify);
   }, [locale, persistPreferences, onLocaleChange]);
 
+  const previewOnboardingFlashKey = useCallback((nextKey: FlashKeyPreference) => {
+    setPreferences((prev) => ({ ...prev, flashKey: nextKey }));
+  }, []);
+
+  const confirmFlashOnboarding = useCallback(() => {
+    const selectedFlashKey = preferences.flashKey;
+    setNeedsFlashOnboarding(false);
+    setPreferences((prev) => {
+      const next = { ...prev, flashKey: selectedFlashKey };
+      if (!usingIniRef.current) {
+        try {
+          localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+    if (usingIniRef.current) {
+      settingsIpc.completeFlashOnboarding(selectedFlashKey).catch(() => {});
+    } else {
+      saveFlashOnboardingCompletedToStorage();
+      settingsIpc
+        .syncUserPreferences({ ...preferences, flashKey: selectedFlashKey })
+        .catch(() => {});
+    }
+    onFlashKeyChange?.(selectedFlashKey);
+  }, [preferences, onFlashKeyChange]);
+
   const updateProfileBlur = useCallback((blurPercent: number) => {
     const clamped = clampProfileBlur(blurPercent);
     profileBlurRef.current = clamped;
@@ -230,6 +263,9 @@ export function usePreferences(
     needsLanguageOnboarding,
     previewOnboardingLocale,
     confirmLanguageOnboarding,
+    needsFlashOnboarding,
+    previewOnboardingFlashKey,
+    confirmFlashOnboarding,
     changeLanguage,
     preferences,
     updatePreference,

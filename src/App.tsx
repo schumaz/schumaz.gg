@@ -7,7 +7,13 @@ import { useWindowMinimized } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
 import { ARAM_DOCK_ICON_URL, NavigationDock, StatusDock } from "./components/ui";
-import { LanguageOnboardingModal, SettingsTab, profileBlurPercentToPx, usePreferences } from "./features/settings";
+import {
+  FlashOnboardingModal,
+  LanguageOnboardingModal,
+  SettingsTab,
+  profileBlurPercentToPx,
+  usePreferences,
+} from "./features/settings";
 import { ProfileTab, ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
 import { ChampSelectTab, useLcuEvents } from "./features/champ-select";
 import { AramTab, useAram } from "./features/aram";
@@ -230,13 +236,19 @@ function App() {
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 
-        {prefs.needsLanguageOnboarding && (
+        {prefs.needsLanguageOnboarding ? (
           <LanguageOnboardingModal
             selectedLocale={locale}
             onSelectLocale={prefs.previewOnboardingLocale}
             onConfirm={prefs.confirmLanguageOnboarding}
           />
-        )}
+        ) : prefs.needsFlashOnboarding ? (
+          <FlashOnboardingModal
+            selectedFlashKey={preferences.flashKey}
+            onSelectFlashKey={prefs.previewOnboardingFlashKey}
+            onConfirm={prefs.confirmFlashOnboarding}
+          />
+        ) : null}
       </main>
     </I18nProvider>
   );

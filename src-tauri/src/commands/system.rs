@@ -1,5 +1,5 @@
 use crate::lcu_injector;
-use crate::models::AppLocale;
+use crate::models::{AppLocale, FlashKeyPreference};
 use crate::storage::{
     self, AppSettings, GraphicsState, HardwareAccelerationStatus, LegacyLocalStoragePayload,
     NavigationStatePatch,
@@ -54,6 +54,15 @@ pub fn update_navigation_state(patch: NavigationStatePatch) -> Result<AppSetting
 #[specta::specta]
 pub async fn complete_language_onboarding(locale: AppLocale) -> Result<AppSettings, String> {
     lcu_injector::complete_language_onboarding_service(locale)
+}
+
+/// Marks the first-run Flash key onboarding completed with `flash_key` (`D` | `F`) and persists to `UserSettings.ini`.
+#[tauri::command]
+#[specta::specta]
+pub async fn complete_flash_onboarding(
+    flash_key: FlashKeyPreference,
+) -> Result<AppSettings, String> {
+    lcu_injector::complete_flash_onboarding_service(flash_key)
 }
 
 /// Performs one-time migration of the 6 legacy `localStorage` keys into `UserSettings.ini`.

@@ -25,6 +25,15 @@ export const ptCore: CoreTranslations = {
     portugueseName: "Português",
     portugueseRegion: "Brasil (PT-BR)",
     ariaGroup: "Seleção de idioma",
+    flashTitle: "Em qual tecla você usa o Flash?",
+    flashSubtitle:
+      "Selecione a tecla onde o feitiço Flash será posicionado ao aplicar os feitiços de invocador. Você poderá alterar isso depois em Configurações.",
+    flashConfirmBtn: "Continuar",
+    flashAriaGroup: "Seleção da tecla do Flash",
+    flashOptionDTitle: "Flash no D",
+    flashOptionDDesc: "Espaço 1 (Tecla D)",
+    flashOptionFTitle: "Flash no F",
+    flashOptionFDesc: "Espaço 2 (Tecla F)",
   },
   nav: {
     ariaLabel: "Navegação Principal",

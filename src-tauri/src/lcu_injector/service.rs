@@ -5,7 +5,7 @@ use super::selections::{
     set_selected_build, set_selected_core_build, set_selected_final_build, set_selected_rune_page,
     set_selected_secondary_spell,
 };
-use crate::models::{AppLocale, QUEUE_SOLO_DUO, UserPreferences};
+use crate::models::{AppLocale, FlashKeyPreference, QUEUE_SOLO_DUO, UserPreferences};
 use crate::storage::{AppSettings, LegacyLocalStoragePayload};
 use crate::{build_provider, lcu_connector, storage};
 
@@ -162,6 +162,19 @@ pub fn complete_language_onboarding_service(locale: AppLocale) -> Result<AppSett
     Ok(updated)
 }
 
+/// Marks Flash key onboarding completed, persists `flashKey` to `UserSettings.ini`, and syncs preferences.
+pub fn complete_flash_onboarding_service(
+    flash_key: FlashKeyPreference,
+) -> Result<AppSettings, String> {
+    let updated = storage::update_global_settings(|s| {
+        s.general.flash_onboarding_completed = true;
+        s.automation.flash_key = flash_key;
+    })?;
+
+    set_user_preferences(updated.automation.clone());
+    Ok(updated)
+}
+
 /// Migrates legacy `localStorage` keys into `UserSettings.ini` and syncs active automation preferences.
 pub fn migrate_legacy_local_storage_service(
     payload: LegacyLocalStoragePayload,
@@ -187,5 +200,13 @@ mod tests {
         assert_eq!(normalize_item_build_queue_id(None, Some(450)), 450);
         assert_eq!(normalize_item_build_queue_id(None, Some(2400)), 2400);
         assert_eq!(normalize_item_build_queue_id(None, None), 420);
+    }
+
+    #[test]
+    fn test_complete_flash_onboarding_service_persists_flash_key_and_flag() {
+        let updated = complete_flash_onboarding_service(FlashKeyPreference::F).unwrap();
+        assert!(updated.general.flash_onboarding_completed);
+        assert_eq!(updated.automation.flash_key, FlashKeyPreference::F);
+        assert_eq!(get_user_preferences().flash_key, FlashKeyPreference::F);
     }
 }

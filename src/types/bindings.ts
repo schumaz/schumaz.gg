@@ -57,6 +57,8 @@ export const commands = {
 	updateNavigationState: (patch: NavigationStatePatch_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("update_navigation_state", { patch }),
 	/**  Marks the first-run language onboarding completed with `locale` and persists to `UserSettings.ini`. */
 	completeLanguageOnboarding: (locale: AppLocale) => __TAURI_INVOKE<AppSettings_Serialize>("complete_language_onboarding", { locale }),
+	/**  Marks the first-run Flash key onboarding completed with `flash_key` (`D` | `F`) and persists to `UserSettings.ini`. */
+	completeFlashOnboarding: (flashKey: FlashKeyPreference) => __TAURI_INVOKE<AppSettings_Serialize>("complete_flash_onboarding", { flashKey }),
 	/**  Performs one-time migration of the 6 legacy `localStorage` keys into `UserSettings.ini`. */
 	migrateLegacyLocalStorage: (payload: LegacyLocalStoragePayload_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("migrate_legacy_local_storage", { payload }),
 	/**  Restarts the Tauri application so updated WebView2 GPU flags take effect. */
@@ -313,12 +315,14 @@ export type GeneralSettings = GeneralSettings_Serialize | GeneralSettings_Deseri
 export type GeneralSettings_Deserialize = {
 	language?: AppLocale | null,
 	languageOnboardingCompleted: boolean,
+	flashOnboardingCompleted: boolean,
 	legacyStorageMigrated: boolean,
 };
 
 export type GeneralSettings_Serialize = {
 	language: AppLocale | null,
 	languageOnboardingCompleted: boolean,
+	flashOnboardingCompleted: boolean,
 	legacyStorageMigrated: boolean,
 };
 
