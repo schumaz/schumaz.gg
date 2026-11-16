@@ -14,6 +14,7 @@ pub struct AppPaths {
     pub root: PathBuf,
     pub config_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub webview_dir: PathBuf,
     pub ddragon_dir: PathBuf,
     pub opgg_dir: PathBuf,
     pub opgg_versions_dir: PathBuf,
@@ -29,6 +30,7 @@ impl AppPaths {
     pub fn from_root(root: PathBuf) -> Self {
         let config_dir = root.join("Config");
         let cache_dir = root.join("Cache");
+        let webview_dir = root.join("WebView");
         let ddragon_dir = cache_dir.join("ddragon");
         let opgg_dir = cache_dir.join("opgg");
         let opgg_versions_dir = opgg_dir.join("versions");
@@ -43,6 +45,7 @@ impl AppPaths {
             root,
             config_dir,
             cache_dir,
+            webview_dir,
             ddragon_dir,
             opgg_dir,
             opgg_versions_dir,
@@ -70,6 +73,7 @@ impl AppPaths {
             &self.root,
             &self.config_dir,
             &self.cache_dir,
+            &self.webview_dir,
             &self.ddragon_dir,
             &self.opgg_dir,
             &self.opgg_versions_dir,
@@ -191,4 +195,44 @@ pub fn touch_mtime(path: &Path) {
 #[cfg(test)]
 pub(super) fn next_test_seq() -> u64 {
     TEMP_FILE_SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_paths_centralizes_config_cache_and_webview_under_root() {
+        let root = std::env::temp_dir().join(format!(
+            "schumazgg_paths_test_{}_{}",
+            std::process::id(),
+            next_test_seq()
+        ));
+        let _ = fs::remove_dir_all(&root);
+
+        let paths = AppPaths::from_root(root.clone());
+        assert_eq!(paths.root, root);
+        assert_eq!(paths.config_dir, root.join("Config"));
+        assert_eq!(paths.cache_dir, root.join("Cache"));
+        assert_eq!(paths.webview_dir, root.join("WebView"));
+        assert_eq!(paths.ddragon_dir, root.join("Cache").join("ddragon"));
+        assert_eq!(paths.opgg_dir, root.join("Cache").join("opgg"));
+        assert_eq!(paths.profile_dir, root.join("Cache").join("profile"));
+        assert_eq!(paths.assets_dir, root.join("Cache").join("assets"));
+        assert_eq!(
+            paths.user_settings_ini_path(),
+            root.join("Config").join("UserSettings.ini")
+        );
+
+        paths.ensure_dirs().unwrap();
+        assert!(paths.config_dir.is_dir());
+        assert!(paths.cache_dir.is_dir());
+        assert!(paths.webview_dir.is_dir());
+        assert!(paths.ddragon_dir.is_dir());
+        assert!(paths.opgg_dir.is_dir());
+        assert!(paths.profile_dir.is_dir());
+        assert!(paths.assets_dir.is_dir());
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

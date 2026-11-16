@@ -252,7 +252,7 @@ pub fn setup_app(
     let bootstrap_state = BootstrapState::default();
     app.manage(bootstrap_state.clone());
 
-    // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/ & Cache/ subfolders
+    // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/, Cache/, & WebView/ subfolders
     let paths = storage::AppPaths::resolve_from_app(&app_handle).map_err(std::io::Error::other)?;
     paths.ensure_dirs().map_err(std::io::Error::other)?;
     storage::set_global_paths(paths.clone());
@@ -304,7 +304,9 @@ pub fn setup_app(
             Some(storage::browser_args_for_hardware_acceleration(
                 settings.graphics.hardware_acceleration,
             ));
-        tauri::WebviewWindowBuilder::from_config(&app_handle, &window_config)?.build()?;
+        tauri::WebviewWindowBuilder::from_config(&app_handle, &window_config)?
+            .data_directory(paths.webview_dir.clone())
+            .build()?;
     }
 
     // Background task 1: Monitor LCU process liveness
