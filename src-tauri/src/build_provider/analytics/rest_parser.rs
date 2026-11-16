@@ -176,19 +176,6 @@ pub fn parse_opgg_analysis_payload_with_options(
     normalize_entries(&mut fifth_entries);
     normalize_entries(&mut sixth_entries);
 
-    let cand_ids: Vec<i32> = candidate_entries
-        .iter()
-        .chain(fourth_entries.iter())
-        .chain(fifth_entries.iter())
-        .chain(sixth_entries.iter())
-        .flat_map(|e| e.ids.clone())
-        .collect();
-    let core_build_options = extract_top_core_build_options(&core_entries, &cand_ids, damage_type);
-    let primary_core = if let Some(first_core) = core_build_options.first() {
-        first_core.item_ids.clone()
-    } else {
-        vec![]
-    };
     let item_blocks = build_5_item_blocks_with_depth_lists(
         starter_entries,
         boot_entries,
@@ -215,14 +202,6 @@ pub fn parse_opgg_analysis_payload_with_options(
         damage_type,
         position,
     );
-    let final_build_options = build_3_final_build_options(
-        &primary_core,
-        &fourth_entries,
-        &fifth_entries,
-        &sixth_entries,
-        &cand_ids,
-        damage_type,
-    );
 
     let spell_choices = spell_choice_ids
         .into_iter()
@@ -247,8 +226,6 @@ pub fn parse_opgg_analysis_payload_with_options(
         spell_choices,
         rune_pages: top_rune_pages,
         build_options,
-        core_build_options,
-        final_build_options,
         supports_runes: effective_supports_runes,
         ..Default::default()
     })

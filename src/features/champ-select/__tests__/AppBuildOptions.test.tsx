@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App, { FLASH_ONBOARDING_STORAGE_KEY } from "../../../App";
+import App from "../../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { defaultAppInvokeMock, mockAhriBuild } from "../../../__tests__/appTestFixtures";
 
@@ -25,8 +25,6 @@ describe("App — Rune Pages & Unified Build Options", () => {
   beforeEach(() => {
     eventListeners = {};
     localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
   });
 
   it("renders rune page selector with 3 most played options, displays keystone/sub-style and game count, and allows switching rune pages with LCU injection", async () => {
@@ -184,8 +182,6 @@ describe("App — Rune Pages & Unified Build Options", () => {
       championId: 103,
       queueId: 420,
       buildIndex: 1,
-      coreIndex: 1,
-      finalIndex: 1,
     });
 
     await act(async () => {

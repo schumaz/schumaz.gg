@@ -33,7 +33,7 @@ export const commands = {
 	/**  Tauri command to immediately inject a specific chosen rune page into the LoL client. */
 	injectRunePage: (championId: number, championName: string, pageIndex: number, primaryStyleId: number, subStyleId: number, selectedPerkIds: number[]) => __TAURI_INVOKE<null>("inject_rune_page", { championId, championName, pageIndex, primaryStyleId, subStyleId, selectedPerkIds }),
 	/**  Tauri command to immediately update and re-inject item sets into the LoL client shop. */
-	injectItemBuild: (championId: number, queueId: number | null, buildIndex: number | null, coreIndex: number | null, finalIndex: number | null) => __TAURI_INVOKE<null>("inject_item_build", { championId, queueId, buildIndex, coreIndex, finalIndex }),
+	injectItemBuild: (championId: number, queueId: number | null, buildIndex: number | null) => __TAURI_INVOKE<null>("inject_item_build", { championId, queueId, buildIndex }),
 	/**  Tauri command to fetch ARAM or ARAM Mayhem champion tier list. */
 	getAramTierList: (mode: AramMode) => __TAURI_INVOKE<AramChampionRank_Serialize[]>("get_aram_tier_list", { mode }),
 	/**  Tauri command to fetch ARAM Mayhem augments for a specific champion key. */
@@ -61,8 +61,6 @@ export const commands = {
 	completeLanguageOnboarding: (locale: AppLocale) => __TAURI_INVOKE<AppSettings_Serialize>("complete_language_onboarding", { locale }),
 	/**  Marks the first-run Flash key onboarding completed with `flash_key` (`D` | `F`) and persists to `UserSettings.ini`. */
 	completeFlashOnboarding: (flashKey: FlashKeyPreference) => __TAURI_INVOKE<AppSettings_Serialize>("complete_flash_onboarding", { flashKey }),
-	/**  Performs one-time migration of the 6 legacy `localStorage` keys into `UserSettings.ini`. */
-	migrateLegacyLocalStorage: (payload: LegacyLocalStoragePayload_Deserialize) => __TAURI_INVOKE<AppSettings_Serialize>("migrate_legacy_local_storage", { payload }),
 	/**  Restarts the Tauri application so updated WebView2 GPU flags take effect. */
 	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
@@ -253,9 +251,7 @@ export type ChampionBuild_Deserialize = {
 	spell2_id: number,
 	item_blocks: ItemBlock_Deserialize[],
 	rune_pages?: RunePageOption_Deserialize[],
-	core_build_options?: ItemBuildOption_Deserialize[],
 	build_options?: UnifiedBuildOption_Deserialize[],
-	final_build_options?: ItemBuildOption_Deserialize[],
 	champion_icon_url?: string,
 	primary_style_name?: string,
 	primary_style_icon_url?: string,
@@ -287,9 +283,7 @@ export type ChampionBuild_Serialize = {
 	spell2_id: number,
 	item_blocks: ItemBlock_Serialize[],
 	rune_pages: RunePageOption_Serialize[],
-	core_build_options: ItemBuildOption_Serialize[],
 	build_options: UnifiedBuildOption_Serialize[],
-	final_build_options: ItemBuildOption_Serialize[],
 	champion_icon_url: string,
 	primary_style_name: string,
 	primary_style_icon_url: string,
@@ -328,14 +322,12 @@ export type GeneralSettings_Deserialize = {
 	language?: AppLocale | null,
 	languageOnboardingCompleted: boolean,
 	flashOnboardingCompleted: boolean,
-	legacyStorageMigrated: boolean,
 };
 
 export type GeneralSettings_Serialize = {
 	language: AppLocale | null,
 	languageOnboardingCompleted: boolean,
 	flashOnboardingCompleted: boolean,
-	legacyStorageMigrated: boolean,
 };
 
 export type GraphicsSettings = {
@@ -373,27 +365,6 @@ export type ItemBlock_Serialize = {
 	item_icon_urls: string[],
 };
 
-/**  Metadata for a multi-option item build (e.g. Core 3 or Final 6). */
-export type ItemBuildOption = ItemBuildOption_Serialize | ItemBuildOption_Deserialize;
-
-/**  Metadata for a multi-option item build (e.g. Core 3 or Final 6). */
-export type ItemBuildOption_Deserialize = {
-	item_ids: number[],
-	item_icon_urls?: string[],
-	play: number,
-	win: number,
-	pick_rate: number | null,
-};
-
-/**  Metadata for a multi-option item build (e.g. Core 3 or Final 6). */
-export type ItemBuildOption_Serialize = {
-	item_ids: number[],
-	item_icon_urls: string[],
-	play: number,
-	win: number,
-	pick_rate: number | null,
-};
-
 export type LcuConnected = LcuConnected_Serialize | LcuConnected_Deserialize;
 
 export type LcuConnected_Deserialize = SummonerInfo_Deserialize;
@@ -401,26 +372,6 @@ export type LcuConnected_Deserialize = SummonerInfo_Deserialize;
 export type LcuConnected_Serialize = SummonerInfo_Serialize;
 
 export type LcuDisconnected = null;
-
-export type LegacyLocalStoragePayload = LegacyLocalStoragePayload_Serialize | LegacyLocalStoragePayload_Deserialize;
-
-export type LegacyLocalStoragePayload_Deserialize = {
-	schumazUserPreferences?: string | null,
-	schumazLanguage?: string | null,
-	schumazProfileUiBlur?: string | null,
-	schumazProfileWallpaperVisible?: string | null,
-	schumazAramSubmode?: string | null,
-	schumazRankedFilters?: string | null,
-};
-
-export type LegacyLocalStoragePayload_Serialize = {
-	schumazUserPreferences: string | null,
-	schumazLanguage: string | null,
-	schumazProfileUiBlur: string | null,
-	schumazProfileWallpaperVisible: string | null,
-	schumazAramSubmode: string | null,
-	schumazRankedFilters: string | null,
-};
 
 export type MatchEnded = null;
 
@@ -432,12 +383,12 @@ export type NavigationStatePatch_Deserialize = {
 	savedAramMode?: AramMode | null,
 	profileMatchModeFilter?: string | null,
 	aramMayhemRarityFilter?: string | null,
-	/**  Empty string clears `aram_mayhem_last_champion` to `None`. */
+	/**  Empty string clears `aram_mayhem_last_champion` to `None`.\npub aram_mayhem_last_champion: Option<String>, */
 	aramMayhemLastChampion?: string | null,
 	rankedFilterRegion?: string | null,
 	rankedFilterTier?: string | null,
 	rankedFilterLane?: string | null,
-	/**  Empty string clears `ranked_filter_patch` to `None`. */
+	/**  Empty string clears `ranked_filter_patch` to `None`.\npub ranked_filter_patch: Option<String>, */
 	rankedFilterPatch?: string | null,
 	rankedChampionTierFilter?: string | null,
 	lastSummonerId?: number | null,
@@ -447,12 +398,12 @@ export type NavigationStatePatch_Serialize = {
 	savedAramMode: AramMode | null,
 	profileMatchModeFilter: string | null,
 	aramMayhemRarityFilter: string | null,
-	/**  Empty string clears `aram_mayhem_last_champion` to `None`. */
+	/**  Empty string clears `aram_mayhem_last_champion` to `None`.\npub aram_mayhem_last_champion: Option<String>, */
 	aramMayhemLastChampion: string | null,
 	rankedFilterRegion: string | null,
 	rankedFilterTier: string | null,
 	rankedFilterLane: string | null,
-	/**  Empty string clears `ranked_filter_patch` to `None`. */
+	/**  Empty string clears `ranked_filter_patch` to `None`.\npub ranked_filter_patch: Option<String>, */
 	rankedFilterPatch: string | null,
 	rankedChampionTierFilter: string | null,
 	lastSummonerId: number | null,

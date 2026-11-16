@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App, { FLASH_ONBOARDING_STORAGE_KEY } from "./App";
+import App from "./App";
 import { invoke } from "@tauri-apps/api/core";
-import { defaultAppInvokeMock, mockAhriBuild } from "./__tests__/appTestFixtures";
+import { defaultAppInvokeMock, mockAhriBuild, resetMockAppSettings } from "./__tests__/appTestFixtures";
 
 let eventListeners: Record<string, (event: { payload: unknown }) => void> = {};
 
@@ -24,16 +24,16 @@ vi.mock("@tauri-apps/api/event", () => ({
 describe("App Component", () => {
   beforeEach(() => {
     eventListeners = {};
-    localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
+    resetMockAppSettings();
   });
 
-  it("renders schumaz.gg title, initial LCU disconnected status, and starts on Perfil tab", () => {
+  it("renders schumaz.gg title, initial LCU disconnected status, and starts on Perfil tab", async () => {
     render(<App />);
     expect(screen.getByText("schumaz.gg")).toBeInTheDocument();
-    expect(screen.getByTestId("status-disconnected")).toHaveTextContent(/Aguardando cliente do LoL/i);
-    expect(screen.getByTestId("profile-waiting-client")).toHaveTextContent(/Aguardando Cliente do LoL/i);
+    await waitFor(() => {
+      expect(screen.getByTestId("status-disconnected")).toHaveTextContent(/Aguardando cliente do LoL/i);
+      expect(screen.getByTestId("profile-waiting-client")).toHaveTextContent(/Aguardando Cliente do LoL/i);
+    });
   });
 
   it("does not render manual injection buttons as injection is strictly automatic", () => {
@@ -44,8 +44,10 @@ describe("App Component", () => {
 
   it("renders only waiting state initially, and renders all 5 shop item blocks once build is received", async () => {
     render(<App />);
-    expect(screen.getByText(/Aguardando Seleção de Campeões/i)).toBeInTheDocument();
-    expect(screen.getByText("schumaz.gg · Runas")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Aguardando Seleção de Campeões/i)).toBeInTheDocument();
+      expect(screen.getByText("schumaz.gg · Runas")).toBeInTheDocument();
+    });
     const runesWaiting = screen.getByTestId("runes-waiting-champ");
     expect(runesWaiting.querySelector(".idle-radar-ring")).toBeInTheDocument();
     expect(screen.getByTestId("runes-waiting-champ-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
@@ -71,9 +73,9 @@ describe("App Component", () => {
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
-  it("renders the floating bottom dock with 5 navigation tabs in order: Perfil, Runas, Ranqueada, Aram and Configurações", () => {
+  it("renders the floating bottom dock with 5 navigation tabs in order: Perfil, Runas, Ranqueada, Aram and Configurações", async () => {
     render(<App />);
-    const dockNav = screen.getByRole("navigation", { name: /navegação principal/i });
+    const dockNav = await screen.findByRole("navigation", { name: /navegação principal/i });
     expect(dockNav).toBeInTheDocument();
 
     const buttons = Array.from(dockNav.querySelectorAll("button"));
@@ -120,9 +122,9 @@ describe("App Component", () => {
     expect(screen.getByTestId("profile-waiting-client")).toBeInTheDocument();
   });
 
-  it("switches to the Configurações view and displays the settings groups", () => {
+  it("switches to the Configurações view and displays the settings groups", async () => {
     render(<App />);
-    const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
+    const settingsBtn = await screen.findByRole("button", { name: /^configurações$/i });
     fireEvent.click(settingsBtn);
 
     expect(settingsBtn).toHaveAttribute("aria-current", "page");
@@ -138,9 +140,10 @@ describe("App Component", () => {
     expect(screen.queryByRole("heading", { name: /Critério da Build Recomendada/i })).not.toBeInTheDocument();
   });
 
-  it("toggles preferences and persists them to localStorage", () => {
+  it("toggles preferences and persists them to UserSettings.ini", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
+    const settingsBtn = await screen.findByRole("button", { name: /^configurações$/i });
+    fireEvent.click(settingsBtn);
 
     const runesToggle = screen.getByLabelText("Injetar Runas Automaticamente");
     fireEvent.click(runesToggle);
@@ -157,9 +160,13 @@ describe("App Component", () => {
     fireEvent.click(screen.getByTestId("patch-48h-accept-btn"));
     expect(patchProtToggle).not.toBeChecked();
 
-    const saved = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
-    expect(saved.autoInjectRunes).toBe(false);
-    expect(saved.flashKey).toBe("F");
-    expect(saved.patch48hProtection).toBe(false);
+    expect(invoke).toHaveBeenCalledWith("sync_user_preferences", {
+      preferences: expect.objectContaining({
+        autoInjectRunes: false,
+        flashKey: "F",
+        patch48hProtection: false,
+      }),
+    });
+    expect(localStorage.getItem("schumaz_user_preferences")).toBeNull();
   });
 });

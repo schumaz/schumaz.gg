@@ -19,12 +19,8 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         fmt_bool(s.general.language_onboarding_completed)
     ));
     out.push_str(&format!(
-        "bFlashOnboardingCompleted={}\n",
+        "bFlashOnboardingCompleted={}\n\n",
         fmt_bool(s.general.flash_onboarding_completed)
-    ));
-    out.push_str(&format!(
-        "bLegacyStorageMigrated={}\n\n",
-        fmt_bool(s.general.legacy_storage_migrated)
     ));
 
     out.push_str(&format!("[{SEC_AUTOMATION}]\n"));
@@ -107,13 +103,10 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         "AramMayhemRarityFilter={}\n",
         s.navigation.aram_mayhem_rarity_filter
     ));
-    out.push_str(&format!(
-        "AramMayhemLastChampion={}\n",
-        s.navigation
-            .aram_mayhem_last_champion
-            .as_deref()
-            .unwrap_or("")
-    ));
+    match &s.navigation.aram_mayhem_last_champion {
+        Some(c) => out.push_str(&format!("AramMayhemLastChampion={c}\n")),
+        None => out.push_str("AramMayhemLastChampion=\n"),
+    }
     out.push_str(&format!(
         "RankedFilterRegion={}\n",
         s.navigation.ranked_filter_region
@@ -126,10 +119,10 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         "RankedFilterLane={}\n",
         s.navigation.ranked_filter_lane
     ));
-    out.push_str(&format!(
-        "RankedFilterPatch={}\n",
-        s.navigation.ranked_filter_patch.as_deref().unwrap_or("")
-    ));
+    match &s.navigation.ranked_filter_patch {
+        Some(p) => out.push_str(&format!("RankedFilterPatch={p}\n")),
+        None => out.push_str("RankedFilterPatch=\n"),
+    }
     out.push_str(&format!(
         "RankedChampionTierFilter={}\n",
         s.navigation.ranked_champion_tier_filter

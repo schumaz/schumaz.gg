@@ -169,14 +169,6 @@ pub fn enrich_build_with_ddragon_with_flash_key_and_locale(
         opt.situational_item_icon_urls = item_icon_urls(&cache.version, &opt.situational_item_ids);
     }
 
-    for opt in &mut build.core_build_options {
-        opt.item_icon_urls = item_icon_urls(&cache.version, &opt.item_ids);
-    }
-
-    for opt in &mut build.final_build_options {
-        opt.item_icon_urls = item_icon_urls(&cache.version, &opt.item_ids);
-    }
-
     localize_build_labels(build, locale);
 }
 
@@ -200,3 +192,7 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
         prefs.language,
     );
 }
+
+#[cfg(test)]
+#[path = "enrichment_tests.rs"]
+mod tests;

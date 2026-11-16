@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import App, {
-  FLASH_ONBOARDING_STORAGE_KEY,
-  LANGUAGE_STORAGE_KEY,
-  PREFERENCES_STORAGE_KEY,
-} from "../App";
+import App from "../App";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppSettings } from "../types";
+import { defaultAppInvokeMock, resetMockAppSettings } from "./appTestFixtures";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockResolvedValue(null),
+  invoke: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -22,7 +19,6 @@ function makeIniSettings(overrides: Partial<AppSettings["general"]> = {}): AppSe
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: false,
-      legacyStorageMigrated: true,
       ...overrides,
     },
     automation: {
@@ -65,16 +61,25 @@ function makeIniSettings(overrides: Partial<AppSettings["general"]> = {}): AppSe
 
 describe("First-Launch Flash Key Onboarding Screen", () => {
   beforeEach(() => {
-    localStorage.clear();
     vi.clearAllMocks();
-    vi.mocked(invoke).mockResolvedValue(null);
+    resetMockAppSettings();
+    vi.mocked(invoke).mockImplementation((cmd, args) => defaultAppInvokeMock(cmd, args as Record<string, unknown>));
   });
 
   it("opens after language onboarding, lets user switch D/F without persisting until confirm, and persists F on confirm", async () => {
+    resetMockAppSettings({
+      general: {
+        language: null,
+        languageOnboardingCompleted: false,
+        flashOnboardingCompleted: false,
+      },
+    });
+
     render(<App />);
 
     // First screen: Language onboarding
-    expect(screen.getByTestId("language-onboarding-modal")).toBeInTheDocument();
+    const langModal = await screen.findByTestId("language-onboarding-modal");
+    expect(langModal).toBeInTheDocument();
     expect(screen.queryByTestId("flash-onboarding-modal")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("onboarding-lang-pt_BR"));
@@ -90,14 +95,12 @@ describe("First-Launch Flash Key Onboarding Screen", () => {
     const optionF = screen.getByTestId("onboarding-flash-F");
     expect(optionD).toHaveAttribute("aria-checked", "true");
     expect(optionF).toHaveAttribute("aria-checked", "false");
-    expect(localStorage.getItem(FLASH_ONBOARDING_STORAGE_KEY)).toBeNull();
 
     // Selecting F updates radio state without dismissing or persisting yet
     fireEvent.click(optionF);
     expect(screen.getByTestId("flash-onboarding-modal")).toBeInTheDocument();
     expect(optionF).toHaveAttribute("aria-checked", "true");
     expect(optionD).toHaveAttribute("aria-checked", "false");
-    expect(localStorage.getItem(FLASH_ONBOARDING_STORAGE_KEY)).toBeNull();
 
     // Confirming persists flashKey F and closes the modal
     fireEvent.click(screen.getByTestId("flash-onboarding-continue-btn"));
@@ -105,31 +108,48 @@ describe("First-Launch Flash Key Onboarding Screen", () => {
       expect(screen.queryByTestId("flash-onboarding-modal")).not.toBeInTheDocument();
     });
 
-    expect(localStorage.getItem(FLASH_ONBOARDING_STORAGE_KEY)).toBe("true");
-    const savedPrefs = JSON.parse(localStorage.getItem(PREFERENCES_STORAGE_KEY) || "{}");
-    expect(savedPrefs.flashKey).toBe("F");
+    expect(invoke).toHaveBeenCalledWith("complete_flash_onboarding", { flashKey: "F" });
 
     fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
     expect(screen.getByRole("button", { name: "F" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows Flash onboarding once to existing users who already completed language onboarding, then skips on subsequent opens", async () => {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt_BR");
+    resetMockAppSettings({
+      general: {
+        language: "pt_BR",
+        languageOnboardingCompleted: true,
+        flashOnboardingCompleted: false,
+      },
+      automation: {
+        language: "pt_BR",
+        flashKey: "D",
+        autoInjectRunes: true,
+        autoInjectSpells: true,
+        autoInjectItems: true,
+        patch48hProtection: true,
+        autoMarkDailyMissionsRead: false,
+      },
+    });
 
     const { unmount } = render(<App />);
 
+    const flashModal = await screen.findByTestId("flash-onboarding-modal");
+    expect(flashModal).toBeInTheDocument();
     expect(screen.queryByTestId("language-onboarding-modal")).not.toBeInTheDocument();
-    expect(screen.getByTestId("flash-onboarding-modal")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("flash-onboarding-continue-btn"));
 
     await waitFor(() => {
       expect(screen.queryByTestId("flash-onboarding-modal")).not.toBeInTheDocument();
     });
-    expect(localStorage.getItem(FLASH_ONBOARDING_STORAGE_KEY)).toBe("true");
+    expect(invoke).toHaveBeenCalledWith("complete_flash_onboarding", { flashKey: "D" });
 
     unmount();
     render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Configurações$/i })).toBeInTheDocument();
+    });
     expect(screen.queryByTestId("language-onboarding-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("flash-onboarding-modal")).not.toBeInTheDocument();
   });
@@ -143,7 +163,7 @@ describe("First-Launch Flash Key Onboarding Screen", () => {
     };
 
     vi.mocked(invoke).mockImplementation((cmd: string) => {
-      if (cmd === "migrate_legacy_local_storage") return Promise.resolve(iniBefore);
+      if (cmd === "get_app_settings") return Promise.resolve(iniBefore);
       if (cmd === "complete_flash_onboarding") return Promise.resolve(iniAfter);
       if (cmd === "get_hardware_acceleration_status") {
         return Promise.resolve({ enabled: true, active_at_startup: true });

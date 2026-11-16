@@ -3,15 +3,6 @@ use crate::build_provider::*;
 use crate::lcu_injector::*;
 
 #[test]
-fn test_build_spells_payload_with_flash_preference() {
-    let payload = build_spells_payload_with_preference(4, 14, FlashKeyPreference::F)
-        .expect("Payload should be valid");
-
-    assert_eq!(payload.get("spell1Id").unwrap().as_i64().unwrap(), 14);
-    assert_eq!(payload.get("spell2Id").unwrap().as_i64().unwrap(), 4);
-}
-
-#[test]
 fn test_build_rune_page_payload_validates_and_formats_correctly() {
     let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
     clear_champion_selections();
@@ -93,19 +84,6 @@ fn test_find_first_deletable_page_id_skips_riot_presets() {
     ]);
 
     assert_eq!(find_first_deletable_page_id(&pages_json), Some(55));
-}
-
-#[test]
-fn test_extract_deletable_rune_page_id_respects_riot_preset_pages() {
-    let riot_preset = serde_json::json!(
-        { "id": 10, "name": "Preset: Inspiration", "isDeletable": false }
-    );
-    assert_eq!(extract_deletable_rune_page_id(&riot_preset), None);
-
-    let custom_page = serde_json::json!(
-        { "id": 88, "name": "My Custom Runes", "isDeletable": true }
-    );
-    assert_eq!(extract_deletable_rune_page_id(&custom_page), Some(88));
 }
 
 #[test]

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App, { FLASH_ONBOARDING_STORAGE_KEY } from "../../../App";
+import App from "../../../App";
 import { invoke } from "@tauri-apps/api/core";
-import { defaultAppInvokeMock, mockAhriBuild } from "../../../__tests__/appTestFixtures";
+import { defaultAppInvokeMock, mockAhriBuild, resetMockAppSettings } from "../../../__tests__/appTestFixtures";
 
 let eventListeners: Record<string, (event: { payload: unknown }) => void> = {};
 
@@ -24,9 +24,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 describe("App — Champ Select Dashboard, Filters & Spells", () => {
   beforeEach(() => {
     eventListeners = {};
-    localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
+    resetMockAppSettings();
   });
 
   it("swaps summoner spell slots and supports inverting spells with immediate injection in champion select", async () => {
@@ -68,8 +66,9 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
       secondarySpellId: null,
     });
 
-    const saved = JSON.parse(localStorage.getItem("schumaz_user_preferences") || "{}");
-    expect(saved.flashKey).toBe("F");
+    expect(invoke).toHaveBeenCalledWith("sync_user_preferences", {
+      preferences: expect.objectContaining({ flashKey: "F" }),
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
     const flashDBtn = screen.getByRole("button", { name: "D" });

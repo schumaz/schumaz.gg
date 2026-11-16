@@ -47,17 +47,8 @@ pub async fn inject_item_build(
     champion_id: i32,
     queue_id: Option<i32>,
     build_index: Option<usize>,
-    core_index: Option<usize>,
-    final_index: Option<usize>,
 ) -> Result<(), String> {
-    lcu_injector::apply_manual_item_build(
-        champion_id,
-        queue_id,
-        build_index,
-        core_index,
-        final_index,
-    )
-    .await
+    lcu_injector::apply_manual_item_build(champion_id, queue_id, build_index).await
 }
 
 /// Tauri command to sync user preferences from the frontend to the backend engine and `UserSettings.ini`.

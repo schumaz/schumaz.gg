@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ItemBlocks } from "../components/ItemBlocks";
+import { ItemBlocks } from "../components/ui/ItemBlocks";
 import { ChampionBuild } from "../types";
 
 describe("ItemBlocks", () => {

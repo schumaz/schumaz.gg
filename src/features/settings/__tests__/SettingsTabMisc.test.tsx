@@ -2,7 +2,7 @@ import { useState } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AppLocale, I18nProvider } from "../../../i18n";
-import { SettingsTab } from "../../../components/SettingsTab";
+import { SettingsTab } from "../SettingsTab";
 import { DEFAULT_PREFERENCES } from "../../../types";
 
 describe("SettingsTab — Miscellaneous section", () => {

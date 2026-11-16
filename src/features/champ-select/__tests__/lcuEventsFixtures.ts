@@ -1,4 +1,4 @@
-import { ChampionBuild } from "../../../types";
+import type { ChampionBuild } from "../../../types";
 
 export const baseBuild: ChampionBuild = {
   champion_id: 18,
@@ -78,8 +78,6 @@ export const baseBuild: ChampionBuild = {
       pick_rate: 25,
     },
   ],
-  core_build_options: [],
-  final_build_options: [],
   item_blocks: [],
   active_position: "",
   active_tier: "emerald_plus",

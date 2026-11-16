@@ -124,9 +124,7 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
     { id: 5001, key: "HealthScaling", name: "Vida Escalonável", icon_url: "hp.png" },
   ],
   rune_pages: [],
-  core_build_options: [],
   build_options: [],
-  final_build_options: [],
   spells: [
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },

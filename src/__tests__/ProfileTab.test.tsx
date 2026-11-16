@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ProfileTab } from "../components/ProfileTab";
+import { ProfileTab } from "../features/profile/ProfileTab";
 import { PlayerProfile } from "../types";
 import { mockProfile, mockSummoner } from "../features/profile/__tests__/profileFixtures";
 
 describe("ProfileTab Component", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
+    // pure INI
   });
 
   it("renders waiting state with unified island branding when League client is disconnected", () => {

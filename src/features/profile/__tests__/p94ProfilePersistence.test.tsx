@@ -22,7 +22,6 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: true,
-      legacyStorageMigrated: true,
     },
     automation: {
       autoInjectRunes: true,
@@ -31,6 +30,7 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
       flashKey: "F",
       patch48hProtection: true,
       autoMarkDailyMissionsRead: true,
+      language: "pt_BR",
     },
     profileAppearance: {
       profileBlurPercent: 42,
@@ -106,7 +106,7 @@ describe("P9.4 usePlayerProfile startup cache & Stale-While-Revalidate", () => {
 
     vi.mocked(invoke).mockImplementation((cmd: string) => {
       if (cmd === "get_summoner_status") return Promise.resolve(null);
-      if (cmd === "migrate_legacy_local_storage") return Promise.resolve(ini);
+      if (cmd === "get_app_settings") return Promise.resolve(ini);
       if (cmd === "get_cached_player_profile") return Promise.resolve(cachedResult);
       if (cmd === "get_hardware_acceleration_status") {
         return Promise.resolve({ enabled: true, active_at_startup: true });

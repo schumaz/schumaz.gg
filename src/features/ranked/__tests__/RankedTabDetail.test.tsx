@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
-import { RankedTab } from "../../../components/RankedTab";
+import { RankedTab } from "../RankedTab";
 import {
   mockAhriBuild,
   mockRankedChampions,

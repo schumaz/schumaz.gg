@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SpellsBar } from "../components/SpellsBar";
+import { SpellsBar } from "../components/ui/SpellsBar";
 import { SpellMetadata } from "../types";
 
 describe("SpellsBar", () => {

@@ -1,7 +1,6 @@
 import {
   ChampionBuild,
   NavigationStatePatch,
-  RANKED_FILTERS_STORAGE_KEY,
   RankedChampionEntry,
   RankedLane,
 } from "../../types";
@@ -23,44 +22,6 @@ export const DEFAULT_RANKED_FILTERS: RankedFilters = {
 };
 
 export const VALID_LANES = new Set<string>(["all", "top", "jungle", "mid", "adc", "support"]);
-
-export function loadSavedRankedFilters(): RankedFilters {
-  try {
-    const raw = localStorage.getItem(RANKED_FILTERS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        region:
-          typeof parsed.region === "string" && parsed.region.trim()
-            ? parsed.region.trim()
-            : DEFAULT_RANKED_FILTERS.region,
-        tier:
-          typeof parsed.tier === "string" && parsed.tier.trim()
-            ? parsed.tier.trim()
-            : DEFAULT_RANKED_FILTERS.tier,
-        lane:
-          typeof parsed.lane === "string" && VALID_LANES.has(parsed.lane)
-            ? (parsed.lane as RankedLaneFilter)
-            : DEFAULT_RANKED_FILTERS.lane,
-        patch:
-          typeof parsed.patch === "string" && parsed.patch.trim()
-            ? parsed.patch.trim()
-            : null,
-      };
-    }
-  } catch {
-    // Ignore storage access or parse errors
-  }
-  return { ...DEFAULT_RANKED_FILTERS };
-}
-
-export function saveRankedFilters(filters: RankedFilters): void {
-  try {
-    localStorage.setItem(RANKED_FILTERS_STORAGE_KEY, JSON.stringify(filters));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
 
 export interface UseRankedPersistenceOptions {
   iniBacked?: boolean;

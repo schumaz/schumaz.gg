@@ -1,11 +1,9 @@
 pub mod ini_parser;
 pub mod ini_serializer;
-pub mod migration;
 pub mod store;
 
 pub use ini_parser::*;
 pub use ini_serializer::*;
-pub use migration::*;
 pub use store::*;
 
 use crate::models::{AppLocale, AramMode, FlashKeyPreference, UserPreferences};
@@ -29,7 +27,6 @@ pub struct GeneralSettings {
     pub language: Option<AppLocale>,
     pub language_onboarding_completed: bool,
     pub flash_onboarding_completed: bool,
-    pub legacy_storage_migrated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
@@ -133,26 +130,15 @@ pub struct NavigationStatePatch {
     pub saved_aram_mode: Option<AramMode>,
     pub profile_match_mode_filter: Option<String>,
     pub aram_mayhem_rarity_filter: Option<String>,
-    /// Empty string clears `aram_mayhem_last_champion` to `None`.
+    /// Empty string clears `aram_mayhem_last_champion` to `None`.\npub aram_mayhem_last_champion: Option<String>,
     pub aram_mayhem_last_champion: Option<String>,
     pub ranked_filter_region: Option<String>,
     pub ranked_filter_tier: Option<String>,
     pub ranked_filter_lane: Option<String>,
-    /// Empty string clears `ranked_filter_patch` to `None`.
+    /// Empty string clears `ranked_filter_patch` to `None`.\npub ranked_filter_patch: Option<String>,
     pub ranked_filter_patch: Option<String>,
     pub ranked_champion_tier_filter: Option<String>,
     pub last_summoner_id: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyLocalStoragePayload {
-    pub schumaz_user_preferences: Option<String>,
-    pub schumaz_language: Option<String>,
-    pub schumaz_profile_ui_blur: Option<String>,
-    pub schumaz_profile_wallpaper_visible: Option<String>,
-    pub schumaz_aram_submode: Option<String>,
-    pub schumaz_ranked_filters: Option<String>,
 }
 
 pub(super) fn parse_bool(raw: &str) -> Option<bool> {

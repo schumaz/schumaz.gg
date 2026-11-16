@@ -1,12 +1,7 @@
 import { AppLocale, AppSettings, UserPreferences } from "../../types";
 import { settingsIpc } from "../../services/ipc";
 import { DEFAULT_ONBOARDING_LOCALE, isValidAppLocale } from "../../i18n";
-import {
-  buildLegacyMigrationPayload,
-  clampProfileBlur,
-  clearLegacyLocalStorageKeys,
-  isValidAppSettings,
-} from "./preferencesStorage";
+import { clampProfileBlur, isValidAppSettings } from "./preferencesStorage";
 
 export interface HydratedIniSettings {
   resolvedLocale: AppLocale;
@@ -20,8 +15,6 @@ export interface HydratedIniSettings {
 }
 
 export function extractHydratedIniSettings(settings: AppSettings): HydratedIniSettings {
-  clearLegacyLocalStorageKeys();
-
   const resolvedLocale: AppLocale = isValidAppLocale(settings.general.language)
     ? settings.general.language
     : isValidAppLocale(settings.automation.language)
@@ -45,21 +38,12 @@ export function extractHydratedIniSettings(settings: AppSettings): HydratedIniSe
 
 export async function fetchInitialIniSettings(): Promise<AppSettings | null> {
   try {
-    const migrated = await settingsIpc.migrateLegacyLocalStorage(buildLegacyMigrationPayload());
-    if (isValidAppSettings(migrated)) {
-      return migrated;
-    }
-  } catch {
-    // Fallback below
-  }
-
-  try {
     const loaded = await settingsIpc.getAppSettings();
     if (isValidAppSettings(loaded)) {
       return loaded;
     }
   } catch {
-    // Fallback to legacy localStorage mode in non-Tauri environments
+    // Non-Tauri environment or IPC failure
   }
 
   return null;

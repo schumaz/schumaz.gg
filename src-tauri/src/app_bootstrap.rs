@@ -243,7 +243,7 @@ fn spawn_prewarm_task(
     });
 }
 
-/// Initializes local storage, migrates settings, builds the main window, and spawns background tasks.
+/// Initializes local storage, loads settings, builds the main window, and spawns background tasks.
 pub fn setup_app(
     app: &mut tauri::App,
     window_tracker: &Arc<Mutex<storage::WindowSettings>>,
@@ -257,12 +257,8 @@ pub fn setup_app(
     paths.ensure_dirs().map_err(std::io::Error::other)?;
     storage::set_global_paths(paths.clone());
 
-    // 2. Load or migrate UserSettings.ini BEFORE creating window or spawning background tasks
-    let legacy_gpu_path = storage::resolve_legacy_graphics_config_path(&app_handle);
-    let settings = storage::load_or_migrate_user_settings(
-        &paths.user_settings_ini_path(),
-        legacy_gpu_path.as_deref(),
-    );
+    // 2. Load UserSettings.ini BEFORE creating window or spawning background tasks
+    let settings = storage::load_user_settings(&paths.user_settings_ini_path());
     storage::init_global_settings(paths.user_settings_ini_path(), settings.clone());
 
     let active_locale = settings.general.language.unwrap_or_default();

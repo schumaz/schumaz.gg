@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { NavigationDock } from "../components/ui/NavigationDock";
-import { RankedTab } from "../components/RankedTab";
+import { RankedTab } from "../features/ranked/RankedTab";
 import {
   mockProtectedTierResponse,
   mockTierResponse,

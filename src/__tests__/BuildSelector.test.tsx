@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { BuildSelector } from "../components/BuildSelector";
+import { BuildSelector } from "../components/ui/BuildSelector";
 import { UnifiedBuildOption } from "../types";
 
 describe("BuildSelector", () => {

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { waitFor, act, renderHook } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
-import { usePreferences } from "../hooks/usePreferences";
-import { useAram } from "../hooks/useAram";
-import { useRanked } from "../hooks/useRanked";
+import { usePreferences } from "../features/settings/usePreferences";
+import { useAram } from "../features/aram/useAram";
+import { useRanked } from "../features/ranked/useRanked";
 import { buildAssetSegment, resolveCachedAssetUrl } from "../utils/assets";
 import type { AppSettings } from "../types";
 
@@ -24,7 +24,6 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: true,
-      legacyStorageMigrated: true,
     },
     automation: {
       autoInjectRunes: true,
@@ -33,6 +32,7 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
       flashKey: "F",
       patch48hProtection: true,
       autoMarkDailyMissionsRead: true,
+      language: "pt_BR",
     },
     profileAppearance: {
       profileBlurPercent: 42,
@@ -104,18 +104,11 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
     });
   });
 
-  describe("usePreferences legacy 6-key migration & UserSettings.ini hydration", () => {
-    it("migrates all 6 legacy localStorage keys to INI and clears localStorage", async () => {
-      localStorage.setItem("schumaz_user_preferences", JSON.stringify({ flashKey: "F" }));
-      localStorage.setItem("schumaz_language", "pt_BR");
-      localStorage.setItem("schumaz_profile_ui_blur", "42");
-      localStorage.setItem("schumaz_profile_wallpaper_visible", "true");
-      localStorage.setItem("schumaz_aram_submode", "aram_mayhem");
-      localStorage.setItem("schumaz_ranked_filters", JSON.stringify({ region: "kr" }));
-
+  describe("usePreferences UserSettings.ini hydration & updates", () => {
+    it("hydrates settings directly from get_app_settings IPC without writing localStorage", async () => {
       const ini = makeIniSettings();
       vi.mocked(invoke).mockImplementation((cmd: string) => {
-        if (cmd === "migrate_legacy_local_storage") return Promise.resolve(ini);
+        if (cmd === "get_app_settings") return Promise.resolve(ini);
         if (cmd === "get_hardware_acceleration_status") {
           return Promise.resolve({ enabled: true, active_at_startup: true });
         }
@@ -125,27 +118,10 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
       const { result } = renderHook(() => usePreferences());
 
       await waitFor(() => {
-        expect(result.current.iniBacked).toBe(true);
+        expect(result.current.preferencesReady).toBe(true);
       });
 
-      expect(invoke).toHaveBeenCalledWith("migrate_legacy_local_storage", {
-        payload: {
-          schumazUserPreferences: JSON.stringify({ flashKey: "F" }),
-          schumazLanguage: "pt_BR",
-          schumazProfileUiBlur: "42",
-          schumazProfileWallpaperVisible: "true",
-          schumazAramSubmode: "aram_mayhem",
-          schumazRankedFilters: JSON.stringify({ region: "kr" }),
-        },
-      });
-
-      expect(localStorage.getItem("schumaz_user_preferences")).toBeNull();
-      expect(localStorage.getItem("schumaz_language")).toBeNull();
-      expect(localStorage.getItem("schumaz_profile_ui_blur")).toBeNull();
-      expect(localStorage.getItem("schumaz_profile_wallpaper_visible")).toBeNull();
-      expect(localStorage.getItem("schumaz_aram_submode")).toBeNull();
-      expect(localStorage.getItem("schumaz_ranked_filters")).toBeNull();
-
+      expect(invoke).toHaveBeenCalledWith("get_app_settings");
       expect(result.current.profileBlur).toBe(42);
       expect(result.current.preferences.flashKey).toBe("F");
       expect(result.current.navigationState?.rankedFilterRegion).toBe("kr");
@@ -172,7 +148,6 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
 
       const aramHook = renderHook(() =>
         useAram(false, null, "pt_BR", {
-          iniBacked: true,
           savedAramMode: "aram",
           savedLastChampion: "jinx",
           onNavigationPatch,
@@ -188,7 +163,6 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
 
       const rankedHook = renderHook(() =>
         useRanked(false, "D", true, "pt_BR", {
-          iniBacked: true,
           savedFilters: { region: "kr", tier: "diamond_plus", lane: "mid", patch: "16.22" },
           onNavigationPatch,
         })

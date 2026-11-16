@@ -122,7 +122,7 @@ fn test_opgg_payload_normalizes_tear_items_in_blocks_and_options() {
     assert!(!build.item_blocks[3].item_ids.contains(&3042));
 
     // Core options must have 3004, NOT 3042
-    assert_eq!(build.core_build_options[0].item_ids, vec![3078, 3004, 3036]);
+    assert_eq!(build.build_options[0].core_item_ids, vec![3078, 3004, 3036]);
 
     // Situational items with 3040 must normalize to 3003
     assert!(!build.item_blocks[4].item_ids.contains(&3040));

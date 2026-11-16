@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppLocale, ChampionBuild, FlashKeyPreference, RankedChampionEntry, RankedLane, RankedTierListResponse } from "../../types";
+import {
+  AppLocale,
+  ChampionBuild,
+  FlashKeyPreference,
+  RankedChampionEntry,
+  RankedLane,
+  RankedTierListResponse,
+} from "../../types";
 import { rankedIpc } from "../../services/ipc";
 import { translate } from "../../i18n";
-import { computeOrderedSpells } from "../../utils/spells";
 import {
-  RankedFilters,
-  UseRankedPersistenceOptions,
   applyTierListFilterChange,
   buildRankedCacheKey,
   computeNextDetailRankedFilters,
+  DEFAULT_RANKED_FILTERS,
   extractIniRankedFilters,
-  loadSavedRankedFilters,
-  saveRankedFilters,
+  RankedFilters,
+  UseRankedPersistenceOptions,
 } from "./rankedStorage";
+import { computeOrderedSpells } from "../../utils/spells";
 
 export * from "./rankedStorage";
 
@@ -23,10 +29,13 @@ export function useRanked(
   locale: AppLocale = "pt_BR",
   persistence?: UseRankedPersistenceOptions
 ) {
-  const iniBacked = Boolean(persistence?.iniBacked);
   const onNavigationPatch = persistence?.onNavigationPatch;
 
-  const [filters, setFilters] = useState<RankedFilters>(loadSavedRankedFilters);
+  const [filters, setFilters] = useState<RankedFilters>(() =>
+    persistence?.savedFilters
+      ? extractIniRankedFilters(persistence.savedFilters)
+      : DEFAULT_RANKED_FILTERS
+  );
   const [tierData, setTierData] = useState<RankedTierListResponse | null>(null);
   const [tierLoading, setTierLoading] = useState(false);
   const [tierError, setTierError] = useState<string | null>(null);
@@ -42,7 +51,7 @@ export function useRanked(
   const buildSeqRef = useRef(0);
   const loadedCacheKeyRef = useRef<string | null>(null);
   const prevLocaleRef = useRef<AppLocale>(locale);
-  const hydratedIniRef = useRef(false);
+  const hydratedIniRef = useRef(Boolean(persistence?.savedFilters));
   const selectedChampionRef = useRef<RankedChampionEntry | null>(selectedChampion);
   selectedChampionRef.current = selectedChampion;
   const filtersRef = useRef<RankedFilters>(filters);
@@ -50,25 +59,21 @@ export function useRanked(
 
   const persistFilters = useCallback(
     (next: RankedFilters) => {
-      if (iniBacked) {
-        onNavigationPatch?.({
-          rankedFilterRegion: next.region,
-          rankedFilterTier: next.tier,
-          rankedFilterLane: next.lane,
-          rankedFilterPatch: next.patch ?? "",
-        });
-      } else {
-        saveRankedFilters(next);
-      }
+      onNavigationPatch?.({
+        rankedFilterRegion: next.region,
+        rankedFilterTier: next.tier,
+        rankedFilterLane: next.lane,
+        rankedFilterPatch: next.patch ?? "",
+      });
     },
-    [iniBacked, onNavigationPatch]
+    [onNavigationPatch]
   );
 
   useEffect(() => {
-    if (!iniBacked || hydratedIniRef.current || !persistence?.savedFilters) return;
+    if (hydratedIniRef.current || !persistence?.savedFilters) return;
     hydratedIniRef.current = true;
     setFilters(extractIniRankedFilters(persistence.savedFilters));
-  }, [iniBacked, persistence?.savedFilters]);
+  }, [persistence?.savedFilters]);
 
   const fetchTierList = useCallback(
     async (targetFilters: RankedFilters, force = false) => {

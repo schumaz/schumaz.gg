@@ -63,20 +63,21 @@ export function ItemBlocks({
 
       <div className="grid-blocks">
         {build.item_blocks.map((block, bIndex) => {
+          const rawTitle = block.title || (block as any).name || "";
           const isStarterBlock =
-            block.title.includes("Itens Iniciais") || block.title.includes("Starter Items");
+            rawTitle.includes("Itens Iniciais") || rawTitle.includes("Starter Items");
           const isCoreBlock =
-            block.title.includes("Primeiros 3 Itens") || block.title.includes("First 3 Items");
+            rawTitle.includes("Primeiros 3 Itens") || rawTitle.includes("First 3 Items");
           const isBootsBlock =
-            block.title.includes("Botas") || block.title.includes("Boots");
+            rawTitle.includes("Botas") || rawTitle.includes("Boots");
           const isFinalBlock =
-            block.title.includes("Build Final") || block.title.includes("Final Build");
+            rawTitle.includes("Build Final") || rawTitle.includes("Final Build");
           const isSituationalBlock =
-            block.title.includes("Itens Situacionais") ||
-            block.title.includes("Úteis") ||
-            block.title.includes("Uteis") ||
-            block.title.includes("Situational") ||
-            block.title.includes("Utility");
+            rawTitle.includes("Itens Situacionais") ||
+            rawTitle.includes("Úteis") ||
+            rawTitle.includes("Uteis") ||
+            rawTitle.includes("Situational") ||
+            rawTitle.includes("Utility");
 
           const localizedTitle = isStarterBlock
             ? t("items.blockStarter")
@@ -88,7 +89,7 @@ export function ItemBlocks({
             ? t("items.blockFinal")
             : isSituationalBlock
             ? t("items.blockSituational")
-            : block.title;
+            : rawTitle;
 
           let activeIds = block.item_ids;
           let activeIcons = block.item_icon_urls;
@@ -108,20 +109,6 @@ export function ItemBlocks({
               activeIds = activeBuildOption.situational_item_ids;
               activeIcons = activeBuildOption.situational_item_icon_urls || [];
             }
-          } else if (
-            isCoreBlock &&
-            build.core_build_options &&
-            build.core_build_options.length > selectedBuildIndex
-          ) {
-            activeIds = build.core_build_options[selectedBuildIndex].item_ids;
-            activeIcons = build.core_build_options[selectedBuildIndex].item_icon_urls;
-          } else if (
-            isFinalBlock &&
-            build.final_build_options &&
-            build.final_build_options.length > selectedBuildIndex
-          ) {
-            activeIds = build.final_build_options[selectedBuildIndex].item_ids;
-            activeIcons = build.final_build_options[selectedBuildIndex].item_icon_urls;
           }
 
           const blockKindClass = isStarterBlock
@@ -145,7 +132,7 @@ export function ItemBlocks({
             : null;
 
           return (
-            <div key={block.title || bIndex} className={`block-item ${blockKindClass}`}>
+            <div key={rawTitle || bIndex} className={`block-item ${blockKindClass}`}>
               <div className="block-header-row">
                 <h4 title={`${bIndex + 1}. ${localizedTitle}`}>
                   {bIndex + 1}. {localizedTitle}

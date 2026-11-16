@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { RuneTree } from "../components/RuneTree";
+import { RuneTree } from "../components/ui/RuneTree";
 import { ChampionBuild } from "../types";
 
 const mockNormalBuild: ChampionBuild = {

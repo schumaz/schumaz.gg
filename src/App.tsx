@@ -57,7 +57,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
   };
 
   const prefs = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
-  const { locale, preferences, navigationState, updateNavigationState, iniBacked } = prefs;
+  const { locale, preferences, navigationState, updateNavigationState } = prefs;
 
   const lcu = useLcuEvents(preferences.flashKey, {
     onChampionPulled: () => setActiveTab("runes"),
@@ -69,17 +69,15 @@ function App({ forceStartupLoading }: AppProps = {}) {
 
   const aramPersistence = useMemo(
     () => ({
-      iniBacked,
       savedAramMode: navigationState?.savedAramMode ?? null,
       savedLastChampion: navigationState?.aramMayhemLastChampion ?? null,
       onNavigationPatch: updateNavigationState,
     }),
-    [iniBacked, navigationState?.savedAramMode, navigationState?.aramMayhemLastChampion, updateNavigationState]
+    [navigationState?.savedAramMode, navigationState?.aramMayhemLastChampion, updateNavigationState]
   );
 
   const rankedPersistence = useMemo(
     () => ({
-      iniBacked,
       savedFilters: navigationState
         ? {
             region: navigationState.rankedFilterRegion,
@@ -90,7 +88,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
         : undefined,
       onNavigationPatch: updateNavigationState,
     }),
-    [iniBacked, navigationState, updateNavigationState]
+    [navigationState, updateNavigationState]
   );
 
   const aram = useAram(activeTab === "aram", currentChampionId, locale, aramPersistence);
@@ -277,7 +275,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
             stageKey={boot.stageKey}
             isExiting={boot.isExiting}
           />
-        ) : prefs.needsLanguageOnboarding ? (
+        ) : !prefs.preferencesReady ? null : prefs.needsLanguageOnboarding ? (
           <LanguageOnboardingModal
             selectedLocale={locale}
             onSelectLocale={prefs.previewOnboardingLocale}

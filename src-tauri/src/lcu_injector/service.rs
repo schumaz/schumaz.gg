@@ -1,12 +1,9 @@
 use super::injection::{inject_item_sets, inject_specific_rune_page};
 use super::payloads::build_spells_payload;
 use super::preferences::{get_user_preferences, set_active_locale, set_user_preferences};
-use super::selections::{
-    set_selected_build, set_selected_core_build, set_selected_final_build, set_selected_rune_page,
-    set_selected_secondary_spell,
-};
+use super::selections::{set_selected_build, set_selected_rune_page, set_selected_secondary_spell};
 use crate::models::{AppLocale, FlashKeyPreference, QUEUE_SOLO_DUO, UserPreferences};
-use crate::storage::{AppSettings, LegacyLocalStoragePayload};
+use crate::storage::AppSettings;
 use crate::{build_provider, lcu_connector, storage};
 
 /// Resolves the active queue ID for item build injection without hardcoding 420.
@@ -67,22 +64,14 @@ pub async fn apply_manual_summoner_spells(
     Ok(())
 }
 
-/// Records item build selections, resolves the active queue, fetches the build, and injects item sets.
+/// Records item build selection, resolves the active queue, fetches the build, and injects item sets.
 pub async fn apply_manual_item_build(
     champion_id: i32,
     queue_id: Option<i32>,
     build_index: Option<usize>,
-    core_index: Option<usize>,
-    final_index: Option<usize>,
 ) -> Result<(), String> {
     if let Some(idx) = build_index {
         set_selected_build(champion_id, idx);
-    }
-    if let Some(idx) = core_index {
-        set_selected_core_build(champion_id, idx);
-    }
-    if let Some(idx) = final_index {
-        set_selected_final_build(champion_id, idx);
     }
 
     let conn = lcu_connector::LcuConnection::connect()
@@ -175,18 +164,6 @@ pub fn complete_flash_onboarding_service(
     Ok(updated)
 }
 
-/// Migrates legacy `localStorage` keys into `UserSettings.ini` and syncs active automation preferences.
-pub fn migrate_legacy_local_storage_service(
-    payload: LegacyLocalStoragePayload,
-) -> Result<AppSettings, String> {
-    let updated = storage::update_global_settings(|s| {
-        let _ = storage::apply_legacy_local_storage_migration(s, &payload);
-    })?;
-
-    set_user_preferences(updated.automation.clone());
-    Ok(updated)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +185,6 @@ mod tests {
         assert!(updated.general.flash_onboarding_completed);
         assert_eq!(updated.automation.flash_key, FlashKeyPreference::F);
         assert_eq!(get_user_preferences().flash_key, FlashKeyPreference::F);
+        set_user_preferences(UserPreferences::default());
     }
 }

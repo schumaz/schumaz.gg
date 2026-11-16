@@ -147,7 +147,7 @@ fn test_seraphine_tear_in_core_promotes_to_whispering_circlet() {
     assert!(!build.item_blocks[1].item_ids.contains(&2530));
 
     // Core options must also contain 2526, not 3070
-    assert_eq!(build.core_build_options[0].item_ids, vec![6617, 3001, 2526]);
+    assert_eq!(build.build_options[0].core_item_ids, vec![6617, 3001, 2526]);
 
     // Final build must contain 2526 exactly once, without 3070 or 2530
     let final_ids = &build.item_blocks[3].item_ids;

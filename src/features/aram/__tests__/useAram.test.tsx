@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { renderHook, act } from "@testing-library/react";
-import { LEAGUE_ARAM_ICON_URL } from "../../../components/AramTab";
+import { LEAGUE_ARAM_ICON_URL } from "../AramTab";
 import { NavigationDock } from "../../../components/ui/NavigationDock";
-import { useAram } from "../../../hooks/useAram";
-import { ARAM_SUBMODE_STORAGE_KEY } from "../../../types";
+import { useAram } from "../useAram";
 import { aramIpc } from "../../../services/ipc";
 import {
   mockAhriAugments,
@@ -24,18 +23,20 @@ describe("NavigationDock Aram label and icon", () => {
 
 describe("useAram persistence and click behavior", () => {
   beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
     vi.restoreAllMocks();
   });
 
   it("asks only on first click, saves choice, opens saved tab on 1 click, and reopens chooser on 2nd click", async () => {
     vi.spyOn(aramIpc, "getAramTierList").mockResolvedValue(mockAramChampions);
     vi.spyOn(aramIpc, "getAramMayhemAugments").mockResolvedValue(mockAhriAugments);
+    const onNavPatch = vi.fn();
 
-    const { result } = renderHook(({ isActive }) => useAram(isActive, null), {
-      initialProps: { isActive: false },
-    });
+    const { result } = renderHook(
+      ({ isActive }) => useAram(isActive, null, "pt_BR", { onNavigationPatch: onNavPatch }),
+      {
+        initialProps: { isActive: false },
+      }
+    );
 
     expect(result.current.savedMode).toBeNull();
     act(() => {
@@ -48,7 +49,7 @@ describe("useAram persistence and click behavior", () => {
     });
     expect(result.current.savedMode).toBe("aram");
     expect(result.current.showChooser).toBe(false);
-    expect(localStorage.getItem(ARAM_SUBMODE_STORAGE_KEY)).toBe("aram");
+    expect(onNavPatch).toHaveBeenCalledWith({ savedAramMode: "aram" });
 
     act(() => {
       result.current.handleAramDockClick(false);
@@ -62,13 +63,14 @@ describe("useAram persistence and click behavior", () => {
   });
 
   it("auto-selects current champion in ARAM Mayhem when active in Champ Select", async () => {
-    localStorage.setItem(ARAM_SUBMODE_STORAGE_KEY, "aram_mayhem");
     vi.spyOn(aramIpc, "getAramTierList").mockResolvedValue(mockMayhemChampions);
     const augSpy = vi
       .spyOn(aramIpc, "getAramMayhemAugments")
       .mockResolvedValue(mockAhriAugments);
 
-    const { result } = renderHook(() => useAram(true, 103));
+    const { result } = renderHook(() =>
+      useAram(true, 103, "pt_BR", { savedAramMode: "aram_mayhem" })
+    );
 
     await waitFor(() => {
       expect(augSpy).toHaveBeenCalledWith("ahri");

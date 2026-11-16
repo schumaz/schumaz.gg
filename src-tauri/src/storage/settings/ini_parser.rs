@@ -1,54 +1,45 @@
-use super::super::window_bounds::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
 use super::{
     AppSettings, SEC_AUTOMATION, SEC_GENERAL, SEC_GRAPHICS, SEC_NAVIGATION, SEC_PROFILE_APPEARANCE,
-    SEC_WINDOW, clamp_profile_blur, parse_aram_mode, parse_bool, parse_flash_key, parse_locale,
+    SEC_WINDOW, parse_aram_mode, parse_bool, parse_flash_key, parse_locale,
     validate_champion_tier_filter, validate_ranked_lane, validate_rarity_filter,
 };
 
-/// Parses `UserSettings.ini` tolerantly: unknown sections/keys are ignored,
-/// and malformed values fall back per-key to defaults.
-pub fn parse_user_settings_ini(content: &str) -> AppSettings {
+pub fn parse_user_settings_ini(raw: &str) -> AppSettings {
     let mut settings = AppSettings::default();
-    let mut current_section = String::new();
-    let mut saw_explicit_onboarding = false;
+    let mut current_section: &str = "";
 
-    for raw_line in content.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('#') {
             continue;
         }
-        if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
-            current_section = line[1..line.len() - 1].trim().to_string();
+
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            current_section = &trimmed[1..trimmed.len() - 1];
             continue;
         }
-        let Some((k, v)) = line.split_once('=') else {
+
+        let Some((key_raw, val_raw)) = trimmed.split_once('=') else {
             continue;
         };
-        let key = k.trim();
-        let val = v.trim();
+        let key = key_raw.trim();
+        let val = val_raw.trim();
 
-        match current_section.as_str() {
+        match current_section {
             SEC_GENERAL => match key {
                 "Language" => {
                     if let Some(loc) = parse_locale(val) {
                         settings.general.language = Some(loc);
-                        settings.automation.language = loc;
                     }
                 }
                 "bLanguageOnboardingCompleted" => {
                     if let Some(b) = parse_bool(val) {
                         settings.general.language_onboarding_completed = b;
-                        saw_explicit_onboarding = true;
                     }
                 }
                 "bFlashOnboardingCompleted" => {
                     if let Some(b) = parse_bool(val) {
                         settings.general.flash_onboarding_completed = b;
-                    }
-                }
-                "bLegacyStorageMigrated" => {
-                    if let Some(b) = parse_bool(val) {
-                        settings.general.legacy_storage_migrated = b;
                     }
                 }
                 _ => {}
@@ -84,12 +75,17 @@ pub fn parse_user_settings_ini(content: &str) -> AppSettings {
                         settings.automation.auto_mark_daily_missions_read = b;
                     }
                 }
+                "Language" => {
+                    if let Some(loc) = parse_locale(val) {
+                        settings.automation.language = loc;
+                    }
+                }
                 _ => {}
             },
             SEC_PROFILE_APPEARANCE => match key {
                 "ProfileBlurPercent" => {
-                    if let Ok(n) = val.parse::<u32>() {
-                        settings.profile_appearance.profile_blur_percent = clamp_profile_blur(n);
+                    if let Ok(v) = val.parse::<u32>() {
+                        settings.profile_appearance.profile_blur_percent = v.min(100);
                     }
                 }
                 "bWallpaperVisible" => {
@@ -99,42 +95,37 @@ pub fn parse_user_settings_ini(content: &str) -> AppSettings {
                 }
                 _ => {}
             },
-            SEC_GRAPHICS => {
-                if key == "bHardwareAcceleration"
-                    && let Some(b) = parse_bool(val)
-                {
-                    settings.graphics.hardware_acceleration = b;
+            SEC_GRAPHICS => match key {
+                "bHardwareAcceleration" => {
+                    if let Some(b) = parse_bool(val) {
+                        settings.graphics.hardware_acceleration = b;
+                    }
                 }
-            }
+                _ => {}
+            },
             SEC_WINDOW => match key {
                 "WindowWidth" => {
-                    if let Ok(w) = val.parse::<f64>()
-                        && w.is_finite()
-                        && w >= MIN_WINDOW_WIDTH
+                    if let Ok(v) = val.parse::<f64>()
+                        && v > 0.0
                     {
-                        settings.window.window_width = w;
+                        settings.window.window_width = v;
                     }
                 }
                 "WindowHeight" => {
-                    if let Ok(h) = val.parse::<f64>()
-                        && h.is_finite()
-                        && h >= MIN_WINDOW_HEIGHT
+                    if let Ok(v) = val.parse::<f64>()
+                        && v > 0.0
                     {
-                        settings.window.window_height = h;
+                        settings.window.window_height = v;
                     }
                 }
                 "WindowX" => {
-                    if let Ok(x) = val.parse::<f64>()
-                        && x.is_finite()
-                    {
-                        settings.window.window_x = Some(x);
+                    if let Ok(v) = val.parse::<f64>() {
+                        settings.window.window_x = Some(v);
                     }
                 }
                 "WindowY" => {
-                    if let Ok(y) = val.parse::<f64>()
-                        && y.is_finite()
-                    {
-                        settings.window.window_y = Some(y);
+                    if let Ok(v) = val.parse::<f64>() {
+                        settings.window.window_y = Some(v);
                     }
                 }
                 "bWindowMaximized" => {
@@ -157,10 +148,11 @@ pub fn parse_user_settings_ini(content: &str) -> AppSettings {
                     settings.navigation.aram_mayhem_rarity_filter = validate_rarity_filter(val);
                 }
                 "AramMayhemLastChampion" => {
-                    if !val.is_empty() {
-                        settings.navigation.aram_mayhem_last_champion =
-                            Some(val.to_ascii_lowercase());
-                    }
+                    settings.navigation.aram_mayhem_last_champion = if val.is_empty() {
+                        None
+                    } else {
+                        Some(val.to_ascii_lowercase())
+                    };
                 }
                 "RankedFilterRegion" => {
                     if !val.is_empty() {
@@ -176,9 +168,11 @@ pub fn parse_user_settings_ini(content: &str) -> AppSettings {
                     settings.navigation.ranked_filter_lane = validate_ranked_lane(val);
                 }
                 "RankedFilterPatch" => {
-                    if !val.is_empty() {
-                        settings.navigation.ranked_filter_patch = Some(val.to_string());
-                    }
+                    settings.navigation.ranked_filter_patch = if val.is_empty() {
+                        None
+                    } else {
+                        Some(val.to_string())
+                    };
                 }
                 "RankedChampionTierFilter" => {
                     settings.navigation.ranked_champion_tier_filter =
@@ -197,8 +191,9 @@ pub fn parse_user_settings_ini(content: &str) -> AppSettings {
         }
     }
 
-    if !saw_explicit_onboarding && settings.general.language.is_some() {
-        settings.general.language_onboarding_completed = true;
+    // Consistency: If general.language is set, ensure automation.language mirrors it
+    if let Some(loc) = settings.general.language {
+        settings.automation.language = loc;
     }
 
     settings
@@ -217,7 +212,6 @@ mod tests {
         s.general.language = Some(AppLocale::PtBr);
         s.general.language_onboarding_completed = true;
         s.general.flash_onboarding_completed = true;
-        s.general.legacy_storage_migrated = true;
         s.automation.auto_inject_runes = false;
         s.automation.flash_key = FlashKeyPreference::F;
         s.automation.auto_mark_daily_missions_read = true;
@@ -249,8 +243,7 @@ mod tests {
         let parsed = parse_user_settings_ini(&ini);
         assert_eq!(parsed, s);
 
-        // Existing INI without bFlashOnboardingCompleted keeps flash_onboarding_completed = false
-        // so existing users still see the Flash onboarding modal once.
+        // Existing INI with unknown/legacy keys (like bLegacyStorageMigrated=True) ignores unknown keys gracefully
         let legacy_ini = "
 [/Script/SchumazGG.GeneralSettings]
 Language=pt_BR
@@ -273,13 +266,13 @@ bLegacyStorageMigrated=True
         let partial_corrupt = "
 [/Script/SchumazGG.ProfileAppearanceSettings]
 ProfileBlurPercent=abc
-bWallpaperVisible=False
+bWallpaperVisible=notabool
 ";
         let fallback_test = parse_user_settings_ini(partial_corrupt);
         assert_eq!(
             fallback_test.profile_appearance.profile_blur_percent,
             DEFAULT_PROFILE_BLUR_PERCENT
         );
-        assert!(!fallback_test.profile_appearance.wallpaper_visible);
+        assert!(fallback_test.profile_appearance.wallpaper_visible);
     }
 }

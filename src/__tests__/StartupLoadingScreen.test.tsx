@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, renderHook } from "@testing-library/react";
-import App, { FLASH_ONBOARDING_STORAGE_KEY } from "../App";
+import App from "../App";
 import { invoke } from "@tauri-apps/api/core";
-import { defaultAppInvokeMock } from "./appTestFixtures";
+import { defaultAppInvokeMock, resetMockAppSettings } from "./appTestFixtures";
 import {
   useAppBootstrap,
   MIN_SPLASH_DURATION_MS,
@@ -33,14 +33,13 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-function makeIniSettings(overrides: Partial<AppSettings["general"]> = {}): AppSettings {
+function makeIniSettings(generalOverrides: Partial<AppSettings["general"]> = {}): AppSettings {
   return {
     general: {
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: true,
-      legacyStorageMigrated: true,
-      ...overrides,
+      ...generalOverrides,
     },
     automation: {
       autoInjectRunes: true,
@@ -84,9 +83,7 @@ describe("Startup Loading Screen & Bootstrap Gate (Option A)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     eventListeners = {};
-    localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
+    resetMockAppSettings();
     vi.clearAllMocks();
     delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
@@ -106,7 +103,7 @@ describe("Startup Loading Screen & Bootstrap Gate (Option A)", () => {
 
     vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
       if (cmd === "get_bootstrap_status") return bootstrapStatusPromise;
-      if (cmd === "migrate_legacy_local_storage") return Promise.resolve(makeIniSettings());
+      if (cmd === "get_app_settings") return Promise.resolve(makeIniSettings());
       if (cmd === "get_hardware_acceleration_status") {
         return Promise.resolve({ enabled: true, active_at_startup: true });
       }
@@ -174,7 +171,7 @@ describe("Startup Loading Screen & Bootstrap Gate (Option A)", () => {
           networkReady: true,
         });
       }
-      if (cmd === "migrate_legacy_local_storage") {
+      if (cmd === "get_app_settings") {
         return Promise.resolve(
           makeIniSettings({
             language: "en_US",

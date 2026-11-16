@@ -4,7 +4,6 @@ import {
   type AppSettings,
   type FlashKeyPreference,
   type HardwareAccelerationStatus,
-  type LegacyLocalStoragePayload,
   type NavigationStatePatch,
   type UserPreferences,
 } from "../../types/bindings";
@@ -42,10 +41,6 @@ export const settingsIpc = {
 
   async completeFlashOnboarding(flashKey: FlashKeyPreference): Promise<AppSettings> {
     return commands.completeFlashOnboarding(flashKey);
-  },
-
-  async migrateLegacyLocalStorage(payload: LegacyLocalStoragePayload): Promise<AppSettings> {
-    return commands.migrateLegacyLocalStorage(payload);
   },
 
   async getHardwareAccelerationStatus(): Promise<HardwareAccelerationStatus> {

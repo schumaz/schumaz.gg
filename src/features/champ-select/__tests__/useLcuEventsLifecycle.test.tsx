@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useLcuEvents } from "../../../hooks/useLcuEvents";
+import { useLcuEvents } from "../useLcuEvents";
 import { ChampionBuild } from "../../../types";
 import { baseBuild } from "./lcuEventsFixtures";
 

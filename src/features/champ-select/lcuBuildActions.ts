@@ -123,7 +123,7 @@ export async function injectItemBuildAction(
   const activeQueueId =
     champSelect?.queue_id ?? (build.supports_runes === false ? 2400 : null);
   try {
-    await injectorIpc.injectItemBuild(build.champion_id, activeQueueId, index, index, index);
+    await injectorIpc.injectItemBuild(build.champion_id, activeQueueId, index);
   } catch (e) {
     console.warn("Failed to inject chosen unified build:", e);
   }

@@ -1,22 +1,19 @@
 export type AppLocale = "pt_BR" | "en_US";
 
-export const LANGUAGE_STORAGE_KEY = "schumaz_language";
 export const DEFAULT_ONBOARDING_LOCALE: AppLocale = "en_US";
 
 export function isValidAppLocale(value: unknown): value is AppLocale {
   return value === "pt_BR" || value === "en_US";
 }
 
+let defaultFallbackLocale: AppLocale | null = null;
+
+export function setDefaultFallbackLocale(locale: AppLocale | null): void {
+  defaultFallbackLocale = locale;
+}
+
 export function getSavedAppLocale(): AppLocale | null {
-  try {
-    const raw = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (isValidAppLocale(raw)) {
-      return raw;
-    }
-  } catch {
-    // Ignore storage access errors
-  }
-  return null;
+  return defaultFallbackLocale;
 }
 
 export interface CoreTranslations {

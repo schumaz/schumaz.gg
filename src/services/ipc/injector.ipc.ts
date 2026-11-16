@@ -35,11 +35,9 @@ export const injectorIpc = {
   async injectItemBuild(
     championId: number,
     queueId: number | null,
-    buildIndex: number | null,
-    coreIndex: number | null,
-    finalIndex: number | null
+    buildIndex: number | null
   ): Promise<null> {
-    return commands.injectItemBuild(championId, queueId, buildIndex, coreIndex, finalIndex);
+    return commands.injectItemBuild(championId, queueId, buildIndex);
   },
 
   async onBuildInjected(handler: (report: BuildInjected) => void): Promise<UnlistenFn> {

@@ -40,7 +40,6 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::update_navigation_state,
             commands::complete_language_onboarding,
             commands::complete_flash_onboarding,
-            commands::migrate_legacy_local_storage,
             commands::restart_app
         ])
         .events(collect_events![

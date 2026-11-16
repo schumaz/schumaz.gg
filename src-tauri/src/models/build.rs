@@ -127,11 +127,7 @@ pub struct ChampionBuild {
     #[serde(default)]
     pub rune_pages: Vec<RunePageOption>,
     #[serde(default)]
-    pub core_build_options: Vec<ItemBuildOption>,
-    #[serde(default)]
     pub build_options: Vec<UnifiedBuildOption>,
-    #[serde(default)]
-    pub final_build_options: Vec<ItemBuildOption>,
     #[serde(default)]
     pub champion_icon_url: String,
     #[serde(default)]

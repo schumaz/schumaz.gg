@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import App, { FLASH_ONBOARDING_STORAGE_KEY } from "../../../App";
+import App from "../../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { defaultAppInvokeMock, mockAhriBuild } from "../../../__tests__/appTestFixtures";
 
@@ -25,8 +25,6 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
   beforeEach(() => {
     eventListeners = {};
     localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
-    localStorage.setItem(FLASH_ONBOARDING_STORAGE_KEY, "true");
   });
 
   it("renders full-screen profile wallpaper only on Perfil tab, applies blur slider from Configurações, and enforces 30s refresh cooldown", async () => {
@@ -91,7 +89,7 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
     const numInput = screen.getByTestId("profile-blur-input");
     fireEvent.change(numInput, { target: { value: "100" } });
     fireEvent.keyDown(numInput, { key: "Enter" });
-    expect(localStorage.getItem("schumaz_profile_ui_blur")).toBe("100");
+    expect(invoke).toHaveBeenCalledWith("update_profile_appearance", expect.objectContaining({ blurPercent: 100 }));
     expect(screen.getByTestId("profile-blur-value")).toHaveTextContent("100%");
 
     fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
@@ -111,7 +109,7 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
     fireEvent.click(screen.getByTestId("wallpaper-visible-toggle"));
-    expect(localStorage.getItem("schumaz_profile_wallpaper_visible")).toBe("false");
+    expect(invoke).toHaveBeenCalledWith("update_profile_appearance", expect.objectContaining({ wallpaperVisible: false }));
     fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
     expect(screen.queryByTestId("profile-wallpaper")).not.toBeInTheDocument();
 
@@ -123,14 +121,15 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
     expect(refreshBtn).toHaveTextContent("Atualizar (30s)");
   });
 
-  it("keeps view-settings inactive and hidden unless Configurações tab is selected", () => {
+  it("keeps view-settings inactive and hidden unless Configurações tab is selected", async () => {
     render(<App />);
 
+    const runesBtn = await screen.findByRole("button", { name: /^runas$/i });
     expect(screen.getByTestId("view-profile")).toHaveClass("active-tab");
     expect(screen.getByTestId("view-settings")).toHaveClass("inactive-tab");
     expect(screen.getByTestId("view-settings")).toHaveAttribute("aria-hidden", "true");
 
-    fireEvent.click(screen.getByRole("button", { name: /^runas$/i }));
+    fireEvent.click(runesBtn);
     expect(screen.getByTestId("view-runes")).toHaveClass("active-tab");
     expect(screen.getByTestId("view-settings")).toHaveClass("inactive-tab");
     expect(screen.getByTestId("view-settings")).toHaveAttribute("aria-hidden", "true");

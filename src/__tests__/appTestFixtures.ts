@@ -1,20 +1,25 @@
-import type { ChampionBuild } from "../App";
+import type { AppSettings, ChampionBuild } from "../types";
 
 export const mockAhriBuild: ChampionBuild = {
   champion_id: 103,
   champion_name: "Ahri",
-  win_rate: 51.8,
+  active_position: "mid",
+  active_tier: "emerald_plus",
+  active_region: "global",
+  active_patch: "16.22",
+  patch_fallback_applied: false,
+  win_rate: 51.4,
   pick_rate: 8.4,
+  spell1_id: 4,
+  spell2_id: 14,
+  champion_icon_url: "ahri.png",
   primary_style_id: 8100,
   sub_style_id: 8200,
   selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],
-  spell1_id: 4,
-  spell2_id: 14,
-  champion_icon_url: "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png",
   primary_style_name: "Dominação",
-  primary_style_icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png",
+  primary_style_icon_url: "domination.png",
   sub_style_name: "Feitiçaria",
-  sub_style_icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7202_Sorcery.png",
+  sub_style_icon_url: "sorcery.png",
   perks: [
     { id: 8112, key: "Electrocute", name: "Eletrocutar", icon_url: "electrocute.png" },
     { id: 8126, key: "CheapShot", name: "Golpe Desleal", icon_url: "cheapshot.png" },
@@ -97,13 +102,18 @@ export const mockAhriBuild: ChampionBuild = {
       ],
     },
   ],
-  spell_choices: [
-    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
-    { id: 12, name: "Teleporte", icon_url: "teleport.png" },
-  ],
   spells: [
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },
+  ],
+  spell_choices: [
+    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
+    { id: 12, name: "Teleporte", icon_url: "teleport.png" },
+    { id: 3, name: "Exaustão", icon_url: "exhaust.png" },
+    { id: 7, name: "Curar", icon_url: "heal.png" },
+    { id: 21, name: "Barreira", icon_url: "barrier.png" },
+    { id: 6, name: "Fantasma", icon_url: "ghost.png" },
+    { id: 1, name: "Purificar", icon_url: "cleanse.png" },
   ],
   build_options: [
     {
@@ -114,90 +124,153 @@ export const mockAhriBuild: ChampionBuild = {
       final_item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"],
       situational_item_ids: [4629, 3165, 3102],
       situational_item_icon_urls: ["4629.png", "3165.png", "3102.png"],
-      play: 25000,
-      win: 13000,
-      pick_rate: 65.0,
+      play: 12500,
+      win: 6800,
+      pick_rate: 57.3,
     },
     {
       name: "Build 2",
-      core_item_ids: [3285, 4645, 3089],
-      core_item_icon_urls: ["3285.png", "4645.png", "3089.png"],
-      final_item_ids: [3285, 4645, 3089, 3157, 3135, 3102],
-      final_item_icon_urls: ["3285.png", "4645.png", "3089.png", "3157.png", "3135.png", "3102.png"],
-      situational_item_ids: [3165, 4629, 3116],
-      situational_item_icon_urls: ["3165.png", "4629.png", "3116.png"],
-      play: 8000,
-      win: 4200,
-      pick_rate: 20.8,
-    },
-    {
-      name: "Build 3",
-      core_item_ids: [3285, 3165, 3089],
-      core_item_icon_urls: ["3285.png", "3165.png", "3089.png"],
-      final_item_ids: [3285, 3165, 3089, 3157, 3135, 4629],
-      final_item_icon_urls: ["3285.png", "3165.png", "3089.png", "3157.png", "3135.png", "4629.png"],
-      situational_item_ids: [4645, 3102, 3041],
-      situational_item_icon_urls: ["4645.png", "3102.png", "3041.png"],
-      play: 3000,
-      win: 1550,
-      pick_rate: 7.8,
-    },
-  ],
-  core_build_options: [
-    {
-      item_ids: [3285, 3157, 3089],
-      item_icon_urls: ["3285.png", "3157.png", "3089.png"],
-      play: 25000,
-      win: 13000,
-      pick_rate: 65.0,
-    },
-    {
-      item_ids: [3285, 4645, 3089],
-      item_icon_urls: ["3285.png", "4645.png", "3089.png"],
-      play: 8000,
-      win: 4200,
-      pick_rate: 20.8,
-    },
-    {
-      item_ids: [3285, 3165, 3089],
-      item_icon_urls: ["3285.png", "3165.png", "3089.png"],
-      play: 3000,
-      win: 1550,
-      pick_rate: 7.8,
-    },
-  ],
-  final_build_options: [
-    {
-      item_ids: [3285, 3157, 3089, 3135, 4645, 3102],
-      item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"],
-      play: 12000,
-      win: 6500,
-      pick_rate: 55.0,
-    },
-    {
-      item_ids: [3285, 3157, 3089, 4629, 3135, 3102],
-      item_icon_urls: ["3285.png", "3157.png", "3089.png", "4629.png", "3135.png", "3102.png"],
-      play: 5000,
-      win: 2700,
-      pick_rate: 22.9,
+      core_item_ids: [6653, 3157, 3089],
+      core_item_icon_urls: ["6653.png", "3157.png", "3089.png"],
+      final_item_ids: [6653, 3157, 3089, 3135, 4645, 3102],
+      final_item_icon_urls: ["6653.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"],
+      situational_item_ids: [4629, 3165, 3116],
+      situational_item_icon_urls: ["4629.png", "3165.png", "3116.png"],
+      play: 6800,
+      win: 3600,
+      pick_rate: 31.2,
     },
   ],
   item_blocks: [
-    { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
-    { title: "Primeiros 3 Itens", item_ids: [3285, 3157, 3089], item_icon_urls: ["3285.png", "3157.png", "3089.png"] },
-    { title: "3 Botas Mais Feitas", item_ids: [3020, 3111, 3047], item_icon_urls: ["3020.png", "3111.png", "3047.png"] },
-    { title: "Build Final", item_ids: [3285, 3157, 3089, 3135, 4645, 3102], item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"] },
-    { title: "Itens Situacionais / Úteis", item_ids: [4629, 3165, 3102], item_icon_urls: ["4629.png", "3165.png", "3102.png"] },
+    { title: "1. Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
+    { title: "2. Primeiros 3 Itens", item_ids: [3285, 3157, 3089], item_icon_urls: ["3285.png", "3157.png", "3089.png"] },
+    { title: "3. 3 Botas Mais Feitas", item_ids: [3020, 3158, 3111], item_icon_urls: ["3020.png", "3158.png", "3111.png"] },
+    { title: "4. Build Final", item_ids: [3285, 3157, 3089, 3135, 4645, 3102], item_icon_urls: ["3285.png", "3157.png", "3089.png", "3135.png", "4645.png", "3102.png"] },
+    { title: "5. Itens Situacionais / Úteis", item_ids: [4629, 3165, 3102], item_icon_urls: ["4629.png", "3165.png", "3102.png"] },
   ],
-  active_position: "mid",
-  active_tier: "emerald_plus",
-  active_region: "global",
-  active_patch: "16.22",
-  available_patches: ["16.22", "16.21"],
-  patch_fallback_applied: false,
 };
 
+export function makeDefaultMockAppSettings(): AppSettings {
+  return {
+    general: {
+      language: "pt_BR",
+      languageOnboardingCompleted: true,
+      flashOnboardingCompleted: true,
+    },
+    automation: {
+      autoInjectRunes: true,
+      autoInjectSpells: true,
+      autoInjectItems: true,
+      flashKey: "D",
+      patch48hProtection: true,
+      autoMarkDailyMissionsRead: false,
+      language: "pt_BR",
+    },
+    profileAppearance: {
+      profileBlurPercent: 10,
+      wallpaperVisible: true,
+    },
+    graphics: {
+      hardwareAcceleration: true,
+    },
+    window: {
+      windowWidth: 1280,
+      windowHeight: 800,
+      windowX: null,
+      windowY: null,
+      windowMaximized: false,
+    },
+    navigation: {
+      savedAramMode: null,
+      profileMatchModeFilter: "all",
+      aramMayhemRarityFilter: "all",
+      aramMayhemLastChampion: null,
+      rankedFilterRegion: "global",
+      rankedFilterTier: "emerald_plus",
+      rankedFilterLane: "all",
+      rankedFilterPatch: null,
+      rankedChampionTierFilter: "all",
+      lastSummonerId: null,
+    },
+  };
+}
+
+export let activeMockAppSettings: AppSettings = makeDefaultMockAppSettings();
+
+export function resetMockAppSettings(overrides?: Partial<AppSettings>): void {
+  activeMockAppSettings = makeDefaultMockAppSettings();
+  if (overrides) {
+    if (overrides.general) {
+      activeMockAppSettings.general = { ...activeMockAppSettings.general, ...overrides.general };
+    }
+    if (overrides.automation) {
+      activeMockAppSettings.automation = { ...activeMockAppSettings.automation, ...overrides.automation };
+    }
+    if (overrides.profileAppearance) {
+      activeMockAppSettings.profileAppearance = { ...activeMockAppSettings.profileAppearance, ...overrides.profileAppearance };
+    }
+    if (overrides.graphics) {
+      activeMockAppSettings.graphics = { ...activeMockAppSettings.graphics, ...overrides.graphics };
+    }
+    if (overrides.window) {
+      activeMockAppSettings.window = { ...activeMockAppSettings.window, ...overrides.window };
+    }
+    if (overrides.navigation) {
+      activeMockAppSettings.navigation = { ...activeMockAppSettings.navigation, ...overrides.navigation };
+    }
+  }
+}
+
 export function defaultAppInvokeMock(cmd: string, args?: Record<string, unknown>) {
+  if (cmd === "get_app_settings") {
+    return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "sync_user_preferences") {
+    if (args?.preferences) {
+      activeMockAppSettings.automation = args.preferences as any;
+    }
+    return Promise.resolve(null);
+  }
+  if (cmd === "set_locale") {
+    if (args?.locale) {
+      activeMockAppSettings.general.language = args.locale as any;
+      activeMockAppSettings.automation.language = args.locale as any;
+    }
+    return Promise.resolve(null);
+  }
+  if (cmd === "complete_language_onboarding") {
+    if (args?.locale) {
+      activeMockAppSettings.general.language = args.locale as any;
+      activeMockAppSettings.general.languageOnboardingCompleted = true;
+      activeMockAppSettings.automation.language = args.locale as any;
+    }
+    return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "complete_flash_onboarding") {
+    if (args?.flashKey) {
+      activeMockAppSettings.general.flashOnboardingCompleted = true;
+      activeMockAppSettings.automation.flashKey = args.flashKey as any;
+    }
+    return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "update_profile_appearance") {
+    activeMockAppSettings.profileAppearance.profileBlurPercent = Number(args?.blurPercent ?? 10);
+    activeMockAppSettings.profileAppearance.wallpaperVisible = Boolean(args?.wallpaperVisible ?? true);
+    return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "update_navigation_state") {
+    activeMockAppSettings.navigation = {
+      ...activeMockAppSettings.navigation,
+      ...(args?.patch as any),
+    };
+    return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "get_hardware_acceleration_status") {
+    return Promise.resolve({
+      enabled: activeMockAppSettings.graphics.hardwareAcceleration,
+      active_at_startup: true,
+    });
+  }
   if (
     cmd === "get_summoner_status" ||
     cmd === "get_player_profile" ||

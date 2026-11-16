@@ -2,8 +2,7 @@ use crate::app_bootstrap::BootstrapState;
 use crate::lcu_injector;
 use crate::models::{AppLocale, BootstrapStatus, FlashKeyPreference};
 use crate::storage::{
-    self, AppSettings, GraphicsState, HardwareAccelerationStatus, LegacyLocalStoragePayload,
-    NavigationStatePatch,
+    self, AppSettings, GraphicsState, HardwareAccelerationStatus, NavigationStatePatch,
 };
 use tauri::{AppHandle, State};
 
@@ -71,15 +70,6 @@ pub async fn complete_flash_onboarding(
     flash_key: FlashKeyPreference,
 ) -> Result<AppSettings, String> {
     lcu_injector::complete_flash_onboarding_service(flash_key)
-}
-
-/// Performs one-time migration of the 6 legacy `localStorage` keys into `UserSettings.ini`.
-#[tauri::command]
-#[specta::specta]
-pub fn migrate_legacy_local_storage(
-    payload: LegacyLocalStoragePayload,
-) -> Result<AppSettings, String> {
-    lcu_injector::migrate_legacy_local_storage_service(payload)
 }
 
 /// Restarts the Tauri application so updated WebView2 GPU flags take effect.

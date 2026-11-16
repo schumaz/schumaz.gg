@@ -6,7 +6,7 @@ import {
   LEAGUE_ARAM_MAYHEM_ICON_URL,
   getChampionTierClass,
   getChampionTierLabel,
-} from "../components/AramTab";
+} from "../features/aram/AramTab";
 import {
   mockAhriAugments,
   mockAramChampions,

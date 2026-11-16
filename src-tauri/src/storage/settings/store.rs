@@ -1,12 +1,23 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
 use super::super::paths::atomic_write;
+use super::ini_parser::parse_user_settings_ini;
 use super::ini_serializer::serialize_user_settings_ini;
 use super::{
     AppSettings, NavigationState, NavigationStatePatch, clamp_profile_blur,
     validate_champion_tier_filter, validate_ranked_lane, validate_rarity_filter,
 };
+
+pub fn load_user_settings(ini_path: &Path) -> AppSettings {
+    if ini_path.exists()
+        && let Ok(raw) = fs::read_to_string(ini_path)
+    {
+        return parse_user_settings_ini(&raw);
+    }
+    AppSettings::default()
+}
 
 pub fn save_user_settings_to_path(path: &Path, settings: &AppSettings) -> Result<(), String> {
     let serialized = serialize_user_settings_ini(settings);

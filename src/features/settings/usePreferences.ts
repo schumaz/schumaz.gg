@@ -1,28 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppLocale,
+  DEFAULT_PREFERENCES,
   FlashKeyPreference,
   NavigationState,
   NavigationStatePatch,
-  PREFERENCES_STORAGE_KEY,
   UserPreferences,
 } from "../../types";
 import { settingsIpc, windowIpc } from "../../services/ipc";
-import { isValidAppLocale } from "../../i18n";
+import { DEFAULT_ONBOARDING_LOCALE, isValidAppLocale } from "../../i18n";
 import {
-  InitialLanguageState,
-  PROFILE_BLUR_STORAGE_KEY,
-  WALLPAPER_VISIBLE_STORAGE_KEY,
+  DEFAULT_PROFILE_BLUR,
   clampProfileBlur,
   isValidAppSettings,
-  loadInitialFlashOnboardingNeeded,
-  loadInitialLanguageState,
-  loadInitialPreferences,
-  loadInitialProfileBlur,
-  loadInitialWallpaperVisible,
   mergeNavigationState,
-  saveFlashOnboardingCompletedToStorage,
-  saveLanguageToStorage,
 } from "./preferencesStorage";
 import { extractHydratedIniSettings, fetchInitialIniSettings } from "./preferencesHydration";
 
@@ -33,27 +24,21 @@ export function usePreferences(
   onPatchProtectionChange?: (enabled: boolean) => void,
   onLocaleChange?: (locale: AppLocale) => void
 ) {
-  const [initialLangState] = useState<InitialLanguageState>(loadInitialLanguageState);
-  const [locale, setLocale] = useState<AppLocale>(initialLangState.locale);
-  const [needsLanguageOnboarding, setNeedsLanguageOnboarding] = useState<boolean>(
-    initialLangState.needsOnboarding
-  );
-  const [needsFlashOnboarding, setNeedsFlashOnboarding] = useState<boolean>(
-    loadInitialFlashOnboardingNeeded
-  );
-  const [preferences, setPreferences] = useState<UserPreferences>(() =>
-    loadInitialPreferences(initialLangState.locale)
-  );
-  const [profileBlur, setProfileBlur] = useState<number>(loadInitialProfileBlur);
-  const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(loadInitialWallpaperVisible);
+  const [locale, setLocale] = useState<AppLocale>(DEFAULT_ONBOARDING_LOCALE);
+  const [needsLanguageOnboarding, setNeedsLanguageOnboarding] = useState<boolean>(false);
+  const [needsFlashOnboarding, setNeedsFlashOnboarding] = useState<boolean>(false);
+  const [preferences, setPreferences] = useState<UserPreferences>(() => ({
+    ...DEFAULT_PREFERENCES,
+    language: DEFAULT_ONBOARDING_LOCALE,
+  }));
+  const [profileBlur, setProfileBlur] = useState<number>(DEFAULT_PROFILE_BLUR);
+  const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(true);
   const [hardwareAcceleration, setHardwareAcceleration] = useState<boolean>(true);
   const [gpuRestartRequired, setGpuRestartRequired] = useState<boolean>(false);
   const [navigationState, setNavigationState] = useState<NavigationState | null>(null);
-  const [iniBacked, setIniBacked] = useState<boolean>(false);
   const [preferencesReady, setPreferencesReady] = useState<boolean>(false);
 
   const gpuActiveAtStartupRef = useRef<boolean>(true);
-  const usingIniRef = useRef<boolean>(false);
   const profileBlurRef = useRef<number>(profileBlur);
   const wallpaperVisibleRef = useRef<boolean>(wallpaperVisible);
 
@@ -67,8 +52,6 @@ export function usePreferences(
       try {
         const settings = await fetchInitialIniSettings();
         if (active && settings) {
-          usingIniRef.current = true;
-          setIniBacked(true);
           const hydrated = extractHydratedIniSettings(settings);
           setLocale(hydrated.resolvedLocale);
           setNeedsLanguageOnboarding(hydrated.needsOnboarding);
@@ -80,9 +63,6 @@ export function usePreferences(
           setWallpaperVisible(hydrated.wallpaperVisible);
           setHardwareAcceleration(hydrated.hardwareAcceleration);
           setNavigationState(hydrated.navigation);
-        } else if (active) {
-          settingsIpc.syncUserPreferences(preferences).catch(() => {});
-          settingsIpc.setLocale(locale).catch(() => {});
         }
 
         try {
@@ -109,18 +89,12 @@ export function usePreferences(
   }, []);
 
   const persistPreferences = useCallback((next: UserPreferences) => {
-    if (!usingIniRef.current) {
-      try {
-        localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-    }
     settingsIpc.syncUserPreferences(next).catch(() => {});
   }, []);
 
   const changeLanguage = useCallback(
     (nextLocale: AppLocale) => {
       setLocale(nextLocale);
-      if (!usingIniRef.current) saveLanguageToStorage(nextLocale);
       setNeedsLanguageOnboarding(false);
       setPreferences((prev) => {
         const next = { ...prev, language: nextLocale };
@@ -145,17 +119,8 @@ export function usePreferences(
     }
     setPreferences((prev) => {
       const next = { ...prev, [key]: value };
-      if (!usingIniRef.current) {
-        try {
-          localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-        } catch {}
-      }
-      settingsIpc
-        .syncUserPreferences(next)
-        .then(() => {
-          if (key === "patch48hProtection") onPatchProtectionChange?.(Boolean(value));
-        })
-        .catch(() => {});
+      persistPreferences(next);
+      if (key === "patch48hProtection") onPatchProtectionChange?.(Boolean(value));
       return next;
     });
     if (key === "flashKey") onFlashKeyChange?.(value as FlashKeyPreference);
@@ -174,12 +139,7 @@ export function usePreferences(
       return next;
     });
     const notify = () => onLocaleChange?.(locale);
-    if (usingIniRef.current) {
-      settingsIpc.completeLanguageOnboarding(locale).then(notify).catch(notify);
-      return;
-    }
-    saveLanguageToStorage(locale);
-    settingsIpc.setLocale(locale).then(notify).catch(notify);
+    settingsIpc.completeLanguageOnboarding(locale).then(notify).catch(notify);
   }, [locale, persistPreferences, onLocaleChange]);
 
   const previewOnboardingFlashKey = useCallback((nextKey: FlashKeyPreference) => {
@@ -191,59 +151,34 @@ export function usePreferences(
     setNeedsFlashOnboarding(false);
     setPreferences((prev) => {
       const next = { ...prev, flashKey: selectedFlashKey };
-      if (!usingIniRef.current) {
-        try {
-          localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-        } catch {}
-      }
+      persistPreferences(next);
       return next;
     });
-    if (usingIniRef.current) {
-      settingsIpc.completeFlashOnboarding(selectedFlashKey).catch(() => {});
-    } else {
-      saveFlashOnboardingCompletedToStorage();
-      settingsIpc
-        .syncUserPreferences({ ...preferences, flashKey: selectedFlashKey })
-        .catch(() => {});
-    }
+    settingsIpc.completeFlashOnboarding(selectedFlashKey).catch(() => {});
     onFlashKeyChange?.(selectedFlashKey);
-  }, [preferences, onFlashKeyChange]);
+  }, [preferences.flashKey, persistPreferences, onFlashKeyChange]);
 
   const updateProfileBlur = useCallback((blurPercent: number) => {
     const clamped = clampProfileBlur(blurPercent);
     profileBlurRef.current = clamped;
     setProfileBlur(clamped);
-    if (usingIniRef.current) {
-      settingsIpc.updateProfileAppearance(clamped, wallpaperVisibleRef.current).catch(() => {});
-    } else {
-      try {
-        localStorage.setItem(PROFILE_BLUR_STORAGE_KEY, String(clamped));
-      } catch {}
-    }
+    settingsIpc.updateProfileAppearance(clamped, wallpaperVisibleRef.current).catch(() => {});
   }, []);
 
   const updateWallpaperVisible = useCallback((visible: boolean) => {
     wallpaperVisibleRef.current = visible;
     setWallpaperVisible(visible);
-    if (usingIniRef.current) {
-      settingsIpc.updateProfileAppearance(profileBlurRef.current, visible).catch(() => {});
-    } else {
-      try {
-        localStorage.setItem(WALLPAPER_VISIBLE_STORAGE_KEY, String(visible));
-      } catch {}
-    }
+    settingsIpc.updateProfileAppearance(profileBlurRef.current, visible).catch(() => {});
   }, []);
 
   const updateNavigationState = useCallback((patch: NavigationStatePatch) => {
     setNavigationState((prev) => mergeNavigationState(prev, patch));
-    if (usingIniRef.current) {
-      settingsIpc
-        .updateNavigationState(patch)
-        .then((updated) => {
-          if (isValidAppSettings(updated)) setNavigationState(updated.navigation);
-        })
-        .catch(() => {});
-    }
+    settingsIpc
+      .updateNavigationState(patch)
+      .then((updated) => {
+        if (isValidAppSettings(updated)) setNavigationState(updated.navigation);
+      })
+      .catch(() => {});
   }, []);
 
   const updateHardwareAcceleration = (enabled: boolean) => {
@@ -286,7 +221,7 @@ export function usePreferences(
     restartApp,
     navigationState,
     updateNavigationState,
-    iniBacked,
+    iniBacked: preferencesReady,
     preferencesReady,
   };
 }

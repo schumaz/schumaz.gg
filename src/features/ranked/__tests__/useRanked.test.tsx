@@ -1,12 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { renderHook, act } from "@testing-library/react";
-import { RankedTab } from "../../../components/RankedTab";
-import { useRanked } from "../../../hooks/useRanked";
-import {
-  RANKED_FILTERS_STORAGE_KEY,
-  type ChampionBuild_Serialize,
-} from "../../../types";
+import { RankedTab } from "../RankedTab";
+import { useRanked } from "../useRanked";
+import type { ChampionBuild_Serialize } from "../../../types";
 import {
   buildIpc,
   injectorIpc,
@@ -23,7 +20,6 @@ import {
 describe("useRanked hook state and filter preservation", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("schumaz_language", "pt_BR");
     vi.restoreAllMocks();
   });
 
@@ -31,8 +27,11 @@ describe("useRanked hook state and filter preservation", () => {
     const tierSpy = vi.spyOn(rankedIpc, "getRankedTierList").mockResolvedValue(mockTierResponse);
     const buildSpy = vi.spyOn(rankedIpc, "getRankedChampionBuild").mockResolvedValue(mockAhriBuild);
     const updateFiltersSpy = vi.spyOn(buildIpc, "updateBuildFilters");
+    const onNavigationPatch = vi.fn();
 
-    const { result } = renderHook(() => useRanked(true, "D", true));
+    const { result } = renderHook(() =>
+      useRanked(true, "D", true, "pt_BR", { onNavigationPatch })
+    );
 
     await waitFor(() => {
       expect(tierSpy).toHaveBeenCalledWith("global", "emerald_plus", null);
@@ -75,12 +74,14 @@ describe("useRanked hook state and filter preservation", () => {
       lane: "all",
       patch: "16.22",
     });
-    expect(JSON.parse(localStorage.getItem(RANKED_FILTERS_STORAGE_KEY) || "{}")).toEqual({
-      region: "br",
-      tier: "diamond_plus",
-      lane: "all",
-      patch: "16.22",
-    });
+    expect(onNavigationPatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rankedFilterRegion: "br",
+        rankedFilterTier: "diamond_plus",
+        rankedFilterLane: "all",
+        rankedFilterPatch: "16.22",
+      })
+    );
   });
 
   it("switches rune pages and build options locally in Ranked without injecting anything into the game", async () => {
@@ -200,7 +201,7 @@ describe("useRanked hook state and filter preservation", () => {
     await waitFor(() => {
       expect(screen.getByTestId("ranked-champion-detail")).toBeInTheDocument();
       expect(screen.getByText("Eletrocutar")).toBeInTheDocument();
-      expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/70\.0% uso/i);
+      expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/70.0% uso/i);
     });
 
     fireEvent.click(screen.getByTestId("rune-page-btn-1"));
@@ -208,7 +209,7 @@ describe("useRanked hook state and filter preservation", () => {
     expect(screen.queryByText("Eletrocutar")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("build-opt-btn-1"));
-    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/30\.0% uso/i);
+    expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/30.0% uso/i);
 
     expect(injectRunesSpy).not.toHaveBeenCalled();
     expect(injectBuildSpy).not.toHaveBeenCalled();
