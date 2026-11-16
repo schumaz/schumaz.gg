@@ -5,7 +5,7 @@ use crate::models::AppDistributionInfo;
 
 pub const GITHUB_RELEASES_LATEST_URL: &str =
     "https://github.com/schumaz/schumaz.gg/releases/latest";
-pub const PRODUCT_INSTALL_DIR_NAME: &str = "schumaz.gg";
+pub const PRODUCT_INSTALL_DIR_NAME: &str = "schumazgg";
 pub const WINDOWS_UNINSTALL_SUBKEY: &str =
     r"Software\Microsoft\Windows\CurrentVersion\Uninstall\schumaz.gg";
 
@@ -47,7 +47,7 @@ pub fn is_exe_within_install_dir(exe_path: &Path, install_dir: &Path) -> bool {
 /// Returns `true` whenever:
 /// - The Cargo `portable` feature is enabled at compile time, OR
 /// - On Windows, there is no `HKCU\...\Uninstall\schumaz.gg` entry OR `current_exe()`
-///   is located outside both the registered `InstallLocation` and `%LOCALAPPDATA%\schumaz.gg`.
+///   is located outside both the registered `InstallLocation` and `%LOCALAPPDATA%\schumazgg`.
 pub fn evaluate_portable_mode(
     feature_portable: bool,
     is_windows: bool,
@@ -151,12 +151,12 @@ mod tests {
 
     #[test]
     fn test_feature_portable_always_forces_portable_mode() {
-        let exe = Path::new(r"C:\Users\Alice\AppData\Local\schumaz.gg\schumaz.gg.exe");
+        let exe = Path::new(r"C:\Users\Alice\AppData\Local\schumazgg\schumazgg.exe");
         let local = Path::new(r"C:\Users\Alice\AppData\Local");
         let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumaz.gg".to_string()),
+            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg".to_string()),
             uninstall_string: Some(
-                r"C:\Users\Alice\AppData\Local\schumaz.gg\uninstall.exe".to_string(),
+                r"C:\Users\Alice\AppData\Local\schumazgg\uninstall.exe".to_string(),
             ),
         };
 
@@ -171,12 +171,12 @@ mod tests {
 
     #[test]
     fn test_installed_nsis_current_user_is_not_portable() {
-        let exe = Path::new(r"\\?\C:\Users\Alice\AppData\Local\schumaz.gg\schumaz.gg.exe");
+        let exe = Path::new(r"\\?\C:\Users\Alice\AppData\Local\schumazgg\schumazgg.exe");
         let local = Path::new(r"C:\Users\Alice\AppData\Local");
         let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumaz.gg\".to_string()),
+            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg\".to_string()),
             uninstall_string: Some(
-                r"C:\Users\Alice\AppData\Local\schumaz.gg\uninstall.exe".to_string(),
+                r"C:\Users\Alice\AppData\Local\schumazgg\uninstall.exe".to_string(),
             ),
         };
 
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_exe_outside_local_appdata_without_uninstall_entry_is_portable() {
-        let exe = Path::new(r"D:\Games\schumaz.gg-portable\schumaz.gg.exe");
+        let exe = Path::new(r"D:\Games\schumazgg-portable\schumazgg.exe");
         let local = Path::new(r"C:\Users\Alice\AppData\Local");
 
         assert!(evaluate_portable_mode(
@@ -205,12 +205,12 @@ mod tests {
 
     #[test]
     fn test_exe_outside_install_dir_even_with_registry_entry_is_portable() {
-        let exe = Path::new(r"C:\Users\Alice\Downloads\schumaz.gg.exe");
+        let exe = Path::new(r"C:\Users\Alice\Downloads\schumazgg.exe");
         let local = Path::new(r"C:\Users\Alice\AppData\Local");
         let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumaz.gg".to_string()),
+            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg".to_string()),
             uninstall_string: Some(
-                r"C:\Users\Alice\AppData\Local\schumaz.gg\uninstall.exe".to_string(),
+                r"C:\Users\Alice\AppData\Local\schumazgg\uninstall.exe".to_string(),
             ),
         };
 
@@ -225,10 +225,10 @@ mod tests {
 
     #[test]
     fn test_similar_sibling_folder_name_does_not_false_match_install_dir() {
-        let exe = Path::new(r"C:\Users\Alice\AppData\Local\schumaz.gg-portable\schumaz.gg.exe");
+        let exe = Path::new(r"C:\Users\Alice\AppData\Local\schumazgg-portable\schumazgg.exe");
         let local = Path::new(r"C:\Users\Alice\AppData\Local");
         let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumaz.gg".to_string()),
+            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg".to_string()),
             uninstall_string: None,
         };
 
