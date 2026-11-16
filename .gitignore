@@ -17,10 +17,11 @@ node_modules/
 dist/
 .vite/
 
-# Environment files
+# Environment & Signing files
 .env
 .env.*
 !.env.example
+*.key
 
 # IDE & Editor files
 .vscode/
