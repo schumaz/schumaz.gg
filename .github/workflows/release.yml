@@ -18,7 +18,9 @@ jobs:
   release-windows:
     name: Build & Publish Windows Release
     runs-on: windows-latest
-    shell: pwsh
+    defaults:
+      run:
+        shell: pwsh
 
     steps:
       - name: Checkout repository
