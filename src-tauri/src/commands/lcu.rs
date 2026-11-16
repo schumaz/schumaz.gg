@@ -13,6 +13,13 @@ pub async fn get_summoner_status() -> Result<Option<models::SummonerInfo>, Strin
     Ok(lcu_connector::fetch_current_summoner_status().await)
 }
 
+/// Tauri command to fetch the current LCU gameflow phase if the client is connected.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_gameflow_phase() -> Option<String> {
+    lcu_connector::fetch_current_gameflow_phase().await
+}
+
 /// Tauri command to return the cached profile for the last known summoner in 0ms (even before LCU connects).
 #[tauri::command]
 #[specta::specta]

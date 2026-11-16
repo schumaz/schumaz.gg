@@ -12,6 +12,8 @@ export const commands = {
 	updateBuildFilters: (championId: number, queueId: number | null, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("update_build_filters", { championId, queueId, position, tier, region, patch }),
 	/**  Tauri command to fetch the current summoner status if the client is connected. */
 	getSummonerStatus: () => __TAURI_INVOKE<SummonerInfo_Serialize | null>("get_summoner_status"),
+	/**  Tauri command to fetch the current LCU gameflow phase if the client is connected. */
+	getGameflowPhase: () => __TAURI_INVOKE<string | null>("get_gameflow_phase"),
 	/**  Tauri command to return the cached profile for the last known summoner in 0ms (even before LCU connects). */
 	getCachedPlayerProfile: (summonerId: number | null) => __TAURI_INVOKE<CachedProfileResult_Serialize | null>("get_cached_player_profile", { summonerId }),
 	/**
@@ -47,6 +49,8 @@ export const commands = {
 	getRankedChampionBuild: (championId: number, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_ranked_champion_build", { championId, position, tier, region, patch }),
 	/**  Returns the current backend startup/prewarm bootstrap status. */
 	getBootstrapStatus: () => __TAURI_INVOKE<BootstrapStatus>("get_bootstrap_status"),
+	/**  Returns the runtime distribution mode (`isPortable`), current app version, and GitHub Releases URL. */
+	getAppDistributionInfo: () => __TAURI_INVOKE<AppDistributionInfo>("get_app_distribution_info"),
 	/**  Returns the saved GPU hardware acceleration setting and whether it was active at startup. */
 	getHardwareAccelerationStatus: () => __TAURI_INVOKE<HardwareAccelerationStatus>("get_hardware_acceleration_status"),
 	/**  Saves the GPU hardware acceleration preference to `UserSettings.ini` for the next startup. */
@@ -82,6 +86,16 @@ export const events = {
 };
 
 /* Types */
+/**
+ *  Runtime distribution metadata used by the frontend updater to distinguish
+ *  NSIS `currentUser` installations from standalone portable executables.
+ */
+export type AppDistributionInfo = {
+	isPortable: boolean,
+	currentVersion: string,
+	releasesUrl: string,
+};
+
 /**  Supported application & data locales (`pt_BR` | `en_US`). */
 export type AppLocale = "pt_BR" | "en_US";
 

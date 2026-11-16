@@ -5,6 +5,7 @@ import { ActiveTab, FlashKeyPreference } from "./types";
 import { injectorIpc } from "./services/ipc";
 import { I18nProvider } from "./i18n";
 import { useAppBootstrap } from "./hooks/useAppBootstrap";
+import { useAppUpdater } from "./hooks/useAppUpdater";
 import { useWindowMinimized } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
@@ -63,6 +64,13 @@ function App({ forceStartupLoading }: AppProps = {}) {
     onChampionPulled: () => setActiveTab("runes"),
     onMatchEnded: () => setActiveTab("profile"),
     locale,
+  });
+
+  const updater = useAppUpdater({
+    enabled: import.meta.env.MODE !== "test",
+    lcuInitialChecked: lcu.lcuInitialChecked,
+    gameflowPhase: lcu.gameflowPhase,
+    isInChampSelect: lcu.champSelect !== null,
   });
 
   const currentChampionId = lcu.champSelect?.champion_id ?? lcu.build?.champion_id ?? null;
@@ -165,7 +173,13 @@ function App({ forceStartupLoading }: AppProps = {}) {
           wallpaperVisible={prefs.wallpaperVisible}
         />
 
-        <StatusDock summoner={lcu.summoner} />
+        <StatusDock
+          summoner={lcu.summoner}
+          updateState={updater.updateState}
+          onRestartUpdate={updater.installAndRestart}
+          onOpenPortableRelease={updater.openPortableRelease}
+          onDismissUpdate={updater.dismissUpdate}
+        />
 
         <div className="tabs-viewport" aria-hidden={boot.isBooting || undefined}>
           <ProfileTab

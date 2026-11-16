@@ -9,6 +9,7 @@ import {
   rankedIpc,
   aramIpc,
   settingsIpc,
+  updaterIpc,
   windowIpc,
   assetsIpc,
 } from "../services/ipc";
@@ -16,6 +17,10 @@ import {
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockImplementation((cmd: string) => {
     if (cmd === "get_summoner_status") return Promise.resolve(null);
+    if (cmd === "get_gameflow_phase") return Promise.resolve("Lobby");
+    if (cmd === "get_app_distribution_info") {
+      return Promise.resolve({ isPortable: false, currentVersion: "0.1.0", releasesUrl: "" });
+    }
     if (cmd === "get_recommended_build_for_champion") return Promise.resolve(null);
     if (cmd === "get_player_profile") return Promise.resolve(null);
     if (cmd === "get_cached_player_profile") return Promise.resolve(null);
@@ -47,6 +52,9 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
   it("delegates lcu, build, injector, profile, ranked, aram, settings, and window commands", async () => {
     await lcuIpc.getSummonerStatus();
     expect(invoke).toHaveBeenCalledWith("get_summoner_status");
+
+    await lcuIpc.getGameflowPhase();
+    expect(invoke).toHaveBeenCalledWith("get_gameflow_phase");
 
     await lcuIpc.syncDisplayedChampion(103);
     expect(invoke).toHaveBeenCalledWith("sync_displayed_champion", { championId: 103 });
@@ -175,6 +183,9 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
 
     await windowIpc.restartApp();
     expect(invoke).toHaveBeenCalledWith("restart_app");
+
+    expect(await updaterIpc.getDistributionInfo()).toBeNull();
+    expect(await updaterIpc.checkForUpdate()).toBeNull();
   });
 
   it("subscribes to domain events, unwraps payloads, and resolves asset URIs", async () => {

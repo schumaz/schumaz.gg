@@ -78,4 +78,56 @@ describe("StatusDock", () => {
     fireEvent.click(screen.getByTestId("window-close-btn"));
     expect(closeSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("renders installer update pill when ready and triggers restart or dismiss callbacks", () => {
+    const onRestart = vi.fn();
+    const onDismiss = vi.fn();
+
+    render(
+      <StatusDock
+        summoner={null}
+        updateState={{ status: "ready", version: "0.2.0" }}
+        onRestartUpdate={onRestart}
+        onDismissUpdate={onDismiss}
+      />
+    );
+
+    expect(screen.getByTestId("update-pill-ready")).toBeInTheDocument();
+    expect(screen.getByText("Atualização v0.2.0 pronta • Reiniciar")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("update-restart-btn"));
+    expect(onRestart).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("update-dismiss-btn"));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders portable update pill and triggers GitHub release opener callback", () => {
+    const onOpenPortable = vi.fn();
+    const onDismiss = vi.fn();
+
+    render(
+      <StatusDock
+        summoner={null}
+        updateState={{
+          status: "portable-available",
+          version: "0.2.0",
+          releasesUrl: "https://github.com/schumaz/schumaz.gg/releases/latest",
+        }}
+        onOpenPortableRelease={onOpenPortable}
+        onDismissUpdate={onDismiss}
+      />
+    );
+
+    expect(screen.getByTestId("update-pill-portable")).toBeInTheDocument();
+    expect(
+      screen.getByText("Nova versão v0.2.0 disponível • Baixar no GitHub")
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("update-portable-btn"));
+    expect(onOpenPortable).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("update-dismiss-btn"));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
 });

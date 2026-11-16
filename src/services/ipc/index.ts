@@ -6,4 +6,5 @@ export { lcuIpc, type UnlistenFn } from "./lcu.ipc";
 export { profileIpc } from "./profile.ipc";
 export { rankedIpc } from "./ranked.ipc";
 export { settingsIpc } from "./settings.ipc";
+export { updaterIpc, type AppDistributionInfo, type UpdaterUpdateHandle } from "./updater.ipc";
 export { windowIpc } from "./window.ipc";

@@ -130,8 +130,14 @@ export function useLcuEvents(
     let active = true;
     lcuIpc
       .getSummonerStatus()
-      .then((data) => {
-        if (active && data) setSummoner(data);
+      .then(async (data) => {
+        if (!active || !data) return;
+        setSummoner(data);
+        const phase = await lcuIpc.getGameflowPhase?.().catch(() => null);
+        if (active && phase) {
+          gameflowPhaseRef.current = phase;
+          setGameflowPhase(phase);
+        }
       })
       .catch(() => {})
       .finally(() => {

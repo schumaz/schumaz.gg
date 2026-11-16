@@ -59,6 +59,12 @@ export const ptCore: CoreTranslations = {
     connected: "Conectado ao cliente do LoL",
     waiting: "Aguardando cliente do LoL",
   },
+  updater: {
+    readyToRestart: "Atualização v{version} pronta • Reiniciar",
+    restarting: "Reiniciando...",
+    portableAvailable: "Nova versão v{version} disponível • Baixar no GitHub",
+    dismissAria: "Dispensar aviso de atualização",
+  },
   idle: {
     runesBadge: "schumaz.gg · Runas",
     loadingTitle: "Carregando Build",

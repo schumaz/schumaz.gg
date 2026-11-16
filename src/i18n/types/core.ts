@@ -73,6 +73,12 @@ export interface CoreTranslations {
     connected: string;
     waiting: string;
   };
+  updater: {
+    readyToRestart: string;
+    restarting: string;
+    portableAvailable: string;
+    dismissAria: string;
+  };
   idle: {
     runesBadge: string;
     loadingTitle: string;

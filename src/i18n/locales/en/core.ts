@@ -59,6 +59,12 @@ export const enCore: CoreTranslations = {
     connected: "Connected to LoL client",
     waiting: "Waiting for LoL client",
   },
+  updater: {
+    readyToRestart: "Update v{version} ready • Restart",
+    restarting: "Restarting...",
+    portableAvailable: "New version v{version} available • Download on GitHub",
+    dismissAria: "Dismiss update notification",
+  },
   idle: {
     runesBadge: "schumaz.gg · Runes",
     loadingTitle: "Loading Build",

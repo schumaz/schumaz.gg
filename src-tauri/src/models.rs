@@ -4,6 +4,7 @@ pub mod events;
 pub mod injector;
 pub mod lcu;
 pub mod ranked;
+pub mod updater;
 pub mod ws;
 
 pub use aram::*;
@@ -12,4 +13,5 @@ pub use events::*;
 pub use injector::*;
 pub use lcu::*;
 pub use ranked::*;
+pub use updater::*;
 pub use ws::*;

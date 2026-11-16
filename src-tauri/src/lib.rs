@@ -6,6 +6,7 @@ pub mod lcu_injector;
 pub mod models;
 pub mod profile_provider;
 pub mod storage;
+pub mod updater;
 pub mod ws_listener;
 
 pub use app_bootstrap::{request_taskbar_attention, should_pause_window_animations};
@@ -20,6 +21,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_recommended_build_for_champion,
             commands::update_build_filters,
             commands::get_summoner_status,
+            commands::get_gameflow_phase,
             commands::get_cached_player_profile,
             commands::get_player_profile,
             commands::sync_displayed_champion,
@@ -33,6 +35,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_ranked_tier_list,
             commands::get_ranked_champion_build,
             commands::get_bootstrap_status,
+            commands::get_app_distribution_info,
             commands::get_hardware_acceleration_status,
             commands::set_hardware_acceleration,
             commands::get_app_settings,
@@ -93,6 +96,10 @@ pub fn run() {
         .setup({
             let window_tracker = runtime_state.window_tracker.clone();
             move |app| {
+                #[cfg(desktop)]
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+
                 builder.mount_events(app);
                 app_bootstrap::setup_app(app, &window_tracker)
             }

@@ -167,6 +167,7 @@ img {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 8px;
   padding: 6px 8px;
 }
 
@@ -230,6 +231,7 @@ img {
   -webkit-backdrop-filter: blur(var(--status-badge-blur));
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
+  white-space: nowrap;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
@@ -245,6 +247,73 @@ img {
 .status-badge.disconnected {
   --status-badge-tint: var(--status-badge-disconnected-tint);
   border-color: var(--status-badge-disconnected-border);
+}
+
+.update-pill {
+  contain: layout style;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background-color: var(--status-badge-glass-bg);
+  background-image: linear-gradient(var(--accent-subtle), var(--accent-subtle));
+  backdrop-filter: blur(var(--status-badge-blur));
+  -webkit-backdrop-filter: blur(var(--status-badge-blur));
+  border: 1px solid var(--accent-border);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.update-pill:hover {
+  border-color: var(--accent-primary-hover);
+}
+
+.update-pill-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.update-pill-action:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.update-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--accent-primary-hover);
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.75);
+  flex-shrink: 0;
+}
+
+.update-pill-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.15s ease;
+}
+
+.update-pill-dismiss:hover {
+  color: var(--text-primary);
 }
 
 .dot {
@@ -387,6 +456,7 @@ img {
 }
 
 .app-minimized .status-badge,
+.app-minimized .update-pill,
 .app-minimized .floating-dock,
 .app-minimized .profile-hero-card,
 .app-minimized .profile-section-card,
@@ -396,6 +466,7 @@ img {
 .app-minimized .settings-modal-backdrop,
 .app-minimized .language-onboarding-backdrop,
 .gpu-effects-disabled .status-badge,
+.gpu-effects-disabled .update-pill,
 .gpu-effects-disabled .floating-dock,
 .gpu-effects-disabled .profile-hero-card,
 .gpu-effects-disabled .profile-section-card,

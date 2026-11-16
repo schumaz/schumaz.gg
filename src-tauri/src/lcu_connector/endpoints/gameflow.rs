@@ -32,3 +32,9 @@ impl LcuConnection {
             .await
     }
 }
+
+/// Convenience helper to query the active gameflow phase if the League Client is currently reachable.
+pub async fn fetch_current_gameflow_phase() -> Option<String> {
+    let conn = LcuConnection::connect().ok()?;
+    conn.get_gameflow_phase().await.ok()
+}

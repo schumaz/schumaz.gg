@@ -18,6 +18,13 @@ export const lcuIpc = {
     return commands.getSummonerStatus();
   },
 
+  async getGameflowPhase(): Promise<string | null> {
+    if (typeof commands?.getGameflowPhase !== "function") {
+      return null;
+    }
+    return commands.getGameflowPhase();
+  },
+
   async syncDisplayedChampion(championId: number | null): Promise<void> {
     return commands.syncDisplayedChampion(championId);
   },

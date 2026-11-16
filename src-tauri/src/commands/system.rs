@@ -1,9 +1,10 @@
 use crate::app_bootstrap::BootstrapState;
 use crate::lcu_injector;
-use crate::models::{AppLocale, BootstrapStatus, FlashKeyPreference};
+use crate::models::{AppDistributionInfo, AppLocale, BootstrapStatus, FlashKeyPreference};
 use crate::storage::{
     self, AppSettings, GraphicsState, HardwareAccelerationStatus, NavigationStatePatch,
 };
+use crate::updater;
 use tauri::{AppHandle, State};
 
 /// Returns the current backend startup/prewarm bootstrap status.
@@ -11,6 +12,13 @@ use tauri::{AppHandle, State};
 #[specta::specta]
 pub fn get_bootstrap_status(state: State<'_, BootstrapState>) -> BootstrapStatus {
     state.snapshot()
+}
+
+/// Returns the runtime distribution mode (`isPortable`), current app version, and GitHub Releases URL.
+#[tauri::command]
+#[specta::specta]
+pub fn get_app_distribution_info(app_handle: AppHandle) -> AppDistributionInfo {
+    updater::get_distribution_info(&app_handle)
 }
 
 /// Returns the saved GPU hardware acceleration setting and whether it was active at startup.
