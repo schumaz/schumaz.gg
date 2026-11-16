@@ -112,10 +112,17 @@ Download one of the two builds from [Releases](https://github.com/schumaz/schuma
   <img src=".github/assets/profile.png" width="49%" alt="Profile tab: summoner icon, wallpaper background, ranked tiers, Top 3 masteries, Win/Loss chart, and recent match history.">
   <img src=".github/assets/ranked.png" width="49%" alt="Ranked tab: Solo/Duo tier list with tier, role, region, and patch filters.">
 </p>
+
 <p align="center">
-  <img src=".github/assets/aram-mayhem.png" width="49%" alt="ARAM Mayhem tab: champion rankings and Augments sorted and filterable by rarity.">
-  <img src=".github/assets/settings.png" width="49%" alt="Settings tab: Flash placement, auto-injection toggles, 48h patch protection, language, GPU rendering, and auto-updates.">
+  <img src=".github/assets/aram-mayhem.png" width="76%" alt="ARAM Mayhem tab: champion rankings and Augments sorted and filterable by rarity.">
 </p>
+
+<details>
+  <summary><strong>Preview the Settings screen</strong> (Flash placement, auto-injection toggles, 48h patch protection, language, GPU &amp; updates)</summary>
+  <p align="center">
+    <img src=".github/assets/settings.png" width="520" alt="Settings tab: Flash placement, auto-injection toggles, 48h patch protection, language, GPU rendering, and auto-updates.">
+  </p>
+</details>
 
 ## FAQ
 

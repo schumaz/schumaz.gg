@@ -118,10 +118,17 @@ Baixe uma das duas opções na página de [Releases](https://github.com/schumaz/
   <img src=".github/assets/profile.png" width="49%" alt="Aba Perfil: ícone de invocador, wallpaper de fundo, elos, Top 3 maestrias, gráfico de Vitórias/Derrotas e histórico recente.">
   <img src=".github/assets/ranked.png" width="49%" alt="Aba Ranqueada: Tier List Solo/Duo com filtros de elo, rota, região e patch.">
 </p>
+
 <p align="center">
-  <img src=".github/assets/aram-mayhem.png" width="49%" alt="Aba ARAM Desordem: ranking de campeões e Aprimoramentos filtráveis por raridade.">
-  <img src=".github/assets/settings.png" width="49%" alt="Aba Configurações: posição do Flash, toggles de auto-injeção, proteção de 48h, idioma, GPU e atualizações.">
+  <img src=".github/assets/aram-mayhem.png" width="76%" alt="Aba ARAM Desordem: ranking de campeões e Aprimoramentos filtráveis por raridade.">
 </p>
+
+<details>
+  <summary><strong>Ver tela de Configurações</strong> (posição do Flash, auto-injeção, proteção de 48h, idioma, GPU e atualizações)</summary>
+  <p align="center">
+    <img src=".github/assets/settings.png" width="520" alt="Aba Configurações: posição do Flash, toggles de auto-injeção, proteção de 48h, idioma, GPU e atualizações.">
+  </p>
+</details>
 
 ## FAQ
 
