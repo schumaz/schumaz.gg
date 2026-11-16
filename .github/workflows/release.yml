@@ -1,0 +1,167 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0). Defaults to v<version> from tauri.conf.json."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build & Publish Windows Release
+    runs-on: windows-latest
+    shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve and validate release tag
+        id: meta
+        run: |
+          $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $version = $conf.version
+          if (-not $version) {
+            throw "Could not read version from src-tauri/tauri.conf.json"
+          }
+
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            if ("${{ inputs.tag }}".Trim()) { "${{ inputs.tag }}".Trim() } else { "v$version" }
+          } else {
+            "${{ github.ref_name }}"
+          }
+
+          if ($tag -ne "v$version") {
+            throw "Tag '$tag' does not match tauri.conf.json version '$version' (expected 'v$version')."
+          }
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify signing key secret
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Repository secret TAURI_SIGNING_PRIVATE_KEY is missing."
+          }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run code gatekeeper
+        run: |
+          Push-Location src-tauri
+          try {
+            cargo clippy --all-targets --message-format=short -- -D warnings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cargo clippy --all-targets --features portable --message-format=short -- -D warnings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cargo test -q
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+          npx tsc --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx vitest run --reporter=dot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build signed NSIS installer, Portable executable, latest.json & SHA256SUMS.txt
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $updaterNotes = "Release $tag — Automated Champion Select runes, summoner spells & item sets, Ranked & ARAM/ARAM Mayhem builds, and Summoner Profile analytics."
+          node scripts/build-desktop.mjs --tag "$tag" --notes "$updaterNotes"
+
+      - name: Validate dist-release artifacts
+        run: |
+          $setup = Get-ChildItem "dist-release/*-setup.exe" | Select-Object -First 1
+          $sig = Get-ChildItem "dist-release/*-setup.exe.sig" | Select-Object -First 1
+          $portable = Get-ChildItem "dist-release/*-portable.exe" | Select-Object -First 1
+          $sums = Get-Item "dist-release/SHA256SUMS.txt" -ErrorAction Stop
+          $latest = Get-Item "dist-release/latest.json" -ErrorAction Stop
+
+          if (-not $setup -or -not $sig -or -not $portable) {
+            throw "Missing expected artifacts in dist-release/."
+          }
+
+          $sumsText = Get-Content $sums.FullName -Raw
+          if ($sumsText -match "latest\.json" -or $sumsText -match "SHA256SUMS\.txt") {
+            throw "SHA256SUMS.txt must not include latest.json or itself."
+          }
+
+          $manifest = Get-Content $latest.FullName -Raw | ConvertFrom-Json
+          if ($manifest.version -ne "${{ steps.meta.outputs.version }}") {
+            throw "latest.json version mismatch: $($manifest.version)"
+          }
+          if (-not $manifest.platforms.'windows-x86_64'.signature -or -not $manifest.platforms.'windows-x86_64'.url) {
+            throw "latest.json is missing windows-x86_64 signature or url."
+          }
+
+          Get-ChildItem "dist-release" | Format-Table Name, Length
+
+      - name: Prepare bilingual release notes
+        id: notes
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $setupName = (Get-ChildItem "dist-release/*-setup.exe" | Select-Object -First 1).Name
+          $portableName = (Get-ChildItem "dist-release/*-portable.exe" | Select-Object -First 1).Name
+          $notesFile = Join-Path $env:RUNNER_TEMP "release-notes.md"
+
+          node scripts/generate-release-notes.mjs --tag "$tag" --setup "$setupName" --portable "$portableName" --out "$notesFile"
+          "notes_file=$notesFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload workflow build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-release-${{ steps.meta.outputs.tag }}
+          path: dist-release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release via gh CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $notesFile = "${{ steps.notes.outputs.notes_file }}"
+          $assets = Get-ChildItem "dist-release/*" -File | ForEach-Object { $_.FullName }
+
+          $exists = $false
+          try {
+            gh release view $tag *> $null
+            if ($LASTEXITCODE -eq 0) { $exists = $true }
+          } catch {
+            $exists = $false
+          }
+
+          if ($exists) {
+            gh release upload $tag @assets --clobber
+            gh release edit $tag --title "schumaz.gg $tag" --notes-file "$notesFile" --latest
+          } else {
+            gh release create $tag @assets --title "schumaz.gg $tag" --notes-file "$notesFile" --latest
+          }

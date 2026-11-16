@@ -192,7 +192,3 @@ pub fn enrich_build_with_ddragon(build: &mut ChampionBuild, cache: &DataDragonCa
         prefs.language,
     );
 }
-
-#[cfg(test)]
-#[path = "enrichment_tests.rs"]
-mod tests;

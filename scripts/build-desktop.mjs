@@ -18,46 +18,83 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, "..");
 
+export const DEFAULT_GITHUB_REPO = "schumaz/schumaz.gg";
+export const EXCLUDED_CHECKSUM_FILES = new Set(["SHA256SUMS.txt", "latest.json"]);
+
 function printHelp() {
   console.log(`Usage: node scripts/build-desktop.mjs [options]
 
 Builds the Windows NSIS installer and Portable executable into dist-release/.
 
 Options:
-  --no-sign          Skip updater/binary signing for local unsigned testing
-  --target <triple>  Cargo target triple (defaults to host target)
-  -h, --help         Show this help message
+  --no-sign            Skip updater/binary signing for local unsigned testing
+  --target <triple>    Cargo target triple (defaults to host target)
+  --tag <tag>          GitHub release tag used in latest.json URL (default: v<version>)
+  --notes <text>       Release notes string embedded in latest.json
+  --notes-file <path>  Path to UTF-8 file containing release notes for latest.json
+  -h, --help           Show this help message
 `);
+}
+
+function readOptionValue(argv, index, flagName) {
+  const value = argv[index + 1];
+  if (!value || value.startsWith("-")) {
+    throw new Error(`Missing value for ${flagName}`);
+  }
+  return value;
 }
 
 export function parseCliArgs(argv) {
   let noSign = false;
   let target = null;
+  let tag = null;
+  let notes = null;
+  let notesFile = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--no-sign") {
       noSign = true;
     } else if (arg === "--target") {
-      const value = argv[i + 1];
-      if (!value || value.startsWith("-")) {
-        throw new Error("Missing value for --target");
-      }
-      target = value;
+      target = readOptionValue(argv, i, "--target");
       i += 1;
     } else if (arg.startsWith("--target=")) {
       target = arg.slice("--target=".length);
       if (!target) {
         throw new Error("Missing value for --target");
       }
+    } else if (arg === "--tag") {
+      tag = readOptionValue(argv, i, "--tag");
+      i += 1;
+    } else if (arg.startsWith("--tag=")) {
+      tag = arg.slice("--tag=".length);
+      if (!tag) {
+        throw new Error("Missing value for --tag");
+      }
+    } else if (arg === "--notes") {
+      notes = readOptionValue(argv, i, "--notes");
+      i += 1;
+    } else if (arg.startsWith("--notes=")) {
+      notes = arg.slice("--notes=".length);
+      if (!notes) {
+        throw new Error("Missing value for --notes");
+      }
+    } else if (arg === "--notes-file") {
+      notesFile = readOptionValue(argv, i, "--notes-file");
+      i += 1;
+    } else if (arg.startsWith("--notes-file=")) {
+      notesFile = arg.slice("--notes-file=".length);
+      if (!notesFile) {
+        throw new Error("Missing value for --notes-file");
+      }
     } else if (arg === "-h" || arg === "--help") {
-      return { help: true, noSign, target };
+      return { help: true, noSign, target, tag, notes, notesFile };
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }
   }
 
-  return { help: false, noSign, target };
+  return { help: false, noSign, target, tag, notes, notesFile };
 }
 
 function loadEnvIfNeeded() {
@@ -153,10 +190,124 @@ export function derivePortableFileName(setupFileName, productName, version, targ
   return `${productName}_${version}_${arch}-portable.exe`;
 }
 
+export function derivePlatformKey(target, hostArch = process.arch) {
+  if (target?.includes("aarch64") || (!target && hostArch === "arm64")) {
+    return "windows-aarch64";
+  }
+  return "windows-x86_64";
+}
+
+export function defaultReleaseTag(version) {
+  return version.startsWith("v") ? version : `v${version}`;
+}
+
+export function defaultReleaseNotes(version) {
+  return `Release v${version} — Automated Champion Select runes, summoner spells & item sets, Ranked & ARAM/ARAM Mayhem builds, and Summoner Profile analytics.`;
+}
+
+export function buildReleaseAssetUrl(tag, assetFileName, repoSlug = DEFAULT_GITHUB_REPO) {
+  const cleanRepo = repoSlug.replace(/^\/+|\/+$/g, "");
+  return `https://github.com/${cleanRepo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetFileName)}`;
+}
+
+export function createUpdaterManifest({
+  version,
+  notes,
+  pubDate = new Date().toISOString(),
+  platformKey,
+  url,
+  signature,
+}) {
+  const trimmedSignature = signature.trim();
+  if (!trimmedSignature) {
+    throw new Error("Updater signature cannot be empty when generating latest.json");
+  }
+  return {
+    version,
+    notes: notes ?? defaultReleaseNotes(version),
+    pub_date: pubDate,
+    platforms: {
+      [platformKey]: {
+        signature: trimmedSignature,
+        url,
+      },
+    },
+  };
+}
+
+export function resolveReleaseNotes({ version, notes, notesFile, cwd = ROOT_DIR }) {
+  if (notesFile) {
+    const resolvedPath = path.isAbsolute(notesFile) ? notesFile : path.resolve(cwd, notesFile);
+    if (!existsSync(resolvedPath)) {
+      throw new Error(`Notes file not found: ${resolvedPath}`);
+    }
+    const content = readFileSync(resolvedPath, "utf8").trim();
+    if (!content) {
+      throw new Error(`Notes file is empty: ${resolvedPath}`);
+    }
+    return content;
+  }
+  if (typeof notes === "string" && notes.trim().length > 0) {
+    return notes.trim();
+  }
+  return defaultReleaseNotes(version);
+}
+
 export function sha256File(filePath) {
   const hash = createHash("sha256");
   hash.update(readFileSync(filePath));
   return hash.digest("hex");
+}
+
+export function getChecksumArtifactNames(distReleaseDir) {
+  return readdirSync(distReleaseDir)
+    .filter((name) => !EXCLUDED_CHECKSUM_FILES.has(name))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+export function writeSha256Sums(distReleaseDir) {
+  const artifactNames = getChecksumArtifactNames(distReleaseDir);
+  const checksumLines = artifactNames.map((name) => {
+    const fullPath = path.join(distReleaseDir, name);
+    return `${sha256File(fullPath)}  ${name}`;
+  });
+  writeFileSync(
+    path.join(distReleaseDir, "SHA256SUMS.txt"),
+    `${checksumLines.join("\n")}\n`,
+    "utf8"
+  );
+  return artifactNames;
+}
+
+export function writeLatestManifest({
+  distReleaseDir,
+  version,
+  tag,
+  notes,
+  setupFileName,
+  sigFilePath,
+  target,
+  repoSlug = process.env.GITHUB_REPOSITORY || DEFAULT_GITHUB_REPO,
+  pubDate = new Date().toISOString(),
+}) {
+  if (!existsSync(sigFilePath)) {
+    throw new Error(`Expected updater signature not found: ${sigFilePath}`);
+  }
+  const signature = readFileSync(sigFilePath, "utf8");
+  const resolvedTag = tag || defaultReleaseTag(version);
+  const platformKey = derivePlatformKey(target);
+  const manifest = createUpdaterManifest({
+    version,
+    notes,
+    pubDate,
+    platformKey,
+    url: buildReleaseAssetUrl(resolvedTag, setupFileName, repoSlug),
+    signature,
+  });
+
+  const manifestPath = path.join(distReleaseDir, "latest.json");
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return manifest;
 }
 
 function formatSizeMb(bytes) {
@@ -183,6 +334,13 @@ function main() {
   }
 
   const { productName, version, binName } = readPackageMetadata();
+  const releaseTag = options.tag || defaultReleaseTag(version);
+  const releaseNotes = resolveReleaseNotes({
+    version,
+    notes: options.notes,
+    notesFile: options.notesFile,
+  });
+
   const distReleaseDir = path.join(ROOT_DIR, "dist-release");
   const targetReleaseDir = options.target
     ? path.join(ROOT_DIR, "src-tauri", "target", options.target, "release")
@@ -234,8 +392,9 @@ function main() {
 
     const sigFileName = `${setupEntry.name}.sig`;
     const srcSigPath = path.join(nsisDir, sigFileName);
+    const destSigPath = path.join(distReleaseDir, sigFileName);
     if (existsSync(srcSigPath)) {
-      copyFileSync(srcSigPath, path.join(distReleaseDir, sigFileName));
+      copyFileSync(srcSigPath, destSigPath);
     } else if (!options.noSign) {
       throw new Error(`Expected updater signature not found: ${srcSigPath}`);
     }
@@ -260,23 +419,27 @@ function main() {
     const destPortablePath = path.join(distReleaseDir, portableFileName);
     copyFileSync(portableSrcPath, destPortablePath);
 
-    // 4. Generate SHA256SUMS.txt
-    const artifactNames = readdirSync(distReleaseDir)
-      .filter((name) => name !== "SHA256SUMS.txt")
-      .sort((a, b) => a.localeCompare(b));
+    // 4. Generate latest.json for signed builds (must remain excluded from SHA256SUMS.txt)
+    const generatedExtraFiles = [];
+    if (!options.noSign) {
+      writeLatestManifest({
+        distReleaseDir,
+        version,
+        tag: releaseTag,
+        notes: releaseNotes,
+        setupFileName: setupEntry.name,
+        sigFilePath: destSigPath,
+        target: options.target,
+      });
+      generatedExtraFiles.push("latest.json");
+    }
 
-    const checksumLines = artifactNames.map((name) => {
-      const fullPath = path.join(distReleaseDir, name);
-      return `${sha256File(fullPath)}  ${name}`;
-    });
-    writeFileSync(
-      path.join(distReleaseDir, "SHA256SUMS.txt"),
-      `${checksumLines.join("\n")}\n`,
-      "utf8"
-    );
+    // 5. Generate SHA256SUMS.txt (excluding SHA256SUMS.txt and latest.json)
+    const checksummedArtifacts = writeSha256Sums(distReleaseDir);
+    generatedExtraFiles.push("SHA256SUMS.txt");
 
     console.log("\nRelease artifacts generated in dist-release/:");
-    for (const name of [...artifactNames, "SHA256SUMS.txt"]) {
+    for (const name of [...checksummedArtifacts, ...generatedExtraFiles]) {
       const fullPath = path.join(distReleaseDir, name);
       const size = statSync(fullPath).size;
       console.log(`  - ${name} (${formatSizeMb(size)})`);

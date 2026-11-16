@@ -95,14 +95,13 @@ pub fn parse_user_settings_ini(raw: &str) -> AppSettings {
                 }
                 _ => {}
             },
-            SEC_GRAPHICS => match key {
-                "bHardwareAcceleration" => {
-                    if let Some(b) = parse_bool(val) {
-                        settings.graphics.hardware_acceleration = b;
-                    }
+            SEC_GRAPHICS => {
+                if key == "bHardwareAcceleration"
+                    && let Some(b) = parse_bool(val)
+                {
+                    settings.graphics.hardware_acceleration = b;
                 }
-                _ => {}
-            },
+            }
             SEC_WINDOW => match key {
                 "WindowWidth" => {
                     if let Ok(v) = val.parse::<f64>()
