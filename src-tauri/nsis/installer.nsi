@@ -928,6 +928,11 @@ Section Uninstall
     DeleteRegKey /ifempty HKCU "${MANUKEY}"
 
     SetShellVarContext current
+    RmDir /r "$LOCALAPPDATA\schumazgg\Config"
+    RmDir /r "$LOCALAPPDATA\schumazgg\Cache"
+    RmDir /r "$LOCALAPPDATA\schumazgg\WebView"
+    RMDir "$LOCALAPPDATA\schumazgg"
+    RMDir "$INSTDIR"
     RmDir /r "$APPDATA\${BUNDLEID}"
     RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
   ${EndIf}
