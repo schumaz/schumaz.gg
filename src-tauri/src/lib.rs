@@ -9,7 +9,9 @@ pub mod storage;
 pub mod updater;
 pub mod ws_listener;
 
-pub use app_bootstrap::{request_taskbar_attention, should_pause_window_animations};
+pub use app_bootstrap::{
+    focus_main_window, request_taskbar_attention, should_pause_window_animations,
+};
 
 use specta_typescript::Typescript;
 use tauri_specta::{Builder, collect_commands, collect_events};
@@ -79,7 +81,14 @@ pub fn run() {
 
     let runtime_state = app_bootstrap::WindowRuntimeState::default();
 
-    tauri::Builder::default()
+    let tauri_builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let tauri_builder =
+        tauri_builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            app_bootstrap::focus_main_window(app);
+        }));
+
+    tauri_builder
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("schumaz-asset", |_ctx, request, responder| {
             let uri_path = request.uri().path().to_string();

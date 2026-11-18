@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { ChampionBuild } from "../../types";
+import { ChampionBuild, ItemBlockKind } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 import { BuildSelector } from "./BuildSelector";
@@ -63,21 +63,12 @@ export function ItemBlocks({
 
       <div className="grid-blocks">
         {build.item_blocks.map((block, bIndex) => {
-          const rawTitle = block.title || (block as any).name || "";
-          const isStarterBlock =
-            rawTitle.includes("Itens Iniciais") || rawTitle.includes("Starter Items");
-          const isCoreBlock =
-            rawTitle.includes("Primeiros 3 Itens") || rawTitle.includes("First 3 Items");
-          const isBootsBlock =
-            rawTitle.includes("Botas") || rawTitle.includes("Boots");
-          const isFinalBlock =
-            rawTitle.includes("Build Final") || rawTitle.includes("Final Build");
-          const isSituationalBlock =
-            rawTitle.includes("Itens Situacionais") ||
-            rawTitle.includes("Úteis") ||
-            rawTitle.includes("Uteis") ||
-            rawTitle.includes("Situational") ||
-            rawTitle.includes("Utility");
+          const kind: ItemBlockKind = block.kind ?? "other";
+          const isStarterBlock = kind === "starter";
+          const isCoreBlock = kind === "core";
+          const isBootsBlock = kind === "boots";
+          const isFinalBlock = kind === "final";
+          const isSituationalBlock = kind === "situational";
 
           const localizedTitle = isStarterBlock
             ? t("items.blockStarter")
@@ -89,7 +80,7 @@ export function ItemBlocks({
             ? t("items.blockFinal")
             : isSituationalBlock
             ? t("items.blockSituational")
-            : rawTitle;
+            : block.title;
 
           let activeIds = block.item_ids;
           let activeIcons = block.item_icon_urls;
@@ -132,7 +123,7 @@ export function ItemBlocks({
             : null;
 
           return (
-            <div key={rawTitle || bIndex} className={`block-item ${blockKindClass}`}>
+            <div key={`${kind}-${bIndex}`} className={`block-item ${blockKindClass}`}>
               <div className="block-header-row">
                 <h4 title={`${bIndex + 1}. ${localizedTitle}`}>
                   {bIndex + 1}. {localizedTitle}

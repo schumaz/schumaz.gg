@@ -32,6 +32,17 @@ pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
     }
 }
 
+/// Restores (if minimized), shows, and focuses the existing `"main"` window on second-instance launch.
+pub fn focus_main_window(app_handle: &tauri::AppHandle) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        if window.is_minimized().unwrap_or(false) {
+            let _ = window.unminimize();
+        }
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn capture_window_settings(
     window: &tauri::Window,
     tracker: &Arc<Mutex<storage::WindowSettings>>,

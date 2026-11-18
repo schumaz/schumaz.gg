@@ -166,6 +166,7 @@ export function StatusDock({
           type="button"
           className="window-control-btn"
           data-testid="window-minimize-btn"
+          aria-label={t("window.minimizeAria")}
           onClick={handleMinimize}
         >
           <svg
@@ -184,6 +185,7 @@ export function StatusDock({
           type="button"
           className="window-control-btn"
           data-testid="window-maximize-btn"
+          aria-label={isMaximized ? t("window.restoreAria") : t("window.maximizeAria")}
           onClick={handleToggleMaximize}
         >
           {isMaximized ? (
@@ -219,6 +221,7 @@ export function StatusDock({
           type="button"
           className="window-control-btn window-control-close"
           data-testid="window-close-btn"
+          aria-label={t("window.closeAria")}
           onClick={handleClose}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">

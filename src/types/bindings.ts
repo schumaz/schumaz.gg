@@ -364,8 +364,12 @@ export type InjectionReport = {
 /**  An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots). */
 export type ItemBlock = ItemBlock_Serialize | ItemBlock_Deserialize;
 
+/**  Semantic category of a shop item block. */
+export type ItemBlockKind = "starter" | "core" | "boots" | "final" | "situational" | "other";
+
 /**  An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots). */
 export type ItemBlock_Deserialize = {
+	kind?: ItemBlockKind,
 	title: string,
 	item_ids: number[],
 	item_icon_urls?: string[],
@@ -373,6 +377,7 @@ export type ItemBlock_Deserialize = {
 
 /**  An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots). */
 export type ItemBlock_Serialize = {
+	kind: ItemBlockKind,
 	title: string,
 	item_ids: number[],
 	item_icon_urls: string[],

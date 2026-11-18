@@ -131,7 +131,7 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
   ],
   spell_choices: [{ id: 14, name: "Incendiar", icon_url: "ignite.png" }],
   item_blocks: [
-    { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
+    { kind: "starter", title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
   ],
   active_position: "mid",
   active_tier: "emerald_plus",

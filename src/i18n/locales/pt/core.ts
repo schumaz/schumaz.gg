@@ -59,6 +59,12 @@ export const ptCore: CoreTranslations = {
     connected: "Conectado ao cliente do LoL",
     waiting: "Aguardando cliente do LoL",
   },
+  window: {
+    minimizeAria: "Minimizar janela",
+    maximizeAria: "Maximizar janela",
+    restoreAria: "Restaurar janela",
+    closeAria: "Fechar janela",
+  },
   updater: {
     readyToRestart: "Atualização v{version} pronta • Reiniciar",
     restarting: "Reiniciando...",

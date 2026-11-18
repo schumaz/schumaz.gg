@@ -5,6 +5,22 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-11-18
+
+Stability, security, localization, and accessibility hardening release.
+
+### Fixed
+- **Single-Instance Guard (`tauri-plugin-single-instance`)**: Prevented opening duplicate app windows that could contend over `WebView/`, `UserSettings.ini`, or trigger duplicate LCU injections; launching a second instance now restores (if minimized), shows, and focuses the existing `"main"` window.
+- **Localized LCU Injection Reports**: `InjectionReport.message` in `src-tauri/src/lcu_injector/injection.rs` now respects the active `AppLocale` (`en_US` and `pt_BR`) instead of emitting fixed Portuguese strings.
+- **Dynamic DataDragon Disk Fallback**: Replaced the hardcoded `"16.22.1"` fallback in `src-tauri/src/profile_provider/service.rs` with lookup of the latest cached DataDragon version saved on disk (`Cache/ddragon/*.lz4`).
+- **Window Control Accessibility**: Added translated `aria-label` attributes (`Minimize` / `Maximize` / `Restore` / `Close`) to the custom window controls in `StatusDock.tsx`.
+
+### Security
+- **Explicit Tauri v2 Content Security Policy**: Replaced `"csp": null` in `src-tauri/tauri.conf.json` with a strict policy restricting scripts and connections to `'self'` and Tauri IPC, while permitting bundled styles and cached image assets via the `schumaz-asset:` (`http://schumaz-asset.localhost`) protocol.
+
+### Changed
+- **Typed Shop Block Kinds (`ItemBlockKind`)**: Added `ItemBlockKind` (`starter`, `core`, `boots`, `final`, `situational`, `other`) to the Rust/TypeScript IPC contract (`src-tauri/src/models/build.rs` → `src/types/bindings.ts`), migrating both backend item-set injection and `ItemBlocks.tsx` away from localized title substring matching.
+
 ## [0.1.1] - 2026-11-18
 
 Internal architectural refactoring and codebase cleanup without user-facing feature changes.

@@ -59,6 +59,12 @@ export const enCore: CoreTranslations = {
     connected: "Connected to LoL client",
     waiting: "Waiting for LoL client",
   },
+  window: {
+    minimizeAria: "Minimize window",
+    maximizeAria: "Maximize window",
+    restoreAria: "Restore window",
+    closeAria: "Close window",
+  },
   updater: {
     readyToRestart: "Update v{version} ready • Restart",
     restarting: "Restarting...",

@@ -22,6 +22,8 @@ pub struct CacheEnvelope<T> {
 pub(super) struct CacheEnvelopeHeader {
     pub(super) schema_version: u32,
     #[serde(default)]
+    pub(super) created_at_unix: u64,
+    #[serde(default)]
     pub(super) patch: String,
 }
 
@@ -79,6 +81,15 @@ pub(super) fn read_lz4_envelope_header(path: &Path) -> Option<CacheEnvelopeHeade
     rmp_serde::from_slice::<CacheEnvelopeHeader>(&decompressed).ok()
 }
 
+/// Reads `(created_at_unix, patch)` from a valid `.lz4` cache envelope header without touching `mtime`.
+pub fn read_lz4_envelope_meta(path: &Path) -> Option<(u64, String)> {
+    let header = read_lz4_envelope_header(path)?;
+    if header.schema_version != CACHE_SCHEMA_VERSION {
+        return None;
+    }
+    Some((header.created_at_unix, header.patch))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +134,10 @@ mod tests {
         let header = read_lz4_envelope_header(&file_path).unwrap();
         assert_eq!(header.schema_version, CACHE_SCHEMA_VERSION);
         assert_eq!(header.patch, "16.22");
+        assert_eq!(
+            read_lz4_envelope_meta(&file_path),
+            Some((1_700_000_000, "16.22".to_string()))
+        );
 
         // Old schema version is silently discarded
         let old_env = CacheEnvelope {

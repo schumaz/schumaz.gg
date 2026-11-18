@@ -102,9 +102,48 @@ pub struct ItemBuildOption {
     pub pick_rate: f64,
 }
 
+/// Semantic category of a shop item block.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemBlockKind {
+    Starter,
+    Core,
+    Boots,
+    Final,
+    Situational,
+    #[default]
+    Other,
+}
+
+impl ItemBlockKind {
+    /// Infers the block kind from legacy localized block titles (e.g. older disk caches).
+    pub fn infer_from_title(title: &str) -> Self {
+        if title.contains("Itens Iniciais") || title.contains("Starter Items") {
+            Self::Starter
+        } else if title.contains("Primeiros 3 Itens") || title.contains("First 3 Items") {
+            Self::Core
+        } else if title.contains("Botas") || title.contains("Boots") {
+            Self::Boots
+        } else if title.contains("Build Final") || title.contains("Final Build") {
+            Self::Final
+        } else if title.contains("Itens Situacionais")
+            || title.contains("Úteis")
+            || title.contains("Uteis")
+            || title.contains("Situational")
+            || title.contains("Utility")
+        {
+            Self::Situational
+        } else {
+            Self::Other
+        }
+    }
+}
+
 /// An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct ItemBlock {
+    #[serde(default)]
+    pub kind: ItemBlockKind,
     pub title: String,
     pub item_ids: Vec<i32>,
     #[serde(default)]

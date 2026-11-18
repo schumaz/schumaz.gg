@@ -1,10 +1,11 @@
 use super::*;
-use crate::build_provider::{ItemBlock, RunePageOption};
+use crate::build_provider::{ItemBlock, ItemBlockKind, RunePageOption};
 use crate::lcu_injector::{
     FlashKeyPreference, TEST_SELECTIONS_LOCK, build_item_sets_payload, build_rune_page_payload,
     build_spells_payload, clear_champion_selections, resolve_injection_spell_pair,
     set_selected_rune_page, set_selected_secondary_spell,
 };
+use crate::models::AppLocale;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -63,12 +64,48 @@ fn test_injection_report_serialization() {
         runes_injected: true,
         spells_injected: true,
         items_injected: false,
-        message: "Runas injetadas | Feitiços injetados".to_string(),
+        message: "Runes injected | Spells injected".to_string(),
     };
 
     let json = serde_json::to_string(&report).unwrap();
     let parsed: InjectionReport = serde_json::from_str(&json).unwrap();
     assert_eq!(report, parsed);
+}
+
+#[test]
+fn test_format_injection_report_message_localizes_pt_br_and_en_us() {
+    assert_eq!(
+        format_injection_report_message(
+            AppLocale::EnUs,
+            true,
+            Some(&Ok(())),
+            Some(&Err("timeout".to_string())),
+            Some(&Ok(())),
+        ),
+        "Runes injected | Spells failed: timeout | Items injected"
+    );
+    assert_eq!(
+        format_injection_report_message(
+            AppLocale::PtBr,
+            true,
+            Some(&Ok(())),
+            Some(&Err("timeout".to_string())),
+            Some(&Ok(())),
+        ),
+        "Runas injetadas | Falha nos Feitiços: timeout | Itens injetados"
+    );
+    assert_eq!(
+        format_injection_report_message(AppLocale::EnUs, false, None, None, None),
+        "ARAM Mayhem mode (runes disabled by Riot)"
+    );
+    assert_eq!(
+        format_injection_report_message(AppLocale::EnUs, true, None, None, None),
+        "No injections enabled in preferences"
+    );
+    assert_eq!(
+        format_injection_report_message(AppLocale::PtBr, true, None, None, None),
+        "Nenhuma injeção configurada nas preferências"
+    );
 }
 
 #[test]
@@ -147,6 +184,7 @@ async fn test_safety_reinject_with_runes_mode_preserves_manual_selections() {
         spell1_id: 4,
         spell2_id: 14,
         item_blocks: vec![ItemBlock {
+            kind: ItemBlockKind::Core,
             title: "Primeiros 3 Itens".to_string(),
             item_ids: vec![6655, 3020, 4645],
             ..Default::default()
@@ -167,6 +205,10 @@ async fn test_safety_reinject_with_runes_mode_preserves_manual_selections() {
     assert!(report.runes_injected);
     assert!(report.spells_injected);
     assert!(report.items_injected);
+    assert_eq!(
+        report.message,
+        "Runes injected | Spells injected | Items injected"
+    );
     assert!(applied.matches_expected(103, 420, &build, &prefs));
 
     // Verify all three categories were injected and manual selections were respected
@@ -194,6 +236,7 @@ async fn test_safety_reinject_aram_mayhem_skips_runes_and_injects_spells_and_ite
         spell1_id: 4,
         spell2_id: 32,
         item_blocks: vec![ItemBlock {
+            kind: ItemBlockKind::Core,
             title: "Primeiros 3 Itens".to_string(),
             item_ids: vec![3032, 6675, 3031],
             ..Default::default()
@@ -202,7 +245,10 @@ async fn test_safety_reinject_aram_mayhem_skips_runes_and_injects_spells_and_ite
         ..Default::default()
     };
 
-    let prefs = UserPreferences::default();
+    let prefs = UserPreferences {
+        language: AppLocale::PtBr,
+        ..Default::default()
+    };
     let sink = MockInjectionSink::default();
 
     let (report, applied) =
@@ -211,6 +257,10 @@ async fn test_safety_reinject_aram_mayhem_skips_runes_and_injects_spells_and_ite
     assert!(!report.runes_injected);
     assert!(report.spells_injected);
     assert!(report.items_injected);
+    assert_eq!(
+        report.message,
+        "Modo ARAM Mayhem (runas desativadas pela Riot) | Feitiços injetados | Itens injetados"
+    );
     assert!(applied.matches_expected(222, 2400, &build_mayhem, &prefs));
 
     // Runes must NEVER be injected in ARAM Mayhem even when auto_inject_runes is true

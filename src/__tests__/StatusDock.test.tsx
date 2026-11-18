@@ -15,9 +15,18 @@ describe("StatusDock", () => {
     expect(screen.getByText("schumaz.gg")).toBeInTheDocument();
     expect(container.querySelector(".header-brand-icon")).toBeInTheDocument();
 
-    expect(screen.getByTestId("window-minimize-btn")).toBeInTheDocument();
-    expect(screen.getByTestId("window-maximize-btn")).toBeInTheDocument();
-    expect(screen.getByTestId("window-close-btn")).toBeInTheDocument();
+    expect(screen.getByTestId("window-minimize-btn")).toHaveAttribute(
+      "aria-label",
+      "Minimizar janela"
+    );
+    expect(screen.getByTestId("window-maximize-btn")).toHaveAttribute(
+      "aria-label",
+      "Maximizar janela"
+    );
+    expect(screen.getByTestId("window-close-btn")).toHaveAttribute(
+      "aria-label",
+      "Fechar janela"
+    );
 
     expect(screen.getByTestId("status-disconnected")).toBeInTheDocument();
     expect(
@@ -68,11 +77,13 @@ describe("StatusDock", () => {
 
     const maxBtn = screen.getByTestId("window-maximize-btn");
     expect(maxBtn.querySelector("rect")).toBeInTheDocument();
+    expect(maxBtn).toHaveAttribute("aria-label", "Maximizar janela");
     fireEvent.click(maxBtn);
     expect(maxSpy).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(isMaxSpy).toHaveBeenCalled();
       expect(maxBtn.querySelector("path")).toBeInTheDocument();
+      expect(maxBtn).toHaveAttribute("aria-label", "Restaurar janela");
     });
 
     fireEvent.click(screen.getByTestId("window-close-btn"));

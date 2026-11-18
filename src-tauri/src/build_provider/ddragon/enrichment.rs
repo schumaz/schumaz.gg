@@ -1,26 +1,37 @@
-use super::super::models::{ChampionBuild, DataDragonCache};
+use super::super::models::{ChampionBuild, DataDragonCache, ItemBlockKind};
 use super::metadata::{resolve_rune_metadata_for_locale, resolve_spell_metadata_for_locale};
 use crate::lcu_injector::FlashKeyPreference;
 use crate::models::AppLocale;
 
 /// Translates item block titles and build option labels according to `locale`.
 pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
-    if locale != AppLocale::EnUs {
-        return;
-    }
     for block in &mut build.item_blocks {
-        block.title = match block.title.as_str() {
-            "Itens Iniciais" => "Starter Items".to_string(),
-            "Primeiros 3 Itens" => "First 3 Items".to_string(),
-            "3 Botas Mais Feitas" => "Top 3 Boots".to_string(),
-            "Build Final" => "Final Build".to_string(),
-            "Itens Situacionais / Úteis" => "Situational / Utility Items".to_string(),
-            _ => block.title.clone(),
+        if block.kind == ItemBlockKind::Other {
+            block.kind = ItemBlockKind::infer_from_title(&block.title);
+        }
+        block.title = match (locale, block.kind) {
+            (AppLocale::EnUs, ItemBlockKind::Starter) => "Starter Items".to_string(),
+            (AppLocale::EnUs, ItemBlockKind::Core) => "First 3 Items".to_string(),
+            (AppLocale::EnUs, ItemBlockKind::Boots) => "Top 3 Boots".to_string(),
+            (AppLocale::EnUs, ItemBlockKind::Final) => "Final Build".to_string(),
+            (AppLocale::EnUs, ItemBlockKind::Situational) => {
+                "Situational / Utility Items".to_string()
+            }
+            (AppLocale::PtBr, ItemBlockKind::Starter) => "Itens Iniciais".to_string(),
+            (AppLocale::PtBr, ItemBlockKind::Core) => "Primeiros 3 Itens".to_string(),
+            (AppLocale::PtBr, ItemBlockKind::Boots) => "3 Botas Mais Feitas".to_string(),
+            (AppLocale::PtBr, ItemBlockKind::Final) => "Build Final".to_string(),
+            (AppLocale::PtBr, ItemBlockKind::Situational) => {
+                "Itens Situacionais / Úteis".to_string()
+            }
+            (_, ItemBlockKind::Other) => block.title.clone(),
         };
     }
-    for opt in &mut build.build_options {
-        if opt.name == "Build 1 (Mais Feita)" {
-            opt.name = "Build 1 (Most Popular)".to_string();
+    if locale == AppLocale::EnUs {
+        for opt in &mut build.build_options {
+            if opt.name == "Build 1 (Mais Feita)" {
+                opt.name = "Build 1 (Most Popular)".to_string();
+            }
         }
     }
 }

@@ -1,23 +1,8 @@
 ﻿use super::selections::get_champion_selections;
-use crate::build_provider::ChampionBuild;
+use crate::build_provider::{ChampionBuild, ItemBlockKind};
 use serde_json::json;
 
 pub const SCHUMAZ_PAGE_SUFFIX: &str = " | schumaz.gg";
-
-fn is_core_block_title(title: &str) -> bool {
-    title.contains("Primeiros 3 Itens") || title.contains("First 3 Items")
-}
-
-fn is_final_block_title(title: &str) -> bool {
-    title.contains("Build Final") || title.contains("Final Build")
-}
-
-fn is_situational_block_title(title: &str) -> bool {
-    title.contains("Itens Situacionais")
-        || title.contains("Úteis")
-        || title.contains("Uteis")
-        || title.contains("Situational")
-}
 
 /// Builds the JSON payload for creating/replacing a rune page from individual components.
 pub fn build_rune_page_payload_from_parts(
@@ -132,20 +117,30 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
 
     for block in &build.item_blocks {
         let mut item_ids = block.item_ids.clone();
+        let effective_kind = if block.kind != ItemBlockKind::Other {
+            block.kind
+        } else {
+            ItemBlockKind::infer_from_title(&block.title)
+        };
 
         // If unified build option is selected, use it for Core Trio, Final Build, and Situational
         if let Some(sel) = selections.as_ref()
             && let Some(b_idx) = sel.build_index
             && b_idx < build.build_options.len()
         {
-            if is_core_block_title(&block.title) {
-                item_ids = build.build_options[b_idx].core_item_ids.clone();
-            } else if is_final_block_title(&block.title) {
-                item_ids = build.build_options[b_idx].final_item_ids.clone();
-            } else if is_situational_block_title(&block.title)
-                && !build.build_options[b_idx].situational_item_ids.is_empty()
-            {
-                item_ids = build.build_options[b_idx].situational_item_ids.clone();
+            match effective_kind {
+                ItemBlockKind::Core => {
+                    item_ids = build.build_options[b_idx].core_item_ids.clone();
+                }
+                ItemBlockKind::Final => {
+                    item_ids = build.build_options[b_idx].final_item_ids.clone();
+                }
+                ItemBlockKind::Situational
+                    if !build.build_options[b_idx].situational_item_ids.is_empty() =>
+                {
+                    item_ids = build.build_options[b_idx].situational_item_ids.clone();
+                }
+                _ => {}
             }
         }
 

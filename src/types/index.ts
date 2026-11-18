@@ -27,6 +27,7 @@ export type {
   HardwareAccelerationStatus,
   InjectionReport,
   ItemBlock,
+  ItemBlockKind,
   LcuConnected,
   LcuDisconnected,
   MatchEnded,

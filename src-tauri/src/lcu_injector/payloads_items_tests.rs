@@ -12,21 +12,25 @@ fn test_build_item_sets_payload_structure() {
         champion_name: "Jinx".to_string(),
         item_blocks: vec![
             ItemBlock {
+                kind: ItemBlockKind::Starter,
                 title: "Itens Iniciais".to_string(),
                 item_ids: vec![1055, 2003],
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Core,
                 title: "Primeiros 3 Itens".to_string(),
                 item_ids: vec![3031, 3006, 3094],
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Final,
                 title: "Build Final".to_string(),
                 item_ids: vec![3031, 3006, 3094, 3036, 3026],
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Boots,
                 title: "3 Botas Mais Feitas".to_string(),
                 item_ids: vec![3006, 3047, 3111],
                 item_icon_urls: vec![],
@@ -87,26 +91,31 @@ fn test_build_item_sets_payload_respects_unified_build_selection() {
         champion_name: "Ahri".to_string(),
         item_blocks: vec![
             crate::build_provider::ItemBlock {
+                kind: ItemBlockKind::Starter,
                 title: "1. Itens Iniciais".to_string(),
                 item_ids: vec![1056, 2003],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
+                kind: ItemBlockKind::Core,
                 title: "2. Primeiros 3 Itens".to_string(),
                 item_ids: vec![3118, 4645, 3089],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
+                kind: ItemBlockKind::Boots,
                 title: "3. 3 Botas Mais Feitas".to_string(),
                 item_ids: vec![3020, 3158, 3111],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
+                kind: ItemBlockKind::Final,
                 title: "4. Build Final".to_string(),
                 item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
+                kind: ItemBlockKind::Situational,
                 title: "5. Itens Situacionais / Úteis".to_string(),
                 item_ids: vec![3102, 3165],
                 item_icon_urls: vec![],
@@ -154,7 +163,7 @@ fn test_build_item_sets_payload_respects_unified_build_selection() {
 }
 
 #[test]
-fn test_build_item_sets_payload_respects_en_us_localized_block_titles() {
+fn test_build_item_sets_payload_uses_typed_block_kind_regardless_of_title() {
     let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
     clear_champion_selections();
     let build = ChampionBuild {
@@ -162,27 +171,32 @@ fn test_build_item_sets_payload_respects_en_us_localized_block_titles() {
         champion_name: "Ahri".to_string(),
         item_blocks: vec![
             crate::build_provider::ItemBlock {
-                title: "Starter Items".to_string(),
+                kind: ItemBlockKind::Starter,
+                title: "Custom Starter".to_string(),
                 item_ids: vec![1056, 2003],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
-                title: "First 3 Items".to_string(),
+                kind: ItemBlockKind::Core,
+                title: "Custom Core".to_string(),
                 item_ids: vec![3118, 4645, 3089],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
-                title: "Top 3 Boots".to_string(),
+                kind: ItemBlockKind::Boots,
+                title: "Custom Footwear".to_string(),
                 item_ids: vec![3020, 3158, 3111],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
-                title: "Final Build".to_string(),
+                kind: ItemBlockKind::Final,
+                title: "Custom Endgame".to_string(),
                 item_ids: vec![3118, 4645, 3089, 3157, 3135, 4629],
                 item_icon_urls: vec![],
             },
             crate::build_provider::ItemBlock {
-                title: "Situational / Utility Items".to_string(),
+                kind: ItemBlockKind::Situational,
+                title: "Custom Tech".to_string(),
                 item_ids: vec![3102, 3165],
                 item_icon_urls: vec![],
             },

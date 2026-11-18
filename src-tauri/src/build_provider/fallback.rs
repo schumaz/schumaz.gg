@@ -1,4 +1,4 @@
-use super::models::{ChampionBuild, ItemBlock};
+use super::models::{ChampionBuild, ItemBlock, ItemBlockKind};
 use crate::ws_listener::QUEUE_ARAM_MAYHEM;
 
 /// Maps a queue ID into an OP.GG queue argument string ("aram" or "ranked").
@@ -79,26 +79,31 @@ pub fn build_fallback_champion_build(
         spell2_id,
         item_blocks: vec![
             ItemBlock {
+                kind: ItemBlockKind::Starter,
                 title: "Itens Iniciais".to_string(),
                 item_ids: starter_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Core,
                 title: "Primeiros 3 Itens".to_string(),
                 item_ids: core_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Boots,
                 title: "3 Botas Mais Feitas".to_string(),
                 item_ids: boots_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Final,
                 title: "Build Final".to_string(),
                 item_ids: final_items,
                 item_icon_urls: vec![],
             },
             ItemBlock {
+                kind: ItemBlockKind::Situational,
                 title: "Itens Situacionais / Úteis".to_string(),
                 item_ids: situational_items,
                 item_icon_urls: vec![],
@@ -145,13 +150,13 @@ mod tests {
         assert_eq!(aram_fallback.spell2_id, 32);
         assert!(aram_fallback.supports_runes);
         assert_eq!(aram_fallback.item_blocks.len(), 5);
-        assert_eq!(aram_fallback.item_blocks[0].title, "Itens Iniciais");
-        assert_eq!(aram_fallback.item_blocks[1].title, "Primeiros 3 Itens");
-        assert_eq!(aram_fallback.item_blocks[2].title, "3 Botas Mais Feitas");
-        assert_eq!(aram_fallback.item_blocks[3].title, "Build Final");
+        assert_eq!(aram_fallback.item_blocks[0].kind, ItemBlockKind::Starter);
+        assert_eq!(aram_fallback.item_blocks[1].kind, ItemBlockKind::Core);
+        assert_eq!(aram_fallback.item_blocks[2].kind, ItemBlockKind::Boots);
+        assert_eq!(aram_fallback.item_blocks[3].kind, ItemBlockKind::Final);
         assert_eq!(
-            aram_fallback.item_blocks[4].title,
-            "Itens Situacionais / Úteis"
+            aram_fallback.item_blocks[4].kind,
+            ItemBlockKind::Situational
         );
 
         let mayhem_fallback = build_fallback_champion_build(103, "Ahri", QUEUE_ARAM_MAYHEM);

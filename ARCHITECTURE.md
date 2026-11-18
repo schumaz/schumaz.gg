@@ -50,7 +50,7 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 └── src-tauri/
     ├── capabilities/default.json  # Permissões Tauri v2 aprovadas (inclui opener:default e updater:default)
     └── src/                       # Padrão Rust 2018+ (modulo.rs + modulo/, sem mod.rs)
-        ├── lib.rs                 # Setup Tauri (inclui plugin-updater) e registro tauri-specta
+        ├── lib.rs                 # Setup Tauri (single-instance, opener, updater) e registro tauri-specta
         ├── app_bootstrap.rs + app_bootstrap/ # Setup de inicialização, protocolo schumaz-asset://, pre-warming e window_events.rs
         ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta])
         ├── models.rs + models/            # Structs serde/specta e Events IPC
@@ -75,5 +75,5 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 | **Persistência & Preferências** | `src/features/settings/` + `src-tauri/src/storage/settings/` + `lcu_injector/` | — |
 | **Auto-Update & Portable (NSIS)** | `src-tauri/src/updater.rs`, `models/updater.rs`, `src/services/ipc/updater.ipc.ts`, `src/hooks/useAppUpdater.ts`, `src/components/ui/StatusDock.tsx` | `docs/tauri-v2-capabilities.md` |
 | **Contrato IPC (Backend -> Frontend)** | `src-tauri/src/{commands,models}/` → `src/types/bindings.ts` → `src/services/ipc/` | — |
-| **Capabilities & Janela Tauri v2** | `src-tauri/capabilities/default.json`, `src-tauri/tauri.conf.json` | `docs/tauri-v2-capabilities.md` |
+| **Capabilities, CSP & Janela Tauri v2** | `src-tauri/capabilities/default.json`, `src-tauri/tauri.conf.json` | `docs/tauri-v2-capabilities.md` |
 | **Diretrizes Visuais Desktop** | `src/styles/`, `src/features/*/*.css`, `src/components/ui/` | `docs/ui-guidelines.md` |

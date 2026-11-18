@@ -15,11 +15,11 @@ describe("ItemBlocks", () => {
     spell1_id: 4,
     spell2_id: 14,
     item_blocks: [
-      { title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["starter1.png", "starter2.png"] },
-      { title: "Primeiros 3 Itens", item_ids: [3089, 3157, 3135], item_icon_urls: ["1.png", "2.png", "3.png"] },
-      { title: "3 Botas Mais Feitas", item_ids: [3020], item_icon_urls: ["boots.png"] },
-      { title: "Build Final", item_ids: [3089, 3157, 3135, 3020, 3165, 3102] },
-      { title: "Itens Situacionais / Úteis", item_ids: [3157, 3102] },
+      { kind: "starter", title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["starter1.png", "starter2.png"] },
+      { kind: "core", title: "Primeiros 3 Itens", item_ids: [3089, 3157, 3135], item_icon_urls: ["1.png", "2.png", "3.png"] },
+      { kind: "boots", title: "3 Botas Mais Feitas", item_ids: [3020], item_icon_urls: ["boots.png"] },
+      { kind: "final", title: "Build Final", item_ids: [3089, 3157, 3135, 3020, 3165, 3102] },
+      { kind: "situational", title: "Itens Situacionais / Úteis", item_ids: [3157, 3102] },
     ],
     build_options: [
       {
@@ -85,6 +85,39 @@ describe("ItemBlocks", () => {
     fireEvent.click(build2Btn);
 
     expect(handleSelectBuild).toHaveBeenCalledWith(1);
+  });
+
+  it("classifies, localizes, and maps build options via ItemBlockKind regardless of block title", () => {
+    const customTitledBuild: ChampionBuild = {
+      ...mockBuild,
+      item_blocks: [
+        { kind: "starter", title: "Opaque A", item_ids: [1056] },
+        { kind: "core", title: "Opaque B", item_ids: [9991, 9992, 9993] },
+        { kind: "boots", title: "Opaque C", item_ids: [3020] },
+        { kind: "final", title: "Opaque D", item_ids: [9994] },
+        { kind: "situational", title: "Opaque E", item_ids: [9995] },
+        { kind: "other", title: "Custom Fallback", item_ids: [2055] },
+      ],
+    };
+
+    const { container } = render(
+      <ItemBlocks
+        build={customTitledBuild}
+        selectedBuildIndex={1}
+        onSelectBuild={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("1. Itens Iniciais")).toBeInTheDocument();
+    expect(screen.getByText("2. Primeiros 3 Itens")).toBeInTheDocument();
+    expect(screen.getByText("3. 3 Botas Mais Feitas")).toBeInTheDocument();
+    expect(screen.getByText("4. Build Final")).toBeInTheDocument();
+    expect(screen.getByText("5. Itens Situacionais / Úteis")).toBeInTheDocument();
+    expect(screen.getByText("6. Custom Fallback")).toBeInTheDocument();
+    expect(container.querySelector(".block-span-full")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-core img[alt='Item 6653']")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-final img[alt='Item 6653']")).toBeInTheDocument();
+    expect(container.querySelector(".block-kind-situational img[alt='Item 3116']")).toBeInTheDocument();
   });
 
   it("uses consultation labels in readOnly mode", () => {

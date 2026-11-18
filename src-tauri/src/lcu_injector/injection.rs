@@ -9,11 +9,62 @@ use super::payloads::{
 use super::preferences::{FlashKeyPreference, UserPreferences, get_user_preferences};
 use super::selections::set_selected_rune_page;
 use crate::build_provider::ChampionBuild;
-use crate::models::InjectionReport;
+use crate::models::{AppLocale, InjectionReport};
 
 pub const PERKS_CURRENT_PAGE_ENDPOINT: &str = "/lol-perks/v1/currentpage";
 pub const PERKS_PAGES_ENDPOINT: &str = "/lol-perks/v1/pages";
 pub const CHAMP_SELECT_MY_SELECTION_ENDPOINT: &str = "/lol-champ-select/v1/session/my-selection";
+
+pub(crate) fn format_injection_report_message(
+    locale: AppLocale,
+    supports_runes: bool,
+    runes_res: Option<&Result<(), String>>,
+    spells_res: Option<&Result<(), String>>,
+    items_res: Option<&Result<(), String>>,
+) -> String {
+    let mut parts = Vec::new();
+
+    if !supports_runes {
+        parts.push(match locale {
+            AppLocale::PtBr => "Modo ARAM Mayhem (runas desativadas pela Riot)".to_string(),
+            AppLocale::EnUs => "ARAM Mayhem mode (runes disabled by Riot)".to_string(),
+        });
+    } else if let Some(r) = runes_res {
+        parts.push(match (locale, r) {
+            (AppLocale::PtBr, Ok(_)) => "Runas injetadas".to_string(),
+            (AppLocale::PtBr, Err(e)) => format!("Falha nas Runas: {e}"),
+            (AppLocale::EnUs, Ok(_)) => "Runes injected".to_string(),
+            (AppLocale::EnUs, Err(e)) => format!("Runes failed: {e}"),
+        });
+    }
+
+    if let Some(s) = spells_res {
+        parts.push(match (locale, s) {
+            (AppLocale::PtBr, Ok(_)) => "Feitiços injetados".to_string(),
+            (AppLocale::PtBr, Err(e)) => format!("Falha nos Feitiços: {e}"),
+            (AppLocale::EnUs, Ok(_)) => "Spells injected".to_string(),
+            (AppLocale::EnUs, Err(e)) => format!("Spells failed: {e}"),
+        });
+    }
+
+    if let Some(i) = items_res {
+        parts.push(match (locale, i) {
+            (AppLocale::PtBr, Ok(_)) => "Itens injetados".to_string(),
+            (AppLocale::PtBr, Err(e)) => format!("Falha nos Itens: {e}"),
+            (AppLocale::EnUs, Ok(_)) => "Items injected".to_string(),
+            (AppLocale::EnUs, Err(e)) => format!("Items failed: {e}"),
+        });
+    }
+
+    if parts.is_empty() {
+        match locale {
+            AppLocale::PtBr => "Nenhuma injeção configurada nas preferências".to_string(),
+            AppLocale::EnUs => "No injections enabled in preferences".to_string(),
+        }
+    } else {
+        parts.join(" | ")
+    }
+}
 
 /// Injects rune page into the LCU. Reuses and overwrites the single schumaz.gg rune page across matches
 /// instead of creating a new page every match.
@@ -183,34 +234,13 @@ pub async fn inject_champion_build_with_sink(
     let spells_ok = spells_res.as_ref().is_some_and(|r| r.is_ok());
     let items_ok = items_res.as_ref().is_some_and(|r| r.is_ok());
 
-    let mut parts = Vec::new();
-    if !build.supports_runes {
-        parts.push("Modo ARAM Mayhem (runas desativadas pela Riot)".to_string());
-    } else if let Some(r) = runes_res {
-        match r {
-            Ok(_) => parts.push("Runas injetadas".to_string()),
-            Err(e) => parts.push(format!("Falha nas Runas: {}", e)),
-        }
-    }
-
-    if let Some(s) = spells_res {
-        match s {
-            Ok(_) => parts.push("Feitiços injetados".to_string()),
-            Err(e) => parts.push(format!("Falha nos Feitiços: {}", e)),
-        }
-    }
-    if let Some(i) = items_res {
-        match i {
-            Ok(_) => parts.push("Itens injetados".to_string()),
-            Err(e) => parts.push(format!("Falha nos Itens: {}", e)),
-        }
-    }
-
-    let message = if parts.is_empty() {
-        "Nenhuma injeção configurada nas preferências".to_string()
-    } else {
-        parts.join(" | ")
-    };
+    let message = format_injection_report_message(
+        prefs.language,
+        build.supports_runes,
+        runes_res.as_ref(),
+        spells_res.as_ref(),
+        items_res.as_ref(),
+    );
 
     InjectionReport {
         champion_name: build.champion_name.clone(),

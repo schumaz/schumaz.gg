@@ -1,6 +1,58 @@
 use super::super::models::{DataDragonCache, RuneMetadata, SpellMetadata};
 use crate::models::AppLocale;
 use std::collections::HashMap;
+use std::path::Path;
+
+/// Scans `dir` for cached DataDragon envelopes (`metadata_*.lz4` or `skins_*.lz4`)
+/// and returns the most recently stored non-empty DataDragon version on disk.
+pub fn latest_cached_ddragon_version_from_dir(dir: &Path) -> Option<String> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    let mut best: Option<(u64, String)> = None;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".lz4")
+            || (!name.starts_with("metadata_") && !name.starts_with("skins_"))
+        {
+            continue;
+        }
+        let Some((created_at, patch)) = crate::storage::read_lz4_envelope_meta(&path) else {
+            continue;
+        };
+        let trimmed = patch.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if best.as_ref().is_none_or(|(ts, _)| created_at >= *ts) {
+            best = Some((created_at, trimmed.to_string()));
+        }
+    }
+    best.map(|(_, version)| version)
+}
+
+/// Returns the latest DataDragon version stored on disk (`Cache\ddragon\`) or in RAM.
+pub fn latest_cached_ddragon_version() -> Option<String> {
+    if let Some(paths) = crate::storage::global_paths()
+        && let Some(disk_version) = latest_cached_ddragon_version_from_dir(&paths.ddragon_dir)
+    {
+        return Some(disk_version);
+    }
+    super::cache::get_ddragon_cache_store()
+        .read()
+        .ok()
+        .and_then(|guard| {
+            guard
+                .values()
+                .map(|c| c.version.trim())
+                .find(|v| !v.is_empty())
+                .map(str::to_string)
+        })
+}
 
 /// Returns metadata for a known stat shard ID localized for `locale`.
 pub fn get_stat_shard_metadata_for_locale(id: i32, locale: AppLocale) -> Option<RuneMetadata> {
@@ -122,13 +174,18 @@ pub fn get_spell_metadata_for_locale(
         AppLocale::PtBr => pt_name,
         AppLocale::EnUs => en_name,
     };
+    let icon_url = if version.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "https://ddragon.leagueoflegends.com/cdn/{}/img/spell/{}.png",
+            version, icon_name
+        )
+    };
     SpellMetadata {
         id: spell_id,
         name: name.to_string(),
-        icon_url: format!(
-            "https://ddragon.leagueoflegends.com/cdn/{}/img/spell/{}.png",
-            version, icon_name
-        ),
+        icon_url,
     }
 }
 

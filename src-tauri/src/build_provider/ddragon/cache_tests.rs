@@ -96,3 +96,33 @@ async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_er
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn test_latest_cached_ddragon_version_from_dir_picks_newest_disk_envelope() {
+    let dir = std::env::temp_dir().join(format!(
+        "schumaz_dd_ver_test_{}_{}",
+        std::process::id(),
+        crate::storage::now_unix_secs()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::create_dir_all(&dir);
+
+    assert_eq!(latest_cached_ddragon_version_from_dir(&dir), None);
+
+    // Non-DataDragon or corrupt files should be ignored safely.
+    std::fs::write(dir.join("metadata_corrupt.lz4"), b"not-an-envelope").unwrap();
+    crate::storage::write_lz4_envelope(&dir.join("other_cache.lz4"), "99.9.9", &42_i32).unwrap();
+    assert_eq!(latest_cached_ddragon_version_from_dir(&dir), None);
+
+    // Write an older skins envelope then a newer metadata envelope; newest created_at wins.
+    crate::storage::write_lz4_envelope(&dir.join("skins_pt_BR.lz4"), "16.20.1", &"s1").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1050));
+    crate::storage::write_lz4_envelope(&dir.join("metadata_en_US.lz4"), "16.24.1", &"m1").unwrap();
+
+    assert_eq!(
+        latest_cached_ddragon_version_from_dir(&dir).as_deref(),
+        Some("16.24.1")
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

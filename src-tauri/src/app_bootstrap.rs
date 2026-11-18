@@ -1,7 +1,7 @@
 pub mod window_events;
 
 pub use window_events::{
-    WindowRuntimeState, handle_window_event, request_taskbar_attention,
+    WindowRuntimeState, focus_main_window, handle_window_event, request_taskbar_attention,
     should_pause_window_animations,
 };
 

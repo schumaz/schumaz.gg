@@ -41,14 +41,13 @@ pub async fn load_player_profile_with_cache(
         return Ok(cached.profile);
     }
 
-    let default_cache = DataDragonCache {
-        version: "16.22.1".to_string(),
-        ..Default::default()
-    };
     let cache =
         match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
             Ok(c) => c.as_ref().clone(),
-            Err(_) => default_cache,
+            Err(_) => DataDragonCache {
+                version: build_provider::latest_cached_ddragon_version().unwrap_or_default(),
+                ..Default::default()
+            },
         };
 
     let (profile_res, masteries_res, ranked_res, history_res) = tokio::join!(

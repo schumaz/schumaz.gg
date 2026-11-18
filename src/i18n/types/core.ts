@@ -73,6 +73,12 @@ export interface CoreTranslations {
     connected: string;
     waiting: string;
   };
+  window: {
+    minimizeAria: string;
+    maximizeAria: string;
+    restoreAria: string;
+    closeAria: string;
+  };
   updater: {
     readyToRestart: string;
     restarting: string;
