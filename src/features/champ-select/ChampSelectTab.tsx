@@ -4,10 +4,10 @@ import {
   SpellMetadata,
   SummonerInfo,
 } from "../../types";
+import { FiltersHeader } from "../../components/ui/FiltersHeader";
 import { ItemBlocks } from "../../components/ui/ItemBlocks";
 import { RuneTree } from "../../components/ui/RuneTree";
 import { SpellsBar } from "../../components/ui/SpellsBar";
-import { FiltersHeader } from "./FiltersHeader";
 import { IdleState } from "./IdleState";
 
 interface ChampSelectTabProps {

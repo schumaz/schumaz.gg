@@ -1,73 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BootstrapStatus } from "../types";
-import { isTauriWindowAvailable, windowIpc } from "../services/ipc/window.ipc";
+import { isTauriWindowAvailable } from "../services/ipc/window.ipc";
+import {
+  ASSETS_PRELOAD_TIMEOUT_MS,
+  EXIT_ANIMATION_MS,
+  EXIT_COMPLETE_BEAT_MS,
+  FONTS_READY_TIMEOUT_MS,
+  MAX_SPLASH_TIMEOUT_MS,
+  MIN_SPLASH_DURATION_MS,
+  NETWORK_WAIT_AFTER_CORE_MS,
+  type StartupStageKey,
+  type UseAppBootstrapOptions,
+  type UseAppBootstrapResult,
+  computeBootstrapProgress,
+  preloadImage,
+  resolveBootstrapStageKey,
+  subscribeToBackendBootstrap,
+} from "./appBootstrapHelpers";
 
-export type StartupStageKey =
-  | "initializing"
-  | "settings"
-  | "cache"
-  | "client"
-  | "assets"
-  | "syncing"
-  | "ready";
-
-export const MIN_SPLASH_DURATION_MS = 650;
-export const NETWORK_WAIT_AFTER_CORE_MS = 2200;
-export const ASSETS_PRELOAD_TIMEOUT_MS = 1500;
-export const FONTS_READY_TIMEOUT_MS = 800;
-export const MAX_SPLASH_TIMEOUT_MS = 4500;
-export const EXIT_COMPLETE_BEAT_MS = 150;
-export const EXIT_ANIMATION_MS = 280;
-
-export interface UseAppBootstrapOptions {
-  enabled: boolean;
-  preferencesReady: boolean;
-  lcuInitialChecked: boolean;
-  profileInitialReady: boolean;
-  criticalImageUrls: string[];
-  reducedMotion?: boolean;
-}
-
-export interface UseAppBootstrapResult {
-  isBooting: boolean;
-  isExiting: boolean;
-  progress: number;
-  stageKey: StartupStageKey;
-}
-
-function isValidBootstrapStatus(value: unknown): value is BootstrapStatus {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<BootstrapStatus>;
-  return (
-    typeof candidate.stage === "string" &&
-    typeof candidate.progress === "number" &&
-    typeof candidate.diskReady === "boolean" &&
-    typeof candidate.networkReady === "boolean"
-  );
-}
-
-function preloadImage(url: string): Promise<void> {
-  if (!url || typeof Image === "undefined") {
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => {
-    const img = new Image();
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      img.onload = null;
-      img.onerror = null;
-      resolve();
-    };
-    img.onload = finish;
-    img.onerror = finish;
-    img.src = url;
-    if (img.complete) {
-      finish();
-    }
-  });
-}
+export {
+  ASSETS_PRELOAD_TIMEOUT_MS,
+  EXIT_ANIMATION_MS,
+  EXIT_COMPLETE_BEAT_MS,
+  FONTS_READY_TIMEOUT_MS,
+  MAX_SPLASH_TIMEOUT_MS,
+  MIN_SPLASH_DURATION_MS,
+  NETWORK_WAIT_AFTER_CORE_MS,
+  type StartupStageKey,
+  type UseAppBootstrapOptions,
+  type UseAppBootstrapResult,
+};
 
 export function useAppBootstrap({
   enabled,
@@ -96,69 +58,21 @@ export function useAppBootstrap({
   // 1. Subscribe to backend bootstrap progress & fetch current snapshot
   useEffect(() => {
     if (!enabled) return;
-
-    if (!isTauriWindowAvailable()) {
-      setBackendStatus({ stage: "ready", progress: 100, diskReady: true, networkReady: true });
-      return;
-    }
-
-    let active = true;
-    let unlisten: (() => void) | undefined;
-
-    const applyStatus = (next: BootstrapStatus) => {
-      if (!active) return;
+    return subscribeToBackendBootstrap((next) => {
       setBackendStatus((prev) => ({
         stage: next.progress >= prev.progress ? next.stage : prev.stage,
         progress: Math.max(prev.progress, Math.min(100, next.progress)),
         diskReady: prev.diskReady || next.diskReady,
         networkReady: prev.networkReady || next.networkReady,
       }));
-    };
-
-    void windowIpc.onBootstrapProgress((status) => {
-      if (isValidBootstrapStatus(status)) {
-        applyStatus(status);
-      }
-    }).then((fn) => {
-      if (!active) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
     });
-
-    void windowIpc
-      .getBootstrapStatus()
-      .then((status) => {
-        if (!active) return;
-        if (isValidBootstrapStatus(status)) {
-          applyStatus(status);
-        } else {
-          // Graceful fallback if command returns null/unmocked payload
-          applyStatus({ stage: "ready", progress: 100, diskReady: true, networkReady: true });
-        }
-      })
-      .catch(() => {
-        if (active) {
-          applyStatus({ stage: "ready", progress: 100, diskReady: true, networkReady: true });
-        }
-      });
-
-    return () => {
-      active = false;
-      unlisten?.();
-    };
   }, [enabled]);
 
   // 2. Minimum splash duration + hard global safety timeout
   useEffect(() => {
     if (!enabled) return;
-    const minTimer = window.setTimeout(() => {
-      setMinDurationElapsed(true);
-    }, MIN_SPLASH_DURATION_MS);
-    const maxTimer = window.setTimeout(() => {
-      setHardTimedOut(true);
-    }, MAX_SPLASH_TIMEOUT_MS);
+    const minTimer = window.setTimeout(() => setMinDurationElapsed(true), MIN_SPLASH_DURATION_MS);
+    const maxTimer = window.setTimeout(() => setHardTimedOut(true), MAX_SPLASH_TIMEOUT_MS);
 
     return () => {
       window.clearTimeout(minTimer);
@@ -197,7 +111,6 @@ export function useAppBootstrap({
 
   useEffect(() => {
     if (!enabled || assetsReady) return;
-    // Wait until initial profile cache check resolves so any cached splash URL is included
     if (!profileInitialReady && !hardTimedOut) return;
 
     let active = true;
@@ -241,55 +154,57 @@ export function useAppBootstrap({
     hardTimedOut ||
     (coreReady && minDurationElapsed && (backendStatus.networkReady || networkGraceElapsed));
 
-  // Compute monotonic progress percentage
-  const computedProgress = useMemo(() => {
-    if (!enabled || allReady) return 100;
-    const backendPart = backendStatus.networkReady
-      ? 45
-      : backendStatus.diskReady
-      ? 36
-      : Math.round((Math.min(backendStatus.progress, 80) / 80) * 36);
-    const prefsPart = preferencesReady ? 15 : 0;
-    const lcuPart = lcuInitialChecked ? 10 : 0;
-    const profilePart = profileInitialReady ? 10 : 0;
-    const fontsPart = fontsReady ? 5 : 0;
-    const assetsPart = assetsReady ? 15 : 0;
-    const raw = Math.max(8, backendPart + prefsPart + lcuPart + profilePart + fontsPart + assetsPart);
-    return Math.min(96, raw);
-  }, [
-    enabled,
-    allReady,
-    backendStatus.diskReady,
-    backendStatus.networkReady,
-    backendStatus.progress,
-    preferencesReady,
-    lcuInitialChecked,
-    profileInitialReady,
-    fontsReady,
-    assetsReady,
-  ]);
+  const computedProgress = useMemo(
+    () =>
+      computeBootstrapProgress({
+        enabled,
+        allReady,
+        backendStatus,
+        preferencesReady,
+        lcuInitialChecked,
+        profileInitialReady,
+        fontsReady,
+        assetsReady,
+      }),
+    [
+      enabled,
+      allReady,
+      backendStatus,
+      preferencesReady,
+      lcuInitialChecked,
+      profileInitialReady,
+      fontsReady,
+      assetsReady,
+    ]
+  );
 
   useEffect(() => {
     setMaxProgress((prev) => Math.max(prev, computedProgress));
   }, [computedProgress]);
 
-  const stageKey: StartupStageKey = useMemo(() => {
-    if (!enabled || allReady) return "ready";
-    if (!preferencesReady) return "settings";
-    if (!backendStatus.diskReady) return "cache";
-    if (!lcuInitialChecked || !profileInitialReady) return "client";
-    if (!fontsReady || !assetsReady) return "assets";
-    return "syncing";
-  }, [
-    enabled,
-    allReady,
-    preferencesReady,
-    backendStatus.diskReady,
-    lcuInitialChecked,
-    profileInitialReady,
-    fontsReady,
-    assetsReady,
-  ]);
+  const stageKey: StartupStageKey = useMemo(
+    () =>
+      resolveBootstrapStageKey({
+        enabled,
+        allReady,
+        preferencesReady,
+        diskReady: backendStatus.diskReady,
+        lcuInitialChecked,
+        profileInitialReady,
+        fontsReady,
+        assetsReady,
+      }),
+    [
+      enabled,
+      allReady,
+      preferencesReady,
+      backendStatus.diskReady,
+      lcuInitialChecked,
+      profileInitialReady,
+      fontsReady,
+      assetsReady,
+    ]
+  );
 
   // 6. Trigger smooth exit sequence once everything is ready
   useEffect(() => {
@@ -301,9 +216,7 @@ export function useAppBootstrap({
     let unmountTimer: number | undefined;
     const beatTimer = window.setTimeout(() => {
       setIsExiting(true);
-      unmountTimer = window.setTimeout(() => {
-        setIsBooting(false);
-      }, exitDuration);
+      unmountTimer = window.setTimeout(() => setIsBooting(false), exitDuration);
     }, EXIT_COMPLETE_BEAT_MS);
 
     return () => {

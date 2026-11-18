@@ -8,6 +8,7 @@ pub mod polling;
 pub mod reconcile;
 pub mod reconcile_state;
 pub mod session_handler;
+mod subscription;
 
 pub use coordinator::*;
 pub use extract::*;

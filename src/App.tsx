@@ -18,14 +18,14 @@ import {
 import {
   FlashOnboardingModal,
   LanguageOnboardingModal,
-  SettingsTab,
   profileBlurPercentToPx,
   usePreferences,
 } from "./features/settings";
-import { ProfileTab, ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
-import { ChampSelectTab, useLcuEvents } from "./features/champ-select";
-import { AramTab, useAram } from "./features/aram";
-import { RankedTab, useRanked } from "./features/ranked";
+import { ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
+import { useLcuEvents } from "./features/champ-select";
+import { useAram } from "./features/aram";
+import { useRanked } from "./features/ranked";
+import { AppTabsViewport } from "./AppTabsViewport";
 
 export * from "./types";
 export * from "./utils/spells";
@@ -181,110 +181,17 @@ function App({ forceStartupLoading }: AppProps = {}) {
           onDismissUpdate={updater.dismissUpdate}
         />
 
-        <div className="tabs-viewport" aria-hidden={boot.isBooting || undefined}>
-          <ProfileTab
-            summoner={lcu.summoner}
-            profile={playerProfile.profile}
-            loading={playerProfile.profileLoading}
-            errorMsg={playerProfile.profileError}
-            onRefresh={playerProfile.refreshProfile}
-            refreshCooldownSecs={playerProfile.refreshCooldownSecs}
-            profileBlur={prefs.profileBlur}
-            isActive={activeTab === "profile"}
-            savedModeFilter={navigationState?.profileMatchModeFilter}
-            onModeFilterChange={(mode) => updateNavigationState({ profileMatchModeFilter: mode })}
-          />
-
-          <ChampSelectTab
-            isActive={activeTab === "runes"}
-            build={lcu.build}
-            champSelect={lcu.champSelect}
-            summoner={lcu.summoner}
-            loading={lcu.loading}
-            errorMsg={lcu.errorMsg}
-            orderedSpells={lcu.orderedSpells}
-            selectedSecondarySpellId={lcu.selectedSecondarySpellId}
-            selectedRunePageIndex={lcu.selectedRunePageIndex}
-            selectedBuildIndex={lcu.selectedBuildIndex}
-            onFilterChange={lcu.handleFilterChange}
-            onSelectRunePage={lcu.handleSelectRunePage}
-            onInvertSpells={handleInvertSpells}
-            onSelectSecondarySpell={lcu.handleSelectSecondarySpell}
-            onSelectBuild={lcu.handleSelectBuild}
-          />
-
-          <RankedTab
-            isActive={activeTab === "ranked"}
-            filters={ranked.filters}
-            tierData={ranked.tierData}
-            tierLoading={ranked.tierLoading}
-            tierError={ranked.tierError}
-            selectedChampion={ranked.selectedChampion}
-            championBuild={ranked.championBuild}
-            buildLoading={ranked.buildLoading}
-            buildError={ranked.buildError}
-            orderedSpells={ranked.orderedSpells}
-            selectedRunePageIndex={ranked.selectedRunePageIndex}
-            selectedBuildIndex={ranked.selectedBuildIndex}
-            onTierListFilterChange={ranked.handleTierListFilterChange}
-            onDetailFilterChange={ranked.handleDetailFilterChange}
-            onSelectChampion={ranked.selectChampion}
-            onBackToTierList={ranked.clearSelectedChampion}
-            onRetryTierList={ranked.retryTierList}
-            onRetryBuild={ranked.retryChampionBuild}
-            onSelectRunePage={ranked.setSelectedRunePageIndex}
-            onSelectBuild={ranked.setSelectedBuildIndex}
-            savedChampionTierFilter={navigationState?.rankedChampionTierFilter}
-            onChampionTierFilterChange={(tier) => updateNavigationState({ rankedChampionTierFilter: tier })}
-          />
-
-          <AramTab
-            isActive={activeTab === "aram"}
-            savedMode={aram.savedMode}
-            showChooser={aram.showChooser}
-            tierLists={aram.tierLists}
-            tierLoading={aram.tierLoading}
-            tierErrors={aram.tierErrors}
-            selectedChampionKey={aram.selectedChampionKey}
-            augmentsByChampion={aram.augmentsByChampion}
-            augmentsLoading={aram.augmentsLoading}
-            augmentsError={aram.augmentsError}
-            onSelectMode={aram.selectMode}
-            onSelectChampion={aram.selectChampion}
-            onRetryTierList={aram.retryTierList}
-            onRetryAugments={aram.retryAugments}
-            savedRarityFilter={navigationState?.aramMayhemRarityFilter}
-            onRarityFilterChange={(rarity) => updateNavigationState({ aramMayhemRarityFilter: String(rarity) })}
-          />
-
-          <SettingsTab
-            preferences={preferences}
-            onUpdatePreference={prefs.updatePreference}
-            locale={locale}
-            onChangeLanguage={prefs.changeLanguage}
-            profileBlur={prefs.profileBlur}
-            onProfileBlurChange={prefs.updateProfileBlur}
-            wallpaperVisible={prefs.wallpaperVisible}
-            onWallpaperVisibleChange={prefs.updateWallpaperVisible}
-            hardwareAcceleration={prefs.hardwareAcceleration}
-            onHardwareAccelerationChange={prefs.updateHardwareAcceleration}
-            gpuRestartRequired={prefs.gpuRestartRequired}
-            onRestartApp={prefs.restartApp}
-            isActive={activeTab === "settings"}
-            updateState={updater.updateState}
-            distributionInfo={updater.distributionInfo}
-            lastUpdateCheckResult={updater.lastCheckResult}
-            onCheckForUpdates={() => {
-              void updater.checkForUpdates({ manual: true });
-            }}
-            onRestartToUpdate={() => {
-              void updater.installAndRestart();
-            }}
-            onOpenPortableRelease={() => {
-              void updater.openPortableRelease();
-            }}
-          />
-        </div>
+        <AppTabsViewport
+          activeTab={activeTab}
+          isBooting={boot.isBooting}
+          prefs={prefs}
+          lcu={lcu}
+          playerProfile={playerProfile}
+          ranked={ranked}
+          aram={aram}
+          updater={updater}
+          onInvertSpells={handleInvertSpells}
+        />
 
         <NavigationDock
           activeTab={activeTab}

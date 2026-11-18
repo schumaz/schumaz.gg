@@ -5,7 +5,6 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	greet: (name: string) => __TAURI_INVOKE<string>("greet", { name }),
 	/**  Tauri command to fetch the recommended build (with visual metadata) for a champion. */
 	getRecommendedBuildForChampion: (championId: number, queueId: number | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_recommended_build_for_champion", { championId, queueId }),
 	/**  Tauri command to update build filters (position, tier, region, patch) and re-inject if connected. */

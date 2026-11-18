@@ -1,7 +1,7 @@
 import { TranslationKey, TranslationParams, translate } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
-import { FilterDropdownOption } from "../../components/ui/FilterDropdown";
-import { RegionFlag } from "../../components/ui/RegionFlag";
+import { FilterDropdownOption } from "./FilterDropdown";
+import { RegionFlag } from "./RegionFlag";
 
 export type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;
 

@@ -5,9 +5,9 @@ import {
   RankedTierListResponse,
 } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
+import { buildIconImg } from "../../components/ui/filterOptions";
 import { ListSkeleton, LoadingDots } from "../../components/ui/LoadingIndicators";
 import { getChampionTierClass, getChampionTierLabel } from "../aram/aramHelpers";
-import { buildIconImg } from "../champ-select/FiltersHeader";
 import { RankedLaneFilter } from "./rankedStorage";
 import { LaneMetaItem, TierGroup } from "./rankedHelpers";
 

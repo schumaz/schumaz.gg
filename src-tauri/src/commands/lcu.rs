@@ -1,11 +1,5 @@
 use crate::{lcu_connector, models, profile_provider, ws_listener};
 
-#[tauri::command]
-#[specta::specta]
-pub fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 /// Tauri command to fetch the current summoner status if the client is connected.
 #[tauri::command]
 #[specta::specta]

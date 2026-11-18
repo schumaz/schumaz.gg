@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { FiltersHeader } from "../features/champ-select/FiltersHeader";
+import { FiltersHeader } from "../components/ui/FiltersHeader";
 import { ChampionBuild, ChampSelectedPayload } from "../types";
 
 const mockBuild: ChampionBuild = {

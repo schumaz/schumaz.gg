@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "../../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
-import { FilterDropdown } from "../../components/ui/FilterDropdown";
-import { LoadingBar } from "../../components/ui/LoadingIndicators";
+import { FilterDropdown } from "./FilterDropdown";
+import { LoadingBar } from "./LoadingIndicators";
 import { getPositionOptions, getRegionOptions, getTierOptions } from "./filterOptions";
 import { computePatchUiMeta } from "./patchUiMeta";
 

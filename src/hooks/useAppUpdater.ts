@@ -1,46 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  lcuIpc,
   updaterIpc,
   type AppDistributionInfo,
   type UpdaterUpdateHandle,
 } from "../services/ipc";
+import {
+  UPDATE_BLOCKED_PHASES,
+  isUpdateDownloadBlockedPhase,
+  performUpdateCheck,
+  runBackgroundDownload,
+  type AppUpdateState,
+  type CheckForUpdatesOptions,
+  type UpdateCheckResult,
+  type UseAppUpdaterOptions,
+} from "./appUpdaterHelpers";
 
-export const UPDATE_BLOCKED_PHASES = new Set([
-  "ChampSelect",
-  "GameStart",
-  "InProgress",
-  "Reconnect",
-]);
-
-export function isUpdateDownloadBlockedPhase(
-  gameflowPhase: string,
-  isInChampSelect: boolean
-): boolean {
-  return isInChampSelect || UPDATE_BLOCKED_PHASES.has(gameflowPhase);
-}
-
-export type UpdateCheckResult = "idle" | "up-to-date" | "error";
-
-export type AppUpdateState =
-  | { status: "idle" }
-  | { status: "checking" }
-  | { status: "deferred"; version: string }
-  | { status: "downloading"; version: string }
-  | { status: "ready"; version: string }
-  | { status: "installing"; version: string }
-  | { status: "portable-available"; version: string; releasesUrl: string };
-
-export interface CheckForUpdatesOptions {
-  manual?: boolean;
-}
-
-export interface UseAppUpdaterOptions {
-  enabled?: boolean;
-  lcuInitialChecked: boolean;
-  gameflowPhase: string;
-  isInChampSelect: boolean;
-}
+export {
+  UPDATE_BLOCKED_PHASES,
+  isUpdateDownloadBlockedPhase,
+  type AppUpdateState,
+  type CheckForUpdatesOptions,
+  type UpdateCheckResult,
+  type UseAppUpdaterOptions,
+};
 
 export function useAppUpdater({
   enabled = true,
@@ -75,48 +57,27 @@ export function useAppUpdater({
     }
   }, []);
 
+  const getRefs = () => ({
+    activeUpdateRef,
+    dismissedVersionRef,
+    distributionInfoRef,
+    isPortableRef,
+    downloadStartedRef,
+    isMountedRef,
+    blockedRef,
+    checkSeqRef,
+  });
+
+  const getActions = () => ({
+    closeActiveUpdate,
+    setUpdateState,
+    setDistributionInfo,
+    setLastCheckResult,
+  });
+
   const startBackgroundDownload = useCallback(
-    async (handle: UpdaterUpdateHandle, seq: number) => {
-      if (isPortableRef.current || downloadStartedRef.current) return;
-
-      const livePhase = await lcuIpc.getGameflowPhase?.().catch(() => null);
-      if (
-        !isMountedRef.current ||
-        checkSeqRef.current !== seq ||
-        activeUpdateRef.current !== handle
-      ) {
-        return;
-      }
-      if (blockedRef.current || (livePhase && isUpdateDownloadBlockedPhase(livePhase, false))) {
-        setUpdateState({ status: "deferred", version: handle.version });
-        return;
-      }
-
-      downloadStartedRef.current = true;
-      setUpdateState({ status: "downloading", version: handle.version });
-
-      try {
-        await handle.download();
-        if (
-          !isMountedRef.current ||
-          checkSeqRef.current !== seq ||
-          activeUpdateRef.current !== handle ||
-          dismissedVersionRef.current === handle.version
-        ) {
-          return;
-        }
-        setUpdateState({ status: "ready", version: handle.version });
-      } catch {
-        // Network or signature verification failure: silently clean up resource
-        if (activeUpdateRef.current === handle) {
-          await closeActiveUpdate();
-        }
-        if (isMountedRef.current && checkSeqRef.current === seq) {
-          setUpdateState({ status: "idle" });
-          setLastCheckResult("error");
-        }
-      }
-    },
+    async (handle: UpdaterUpdateHandle, seq: number) =>
+      runBackgroundDownload(handle, seq, getRefs(), getActions()),
     [closeActiveUpdate]
   );
 
@@ -137,61 +98,7 @@ export function useAppUpdater({
       setUpdateState({ status: "checking" });
 
       try {
-        const fetchedDistInfo = await updaterIpc.getDistributionInfo().catch(() => null);
-        const distInfo = fetchedDistInfo ?? distributionInfoRef.current;
-        if (!distInfo || !isMountedRef.current || checkSeqRef.current !== seq) {
-          if (isMountedRef.current && checkSeqRef.current === seq) {
-            setUpdateState({ status: "idle" });
-            setLastCheckResult(manual ? "error" : "idle");
-          }
-          return;
-        }
-
-        distributionInfoRef.current = distInfo;
-        isPortableRef.current = distInfo.isPortable;
-        setDistributionInfo(distInfo);
-
-        const update = await updaterIpc.checkForUpdate();
-        if (!update) {
-          if (isMountedRef.current && checkSeqRef.current === seq) {
-            setUpdateState({ status: "idle" });
-            setLastCheckResult("up-to-date");
-          }
-          return;
-        }
-
-        if (
-          !isMountedRef.current ||
-          checkSeqRef.current !== seq ||
-          dismissedVersionRef.current === update.version
-        ) {
-          await update.close().catch(() => {});
-          if (isMountedRef.current && checkSeqRef.current === seq) {
-            setUpdateState({ status: "idle" });
-          }
-          return;
-        }
-
-        if (distInfo.isPortable) {
-          const version = update.version;
-          await update.close().catch(() => {});
-          if (isMountedRef.current && checkSeqRef.current === seq) {
-            setUpdateState({
-              status: "portable-available",
-              version,
-              releasesUrl: distInfo.releasesUrl,
-            });
-          }
-          return;
-        }
-
-        activeUpdateRef.current = update;
-        if (blockedRef.current) {
-          setUpdateState({ status: "deferred", version: update.version });
-          return;
-        }
-
-        await startBackgroundDownload(update, seq);
+        await performUpdateCheck(manual, seq, getRefs(), getActions());
       } catch {
         // Network, endpoint, or signature validation failure: fail silently
         await closeActiveUpdate();
@@ -201,7 +108,7 @@ export function useAppUpdater({
         }
       }
     },
-    [closeActiveUpdate, startBackgroundDownload]
+    [closeActiveUpdate]
   );
 
   useEffect(() => {

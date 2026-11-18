@@ -5,6 +5,18 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-11-18
+
+Internal architectural refactoring and codebase cleanup without user-facing feature changes.
+
+### Changed
+- **Modularization & Line Limits**: Split oversized Rust (`ws_listener/subscription.rs`, `app_bootstrap/window_events.rs`) and frontend (`AppTabsViewport.tsx`, `SettingsUpdatesSubsection.tsx`, `appBootstrapHelpers.ts`, `appUpdaterHelpers.ts`, and test suites) modules to strictly comply with the 350-line Rust and 250-line TS/TSX limits.
+- **Shared UI Boundaries**: Promoted `FiltersHeader`, `filterOptions`, and `patchUiMeta` to `src/components/ui/`, removing cross-feature coupling between `ranked` and `champ-select`.
+- **Architecture Documentation**: Updated `ARCHITECTURE.md` to reflect the current module layout and remove obsolete migration notes.
+
+### Removed
+- **Residual Template Command**: Removed unused `commands::greet` from `src-tauri/src/commands/lcu.rs` and `src-tauri/src/lib.rs`, regenerating `src/types/bindings.ts`.
+
 ## [0.1.0] - 2026-11-16
 
 First public release of **schumaz.gg** for Windows 10/11 (64-bit).

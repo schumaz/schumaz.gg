@@ -5,11 +5,11 @@ import {
   SpellMetadata,
 } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
+import { FiltersHeader } from "../../components/ui/FiltersHeader";
 import { ItemBlocks } from "../../components/ui/ItemBlocks";
 import { LoadingDots } from "../../components/ui/LoadingIndicators";
 import { RuneTree } from "../../components/ui/RuneTree";
 import { SpellsBar } from "../../components/ui/SpellsBar";
-import { FiltersHeader } from "../champ-select/FiltersHeader";
 
 interface RankedChampionDetailProps {
   selectedChampion: RankedChampionEntry;

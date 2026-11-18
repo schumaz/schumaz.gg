@@ -2,14 +2,14 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import { RankedLane, RankedTierListResponse } from "../../types";
 import { FilterDropdown } from "../../components/ui/FilterDropdown";
-import { LoadingBar } from "../../components/ui/LoadingIndicators";
-import { SearchInput } from "../../components/ui/SearchInput";
 import {
   buildIconImg,
-  computePatchUiMeta,
   getRegionOptions,
   getTierOptions,
-} from "../champ-select/FiltersHeader";
+} from "../../components/ui/filterOptions";
+import { LoadingBar } from "../../components/ui/LoadingIndicators";
+import { computePatchUiMeta } from "../../components/ui/patchUiMeta";
+import { SearchInput } from "../../components/ui/SearchInput";
 import { RankedFilters } from "./rankedStorage";
 import { LANE_ORDER, LaneMetaItem, getChampionTierFilterOptions } from "./rankedHelpers";
 

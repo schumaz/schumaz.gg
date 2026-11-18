@@ -10,3 +10,6 @@ export * from "./BuildSelector";
 export * from "./SpellsBar";
 export * from "./ItemBlocks";
 export * from "./RuneTree";
+export * from "./filterOptions";
+export * from "./patchUiMeta";
+export * from "./FiltersHeader";

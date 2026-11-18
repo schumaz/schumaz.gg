@@ -10,21 +10,8 @@ export const RUST_MAX_LINES = 350;
 export const TS_MAX_LINES = 250;
 export const EXCLUDED_FILES = new Set(["src/types/bindings.ts"]);
 
-// Temporary P11.1 baseline for pre-existing files above the 350/250 ceiling.
-// Prevents regressions in CI while allowing P11.1 to refactor them incrementally.
-export const LEGACY_BASELINE = {
-  "src-tauri/src/app_bootstrap.rs": 352,
-  "src-tauri/src/ws_listener/polling.rs": 376,
-  "src/App.tsx": 322,
-  "src/hooks/useAppBootstrap.ts": 323,
-  "src/hooks/useAppUpdater.ts": 296,
-  "src/features/settings/SettingsMiscSection.tsx": 277,
-  "src/features/settings/__tests__/SettingsTabMisc.test.tsx": 302,
-  "src/__tests__/appTestFixtures.ts": 309,
-  "src/__tests__/AramTab.test.tsx": 252,
-  "src/__tests__/StartupLoadingScreen.test.tsx": 297,
-  "src/__tests__/useAppUpdater.test.ts": 338,
-};
+// Strict 350/250 ceiling enforced across all source and test files (P11.1 completed).
+export const LEGACY_BASELINE = {};
 
 export function countFileLines(content) {
   if (!content) {

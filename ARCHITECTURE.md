@@ -26,39 +26,39 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 - **Isolamento IPC no Frontend:** toda chamada a `invoke`, `listen`, `convertFileSrc` e consumo de `src/types/bindings.ts`, `@tauri-apps/api` ou `@tauri-apps/plugin-*` fica encapsulada em `src/services/ipc/`. Componentes `.tsx` nunca importam pacotes `@tauri-apps/*` diretamente.
 - **Separação UI vs. Domínio:** `src/features/<dominio>/` concentra componentes, hooks, tipos e estilos do domínio; `src/components/ui/` contém apenas componentes visuais puros.
 
-## 3. Estrutura Principal (Alvo da Refatoração em `todo.md`)
-> Nota: A migração incremental dos módulos legados (`mod.rs`, `components/`, `hooks/`) para a estrutura abaixo está organizada passo a passo em `todo.md`.
+## 3. Estrutura Principal
 
 ```text
 ├── docs/                          # Referências curtas (LCU, OP.GG, Tauri v2, UI)
 ├── src/
 │   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, @tauri-apps/api, plugin-updater, plugin-opener)
-│   ├── components/ui/             # Componentes visuais puros (FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, ItemBlocks, Docks)
-│   ├── hooks/                     # Hooks transversais do shell (ex.: useAppUpdater.ts)
+│   ├── components/ui/             # Componentes visuais puros (FiltersHeader, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, ItemBlocks, Docks)
+│   ├── hooks/                     # Hooks transversais do shell (useAppBootstrap, useAppUpdater, useWindowMinimized)
 │   ├── features/                  # Domínios isolados (cada qual com componentes, hooks, helpers e CSS locais)
-│   │   ├── champ-select/          # Sessão LCU, FiltersHeader, IdleState e auto-injeção
+│   │   ├── champ-select/          # Sessão LCU, IdleState e auto-injeção
 │   │   ├── profile/               # Perfil do invocador, elos, maestrias e histórico
 │   │   ├── ranked/                # Tier list Solo/Duo e explorador de builds
 │   │   ├── aram/                  # ARAM Clássico e ARAM Desordem (Mayhem Augments)
-│   │   └── settings/              # Preferências, aparência, GPU, onboarding e persistência INI
+│   │   └── settings/              # Preferências, aparência, GPU, atualizações, onboarding e persistência INI
 │   ├── i18n/                      # Contexto de tradução e dicionários fatiados (pt/en core & tabs)
 │   ├── styles/                    # Tokens, layout shell e estilos compartilhados
 │   ├── types/
 │   │   ├── bindings.ts            # Gerado automaticamente pelo tauri-specta (uso restrito a src/services/ipc/)
 │   │   └── index.ts               # Tipos locais de UI e reexports de tipos puros
-│   └── App.tsx                    # Orquestrador raiz e viewport de abas
+│   ├── AppTabsViewport.tsx        # Viewport de abas conectando os domínios do shell
+│   └── App.tsx                    # Orquestrador raiz e overlays de inicialização/onboarding
 └── src-tauri/
     ├── capabilities/default.json  # Permissões Tauri v2 aprovadas (inclui opener:default e updater:default)
     └── src/                       # Padrão Rust 2018+ (modulo.rs + modulo/, sem mod.rs)
         ├── lib.rs                 # Setup Tauri (inclui plugin-updater) e registro tauri-specta
-        ├── app_bootstrap.rs       # Eventos de janela, protocolo schumaz-asset:// e pre-warming
+        ├── app_bootstrap.rs + app_bootstrap/ # Setup de inicialização, protocolo schumaz-asset://, pre-warming e window_events.rs
         ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta])
         ├── models.rs + models/            # Structs serde/specta e Events IPC
         ├── updater.rs                     # Detecção de modo Portable (feature + Registro HKCU/path) e info de distribuição
         ├── storage.rs + storage/          # Infraestrutura: paths, cache .lz4, GC, assets, graphics, window_bounds, settings/ (INI)
         ├── lcu_connector.rs + lcu_connector/ # Cliente REST LCU, endpoints por domínio, motor de missões e monitor
         ├── profile_provider.rs + profile_provider/ # Cache de perfil/skins e parsers de ranked, maestrias e histórico
-        ├── ws_listener.rs + ws_listener/  # WebSocket + fallback polling, extração de draft, coordinator e reconciliação
+        ├── ws_listener.rs + ws_listener/  # WebSocket (subscription.rs) + fallback polling, extração de draft, coordinator e reconciliação
         ├── lcu_injector.rs + lcu_injector/ # Regras de spells/Flash, seleções, payloads e serviço de injeção REST
         └── build_provider.rs + build_provider/ # Serviço/orquestrador de builds, ddragon/, items/, analytics/ (OP.GG), runes, spells, patch
 ```
@@ -67,7 +67,7 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 | Integração / Domínio | Arquivos Principais | Referência Curta |
 | :--- | :--- | :--- |
 | **LCU REST & Auth** | `src-tauri/src/lcu_connector.rs` (`lcu_connector/`) | `docs/lcu-api.md` |
-| **LCU WebSocket / Draft** | `src-tauri/src/ws_listener/` (`extract.rs`, `polling.rs`, `reconcile.rs`) | `docs/lcu-api.md` |
+| **LCU WebSocket / Draft** | `src-tauri/src/ws_listener/` (`extract.rs`, `subscription.rs`, `polling.rs`, `reconcile.rs`) | `docs/lcu-api.md` |
 | **LCU Injeção (Runas/Spells/Itens)** | `src-tauri/src/lcu_injector/` (`payloads.rs`, `injection.rs`, `spell_rules.rs`) | `docs/lcu-api.md` |
 | **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `positions.rs`, `rest_parser.rs`, `mcp_parser.rs`, `ranked.rs`, `aram.rs`) | `docs/opgg-api.md` |
 | **DataDragon Cache & Assets** | `src-tauri/src/build_provider/ddragon.rs` (`ddragon/`) | — |

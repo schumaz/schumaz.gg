@@ -1,4 +1,4 @@
-import { FilterDropdownOption } from "../../components/ui/FilterDropdown";
+import { FilterDropdownOption } from "./FilterDropdown";
 import { TranslatorFn, defaultTranslate } from "./filterOptions";
 
 export function computePatchUiMeta(params: {
