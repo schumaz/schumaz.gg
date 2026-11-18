@@ -14,6 +14,7 @@
     "tauri:build": "node --env-file-if-exists=.env ./node_modules/@tauri-apps/cli/tauri.js build",
     "tauri:build:portable": "node --env-file-if-exists=.env ./node_modules/@tauri-apps/cli/tauri.js build --features portable --no-bundle",
     "build:desktop": "node --env-file-if-exists=.env scripts/build-desktop.mjs",
+    "check:lines": "node scripts/check-line-limits.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

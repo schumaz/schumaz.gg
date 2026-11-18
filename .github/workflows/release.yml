@@ -64,6 +64,8 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -97,8 +99,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $tag = "${{ steps.meta.outputs.tag }}"
-          $updaterNotes = "Release $tag — Automated Champion Select runes, summoner spells & item sets, Ranked & ARAM/ARAM Mayhem builds, and Summoner Profile analytics."
-          node scripts/build-desktop.mjs --tag "$tag" --notes "$updaterNotes"
+          $updaterNotesFile = Join-Path $env:RUNNER_TEMP "updater-notes.txt"
+          node scripts/generate-release-notes.mjs --tag "$tag" --updater-out "$updaterNotesFile"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/build-desktop.mjs --tag "$tag" --notes-file "$updaterNotesFile"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate dist-release artifacts
         run: |
@@ -136,6 +141,7 @@ jobs:
           $notesFile = Join-Path $env:RUNNER_TEMP "release-notes.md"
 
           node scripts/generate-release-notes.mjs --tag "$tag" --setup "$setupName" --portable "$portableName" --out "$notesFile"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "notes_file=$notesFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Upload workflow build artifacts

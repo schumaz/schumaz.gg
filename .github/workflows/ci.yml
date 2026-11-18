@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend & Line Limits
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: |
+          npx tsc --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run Vitest suite
+        run: |
+          npx vitest run --reporter=dot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify file line limits (350 Rust / 250 TS-TSX)
+        run: |
+          node scripts/check-line-limits.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  rust:
+    name: Rust Clippy, Tests & IPC Bindings
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri"
+
+      - name: Run cargo clippy (default and portable)
+        run: |
+          Push-Location src-tauri
+          try {
+            cargo clippy --all-targets --message-format=short -- -D warnings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cargo clippy --all-targets --features portable --message-format=short -- -D warnings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Run cargo test
+        run: |
+          Push-Location src-tauri
+          try {
+            cargo test -q
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Verify TypeScript IPC bindings sync
+        run: |
+          Push-Location src-tauri
+          try {
+            cargo run --bin export_bindings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+          git diff --exit-code -- src/types/bindings.ts
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "src/types/bindings.ts is out of sync. Run 'cargo run --bin export_bindings' in src-tauri/ and commit the updated file."
+            exit $LASTEXITCODE
+          }
