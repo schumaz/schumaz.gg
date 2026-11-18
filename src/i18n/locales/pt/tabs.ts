@@ -185,6 +185,15 @@ export const ptTabs: TabTranslations = {
     cacheOptionAllTitle: "Os dois (builds e imagens)",
     cacheOptionAllDesc: "Remove todo o cache de dados e imagens do disco ({size}).",
     cacheModalCancel: "Cancelar",
+    cacheConfirmTitle: "Confirmar exclusão do cache?",
+    cacheConfirmBuildsBody:
+      "Tem certeza que deseja excluir o cache de builds e dados ({size})? Builds, rankings, metadados e perfil salvos serão removidos do disco.",
+    cacheConfirmImagesBody:
+      "Tem certeza que deseja excluir o cache de imagens ({size})? As imagens em cache serão removidas e precisarão ser baixadas novamente.",
+    cacheConfirmAllBody:
+      "Tem certeza que deseja excluir todo o cache local ({size})? Todos os dados, builds e imagens salvos em disco serão removidos.",
+    cacheConfirmBack: "Voltar",
+    cacheConfirmAction: "Confirmar exclusão",
     updatesTitle: "Atualizações e Versão",
     updatesDesc:
       "Consulte a versão instalada, o modo de distribuição e verifique novas atualizações.",

@@ -170,6 +170,12 @@ export interface TabTranslations {
     cacheOptionAllTitle: string;
     cacheOptionAllDesc: string;
     cacheModalCancel: string;
+    cacheConfirmTitle: string;
+    cacheConfirmBuildsBody: string;
+    cacheConfirmImagesBody: string;
+    cacheConfirmAllBody: string;
+    cacheConfirmBack: string;
+    cacheConfirmAction: string;
     updatesTitle: string;
     updatesDesc: string;
     updatesVersionLabel: string;

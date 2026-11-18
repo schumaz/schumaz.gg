@@ -184,6 +184,15 @@ export const enTabs: TabTranslations = {
     cacheOptionAllTitle: "Both (builds and images)",
     cacheOptionAllDesc: "Removes all cached data and images from disk ({size}).",
     cacheModalCancel: "Cancel",
+    cacheConfirmTitle: "Confirm cache deletion?",
+    cacheConfirmBuildsBody:
+      "Are you sure you want to delete the builds & data cache ({size})? Saved builds, rankings, metadata, and profile cache will be removed from disk.",
+    cacheConfirmImagesBody:
+      "Are you sure you want to delete the images cache ({size})? Cached images will be removed and will need to be downloaded again.",
+    cacheConfirmAllBody:
+      "Are you sure you want to delete all local cache ({size})? All cached data, builds, and images will be removed from disk.",
+    cacheConfirmBack: "Back",
+    cacheConfirmAction: "Confirm deletion",
     updatesTitle: "Updates & Version",
     updatesDesc:
       "View the current version, distribution mode, and check for new updates.",

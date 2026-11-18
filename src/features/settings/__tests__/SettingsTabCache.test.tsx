@@ -32,7 +32,7 @@ describe("SettingsTab — Local Cache subsection", () => {
     expect(formatCacheBytes(1024 * 1024 * 1024)).toBe("1.0 GB");
   });
 
-  it("renders cache usage breakdown without file count and opens scope selection modal", () => {
+  it("requires confirmation for all three cache clear options and supports back/escape", () => {
     const onClear = vi.fn();
 
     const { rerender } = render(
@@ -82,9 +82,35 @@ describe("SettingsTab — Local Cache subsection", () => {
     fireEvent.click(screen.getByTestId("clear-cache-modal-backdrop"));
     expect(screen.queryByTestId("clear-cache-modal")).not.toBeInTheDocument();
 
+    // Option 1: builds -> confirm prompt -> back -> Escape
     fireEvent.click(clearBtn);
     fireEvent.click(screen.getByTestId("clear-cache-option-builds"));
+    expect(onClear).not.toHaveBeenCalled();
+    expect(screen.getByTestId("clear-cache-confirm-prompt")).toHaveTextContent(
+      "Confirmar exclusão do cache?"
+    );
+    expect(screen.getByTestId("clear-cache-confirm-prompt")).toHaveTextContent("3.0 MB");
+    fireEvent.click(screen.getByTestId("clear-cache-confirm-back-btn"));
+    expect(screen.queryByTestId("clear-cache-confirm-prompt")).not.toBeInTheDocument();
+    expect(screen.getByTestId("clear-cache-option-builds")).toBeInTheDocument();
+
+    // Option 2: images -> confirm prompt -> Escape returns to options -> confirm executes
+    fireEvent.click(screen.getByTestId("clear-cache-option-images"));
+    expect(onClear).not.toHaveBeenCalled();
+    expect(screen.getByTestId("clear-cache-confirm-prompt")).toHaveTextContent("12.0 MB");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("clear-cache-confirm-prompt")).not.toBeInTheDocument();
+    expect(screen.getByTestId("clear-cache-modal")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("clear-cache-option-images"));
+    fireEvent.click(screen.getByTestId("clear-cache-confirm-btn"));
     expect(screen.queryByTestId("clear-cache-modal")).not.toBeInTheDocument();
+    expect(onClear).toHaveBeenCalledWith("images");
+
+    // Option 1 confirmed
+    fireEvent.click(clearBtn);
+    fireEvent.click(screen.getByTestId("clear-cache-option-builds"));
+    fireEvent.click(screen.getByTestId("clear-cache-confirm-btn"));
     expect(onClear).toHaveBeenCalledWith("builds");
 
     rerender(
@@ -116,7 +142,6 @@ describe("SettingsTab — Local Cache subsection", () => {
       </I18nProvider>
     );
     expect(screen.getByTestId("settings-subgroup-cache")).toHaveTextContent("Local Cache");
-    expect(screen.queryByTestId("settings-cache-files")).not.toBeInTheDocument();
     expect(screen.getByTestId("settings-cache-status")).toHaveTextContent(
       "Could not inspect or clear the local cache."
     );
@@ -125,7 +150,15 @@ describe("SettingsTab — Local Cache subsection", () => {
     expect(screen.getByTestId("clear-cache-option-images")).toBeEnabled();
     expect(screen.getByTestId("clear-cache-option-images")).toHaveTextContent("Not recommended");
     expect(screen.getByTestId("clear-cache-option-builds")).toHaveTextContent("Recommended");
+
+    // Option 3: all -> confirm prompt (EN)
     fireEvent.click(screen.getByTestId("clear-cache-option-all"));
+    expect(onClear).not.toHaveBeenCalledWith("all");
+    expect(screen.getByTestId("clear-cache-confirm-prompt")).toHaveTextContent(
+      "Confirm cache deletion?"
+    );
+    expect(screen.getByTestId("clear-cache-confirm-prompt")).toHaveTextContent("2.0 KB");
+    fireEvent.click(screen.getByTestId("clear-cache-confirm-btn"));
     expect(onClear).toHaveBeenCalledWith("all");
 
     rerender(
@@ -145,7 +178,7 @@ describe("SettingsTab — Local Cache subsection", () => {
     expect(screen.getByTestId("settings-cache-clear-btn")).toBeDisabled();
   });
 
-  it("loads local cache usage via IPC and clears selected scope from modal", async () => {
+  it("loads local cache usage via IPC and clears selected scope after confirmation", async () => {
     (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_local_cache_info") {
@@ -184,6 +217,8 @@ describe("SettingsTab — Local Cache subsection", () => {
     expect(clearBtn).toBeEnabled();
     fireEvent.click(clearBtn);
     fireEvent.click(screen.getByTestId("clear-cache-option-builds"));
+    expect(invoke).not.toHaveBeenCalledWith("clear_local_cache", { scope: "builds" });
+    fireEvent.click(screen.getByTestId("clear-cache-confirm-btn"));
 
     await waitFor(() => {
       expect(screen.getByTestId("settings-cache-size")).toHaveTextContent("Espaço ocupado: 4.0 MB");

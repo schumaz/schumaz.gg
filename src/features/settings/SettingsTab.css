@@ -321,6 +321,51 @@
   line-height: 1.5;
 }
 
+.settings-cache-confirm-dialog {
+  max-width: 460px;
+}
+
+.settings-cache-confirm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-cache-confirm-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.settings-cache-confirm-scope-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-cache-confirm-scope-size {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.settings-modal-btn-secondary {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-highlight);
+  color: var(--text-primary);
+}
+
+.settings-modal-btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 .settings-cache-modal-options {
   display: flex;
   flex-direction: column;
