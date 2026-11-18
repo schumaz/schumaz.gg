@@ -33,7 +33,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
 
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked/versions"))
+        .and(path("/builds_disk_ok/global/champions/ranked/versions"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": ["16.99"]
         })))
@@ -41,7 +41,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/aram/103/none"))
+        .and(path("/builds_disk_ok/global/champions/aram/103/none"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": {
                 "damage_type": "AP",
@@ -75,6 +75,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
     let client = reqwest::Client::new();
     let cache = test_ddragon_cache();
     let mcp_url = format!("{}/mcp", mock_server.uri());
+    let ok_base = format!("{}/builds_disk_ok", mock_server.uri());
 
     let b1 = get_recommended_build_with_filters_and_endpoints_with_dir(
         &client,
@@ -85,7 +86,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
         None,
         Some("16.99"),
         &cache,
-        &mock_server.uri(),
+        &ok_base,
         &mcp_url,
         None,
         false,
@@ -109,7 +110,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
         None,
         Some("16.99"),
         &cache,
-        &mock_server.uri(),
+        &ok_base,
         &mcp_url,
         None,
         false,
@@ -140,7 +141,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
 
     let offline = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/global/champions/aram/103/none"))
+        .and(path("/builds_disk_offline/global/champions/aram/103/none"))
         .respond_with(ResponseTemplate::new(503))
         .mount(&offline)
         .await;
@@ -150,6 +151,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
         .mount(&offline)
         .await;
 
+    let offline_base = format!("{}/builds_disk_offline", offline.uri());
     let offline_mcp = format!("{}/mcp", offline.uri());
     let rescued = get_recommended_build_with_filters_and_endpoints_with_dir(
         &client,
@@ -160,7 +162,7 @@ async fn test_build_disk_cache_ttl_patch_invalidation_and_stale_while_error() {
         None,
         Some("16.99"),
         &cache,
-        &offline.uri(),
+        &offline_base,
         &offline_mcp,
         None,
         false,

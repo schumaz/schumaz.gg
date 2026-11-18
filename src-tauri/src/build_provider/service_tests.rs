@@ -38,7 +38,7 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked/versions"))
+        .and(path("/aram_service_test/global/champions/ranked/versions"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": ["16.22", "16.21"]
         })))
@@ -46,33 +46,32 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked"))
+        .and(path("/aram_service_test/global/champions/ranked"))
         .respond_with(ResponseTemplate::new(500))
         .expect(0)
         .mount(&mock_server)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/aram_service_test/global/champions/aram/18/mid"))
+        .respond_with(ResponseTemplate::new(422))
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/aram_service_test/global/champions/aram/18/top"))
+        .respond_with(ResponseTemplate::new(422))
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/aram_service_test/global/champions/aram/103/mid"))
+        .respond_with(ResponseTemplate::new(422))
+        .expect(0)
+        .mount(&mock_server)
+        .await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/aram/18/mid"))
-        .respond_with(ResponseTemplate::new(422))
-        .expect(0)
-        .mount(&mock_server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/global/champions/aram/18/top"))
-        .respond_with(ResponseTemplate::new(422))
-        .expect(0)
-        .mount(&mock_server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/global/champions/aram/103/mid"))
-        .respond_with(ResponseTemplate::new(422))
-        .expect(0)
-        .mount(&mock_server)
-        .await;
-
-    Mock::given(method("GET"))
-        .and(path("/global/champions/aram/18/none"))
+        .and(path("/aram_service_test/global/champions/aram/18/none"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": {
                 "damage_type": "AD",
@@ -93,7 +92,7 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/aram/103/none"))
+        .and(path("/aram_service_test/global/champions/aram/103/none"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": {
                 "damage_type": "AP",
@@ -135,6 +134,7 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
 
     let client = reqwest::Client::new();
     let cache = test_ddragon_cache();
+    let base_uri = format!("{}/aram_service_test", mock_server.uri());
     let mcp_url = format!("{}/mcp", mock_server.uri());
 
     let mayhem_build = get_recommended_build_with_filters_and_endpoints(
@@ -146,7 +146,7 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
         None,
         Some("16.22"),
         &cache,
-        &mock_server.uri(),
+        &base_uri,
         &mcp_url,
     )
     .await
@@ -174,7 +174,7 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
         None,
         Some("16.22"),
         &cache,
-        &mock_server.uri(),
+        &base_uri,
         &mcp_url,
     )
     .await

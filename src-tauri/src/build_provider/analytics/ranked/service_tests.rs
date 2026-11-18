@@ -30,7 +30,7 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked/versions"))
+        .and(path("/ranked_48h/global/champions/ranked/versions"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": ["16.22", "16.21"]
         })))
@@ -38,7 +38,7 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked"))
+        .and(path("/ranked_48h/global/champions/ranked"))
         .and(query_param("tier", "emerald_plus"))
         .and(query_param("version", "16.22"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -58,7 +58,7 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
     let created_at = "2026-11-14T08:00:00Z";
     let now_unix = parse_iso8601_to_unix(created_at).unwrap() + 10 * 3600;
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked/103/mid"))
+        .and(path("/ranked_48h/global/champions/ranked/103/mid"))
         .and(query_param("tier", "emerald_plus"))
         .and(query_param("version", "16.22"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -72,7 +72,7 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
         .await;
 
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked"))
+        .and(path("/ranked_48h/global/champions/ranked"))
         .and(query_param("tier", "emerald_plus"))
         .and(query_param("version", "16.21"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -91,10 +91,11 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
 
     let client = reqwest::Client::new();
     let ddragon = test_ddragon();
+    let base_uri = format!("{}/ranked_48h", mock_server.uri());
 
     let protected = fetch_ranked_tier_list_with_base(
         &client,
-        &mock_server.uri(),
+        &base_uri,
         Some("global"),
         Some("emerald_plus"),
         None,
@@ -112,7 +113,7 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
 
     let manual = fetch_ranked_tier_list_with_base(
         &client,
-        &mock_server.uri(),
+        &base_uri,
         Some("global"),
         Some("emerald_plus"),
         Some("16.22"),
@@ -138,14 +139,14 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
 
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked/versions"))
+        .and(path("/ranked_disk/global/champions/ranked/versions"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": ["16.25"]
         })))
         .mount(&mock_server)
         .await;
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked"))
+        .and(path("/ranked_disk/global/champions/ranked"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "meta": { "version": "16.25", "match_count": 50000 },
             "data": [{
@@ -160,10 +161,11 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
     let client = reqwest::Client::new();
     let dd = test_ddragon();
     let now = crate::storage::now_unix_secs();
+    let disk_base = format!("{}/ranked_disk", mock_server.uri());
 
     let first = fetch_ranked_tier_list_with_base_and_dir(
         &client,
-        &mock_server.uri(),
+        &disk_base,
         Some("global"),
         Some("emerald_plus"),
         None,
@@ -184,7 +186,7 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
     }
     let disk_hit = fetch_ranked_tier_list_with_base_and_dir(
         &client,
-        &mock_server.uri(),
+        &disk_base,
         Some("global"),
         Some("emerald_plus"),
         None,
@@ -204,14 +206,15 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
     }
     let offline = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/global/champions/ranked"))
+        .and(path("/ranked_offline/global/champions/ranked"))
         .respond_with(ResponseTemplate::new(503))
         .mount(&offline)
         .await;
 
+    let offline_base = format!("{}/ranked_offline", offline.uri());
     let rescued = fetch_ranked_tier_list_with_base_and_dir(
         &client,
-        &offline.uri(),
+        &offline_base,
         Some("global"),
         Some("emerald_plus"),
         None,
