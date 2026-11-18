@@ -2,7 +2,8 @@ use crate::app_bootstrap::BootstrapState;
 use crate::lcu_injector;
 use crate::models::{AppDistributionInfo, AppLocale, BootstrapStatus, FlashKeyPreference};
 use crate::storage::{
-    self, AppSettings, GraphicsState, HardwareAccelerationStatus, NavigationStatePatch,
+    self, AppSettings, CacheClearScope, GraphicsState, HardwareAccelerationStatus, LocalCacheInfo,
+    NavigationStatePatch,
 };
 use crate::updater;
 use tauri::{AppHandle, State};
@@ -78,6 +79,30 @@ pub async fn complete_flash_onboarding(
     flash_key: FlashKeyPreference,
 ) -> Result<AppSettings, String> {
     lcu_injector::complete_flash_onboarding_service(flash_key)
+}
+
+/// Returns disk usage statistics for the local cache directory (`Cache/`).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_local_cache_info() -> Result<LocalCacheInfo, String> {
+    let Some(paths) = storage::global_paths().cloned() else {
+        return Ok(LocalCacheInfo::default());
+    };
+    tokio::task::spawn_blocking(move || storage::inspect_local_cache(&paths))
+        .await
+        .map_err(|e| format!("Failed to inspect local cache: {e}"))
+}
+
+/// Deletes cached files under `Cache/` matching `scope` and returns refreshed usage statistics.
+#[tauri::command]
+#[specta::specta]
+pub async fn clear_local_cache(scope: CacheClearScope) -> Result<LocalCacheInfo, String> {
+    let Some(paths) = storage::global_paths().cloned() else {
+        return Ok(LocalCacheInfo::default());
+    };
+    tokio::task::spawn_blocking(move || storage::clear_local_cache_at(&paths, scope))
+        .await
+        .map_err(|e| format!("Failed to clear local cache: {e}"))?
 }
 
 /// Restarts the Tauri application so updated WebView2 GPU flags take effect.

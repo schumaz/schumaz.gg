@@ -160,6 +160,30 @@ export const enTabs: TabTranslations = {
     missionsToggleTitle: "Automatically Mark Missions & Objectives as Read",
     missionsToggleDesc:
       "Automatically marks all unread missions and objectives as seen on connect and when new ones arrive in the LoL client, clearing the notification badge.",
+    cacheTitle: "Local Cache",
+    cacheDesc:
+      "Disk storage used for cached images, champion metadata, and match history.",
+    cacheSizeLabel: "Disk usage: {size}",
+    cacheSizeLoading: "Calculating disk usage...",
+    cacheBreakdown: "Images: {assets} · Builds & data: {data}",
+    cacheEmptyDesc: "No files stored in the local cache.",
+    cacheStatusCleared: "Local cache cleared.",
+    cacheStatusError: "Could not inspect or clear the local cache.",
+    cacheClearBtn: "Clear cache",
+    cacheClearingBtn: "Clearing...",
+    cacheModalTitle: "Choose what to clear",
+    cacheModalDesc: "Select which part of the local cache you want to remove from disk.",
+    cacheRecommendedBadge: "Recommended",
+    cacheNotRecommendedBadge: "Not recommended",
+    cacheOptionBuildsTitle: "Builds & data cache only",
+    cacheOptionBuildsDesc:
+      "Clears saved builds, rankings, metadata, and profile cache ({size}).",
+    cacheOptionImagesTitle: "Images cache only",
+    cacheOptionImagesDesc:
+      "Champion icons and splashes do not change; clearing forces re-downloading ({size}).",
+    cacheOptionAllTitle: "Both (builds and images)",
+    cacheOptionAllDesc: "Removes all cached data and images from disk ({size}).",
+    cacheModalCancel: "Cancel",
     updatesTitle: "Updates & Version",
     updatesDesc:
       "View the current version, distribution mode, and check for new updates.",

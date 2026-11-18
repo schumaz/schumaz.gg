@@ -2,14 +2,16 @@ import {
   commands,
   type AppLocale,
   type AppSettings,
+  type CacheClearScope,
   type FlashKeyPreference,
   type HardwareAccelerationStatus,
+  type LocalCacheInfo,
   type NavigationStatePatch,
   type UserPreferences,
 } from "../../types/bindings";
 
 /**
- * Typed IPC adapter for unified `UserSettings.ini`, preferences, locale, navigation state, and GPU settings.
+ * Typed IPC adapter for unified `UserSettings.ini`, preferences, locale, navigation state, cache, and GPU settings.
  */
 export const settingsIpc = {
   async getAppSettings(): Promise<AppSettings> {
@@ -49,5 +51,13 @@ export const settingsIpc = {
 
   async setHardwareAcceleration(enabled: boolean): Promise<HardwareAccelerationStatus> {
     return commands.setHardwareAcceleration(enabled);
+  },
+
+  async getLocalCacheInfo(): Promise<LocalCacheInfo> {
+    return commands.getLocalCacheInfo();
+  },
+
+  async clearLocalCache(scope: CacheClearScope): Promise<LocalCacheInfo> {
+    return commands.clearLocalCache(scope);
   },
 };

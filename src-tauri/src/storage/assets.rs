@@ -1,6 +1,13 @@
-use std::fs;
-use std::path::PathBuf;
+#[path = "assets/singleflight.rs"]
+mod singleflight;
 
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use bytes::Bytes;
+
+pub use self::singleflight::AssetSingleflight;
+use self::singleflight::{AssetSharedResult, FlightStep, global_singleflight};
 use super::{AppPaths, atomic_write, fnv1a_128_hex, touch_mtime};
 
 const ALLOWED_ASSET_PREFIXES: [&str; 3] = [
@@ -11,6 +18,8 @@ const ALLOWED_ASSET_PREFIXES: [&str; 3] = [
 
 const B64_URL_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+const MAX_SINGLEFLIGHT_RETRIES: usize = 3;
 
 pub fn encode_base64_url(input: &[u8]) -> String {
     let mut out = String::with_capacity((input.len() * 4).div_ceil(3));
@@ -159,6 +168,40 @@ pub fn mime_type_for_ext_or_bytes(ext: &str, bytes: &[u8]) -> &'static str {
     }
 }
 
+fn read_cached_asset(cache_path: &Path, ext: &str) -> Option<(Vec<u8>, &'static str)> {
+    if !cache_path.exists() {
+        return None;
+    }
+    let bytes = fs::read(cache_path).ok()?;
+    if bytes.is_empty() {
+        return None;
+    }
+    let mime = mime_type_for_ext_or_bytes(ext, &bytes);
+    Some((bytes, mime))
+}
+
+async fn fetch_and_cache_asset(
+    client: &reqwest::Client,
+    url: &str,
+    cache_path: &Path,
+    ext: &str,
+) -> AssetSharedResult {
+    let res = client.get(url).send().await.map_err(|_| 502u16)?;
+    let status = res.status();
+    if !status.is_success() {
+        return Err(status.as_u16());
+    }
+
+    let bytes = res.bytes().await.map_err(|_| 502u16)?;
+    if bytes.is_empty() {
+        return Err(404);
+    }
+
+    let _ = atomic_write(cache_path, &bytes);
+    let mime = mime_type_for_ext_or_bytes(ext, &bytes);
+    Ok((bytes, mime))
+}
+
 pub async fn serve_cached_or_fetch_asset(
     paths: &AppPaths,
     client: &reqwest::Client,
@@ -167,7 +210,42 @@ pub async fn serve_cached_or_fetch_asset(
     serve_cached_or_fetch_asset_with_policy(paths, client, url, false).await
 }
 
+#[cfg(test)]
 async fn serve_cached_or_fetch_asset_with_policy(
+    paths: &AppPaths,
+    client: &reqwest::Client,
+    url: &str,
+    allow_unlisted_for_tests: bool,
+) -> Result<(Vec<u8>, &'static str), u16> {
+    serve_cached_or_fetch_asset_internal(
+        global_singleflight(),
+        paths,
+        client,
+        url,
+        allow_unlisted_for_tests,
+    )
+    .await
+}
+
+#[cfg(not(test))]
+async fn serve_cached_or_fetch_asset_with_policy(
+    paths: &AppPaths,
+    client: &reqwest::Client,
+    url: &str,
+    allow_unlisted_for_tests: bool,
+) -> Result<(Vec<u8>, &'static str), u16> {
+    serve_cached_or_fetch_asset_internal(
+        global_singleflight(),
+        paths,
+        client,
+        url,
+        allow_unlisted_for_tests,
+    )
+    .await
+}
+
+async fn serve_cached_or_fetch_asset_internal(
+    flight: &AssetSingleflight,
     paths: &AppPaths,
     client: &reqwest::Client,
     url: &str,
@@ -180,104 +258,49 @@ async fn serve_cached_or_fetch_asset_with_policy(
     let ext = extract_asset_extension(url);
     let cache_path = asset_cache_path(paths, url);
 
-    if cache_path.exists()
-        && let Ok(bytes) = fs::read(&cache_path)
-        && !bytes.is_empty()
-    {
+    if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
         touch_mtime(&cache_path);
-        let mime = mime_type_for_ext_or_bytes(ext, &bytes);
         return Ok((bytes, mime));
     }
 
-    let res = client.get(url).send().await.map_err(|_| 502u16)?;
-    let status = res.status();
-    if !status.is_success() {
-        return Err(status.as_u16());
+    let key = (cache_path.clone(), url.to_string());
+
+    for _ in 0..MAX_SINGLEFLIGHT_RETRIES {
+        match flight.acquire_or_subscribe(&key) {
+            FlightStep::Wait(mut rx) => {
+                loop {
+                    if let Some(result) = rx.borrow_and_update().clone() {
+                        return match result {
+                            Ok((bytes, mime)) => Ok((bytes.to_vec(), mime)),
+                            Err(status) => Err(status),
+                        };
+                    }
+                    if rx.changed().await.is_err() {
+                        break;
+                    }
+                }
+                if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+                    touch_mtime(&cache_path);
+                    return Ok((bytes, mime));
+                }
+            }
+            FlightStep::Lead(guard) => {
+                if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+                    touch_mtime(&cache_path);
+                    guard.complete(Ok((Bytes::from(bytes.clone()), mime)));
+                    return Ok((bytes, mime));
+                }
+
+                let result = fetch_and_cache_asset(client, url, &cache_path, ext).await;
+                guard.complete(result.clone());
+                return result.map(|(bytes, mime)| (bytes.to_vec(), mime));
+            }
+        }
     }
 
-    let bytes = res.bytes().await.map_err(|_| 502u16)?.to_vec();
-    if bytes.is_empty() {
-        return Err(404);
-    }
-
-    let _ = atomic_write(&cache_path, &bytes);
-    let mime = mime_type_for_ext_or_bytes(ext, &bytes);
-    Ok((bytes, mime))
+    Err(502)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    #[test]
-    fn test_asset_segment_roundtrip_and_allowlist() {
-        let url = "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_27.jpg?v=1";
-        let seg = encode_asset_segment(url);
-        assert!(seg.starts_with("v1_"));
-        assert!(seg.ends_with(".jpg"));
-        assert!(!seg.contains('/'));
-
-        let decoded = decode_asset_request_segment(&format!("/{seg}")).unwrap();
-        assert_eq!(decoded, url);
-
-        assert!(is_allowed_asset_url(url));
-        assert!(is_allowed_asset_url(
-            "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/images/emerald.png"
-        ));
-        assert!(is_allowed_asset_url(
-            "https://opgg-static.akamaized.net/meta/images/lol/latest/perk/8112.png"
-        ));
-        assert!(!is_allowed_asset_url(
-            "https://evil.example.com/payload.png"
-        ));
-        assert!(!is_allowed_asset_url("file:///C:/Windows/win.ini"));
-    }
-
-    #[tokio::test]
-    async fn test_serve_cached_or_fetch_asset_caches_on_disk_and_blocks_disallowed() {
-        let dir =
-            std::env::temp_dir().join(format!("schumazgg_assets_test_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        let paths = AppPaths::from_root(dir.clone());
-        paths.ensure_dirs().unwrap();
-
-        let mock_server = MockServer::start().await;
-        let fake_png: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
-
-        Mock::given(method("GET"))
-            .and(path("/cdn/splash/Ahri_0.jpg"))
-            .respond_with(ResponseTemplate::new(200).set_body_bytes(fake_png.clone()))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let client = reqwest::Client::new();
-        // Public function rejects non-allowlisted hosts
-        let forbidden = serve_cached_or_fetch_asset(
-            &paths,
-            &client,
-            &format!("{}/cdn/splash/Ahri_0.jpg", mock_server.uri()),
-        )
-        .await;
-        assert_eq!(forbidden, Err(403));
-
-        // Internal test-policy helper fetches once, caches natively on disk, then hits disk on second call
-        let url = format!("{}/cdn/splash/Ahri_0.jpg", mock_server.uri());
-        let (b1, m1) = serve_cached_or_fetch_asset_with_policy(&paths, &client, &url, true)
-            .await
-            .unwrap();
-        assert_eq!(b1, fake_png);
-        assert_eq!(m1, "image/jpeg");
-        assert!(asset_cache_path(&paths, &url).exists());
-
-        let (b2, m2) = serve_cached_or_fetch_asset_with_policy(&paths, &client, &url, true)
-            .await
-            .unwrap();
-        assert_eq!(b2, fake_png);
-        assert_eq!(m2, "image/jpeg");
-
-        let _ = fs::remove_dir_all(&dir);
-    }
-}
+#[path = "assets/assets_tests.rs"]
+mod tests;

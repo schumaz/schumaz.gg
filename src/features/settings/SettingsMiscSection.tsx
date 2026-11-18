@@ -1,9 +1,11 @@
-import { AppLocale, UserPreferences } from "../../types";
+import { AppLocale, CacheClearScope, LocalCacheInfo, UserPreferences } from "../../types";
 import type { AppUpdateState, UpdateCheckResult } from "../../hooks/useAppUpdater";
 import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
 import { LanguageFlag } from "../../components/ui/LanguageFlag";
+import { SettingsCacheSubsection } from "./SettingsCacheSubsection";
 import { SettingsUpdatesSubsection } from "./SettingsUpdatesSubsection";
+import type { LocalCacheStatus } from "./useLocalCache";
 
 interface SettingsMiscSectionProps {
   activeLocale: AppLocale;
@@ -17,6 +19,11 @@ interface SettingsMiscSectionProps {
     key: K,
     value: UserPreferences[K]
   ) => void;
+  cacheInfo?: LocalCacheInfo | null;
+  cacheLoading?: boolean;
+  cacheClearing?: boolean;
+  cacheStatus?: LocalCacheStatus;
+  onClearCache?: (scope: CacheClearScope) => void;
   updateState?: AppUpdateState;
   distributionInfo?: AppDistributionInfo | null;
   lastUpdateCheckResult?: UpdateCheckResult;
@@ -34,6 +41,11 @@ export function SettingsMiscSection({
   onRestartApp,
   autoMarkDailyMissionsRead,
   onUpdatePreference,
+  cacheInfo = null,
+  cacheLoading = false,
+  cacheClearing = false,
+  cacheStatus = "idle",
+  onClearCache,
   updateState = { status: "idle" },
   distributionInfo = null,
   lastUpdateCheckResult = "idle",
@@ -158,6 +170,16 @@ export function SettingsMiscSection({
             </label>
           </div>
         </div>
+
+        <div className="settings-card-divider" />
+
+        <SettingsCacheSubsection
+          cacheInfo={cacheInfo}
+          cacheLoading={cacheLoading}
+          cacheClearing={cacheClearing}
+          cacheStatus={cacheStatus}
+          onClearCache={onClearCache}
+        />
 
         <div className="settings-card-divider" />
 

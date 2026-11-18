@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppLocale, UserPreferences } from "../../types";
+import { AppLocale, CacheClearScope, LocalCacheInfo, UserPreferences } from "../../types";
 import type { AppUpdateState, UpdateCheckResult } from "../../hooks/useAppUpdater";
 import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
@@ -7,6 +7,7 @@ import { SettingsProfileSection, isBlurSliderDisabled } from "./SettingsProfileS
 import { SettingsRunesSection } from "./SettingsRunesSection";
 import { SettingsMiscSection } from "./SettingsMiscSection";
 import { PatchProtectionModal } from "./PatchProtectionModal";
+import { useLocalCache, type LocalCacheStatus } from "./useLocalCache";
 
 export { isBlurSliderDisabled };
 
@@ -27,6 +28,11 @@ interface SettingsTabProps {
   gpuRestartRequired?: boolean;
   onRestartApp?: () => void;
   isActive?: boolean;
+  cacheInfo?: LocalCacheInfo | null;
+  cacheLoading?: boolean;
+  cacheClearing?: boolean;
+  cacheStatus?: LocalCacheStatus;
+  onClearCache?: (scope: CacheClearScope) => void;
   updateState?: AppUpdateState;
   distributionInfo?: AppDistributionInfo | null;
   lastUpdateCheckResult?: UpdateCheckResult;
@@ -49,6 +55,11 @@ export function SettingsTab({
   gpuRestartRequired = false,
   onRestartApp,
   isActive = true,
+  cacheInfo: propCacheInfo,
+  cacheLoading: propCacheLoading,
+  cacheClearing: propCacheClearing,
+  cacheStatus: propCacheStatus,
+  onClearCache: propOnClearCache,
   updateState,
   distributionInfo,
   lastUpdateCheckResult,
@@ -58,6 +69,17 @@ export function SettingsTab({
 }: SettingsTabProps) {
   const { locale: contextLocale, setLocale } = useTranslation();
   const activeLocale = propLocale ?? preferences.language ?? contextLocale;
+
+  const localCache = useLocalCache(isActive && propCacheInfo === undefined);
+  const cacheInfo = propCacheInfo !== undefined ? propCacheInfo : localCache.cacheInfo;
+  const cacheLoading = propCacheLoading ?? localCache.loading;
+  const cacheClearing = propCacheClearing ?? localCache.clearing;
+  const cacheStatus = propCacheStatus ?? localCache.status;
+  const onClearCache =
+    propOnClearCache ??
+    ((scope: CacheClearScope) => {
+      void localCache.clearCache(scope);
+    });
 
   const [showDisablePatchProtectionModal, setShowDisablePatchProtectionModal] = useState(false);
   const patch48hProtection = preferences.patch48hProtection ?? true;
@@ -119,6 +141,11 @@ export function SettingsTab({
           onRestartApp={onRestartApp}
           autoMarkDailyMissionsRead={autoMarkDailyMissionsRead}
           onUpdatePreference={onUpdatePreference}
+          cacheInfo={cacheInfo}
+          cacheLoading={cacheLoading}
+          cacheClearing={cacheClearing}
+          cacheStatus={cacheStatus}
+          onClearCache={onClearCache}
           updateState={updateState}
           distributionInfo={distributionInfo}
           lastUpdateCheckResult={lastUpdateCheckResult}

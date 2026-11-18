@@ -66,6 +66,7 @@ describe("SettingsTab — Miscellaneous section", () => {
       "settings-subgroup-language",
       "settings-subgroup-graphics",
       "settings-subgroup-daily-missions",
+      "settings-subgroup-cache",
       "settings-subgroup-updates",
     ]);
 

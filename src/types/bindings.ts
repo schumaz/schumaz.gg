@@ -64,6 +64,10 @@ export const commands = {
 	completeLanguageOnboarding: (locale: AppLocale) => __TAURI_INVOKE<AppSettings_Serialize>("complete_language_onboarding", { locale }),
 	/**  Marks the first-run Flash key onboarding completed with `flash_key` (`D` | `F`) and persists to `UserSettings.ini`. */
 	completeFlashOnboarding: (flashKey: FlashKeyPreference) => __TAURI_INVOKE<AppSettings_Serialize>("complete_flash_onboarding", { flashKey }),
+	/**  Returns disk usage statistics for the local cache directory (`Cache/`). */
+	getLocalCacheInfo: () => __TAURI_INVOKE<LocalCacheInfo>("get_local_cache_info"),
+	/**  Deletes cached files under `Cache/` matching `scope` and returns refreshed usage statistics. */
+	clearLocalCache: (scope: CacheClearScope) => __TAURI_INVOKE<LocalCacheInfo>("clear_local_cache", { scope }),
 	/**  Restarts the Tauri application so updated WebView2 GPU flags take effect. */
 	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
@@ -178,6 +182,9 @@ export type BootstrapStatus = {
 };
 
 export type BuildInjected = InjectionReport;
+
+/**  Target subset when clearing local cache from Settings. */
+export type CacheClearScope = "builds" | "images" | "all";
 
 /**  Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR. */
 export type CachedProfileResult = CachedProfileResult_Serialize | CachedProfileResult_Deserialize;
@@ -390,6 +397,14 @@ export type LcuConnected_Deserialize = SummonerInfo_Deserialize;
 export type LcuConnected_Serialize = SummonerInfo_Serialize;
 
 export type LcuDisconnected = null;
+
+/**  Disk usage summary for `%LOCALAPPDATA%\schumazgg\Cache\`. */
+export type LocalCacheInfo = {
+	totalBytes: number,
+	assetsBytes: number,
+	dataBytes: number,
+	fileCount: number,
+};
 
 export type MatchEnded = null;
 

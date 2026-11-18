@@ -5,6 +5,17 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-18
+
+Asset singleflight request deduplication, disk cache quota enforcement, and Settings local cache controls.
+
+### Added
+- **Local Cache Settings Control**: Added a **Local Cache** subsection in Settings (*Miscellaneous*) displaying total disk usage and an images vs. builds/data breakdown, along with a **Clear cache** modal to selectively clear **builds & data** (recommended), **images** (not recommended), or **both** via `get_local_cache_info` and `clear_local_cache` IPC commands.
+
+### Performance
+- **Singleflight `schumaz-asset://` Deduplication**: Coalesced concurrent cold-cache requests for the same asset URL in `src-tauri/src/storage/assets.rs` so simultaneous `<img>` tags share a single HTTP download and atomic disk write.
+- **Asset Cache LRU Disk Quota (`1 GiB`)**: Added a `1 GiB` maximum disk quota for `Cache\assets\` in `src-tauri/src/storage/gc.rs`, evicting the least recently used files by `mtime` after the 7-day inactivity pass.
+
 ## [0.1.2] - 2026-11-18
 
 Stability, security, localization, and accessibility hardening release.

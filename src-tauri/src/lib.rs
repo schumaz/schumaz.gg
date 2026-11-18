@@ -44,6 +44,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::update_navigation_state,
             commands::complete_language_onboarding,
             commands::complete_flash_onboarding,
+            commands::get_local_cache_info,
+            commands::clear_local_cache,
             commands::restart_app
         ])
         .events(collect_events![

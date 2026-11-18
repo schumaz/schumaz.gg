@@ -161,6 +161,30 @@ export const ptTabs: TabTranslations = {
     missionsToggleTitle: "Marcar Missões e Objetivos como Lidos Automaticamente",
     missionsToggleDesc:
       "Marca automaticamente todas as missões e objetivos não lidos como vistos ao conectar e ao receber novas missões no cliente do LoL, zerando o contador de notificação.",
+    cacheTitle: "Cache Local",
+    cacheDesc:
+      "Espaço em disco ocupado por imagens, metadados de campeões e histórico de partidas.",
+    cacheSizeLabel: "Espaço ocupado: {size}",
+    cacheSizeLoading: "Calculando espaço ocupado...",
+    cacheBreakdown: "Imagens: {assets} · Builds e dados: {data}",
+    cacheEmptyDesc: "Nenhum arquivo armazenado no cache local.",
+    cacheStatusCleared: "Cache local limpo com sucesso.",
+    cacheStatusError: "Não foi possível consultar ou limpar o cache local.",
+    cacheClearBtn: "Limpar cache",
+    cacheClearingBtn: "Limpando...",
+    cacheModalTitle: "O que você deseja limpar?",
+    cacheModalDesc: "Escolha qual parte do cache local deseja remover do disco.",
+    cacheRecommendedBadge: "Recomendado",
+    cacheNotRecommendedBadge: "Não recomendado",
+    cacheOptionBuildsTitle: "Somente cache de builds e dados",
+    cacheOptionBuildsDesc:
+      "Remove builds, rankings, metadados e perfil salvos ({size}).",
+    cacheOptionImagesTitle: "Somente cache de imagens",
+    cacheOptionImagesDesc:
+      "As imagens não mudam; limpar fará o aplicativo baixá-las novamente ({size}).",
+    cacheOptionAllTitle: "Os dois (builds e imagens)",
+    cacheOptionAllDesc: "Remove todo o cache de dados e imagens do disco ({size}).",
+    cacheModalCancel: "Cancelar",
     updatesTitle: "Atualizações e Versão",
     updatesDesc:
       "Consulte a versão instalada, o modo de distribuição e verifique novas atualizações.",

@@ -178,6 +178,12 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     await settingsIpc.setHardwareAcceleration(false);
     expect(invoke).toHaveBeenCalledWith("set_hardware_acceleration", { enabled: false });
 
+    await settingsIpc.getLocalCacheInfo();
+    expect(invoke).toHaveBeenCalledWith("get_local_cache_info");
+
+    await settingsIpc.clearLocalCache("builds");
+    expect(invoke).toHaveBeenCalledWith("clear_local_cache", { scope: "builds" });
+
     await windowIpc.getBootstrapStatus();
     expect(invoke).toHaveBeenCalledWith("get_bootstrap_status");
 

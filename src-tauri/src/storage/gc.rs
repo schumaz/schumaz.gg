@@ -1,11 +1,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::{Deserialize, Serialize};
 
 use super::lz4_cache::{CACHE_SCHEMA_VERSION, read_lz4_envelope_header};
 use super::paths::AppPaths;
 
 pub const GC_MAX_INACTIVE_SECS: u64 = 7 * 24 * 3600;
+/// Maximum total disk footprint allowed for `Cache\assets\` (1 GiB).
+pub const ASSET_CACHE_MAX_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GcStats {
@@ -13,6 +17,32 @@ pub struct GcStats {
     pub removed_stale_patch_files: usize,
     pub removed_inactive_files: usize,
     pub removed_corrupt_files: usize,
+    pub removed_over_quota_files: usize,
+}
+
+/// Disk usage summary for `%LOCALAPPDATA%\schumazgg\Cache\`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalCacheInfo {
+    pub total_bytes: u64,
+    pub assets_bytes: u64,
+    pub data_bytes: u64,
+    pub file_count: u32,
+}
+
+/// Target subset when clearing local cache from Settings.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CacheClearScope {
+    Builds,
+    Images,
+    All,
+}
+
+struct SurvivingAsset {
+    path: PathBuf,
+    size: u64,
+    modified: SystemTime,
 }
 
 fn collect_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -34,13 +64,25 @@ fn collect_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
 /// - `.lz4` files under `Cache\opgg\` whose envelope `patch` is non-empty and not in `active_patches`
 /// - Corrupt or outdated-schema `.lz4` files
 /// - `.lz4` or cached asset files whose `mtime` has been inactive for > 7 days
+/// - Oldest `Cache\assets\` files (LRU by `mtime`) when total asset cache size exceeds `ASSET_CACHE_MAX_BYTES`
 pub fn run_garbage_collector(
     paths: &AppPaths,
     active_patches: &[String],
     now_unix: u64,
 ) -> GcStats {
+    run_garbage_collector_with_asset_quota(paths, active_patches, now_unix, ASSET_CACHE_MAX_BYTES)
+}
+
+/// Runs garbage collection using an explicit byte quota for `Cache\assets\`.
+pub fn run_garbage_collector_with_asset_quota(
+    paths: &AppPaths,
+    active_patches: &[String],
+    now_unix: u64,
+    max_asset_bytes: u64,
+) -> GcStats {
     let mut stats = GcStats::default();
     let mut all_files = Vec::new();
+    let mut surviving_assets = Vec::new();
     collect_files_recursive(&paths.config_dir, &mut all_files);
     collect_files_recursive(&paths.cache_dir, &mut all_files);
 
@@ -94,15 +136,42 @@ pub fn run_garbage_collector(
             }
         }
 
-        if let Ok(meta) = fs::metadata(&path)
-            && let Ok(modified) = meta.modified()
-            && let Ok(dur) = modified.duration_since(UNIX_EPOCH)
-        {
-            let mtime_unix = dur.as_secs();
-            if now_unix.saturating_sub(mtime_unix) > GC_MAX_INACTIVE_SECS
-                && fs::remove_file(&path).is_ok()
-            {
-                stats.removed_inactive_files += 1;
+        if let Ok(meta) = fs::metadata(&path) {
+            let modified = meta.modified().unwrap_or(UNIX_EPOCH);
+            if let Ok(dur) = modified.duration_since(UNIX_EPOCH) {
+                let mtime_unix = dur.as_secs();
+                if now_unix.saturating_sub(mtime_unix) > GC_MAX_INACTIVE_SECS {
+                    if fs::remove_file(&path).is_ok() {
+                        stats.removed_inactive_files += 1;
+                    }
+                    continue;
+                }
+            }
+
+            if path.starts_with(&paths.assets_dir) {
+                surviving_assets.push(SurvivingAsset {
+                    path,
+                    size: meta.len(),
+                    modified,
+                });
+            }
+        }
+    }
+
+    let mut total_asset_bytes: u64 = surviving_assets.iter().map(|entry| entry.size).sum();
+    if total_asset_bytes > max_asset_bytes {
+        surviving_assets.sort_by(|a, b| {
+            a.modified
+                .cmp(&b.modified)
+                .then_with(|| a.path.cmp(&b.path))
+        });
+        for entry in surviving_assets {
+            if total_asset_bytes <= max_asset_bytes {
+                break;
+            }
+            if fs::remove_file(&entry.path).is_ok() {
+                total_asset_bytes = total_asset_bytes.saturating_sub(entry.size);
+                stats.removed_over_quota_files += 1;
             }
         }
     }
@@ -110,85 +179,54 @@ pub fn run_garbage_collector(
     stats
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::storage::lz4_cache::write_lz4_envelope_at;
-    use crate::storage::paths::{atomic_write, next_test_seq, now_unix_secs, touch_mtime};
-    use std::time::SystemTime;
+/// Computes current disk space used by cached files under `Cache\`.
+pub fn inspect_local_cache(paths: &AppPaths) -> LocalCacheInfo {
+    let mut files = Vec::new();
+    collect_files_recursive(&paths.cache_dir, &mut files);
 
-    fn temp_test_paths(suffix: &str) -> AppPaths {
-        let dir = std::env::temp_dir().join(format!(
-            "schumazgg_gc_test_{}_{}_{}",
-            std::process::id(),
-            suffix,
-            next_test_seq()
-        ));
-        let _ = fs::remove_dir_all(&dir);
-        let paths = AppPaths::from_root(dir);
-        paths.ensure_dirs().unwrap();
-        paths
-    }
-
-    #[test]
-    fn test_garbage_collector_cleans_tmp_old_patches_corrupt_and_inactive_files() {
-        let paths = temp_test_paths("gc");
-        let now = now_unix_secs();
-
-        // 1. Orphan .tmp files
-        let tmp_cfg = paths.config_dir.join("UserSettings.ini.123.tmp");
-        let tmp_cache = paths.opgg_builds_dir.join("build.lz4.456.tmp");
-        atomic_write(&tmp_cfg, b"tmp").unwrap();
-        atomic_write(&tmp_cache, b"tmp").unwrap();
-
-        // 2. Old patch build file (patch 16.19 not in active ["16.22", "16.21"])
-        let old_patch_file = paths.opgg_builds_dir.join("old_patch.lz4");
-        write_lz4_envelope_at(&old_patch_file, "16.19", &vec![1, 2], now).unwrap();
-
-        // 3. Active patch build file (should stay)
-        let active_patch_file = paths.opgg_builds_dir.join("active_patch.lz4");
-        write_lz4_envelope_at(&active_patch_file, "16.22", &vec![3, 4], now).unwrap();
-
-        // 4. Corrupt .lz4
-        let corrupt_file = paths.profile_dir.join("corrupt.lz4");
-        atomic_write(&corrupt_file, b"broken").unwrap();
-
-        // 5. Inactive asset > 7 days (mtime backdated 8 days)
-        let old_asset = paths.assets_dir.join("old_splash.jpg");
-        atomic_write(&old_asset, b"jpegdata").unwrap();
-        {
-            let file = fs::OpenOptions::new().write(true).open(&old_asset).unwrap();
-            let eight_days_ago = SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 3600);
-            file.set_modified(eight_days_ago).unwrap();
+    let mut info = LocalCacheInfo::default();
+    for path in files {
+        let is_tmp = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("tmp"));
+        if is_tmp {
+            continue;
         }
 
-        // 6. Recently hit asset (touch_mtime keeps it alive)
-        let fresh_asset = paths.assets_dir.join("fresh_splash.jpg");
-        atomic_write(&fresh_asset, b"jpegdata").unwrap();
-        {
-            let file = fs::OpenOptions::new()
-                .write(true)
-                .open(&fresh_asset)
-                .unwrap();
-            let eight_days_ago = SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 3600);
-            file.set_modified(eight_days_ago).unwrap();
+        let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        info.total_bytes = info.total_bytes.saturating_add(size);
+        if path.starts_with(&paths.assets_dir) {
+            info.assets_bytes = info.assets_bytes.saturating_add(size);
+        } else {
+            info.data_bytes = info.data_bytes.saturating_add(size);
         }
-        touch_mtime(&fresh_asset);
-
-        let stats = run_garbage_collector(&paths, &["16.22".to_string(), "16.21".to_string()], now);
-
-        assert_eq!(stats.removed_tmp_files, 2);
-        assert_eq!(stats.removed_stale_patch_files, 1);
-        assert_eq!(stats.removed_corrupt_files, 1);
-        assert_eq!(stats.removed_inactive_files, 1);
-        assert!(!tmp_cfg.exists());
-        assert!(!tmp_cache.exists());
-        assert!(!old_patch_file.exists());
-        assert!(active_patch_file.exists());
-        assert!(!corrupt_file.exists());
-        assert!(!old_asset.exists());
-        assert!(fresh_asset.exists());
-
-        let _ = fs::remove_dir_all(&paths.root);
+        info.file_count = info.file_count.saturating_add(1);
     }
+    info
 }
+
+/// Removes cached files under `Cache\` matching `scope` while preserving the directory structure.
+pub fn clear_local_cache_at(
+    paths: &AppPaths,
+    scope: CacheClearScope,
+) -> Result<LocalCacheInfo, String> {
+    let mut files = Vec::new();
+    collect_files_recursive(&paths.cache_dir, &mut files);
+    for path in files {
+        let should_remove = match scope {
+            CacheClearScope::Builds => !path.starts_with(&paths.assets_dir),
+            CacheClearScope::Images => path.starts_with(&paths.assets_dir),
+            CacheClearScope::All => true,
+        };
+        if should_remove {
+            let _ = fs::remove_file(&path);
+        }
+    }
+    paths.ensure_dirs()?;
+    Ok(inspect_local_cache(paths))
+}
+
+#[cfg(test)]
+#[path = "gc/gc_tests.rs"]
+mod tests;
