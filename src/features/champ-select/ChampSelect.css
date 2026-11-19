@@ -602,11 +602,44 @@
   position: absolute;
   inset: -5px;
   border-radius: 22px;
-  border: 2px solid transparent;
-  border-top-color: var(--accent-primary-hover);
-  border-right-color: rgba(124, 58, 237, 0.5);
-  animation: spin 1.05s linear infinite;
   pointer-events: none;
+}
+
+.idle-icon-box.is-loading .idle-spinner-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.idle-icon-box.is-loading .idle-spinner-track {
+  stroke: var(--accent-border);
+  stroke-opacity: 0.32;
+  stroke-width: 1.5;
+}
+
+.idle-icon-box.is-loading .idle-spinner-trail,
+.idle-icon-box.is-loading .idle-spinner-beam {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.idle-icon-box.is-loading .idle-spinner-trail {
+  stroke: var(--accent-primary);
+  stroke-opacity: 0.55;
+  stroke-width: 2.5;
+  stroke-dasharray: 32 68;
+  stroke-dashoffset: 0;
+  animation: idleSpinnerTrailOrbit 1.35s linear infinite;
+}
+
+.idle-icon-box.is-loading .idle-spinner-beam {
+  stroke: var(--accent-primary-hover);
+  stroke-width: 2;
+  stroke-dasharray: 18 82;
+  stroke-dashoffset: -14;
+  filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.55));
+  animation: idleSpinnerBeamOrbit 1.35s linear infinite;
 }
 
 .idle-activity-row {
@@ -715,4 +748,3 @@
   color: var(--text-secondary);
   margin: 0;
 }
-

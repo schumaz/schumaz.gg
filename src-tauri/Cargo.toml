@@ -1,6 +1,6 @@
 [package]
 name = "schumazgg"
-version = "0.3.0"
+version = "0.3.1"
 description = "Automated League of Legends companion app for builds, runes, spells, item sets, and summoner stats."
 authors = ["schumaZ"]
 license = "GPL-3.0-only"
@@ -41,7 +41,7 @@ reqwest = { version = "0.13.5", features = ["json", "rustls"] }
 bytes = "1.12.1"
 http-body-util = "0.1.5"
 hyper-util = { version = "0.1.21", features = ["client-legacy"] }
-hyper-rustls = "0.27.10"
+hyper-rustls = { version = "0.27.10", features = ["ring"] }
 rustls = { version = "0.23.46", features = ["ring"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

@@ -40,6 +40,24 @@
   }
 }
 
+@keyframes idleSpinnerTrailOrbit {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes idleSpinnerBeamOrbit {
+  from {
+    stroke-dashoffset: -14;
+  }
+  to {
+    stroke-dashoffset: -114;
+  }
+}
+
 @keyframes loadingDotWave {
   0%, 70%, 100% {
     opacity: 0.26;

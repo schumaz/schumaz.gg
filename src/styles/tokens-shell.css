@@ -428,6 +428,8 @@ img {
   .dot-orange.dot-pulsing::after,
   .idle-radar-ring,
   .idle-spinner-ring,
+  .idle-spinner-trail,
+  .idle-spinner-beam,
   .spinner,
   .loading-dot,
   .loading-bar-fill,
@@ -448,6 +450,7 @@ img {
 
 .app-minimized .dot-orange.dot-pulsing::after,
 .app-minimized .idle-radar-ring,
+.app-minimized .idle-spinner-ring,
 .app-minimized .loading-bar-fill,
 .app-minimized .skeleton-block::after,
 .app-minimized .startup-icon-halo,
@@ -488,11 +491,18 @@ img {
 .gpu-effects-disabled .dot-orange.dot-pulsing,
 .gpu-effects-disabled .dot-orange.dot-pulsing::after,
 .gpu-effects-disabled .idle-radar-ring,
+.gpu-effects-disabled .idle-spinner-ring,
+.gpu-effects-disabled .idle-spinner-trail,
+.gpu-effects-disabled .idle-spinner-beam,
 .gpu-effects-disabled .loading-bar-fill,
 .gpu-effects-disabled .skeleton-block::after,
 .gpu-effects-disabled .startup-icon-halo,
 .gpu-effects-disabled .startup-progress-fill::after {
   animation: none !important;
+}
+
+.gpu-effects-disabled .idle-spinner-beam {
+  filter: none !important;
 }
 
 .gpu-effects-disabled .dot-orange.dot-pulsing::after,

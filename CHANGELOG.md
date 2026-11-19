@@ -5,6 +5,13 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-11-19
+
+Replaced the rotating square loading ring in `IdleIsland` with a concentric SVG rounded-perimeter light trail animation.
+
+### Fixed
+- **`IdleIsland` Loading Ring Animation (`IdleState.tsx`, `ChampSelect.css`, `loading-skeleton.css`, `tokens-shell.css`)**: Replaced the `animation: spin` rotated rounded-square border on `.idle-icon-box.is-loading .idle-spinner-ring` (seen in *Loading Profile* and *Loading Build*) with a concentric `<svg><rect pathLength="100" /></svg>` perimeter trail (`idleSpinnerTrailOrbit` / `idleSpinnerBeamOrbit`) aligned to the icon container's rounded geometry, eliminating protruding rotating corners while preserving automatic pausing in inactive tabs, minimized windows, GPU-effects-disabled mode, and `prefers-reduced-motion`.
+
 ## [0.3.0] - 2026-11-19
 
 Full end-to-end **Arena (`CHERRY` / `3x6`)** support: live Champion Select automation on the Runes tab, dedicated Arena tab between Ranked and ARAM, Map `30`-safe Arena build engine, and real-payload regression suite.

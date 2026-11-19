@@ -34,7 +34,46 @@ export function IdleIsland({
           aria-hidden="true"
         >
           {isWaiting && <span className="idle-radar-ring" />}
-          {isLoading && <span className="idle-spinner-ring" />}
+          {isLoading && (
+            <span className="idle-spinner-ring">
+              <svg
+                className="idle-spinner-svg"
+                viewBox="0 0 80 80"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect
+                  className="idle-spinner-track"
+                  x="2"
+                  y="2"
+                  width="76"
+                  height="76"
+                  rx="20"
+                  ry="20"
+                />
+                <rect
+                  className="idle-spinner-trail"
+                  x="2"
+                  y="2"
+                  width="76"
+                  height="76"
+                  rx="20"
+                  ry="20"
+                  pathLength={100}
+                />
+                <rect
+                  className="idle-spinner-beam"
+                  x="2"
+                  y="2"
+                  width="76"
+                  height="76"
+                  rx="20"
+                  ry="20"
+                  pathLength={100}
+                />
+              </svg>
+            </span>
+          )}
           <span className="idle-icon-inner">{icon}</span>
         </div>
         {badge && <span className="idle-brand-pill">{badge}</span>}
