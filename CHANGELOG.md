@@ -5,6 +5,17 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-11-19
+
+Dynamic mode-based summoner spell filtering for ARAM Mayhem and Classic ARAM.
+
+### Fixed
+- **Dynamic Summoner Spell Filtering by Queue Mode**: Persisted DataDragon `summoner.json` `modes` metadata in `SpellMetadata` and dynamically filtered spell combinations, `spell_choices`, fast REST spells, and enrichment fallbacks by active queue mode (`"KIWI"` for ARAM Mayhem `2400`, `"ARAM"` for Classic ARAM `450`, and `"CLASSIC"` for Summoner's Rift), preventing disabled spells such as **Exhaust** in ARAM Mayhem and **Teleport** in ARAM/ARAM Mayhem from being recommended or injected.
+- **ARAM/Mayhem Spell Fallbacks**: Replaced static `Exhaust` (`3`) and `Teleport` (`12`) fallbacks with mode-aware prioritization favoring **Mark / Snowball** (`32`), **Heal** (`7`), **Barrier** (`21`), **Ghost** (`6`), **Ignite** (`14`), and **Cleanse** (`1`).
+
+### Changed
+- **Binary Cache Schema (`CACHE_SCHEMA_VERSION = 2`)**: Incremented `CACHE_SCHEMA_VERSION` in `src-tauri/src/storage/lz4_cache.rs` to safely invalidate legacy `.lz4` caches missing spell `modes` metadata or containing disallowed ARAM Mayhem spells.
+
 ## [0.2.0] - 2026-11-18
 
 Asset singleflight request deduplication, disk cache quota enforcement, and Settings local cache controls.
