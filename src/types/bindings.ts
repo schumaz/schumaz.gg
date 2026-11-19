@@ -278,8 +278,8 @@ export type ChampionBuild_Deserialize = {
 	sub_style_name?: string,
 	sub_style_icon_url?: string,
 	perks?: RuneMetadata[],
-	spells?: SpellMetadata[],
-	spell_choices?: SpellMetadata[],
+	spells?: SpellMetadata_Deserialize[],
+	spell_choices?: SpellMetadata_Deserialize[],
 	active_position?: string,
 	active_tier?: string,
 	active_region?: string,
@@ -310,8 +310,8 @@ export type ChampionBuild_Serialize = {
 	sub_style_name: string,
 	sub_style_icon_url: string,
 	perks: RuneMetadata[],
-	spells: SpellMetadata[],
-	spell_choices: SpellMetadata[],
+	spells: SpellMetadata_Serialize[],
+	spell_choices: SpellMetadata_Serialize[],
 	active_position: string,
 	active_tier: string,
 	active_region: string,
@@ -656,10 +656,22 @@ export type RunePageOption_Serialize = {
 };
 
 /**  Metadata for a summoner spell. */
-export type SpellMetadata = {
+export type SpellMetadata = SpellMetadata_Serialize | SpellMetadata_Deserialize;
+
+/**  Metadata for a summoner spell. */
+export type SpellMetadata_Deserialize = {
 	id: number,
 	name: string,
 	icon_url: string,
+	modes?: string[],
+};
+
+/**  Metadata for a summoner spell. */
+export type SpellMetadata_Serialize = {
+	id: number,
+	name: string,
+	icon_url: string,
+	modes: string[],
 };
 
 /**  Basic summoner details parsed from `/lol-summoner/v1/current-summoner`. */

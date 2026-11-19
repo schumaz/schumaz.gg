@@ -39,6 +39,8 @@ pub struct SpellMetadata {
     pub id: i32,
     pub name: String,
     pub icon_url: String,
+    #[serde(default)]
+    pub modes: Vec<String>,
 }
 
 /// Metadata for a complete 9-perk rune page option (keystone, primary tree, secondary tree, stat mods).

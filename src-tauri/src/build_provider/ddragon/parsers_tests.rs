@@ -3,27 +3,34 @@ use crate::build_provider::items::TEST_CLASSIFICATION_MUTEX;
 use crate::build_provider::*;
 
 #[test]
-fn test_parse_ddragon_summoners_loads_pt_br_names_and_icons() {
+fn test_parse_ddragon_summoners_loads_pt_br_names_icons_and_modes() {
     let summoners_json = serde_json::json!({
         "type": "summoner",
         "version": "16.22.1",
         "data": {
-            "SummonerFlash": { "id": "SummonerFlash", "name": "Flash", "key": "4", "image": { "full": "SummonerFlash.png" } },
-            "SummonerHeal": { "id": "SummonerHeal", "name": "Curar", "key": "7", "image": { "full": "SummonerHeal.png" } },
-            "SummonerBarrier": { "id": "SummonerBarrier", "name": "Barreira", "key": "21", "image": { "full": "SummonerBarrier.png" } },
-            "SummonerTeleport": { "id": "SummonerTeleport", "name": "Teleporte", "key": "12", "image": { "full": "SummonerTeleport.png" } },
-            "SummonerMana": { "id": "SummonerMana", "name": "Clareza", "key": "13", "image": { "full": "SummonerMana.png" } },
-            "SummonerSnowball": { "id": "SummonerSnowball", "name": "Marca", "key": "32", "image": { "full": "SummonerSnowball.png" } }
+            "SummonerFlash": { "id": "SummonerFlash", "name": "Flash", "key": "4", "modes": ["CLASSIC", "ARAM", "KIWI"], "image": { "full": "SummonerFlash.png" } },
+            "SummonerExhaust": { "id": "SummonerExhaust", "name": "Exaustão", "key": "3", "modes": ["CLASSIC", "ARAM"], "image": { "full": "SummonerExhaust.png" } },
+            "SummonerHeal": { "id": "SummonerHeal", "name": "Curar", "key": "7", "modes": ["CLASSIC", "ARAM", "KIWI"], "image": { "full": "SummonerHeal.png" } },
+            "SummonerBarrier": { "id": "SummonerBarrier", "name": "Barreira", "key": "21", "modes": ["CLASSIC", "ARAM", "KIWI"], "image": { "full": "SummonerBarrier.png" } },
+            "SummonerTeleport": { "id": "SummonerTeleport", "name": "Teleporte", "key": "12", "modes": ["CLASSIC"], "image": { "full": "SummonerTeleport.png" } },
+            "SummonerMana": { "id": "SummonerMana", "name": "Clareza", "key": "13", "modes": ["ARAM", "KIWI"], "image": { "full": "SummonerMana.png" } },
+            "SummonerSnowball": { "id": "SummonerSnowball", "name": "Marca", "key": "32", "modes": ["ARAM", "KIWI"], "image": { "full": "SummonerSnowball.png" } }
         }
     });
 
     let map = parse_ddragon_summoners(&summoners_json, "16.22.1").unwrap();
     assert_eq!(map.get(&4).unwrap().name, "Flash");
+    assert_eq!(map.get(&3).unwrap().name, "Exaustão");
     assert_eq!(map.get(&7).unwrap().name, "Curar");
     assert_eq!(map.get(&21).unwrap().name, "Barreira");
     assert_eq!(map.get(&12).unwrap().name, "Teleporte");
     assert_eq!(map.get(&13).unwrap().name, "Clareza");
     assert_eq!(map.get(&32).unwrap().name, "Marca");
+
+    assert_eq!(map.get(&3).unwrap().modes, vec!["CLASSIC", "ARAM"]);
+    assert!(!map.get(&3).unwrap().modes.iter().any(|m| m == "KIWI"));
+    assert_eq!(map.get(&12).unwrap().modes, vec!["CLASSIC"]);
+    assert_eq!(map.get(&32).unwrap().modes, vec!["ARAM", "KIWI"]);
 }
 
 #[test]

@@ -28,6 +28,17 @@ pub fn parse_ddragon_summoners(
                 .filter(|s| !s.is_empty())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| format!("{}.png", fallback_id));
+            let modes = spell_data
+                .get("modes")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m.as_str().map(str::trim))
+                        .filter(|m| !m.is_empty())
+                        .map(|m| m.to_ascii_uppercase())
+                        .collect::<Vec<String>>()
+                })
+                .unwrap_or_default();
 
             map.insert(
                 spell_id,
@@ -38,6 +49,7 @@ pub fn parse_ddragon_summoners(
                         "https://ddragon.leagueoflegends.com/cdn/{}/img/spell/{}",
                         version, image_full
                     ),
+                    modes,
                 },
             );
         }

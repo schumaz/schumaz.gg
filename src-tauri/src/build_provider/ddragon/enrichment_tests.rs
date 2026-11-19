@@ -1,7 +1,7 @@
 use super::*;
 use crate::build_provider::*;
 use crate::lcu_injector::FlashKeyPreference;
-use crate::models::AppLocale;
+use crate::models::{AppLocale, QUEUE_ARAM, QUEUE_ARAM_MAYHEM};
 use std::collections::HashMap;
 
 #[test]
@@ -91,21 +91,19 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
     let mut tristana_aram = ChampionBuild {
         champion_id: 18,
         champion_name: "Tristana".to_string(),
-        spell1_id: 7, // numerically ordered by OP.GG or reversed
+        spell1_id: 7,
         spell2_id: 4,
         spell_choices: vec![
             SpellMetadata {
                 id: 7,
-                name: String::new(),
-                icon_url: String::new(),
+                ..Default::default()
             },
             SpellMetadata {
                 id: 21,
-                name: String::new(),
-                icon_url: String::new(),
+                ..Default::default()
             },
         ],
-        active_position: String::new(), // ARAM has empty position
+        active_position: String::new(),
         ..Default::default()
     };
 
@@ -138,7 +136,7 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
     assert_eq!(ahri_aram.spells[0].name, "Flash");
     assert_eq!(ahri_aram.spells[1].name, "Marca");
 
-    // 3. ARAM Mayhem with numerically ordered [1, 4] (Purificar + Flash) and [3, 4] (Exaustão + Flash)
+    // 3. ARAM Mayhem with numerically ordered [1, 4] (Purificar + Flash)
     let mut cleanse_mayhem = ChampionBuild {
         champion_id: 222,
         champion_name: "Jinx".to_string(),
@@ -153,6 +151,7 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
     assert_eq!(cleanse_mayhem.spell2_id, 1);
     assert_eq!(cleanse_mayhem.spells[0].name, "Flash");
     assert_eq!(cleanse_mayhem.spells[1].name, "Purificar");
+    assert_eq!(cleanse_mayhem.spell_choices[1].id, 32);
 
     // 4. Summoner's Rift non-jungle ("mid") also respects FlashKeyPreference
     let mut mid_sr = ChampionBuild {
@@ -168,6 +167,103 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
     assert_eq!(mid_sr.spell2_id, 4);
     assert_eq!(mid_sr.spells[0].name, "Teleporte");
     assert_eq!(mid_sr.spells[1].name, "Flash");
+}
+
+#[test]
+fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() {
+    let cache = DataDragonCache {
+        version: "16.22.1".to_string(),
+        champions: HashMap::new(),
+        runes: HashMap::new(),
+        spells: HashMap::new(),
+    };
+
+    // Stale/legacy ARAM Mayhem build with Flash + Exhaust and [Exhaust, Heal] choices
+    let mut lulu_mayhem = ChampionBuild {
+        champion_id: 117,
+        champion_name: "Lulu".to_string(),
+        spell1_id: 4,
+        spell2_id: 3,
+        spell_choices: vec![
+            SpellMetadata {
+                id: 3,
+                ..Default::default()
+            },
+            SpellMetadata {
+                id: 7,
+                ..Default::default()
+            },
+        ],
+        supports_runes: false,
+        ..Default::default()
+    };
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
+        &mut lulu_mayhem,
+        &cache,
+        FlashKeyPreference::F,
+        AppLocale::PtBr,
+        Some(QUEUE_ARAM_MAYHEM),
+    );
+    assert_eq!(lulu_mayhem.spell1_id, 7);
+    assert_eq!(lulu_mayhem.spell2_id, 4);
+    assert_eq!(
+        lulu_mayhem
+            .spell_choices
+            .iter()
+            .map(|s| s.id)
+            .collect::<Vec<_>>(),
+        vec![7, 32]
+    );
+
+    // Classic ARAM (450) with Ignite (14) and empty choices must fall back to Mark (32), never Teleport (12)
+    let mut ignite_aram = ChampionBuild {
+        champion_id: 103,
+        champion_name: "Ahri".to_string(),
+        spell1_id: 4,
+        spell2_id: 14,
+        supports_runes: true,
+        ..Default::default()
+    };
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
+        &mut ignite_aram,
+        &cache,
+        FlashKeyPreference::D,
+        AppLocale::PtBr,
+        Some(QUEUE_ARAM),
+    );
+    assert_eq!(
+        ignite_aram
+            .spell_choices
+            .iter()
+            .map(|s| s.id)
+            .collect::<Vec<_>>(),
+        vec![14, 32]
+    );
+
+    // Barrier (21) with empty choices in ARAM Mayhem must fall back to Mark (32), never Exhaust (3)
+    let mut barrier_mayhem = ChampionBuild {
+        champion_id: 18,
+        champion_name: "Tristana".to_string(),
+        spell1_id: 4,
+        spell2_id: 21,
+        supports_runes: false,
+        ..Default::default()
+    };
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
+        &mut barrier_mayhem,
+        &cache,
+        FlashKeyPreference::D,
+        AppLocale::PtBr,
+        Some(QUEUE_ARAM_MAYHEM),
+    );
+    assert_eq!(
+        barrier_mayhem
+            .spell_choices
+            .iter()
+            .map(|s| s.id)
+            .collect::<Vec<_>>(),
+        vec![21, 32]
+    );
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use super::super::models::{DataDragonCache, RuneMetadata, SpellMetadata};
+use super::super::spells::default_spell_modes;
 use crate::models::AppLocale;
 use std::collections::HashMap;
 use std::path::Path;
@@ -182,10 +183,14 @@ pub fn get_spell_metadata_for_locale(
             version, icon_name
         )
     };
+    let modes = default_spell_modes(spell_id)
+        .map(|list| list.iter().map(|m| (*m).to_string()).collect())
+        .unwrap_or_default();
     SpellMetadata {
         id: spell_id,
         name: name.to_string(),
         icon_url,
+        modes,
     }
 }
 

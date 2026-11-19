@@ -1,11 +1,12 @@
 use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
-use super::super::spells::extract_summoner_spell_choices;
+use super::super::spells::extract_summoner_spell_choices_for_mode;
 use super::mcp_extractors::parse_json_item_entries;
-use super::mcp_parser::parse_opgg_mcp_text_with_options;
+use super::mcp_parser::parse_opgg_mcp_text_for_mode;
 use super::rest_extractors::{
     extract_rest_runes_and_pages, extract_rest_win_and_pick_rates, infer_rest_damage_type,
 };
+use std::collections::HashMap;
 
 pub fn parse_opgg_analysis_payload(
     opgg_json: &serde_json::Value,
@@ -21,6 +22,26 @@ pub fn parse_opgg_analysis_payload_with_options(
     champion_name: &str,
     supports_runes: bool,
 ) -> Result<ChampionBuild, String> {
+    parse_opgg_analysis_payload_for_mode(
+        opgg_json,
+        champion_id,
+        champion_name,
+        supports_runes,
+        None,
+        None,
+    )
+}
+
+/// Parses an OP.GG REST or wrapped MCP payload into a `ChampionBuild`, filtering summoner spells
+/// against DataDragon's `modes` for `spell_mode` when provided.
+pub fn parse_opgg_analysis_payload_for_mode(
+    opgg_json: &serde_json::Value,
+    champion_id: i32,
+    champion_name: &str,
+    supports_runes: bool,
+    spell_mode: Option<&str>,
+    spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
+) -> Result<ChampionBuild, String> {
     let json_supports_runes = opgg_json
         .get("supports_runes")
         .and_then(|v| v.as_bool())
@@ -31,11 +52,13 @@ pub fn parse_opgg_analysis_payload_with_options(
         .pointer("/result/content/0/text")
         .and_then(|v| v.as_str())
     {
-        return parse_opgg_mcp_text_with_options(
+        return parse_opgg_mcp_text_for_mode(
             text,
             champion_id,
             champion_name,
             supports_runes && json_supports_runes,
+            spell_mode,
+            spells_catalog,
         );
     }
 
@@ -63,9 +86,9 @@ pub fn parse_opgg_analysis_payload_with_options(
         .unwrap_or("");
     let is_jungle = position.eq_ignore_ascii_case("jungle");
 
-    // Extract summoner spells: selects the most played combination and top 2 choices for secondary spell slot
+    // Extract summoner spells filtered by active mode and DataDragon spell catalog
     let ((spell1_id, spell2_id), spell_choice_ids) =
-        extract_summoner_spell_choices(analysis, is_jungle);
+        extract_summoner_spell_choices_for_mode(analysis, is_jungle, spell_mode, spells_catalog);
 
     // Extract item entries from JSON
     let starter_val = analysis
@@ -207,8 +230,7 @@ pub fn parse_opgg_analysis_payload_with_options(
         .into_iter()
         .map(|id| SpellMetadata {
             id,
-            name: String::new(),
-            icon_url: String::new(),
+            ..Default::default()
         })
         .collect();
 

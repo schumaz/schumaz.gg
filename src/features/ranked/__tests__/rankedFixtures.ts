@@ -126,10 +126,12 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
   rune_pages: [],
   build_options: [],
   spells: [
-    { id: 4, name: "Flash", icon_url: "flash.png" },
-    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
+    { id: 4, name: "Flash", icon_url: "flash.png", modes: ["CLASSIC", "ARAM", "KIWI"] },
+    { id: 14, name: "Incendiar", icon_url: "ignite.png", modes: ["CLASSIC", "ARAM", "KIWI"] },
   ],
-  spell_choices: [{ id: 14, name: "Incendiar", icon_url: "ignite.png" }],
+  spell_choices: [
+    { id: 14, name: "Incendiar", icon_url: "ignite.png", modes: ["CLASSIC", "ARAM", "KIWI"] },
+  ],
   item_blocks: [
     { kind: "starter", title: "Itens Iniciais", item_ids: [1056, 2003], item_icon_urls: ["1056.png", "2003.png"] },
   ],

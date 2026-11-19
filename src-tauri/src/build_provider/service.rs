@@ -1,12 +1,12 @@
 use super::analytics::{
     fetch_opgg_mcp_depth_items, fetch_opgg_versions_from_base,
-    parse_opgg_analysis_payload_with_options, resolve_champion_most_played_lane,
+    parse_opgg_analysis_payload_for_mode, resolve_champion_most_played_lane,
 };
 use super::cache::{
     load_disk_build_envelope, make_build_cache_key, store_disk_build, store_ram_cached_build,
     try_get_fresh_disk_build, try_get_ram_cached_build,
 };
-use super::ddragon::enrich_build_with_ddragon;
+use super::ddragon::enrich_build_with_ddragon_for_queue;
 use super::fallback::champion_default_lane;
 use super::models::{ChampionBuild, DataDragonCache};
 pub use super::service_helpers::FastSpellRecommendation;
@@ -15,6 +15,7 @@ use super::service_helpers::{
     fetch_rest_with_patch_protection, merge_mcp_depth_into_json, resolve_build_fallback,
     send_build_fast_spells,
 };
+use super::spells::ddragon_mode_for_queue;
 use std::path::Path;
 
 #[cfg(test)]
@@ -44,6 +45,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     let is_aram = queue_id == crate::ws_listener::QUEUE_ARAM
         || queue_id == crate::ws_listener::QUEUE_ARAM_MAYHEM;
     let mode = if is_aram { "aram" } else { "ranked" };
+    let spell_mode = ddragon_mode_for_queue(queue_id);
     let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
     let target_region = region.unwrap_or("global");
     let target_tier = tier.unwrap_or("emerald_plus");
@@ -71,6 +73,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
 
     if let Some(build) = try_get_ram_cached_build(
         &build_cache_key,
+        queue_id,
         ddragon_cache,
         prefs.flash_key,
         active_locale,
@@ -94,6 +97,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     if let Some(ref env) = disk_env
         && let Some(build) = try_get_fresh_disk_build(
             env,
+            queue_id,
             target_region,
             manual_patch_trimmed,
             ddragon_cache,
@@ -178,7 +182,8 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     let patch_protection_remaining_hours = fetch_outcome.patch_protection_remaining_hours;
 
     if let Ok(ref json_res) = fetch_outcome.result
-        && let Some(fast) = extract_fast_spells_from_rest(json_res, champion_id, is_jungle)
+        && let Some(fast) =
+            extract_fast_spells_from_rest(json_res, champion_id, is_jungle, queue_id, ddragon_cache)
         && let Some(tx) = fast_spells_tx.take()
     {
         let _ = tx.send(fast);
@@ -189,11 +194,13 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     let parsed_build = match fetch_outcome.result {
         Ok(mut json_res) => {
             merge_mcp_depth_into_json(&mut json_res, target_position.as_ref(), mcp_depth_opt);
-            parse_opgg_analysis_payload_with_options(
+            parse_opgg_analysis_payload_for_mode(
                 &json_res,
                 champion_id,
                 champ_name,
                 supports_runes,
+                Some(spell_mode),
+                Some(&ddragon_cache.spells),
             )
             .ok()
         }
@@ -231,7 +238,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     build.patch_protection_remaining_hours = patch_protection_remaining_hours;
     build.supports_runes = supports_runes;
 
-    enrich_build_with_ddragon(&mut build, ddragon_cache);
+    enrich_build_with_ddragon_for_queue(&mut build, ddragon_cache, queue_id);
     if let Some(tx) = fast_spells_tx.take() {
         let _ = tx.send(FastSpellRecommendation {
             champion_id,
@@ -267,3 +274,7 @@ mod tests;
 #[cfg(test)]
 #[path = "service_patch_tests.rs"]
 mod patch_tests;
+
+#[cfg(test)]
+#[path = "service_spells_tests.rs"]
+mod spells_tests;

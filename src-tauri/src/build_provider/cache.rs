@@ -1,4 +1,4 @@
-use super::ddragon::enrich_build_with_ddragon_with_flash_key_and_locale;
+use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_locale;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::peek_latest_cached_opgg_version;
 use crate::models::{AppLocale, FlashKeyPreference};
@@ -74,6 +74,7 @@ pub(crate) fn make_build_cache_key(
 
 pub(crate) fn try_get_ram_cached_build(
     cache_key: &str,
+    queue_id: i32,
     ddragon_cache: &DataDragonCache,
     flash_key: FlashKeyPreference,
     locale: AppLocale,
@@ -84,11 +85,12 @@ pub(crate) fn try_get_ram_cached_build(
         return None;
     }
     let mut build = cached.clone();
-    enrich_build_with_ddragon_with_flash_key_and_locale(
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
         &mut build,
         ddragon_cache,
         flash_key,
         locale,
+        Some(queue_id),
     );
     Some(build)
 }
@@ -123,6 +125,7 @@ pub(crate) fn load_disk_build_envelope(
 
 pub(crate) fn try_get_fresh_disk_build(
     env: &crate::storage::CacheEnvelope<ChampionBuild>,
+    queue_id: i32,
     target_region: &str,
     manual_patch: &str,
     ddragon_cache: &DataDragonCache,
@@ -150,11 +153,12 @@ pub(crate) fn try_get_fresh_disk_build(
     }
 
     let mut build = env.payload.clone();
-    enrich_build_with_ddragon_with_flash_key_and_locale(
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
         &mut build,
         ddragon_cache,
         flash_key,
         locale,
+        Some(queue_id),
     );
     Some(build)
 }

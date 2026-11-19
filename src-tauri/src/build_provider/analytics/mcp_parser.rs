@@ -1,11 +1,12 @@
 ﻿use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
 use super::super::runes::extract_all_mcp_runes;
-use super::super::spells::extract_summoner_spell_choices;
+use super::super::spells::extract_summoner_spell_choices_for_mode;
 use super::mcp_extractors::{extract_all_core_items_from_text, extract_mcp_grouped_item_lists};
 use super::mcp_stats::{
     extract_mcp_summoner_spell_entries, is_known_summoner_spell_id, parse_mcp_average_stats,
 };
+use std::collections::HashMap;
 
 /// Parses OP.GG MCP text output into a ChampionBuild (requiring valid runes).
 pub fn parse_opgg_mcp_text(
@@ -22,6 +23,18 @@ pub fn parse_opgg_mcp_text_with_options(
     champion_id: i32,
     champion_name: &str,
     supports_runes: bool,
+) -> Result<ChampionBuild, String> {
+    parse_opgg_mcp_text_for_mode(text, champion_id, champion_name, supports_runes, None, None)
+}
+
+/// Parses OP.GG MCP text output into a ChampionBuild with optional mode-based spell filtering.
+pub fn parse_opgg_mcp_text_for_mode(
+    text: &str,
+    champion_id: i32,
+    champion_name: &str,
+    supports_runes: bool,
+    spell_mode: Option<&str>,
+    spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
 ) -> Result<ChampionBuild, String> {
     // 1. Extract win_rate and pick_rate: AverageStats(...)
     let (win_rate, pick_rate) = parse_mcp_average_stats(text);
@@ -56,10 +69,14 @@ pub fn parse_opgg_mcp_text_with_options(
     };
     let is_jungle = position.eq_ignore_ascii_case("jungle");
 
-    // 4. Extract summoner spells via shared extract_summoner_spell_choices
+    // 4. Extract summoner spells via shared extract_summoner_spell_choices_for_mode
     let spells_json = extract_mcp_summoner_spell_entries(text, &all_entries);
-    let ((spell1_id, spell2_id), spell_choice_ids) =
-        extract_summoner_spell_choices(&spells_json, is_jungle);
+    let ((spell1_id, spell2_id), spell_choice_ids) = extract_summoner_spell_choices_for_mode(
+        &spells_json,
+        is_jungle,
+        spell_mode,
+        spells_catalog,
+    );
 
     // Filter out spell arrays from items entries
     let item_candidate_entries: Vec<ItemStatEntry> = all_entries
@@ -208,8 +225,7 @@ pub fn parse_opgg_mcp_text_with_options(
         .into_iter()
         .map(|id| SpellMetadata {
             id,
-            name: String::new(),
-            icon_url: String::new(),
+            ..Default::default()
         })
         .collect();
 

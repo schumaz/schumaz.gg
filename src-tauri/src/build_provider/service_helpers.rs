@@ -1,10 +1,10 @@
 use super::analytics::{
     fetch_opgg_rest_champion_analysis_from_base, get_recommended_build_with_endpoint,
 };
-use super::ddragon::enrich_build_with_ddragon_with_flash_key_and_locale;
+use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_locale;
 use super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::patch::resolve_effective_patch;
-use super::spells::extract_summoner_spell_choices;
+use super::spells::{ddragon_mode_for_queue, extract_summoner_spell_choices_for_mode};
 use crate::models::{AppLocale, FlashKeyPreference};
 use std::time::Duration;
 
@@ -34,6 +34,8 @@ pub(super) fn extract_fast_spells_from_rest(
     json_res: &serde_json::Value,
     champion_id: i32,
     is_jungle: bool,
+    queue_id: i32,
+    ddragon_cache: &DataDragonCache,
 ) -> Option<FastSpellRecommendation> {
     let analysis = json_res
         .get("data")
@@ -46,7 +48,13 @@ pub(super) fn extract_fast_spells_from_rest(
     if !has_spells {
         return None;
     }
-    let ((s1, s2), _) = extract_summoner_spell_choices(analysis, is_jungle);
+    let mode = ddragon_mode_for_queue(queue_id);
+    let ((s1, s2), _) = extract_summoner_spell_choices_for_mode(
+        analysis,
+        is_jungle,
+        Some(mode),
+        Some(&ddragon_cache.spells),
+    );
     if s1 > 0 && s2 > 0 && s1 != s2 {
         Some(FastSpellRecommendation {
             champion_id,
@@ -219,11 +227,12 @@ pub(super) async fn resolve_build_fallback(
 ) -> FallbackBuild {
     if let Some(env) = disk_env {
         let mut stale = env.payload;
-        enrich_build_with_ddragon_with_flash_key_and_locale(
+        enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
             &mut stale,
             ddragon_cache,
             flash_key,
             active_locale,
+            Some(queue_id),
         );
         send_build_fast_spells(fast_spells_tx, champion_id, &stale);
         return FallbackBuild::Stale(stale);

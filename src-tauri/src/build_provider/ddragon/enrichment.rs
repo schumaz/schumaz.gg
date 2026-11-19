@@ -1,7 +1,27 @@
 use super::super::models::{ChampionBuild, DataDragonCache, ItemBlockKind};
+use super::super::spells::{
+    SPELL_CLARITY_ID, SPELL_MARK_ID, ddragon_mode_for_queue, sanitize_spell_choices_for_mode,
+    sanitize_spell_pair_for_mode,
+};
 use super::metadata::{resolve_rune_metadata_for_locale, resolve_spell_metadata_for_locale};
 use crate::lcu_injector::FlashKeyPreference;
 use crate::models::AppLocale;
+
+fn infer_mode_from_build(build: &ChampionBuild) -> Option<&'static str> {
+    if !build.active_position.trim().is_empty() {
+        Some("CLASSIC")
+    } else if !build.supports_runes {
+        Some("KIWI")
+    } else if build.spell1_id == SPELL_MARK_ID
+        || build.spell2_id == SPELL_MARK_ID
+        || build.spell1_id == SPELL_CLARITY_ID
+        || build.spell2_id == SPELL_CLARITY_ID
+    {
+        Some("ARAM")
+    } else {
+        None
+    }
+}
 
 /// Translates item block titles and build option labels according to `locale`.
 pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
@@ -36,20 +56,31 @@ pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
     }
 }
 
-/// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots
-/// and enriches `spells` and `spell_choices` using DataDragon cache and `locale`.
-pub fn apply_build_spells_with_preference_and_locale(
+/// Sanitizes spells for the active queue mode, applies Flash key preference (D vs F) and Jungle
+/// Smite rule, and enriches `spells` and `spell_choices` using DataDragon cache and `locale`.
+pub fn apply_build_spells_for_queue_with_preference_and_locale(
     build: &mut ChampionBuild,
     cache: &DataDragonCache,
     flash_key: FlashKeyPreference,
     locale: AppLocale,
+    queue_id: Option<i32>,
 ) {
     let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
-    let (s1, s2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
+    let mode = queue_id
+        .map(ddragon_mode_for_queue)
+        .or_else(|| infer_mode_from_build(build));
+    let existing_choice_ids: Vec<i32> = build.spell_choices.iter().map(|s| s.id).collect();
+
+    let (clean_s1, clean_s2) = sanitize_spell_pair_for_mode(
         build.spell1_id,
         build.spell2_id,
-        flash_key,
+        &existing_choice_ids,
         is_jungle,
+        mode,
+        Some(&cache.spells),
+    );
+    let (s1, s2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
+        clean_s1, clean_s2, flash_key, is_jungle,
     );
     build.spell1_id = s1;
     build.spell2_id = s2;
@@ -59,42 +90,29 @@ pub fn apply_build_spells_with_preference_and_locale(
         resolve_spell_metadata_for_locale(cache, build.spell2_id, locale),
     ];
 
-    if build.spell_choices.is_empty() {
-        let non_primary = if is_jungle {
-            if build.spell1_id == 11 {
-                build.spell2_id
-            } else {
-                build.spell1_id
-            }
-        } else if build.spell1_id == 4 {
-            build.spell2_id
-        } else {
-            build.spell1_id
-        };
-        let second_alt = if is_jungle {
-            if non_primary == 4 { 6 } else { 4 }
-        } else if non_primary == 21 {
-            3
-        } else if non_primary == 7 {
-            21
-        } else if non_primary == 32 {
-            7
-        } else if non_primary == 14 {
-            12
-        } else {
-            14
-        };
-        build.spell_choices = vec![
-            resolve_spell_metadata_for_locale(cache, non_primary, locale),
-            resolve_spell_metadata_for_locale(cache, second_alt, locale),
-        ];
-    } else {
-        build.spell_choices = build
-            .spell_choices
-            .iter()
-            .map(|s| resolve_spell_metadata_for_locale(cache, s.id, locale))
-            .collect();
-    }
+    let sanitized_choices = sanitize_spell_choices_for_mode(
+        build.spell1_id,
+        build.spell2_id,
+        &existing_choice_ids,
+        is_jungle,
+        mode,
+        Some(&cache.spells),
+    );
+    build.spell_choices = sanitized_choices
+        .into_iter()
+        .map(|id| resolve_spell_metadata_for_locale(cache, id, locale))
+        .collect();
+}
+
+/// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots
+/// and enriches `spells` and `spell_choices` using DataDragon cache and `locale`.
+pub fn apply_build_spells_with_preference_and_locale(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    flash_key: FlashKeyPreference,
+    locale: AppLocale,
+) {
+    apply_build_spells_for_queue_with_preference_and_locale(build, cache, flash_key, locale, None);
 }
 
 /// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots.
@@ -118,12 +136,14 @@ fn item_icon_urls(version: &str, item_ids: &[i32]) -> Vec<String> {
         .collect()
 }
 
-/// Enriches a ChampionBuild with visual assets from DataDragon using explicit `FlashKeyPreference` and `AppLocale`.
-pub fn enrich_build_with_ddragon_with_flash_key_and_locale(
+/// Enriches a ChampionBuild with visual assets from DataDragon using explicit queue mode,
+/// `FlashKeyPreference`, and `AppLocale`.
+pub fn enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
     build: &mut ChampionBuild,
     cache: &DataDragonCache,
     flash_key: FlashKeyPreference,
     locale: AppLocale,
+    queue_id: Option<i32>,
 ) {
     if let Some(champ) = cache.champions.get(&build.champion_id) {
         build.champion_icon_url = champ.icon_url.clone();
@@ -168,7 +188,9 @@ pub fn enrich_build_with_ddragon_with_flash_key_and_locale(
             .collect();
     }
 
-    apply_build_spells_with_preference_and_locale(build, cache, flash_key, locale);
+    apply_build_spells_for_queue_with_preference_and_locale(
+        build, cache, flash_key, locale, queue_id,
+    );
 
     for block in &mut build.item_blocks {
         block.item_icon_urls = item_icon_urls(&cache.version, &block.item_ids);
@@ -183,6 +205,18 @@ pub fn enrich_build_with_ddragon_with_flash_key_and_locale(
     localize_build_labels(build, locale);
 }
 
+/// Enriches a ChampionBuild with visual assets from DataDragon using explicit `FlashKeyPreference` and `AppLocale`.
+pub fn enrich_build_with_ddragon_with_flash_key_and_locale(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    flash_key: FlashKeyPreference,
+    locale: AppLocale,
+) {
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
+        build, cache, flash_key, locale, None,
+    );
+}
+
 /// Enriches a ChampionBuild with visual assets from DataDragon (avatars, icons, spells, items)
 /// using an explicit `FlashKeyPreference` (PT-BR default for backwards compatibility in tests).
 pub fn enrich_build_with_ddragon_with_flash_key(
@@ -191,6 +225,23 @@ pub fn enrich_build_with_ddragon_with_flash_key(
     flash_key: FlashKeyPreference,
 ) {
     enrich_build_with_ddragon_with_flash_key_and_locale(build, cache, flash_key, AppLocale::PtBr);
+}
+
+/// Enriches a ChampionBuild with visual assets from DataDragon using the active user preferences,
+/// locale, and queue-specific spell filtering.
+pub fn enrich_build_with_ddragon_for_queue(
+    build: &mut ChampionBuild,
+    cache: &DataDragonCache,
+    queue_id: i32,
+) {
+    let prefs = crate::lcu_injector::get_user_preferences();
+    enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
+        build,
+        cache,
+        prefs.flash_key,
+        prefs.language,
+        Some(queue_id),
+    );
 }
 
 /// Enriches a ChampionBuild with visual assets from DataDragon using the active user preferences & locale.

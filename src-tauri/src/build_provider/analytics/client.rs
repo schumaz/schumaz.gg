@@ -1,10 +1,11 @@
-use super::super::ddragon::enrich_build_with_ddragon;
+use super::super::ddragon::enrich_build_with_ddragon_for_queue;
 use super::super::fallback::{
     build_fallback_champion_build, champion_key_to_opgg_name, opgg_queue_param_from_id,
 };
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
+use super::super::spells::ddragon_mode_for_queue;
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
-use super::rest_parser::parse_opgg_analysis_payload_with_options;
+use super::rest_parser::parse_opgg_analysis_payload_for_mode;
 pub use super::versions::{
     fetch_opgg_versions, fetch_opgg_versions_from_base, fetch_opgg_versions_with_cache_dir,
     opgg_versions_file_path, peek_latest_cached_opgg_version,
@@ -112,15 +113,18 @@ pub async fn get_recommended_build_with_endpoint(
         .unwrap_or("Unknown");
 
     let queue_param = opgg_queue_param_from_id(queue_id);
+    let spell_mode = ddragon_mode_for_queue(queue_id);
     let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-            Ok(json_res) => match parse_opgg_analysis_payload_with_options(
+            Ok(json_res) => match parse_opgg_analysis_payload_for_mode(
                 &json_res,
                 champion_id,
                 champ_name,
                 supports_runes,
+                Some(spell_mode),
+                Some(&ddragon_cache.spells),
             ) {
                 Ok(build) => build,
                 Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
@@ -132,7 +136,7 @@ pub async fn get_recommended_build_with_endpoint(
         build.active_position.clear();
     }
     build.supports_runes = supports_runes;
-    enrich_build_with_ddragon(&mut build, ddragon_cache);
+    enrich_build_with_ddragon_for_queue(&mut build, ddragon_cache, queue_id);
     build
 }
 
