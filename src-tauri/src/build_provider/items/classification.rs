@@ -7,8 +7,8 @@ pub static TEST_CLASSIFICATION_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::n
 static DYNAMIC_ITEM_CLASSIFICATIONS: std::sync::RwLock<Option<ItemClassificationCache>> =
     std::sync::RwLock::new(None);
 
-/// Item ID range reserved for Arena (`CHERRY`) anvils (e.g. `220000` Stat Anvil, `220007` Prismatic Item Anvil).
-pub const ARENA_ANVIL_ID_RANGE: RangeInclusive<i32> = 220_000..=220_011;
+/// Item ID range reserved for Arena (`CHERRY`) anvils & Shardholder (`220000` Stat Anvil, `220007` Prismatic Item Anvil, `220012` Shardholder).
+pub const ARENA_ANVIL_ID_RANGE: RangeInclusive<i32> = 220_000..=220_012;
 /// Item ID prefix range for Arena `44xxxx` items (note: `447111` costs `2500g` and is NOT a Prismatic).
 pub const ARENA_PRISMATIC_ID_RANGE: RangeInclusive<i32> = 440_000..=449_999;
 /// Canonical DataDragon total gold cost shared by all 46 real Arena Prismatic items (`sell == 1100`).
@@ -95,8 +95,8 @@ pub fn is_map30_item_dynamic(id: i32) -> bool {
     true
 }
 
-/// Returns `true` for Arena anvils (`220000..=220011`), juices/consumables, and any item tagged
-/// `"Consumable"` in DataDragon `item.json`.
+/// Returns `true` for Arena anvils (`220000..=220012`), juices/consumables, unpurchasable non-evolved
+/// Map 30 items, and any item tagged `"Consumable"` in DataDragon `item.json`.
 pub fn is_arena_anvil_or_consumable(id: i32) -> bool {
     if ARENA_ANVIL_ID_RANGE.contains(&id) {
         return true;

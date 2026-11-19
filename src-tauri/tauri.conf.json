@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "schumaz.gg",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "identifier": "com.schumaz.schumazgg",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -37,7 +37,7 @@
     "licenseFile": "../LICENSE",
     "category": "Utility",
     "shortDescription": "Automated League of Legends companion app for builds, runes, spells, and stats.",
-    "longDescription": "schumaz.gg is a League of Legends desktop companion app that automatically injects recommended runes, summoner spells, and item sets during Champion Select, plus ranked tier lists, ARAM & ARAM Mayhem builds, and summoner profile analytics.",
+    "longDescription": "schumaz.gg is a League of Legends desktop companion app that automatically injects recommended runes, summoner spells, and item sets during Champion Select, plus ranked tier lists, Arena (3x6) and ARAM & ARAM Mayhem builds, and summoner profile analytics.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -70,6 +70,10 @@ pub fn parse_ddragon_item_classifications(
             .pointer("/gold/total")
             .and_then(|g| g.as_i64())
             .unwrap_or(0);
+        let purchasable = item_val
+            .pointer("/gold/purchasable")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         let tags: Vec<&str> = item_val
             .get("tags")
             .and_then(|t| t.as_array())
@@ -99,7 +103,22 @@ pub fn parse_ddragon_item_classifications(
         }
         item_tags.insert(id, string_tags);
 
-        let is_consumable = tags.contains(&"Consumable") || ARENA_ANVIL_ID_RANGE.contains(&id);
+        let in_store = item_val
+            .get("inStore")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let special_recipe = item_val
+            .get("specialRecipe")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+
+        // Unpurchasable Map 30 items without a specialRecipe (e.g. `220012` Shardholder, quest items)
+        // cannot be purchased in the Arena shop and must be excluded from recommended legendaries.
+        let is_unpurchasable_map30_non_evolved =
+            map30_items.contains(&id) && (!in_store || !purchasable) && special_recipe.is_none();
+        let is_consumable = tags.contains(&"Consumable")
+            || ARENA_ANVIL_ID_RANGE.contains(&id)
+            || is_unpurchasable_map30_non_evolved;
         if is_consumable {
             arena_consumables.insert(id);
         }
@@ -110,15 +129,6 @@ pub fn parse_ddragon_item_classifications(
         if is_prismatic {
             arena_prismatics.insert(id);
         }
-
-        let in_store = item_val
-            .get("inStore")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-        let special_recipe = item_val
-            .get("specialRecipe")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32);
 
         if !in_store && let Some(base_id) = special_recipe {
             if map30_items.contains(&id) && !map30_items.contains(&base_id) {

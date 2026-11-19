@@ -118,10 +118,14 @@ fn extract_arena_core_candidates(
         }
     }
 
+    // Rank by dominant sequence play first so top-N API truncation does not inflate
+    // split-order trios above higher-volume primary build paths, while still aggregating
+    // total play/win across deduplicated permutations.
     let mut trios: Vec<CoreCandidate> = trio_map.into_values().collect();
     trios.sort_by(|a, b| {
-        b.total_play
-            .cmp(&a.total_play)
+        b.best_entry_play
+            .cmp(&a.best_entry_play)
+            .then_with(|| b.total_play.cmp(&a.total_play))
             .then_with(|| b.total_win.cmp(&a.total_win))
             .then_with(|| a.display_ids.cmp(&b.display_ids))
     });
@@ -134,8 +138,9 @@ fn extract_arena_core_candidates(
     if trios.len() < MAX_ARENA_BUILD_OPTIONS {
         let mut pairs: Vec<CoreCandidate> = pair_map.into_values().collect();
         pairs.sort_by(|a, b| {
-            b.total_play
-                .cmp(&a.total_play)
+            b.best_entry_play
+                .cmp(&a.best_entry_play)
+                .then_with(|| b.total_play.cmp(&a.total_play))
                 .then_with(|| b.total_win.cmp(&a.total_win))
         });
         for mut pair in pairs {
@@ -220,7 +225,7 @@ pub(super) fn build_arena_unified_options(
         let (final_item_ids, situational_item_ids) =
             build_final_and_situational(&candidate.display_ids, legendary_pool);
         let pick_rate = if total_core_play > 0 {
-            candidate.total_play as f64 / total_core_play as f64
+            (((candidate.total_play as f64 / total_core_play as f64) * 100.0) * 10.0).round() / 10.0
         } else {
             0.0
         };

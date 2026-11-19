@@ -1,6 +1,6 @@
 [package]
 name = "schumazgg"
-version = "0.2.3"
+version = "0.3.0"
 description = "Automated League of Legends companion app for builds, runes, spells, item sets, and summoner stats."
 authors = ["schumaZ"]
 license = "GPL-3.0-only"

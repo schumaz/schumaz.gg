@@ -14,7 +14,7 @@ pub(super) fn install_arena_item_classifications() {
         cache.arena_prismatics.insert(p);
         cache.map30_items.insert(p);
     }
-    for c in [220000, 220007, 2142] {
+    for c in [220000, 220007, 220012, 2142] {
         cache.arena_consumables.insert(c);
         cache.map30_items.insert(c);
     }
@@ -66,7 +66,9 @@ pub(super) fn install_arena_item_classifications() {
 
 #[test]
 fn test_arena_items_filter_troll_boots_anvils_prismatics_and_preserve_447111_and_4017() {
-    let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+    let _lock = TEST_CLASSIFICATION_MUTEX
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     install_arena_item_classifications();
 
     let boots = vec![
@@ -143,6 +145,12 @@ fn test_arena_items_filter_troll_boots_anvils_prismatics_and_preserve_447111_and
             pick_rate: 0.3,
         },
         ItemStatEntry {
+            ids: vec![220012],
+            play: 6500,
+            win: 3400,
+            pick_rate: 0.28,
+        },
+        ItemStatEntry {
             ids: vec![447111],
             play: 5000,
             win: 2900,
@@ -185,11 +193,15 @@ fn test_arena_items_filter_troll_boots_anvils_prismatics_and_preserve_447111_and
     assert_eq!(options.len(), 2);
     assert_eq!(options[0].core_item_ids, vec![223153, 223124, 226672]);
     assert_eq!(options[0].play, 4200);
+    assert!((options[0].pick_rate - 73.7).abs() < 0.2);
+    assert!((options[1].pick_rate - 26.3).abs() < 0.2);
     assert_eq!(options[1].core_item_ids, vec![447111, 4017, 223004]);
 
-    let forbidden: HashSet<i32> = [443090, 447109, 223158, 220007, 1055, 1056, 2003, 3119]
-        .into_iter()
-        .collect();
+    let forbidden: HashSet<i32> = [
+        443090, 447109, 223158, 220007, 220012, 1055, 1056, 2003, 3119,
+    ]
+    .into_iter()
+    .collect();
     for opt in &options {
         for &id in opt
             .final_item_ids
@@ -213,7 +225,9 @@ fn test_arena_items_filter_troll_boots_anvils_prismatics_and_preserve_447111_and
 
 #[test]
 fn test_arena_shaco_ap_and_ad_build_options_stay_archetype_cohesive() {
-    let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+    let _lock = TEST_CLASSIFICATION_MUTEX
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     install_arena_item_classifications();
 
     let cores = vec![

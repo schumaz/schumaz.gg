@@ -5,6 +5,22 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-19
+
+Full end-to-end **Arena (`CHERRY` / `3x6`)** support: live Champion Select automation on the Runes tab, dedicated Arena tab between Ranked and ARAM, Map `30`-safe Arena build engine, and real-payload regression suite.
+
+### Added
+- **Dedicated `Arena` Tab (`src/features/arena/` & `NavigationDock`)**: Added the **Arena** tab between **Ranked** and **ARAM**, featuring a searchable **Arena (`3x6`)** Tier List grouped by Tier (`OP`, `1`–`5`) with Top 3 / Win Rate, 1st Place Rate, and Pick/Ban metrics, plus a Champion Detail view with rarity-filterable **Augments** (*Silver*, *Gold*, *Prismatic*), **Best Synergies**, and 5-block Arena items (**Prismatic Items**, **Core 3**, **Boots**, **Final Build**, and **Situational**).
+- **Live Arena (`3x6`) Support on the `Runes` Tab (`src/features/champ-select/`)**: Automatically detects Arena queues (`1700`, `1710`, `1750`, `gameMode == "CHERRY" | "ARENA" | "TGR"`, or `map.id == 30`), injects only the **Map `30` Shop Item Set** (safely skipping disabled runes and summoner spells with a localized status notice), and renders Arena Augments, Best Synergies, Prismatic Items, and selectable Core 1/2/3 build options in Champ Select.
+- **Arena Build Engine & Metadata (`build_provider/analytics/arena/` & `build_provider/ddragon/`)**: Added dedicated Arena Tier List and Champion Build endpoints (`get_arena_tier_list`, `get_arena_champion_build`) with localized `pt_BR` / `en_US` Augment metadata (`cherry-augments.json`) and Map `30` item classification:
+  - Separates real `2750g` **Prismatic Items** into their own block without blocking purchasable `2500g` `44xxxx` legendaries (such as `447111` *Overlord's Bloodmail*) or 4-digit Arena exclusives (`3430`, `4010`–`4017` such as `4017` *Hellfire Hatchet*).
+  - Filters Arena anvils and non-purchasable Shardholder/consumable items (`220000..=220012`), troll low-sample boots (`< 1.5%` pick rate), and invalid SR starters (`1055`/`1056`/`2003`).
+  - Safely normalizes Arena Tear evolutions (`223042 → 223004`, `223040 → 223003`, `222530 → 222526`, and Riot's broken `223121 → 223119` instead of non-Map-30 `3119`), deduplicates permuted Core 3 trios, and preserves AP/AD archetype cohesion.
+- **Real-Payload Arena Contract Test Suite (`src-tauri/tests/integration/arena_real_payloads.rs`)**: Added end-to-end integration tests running real Arena payloads for **Yuumi**, **Master Yi**, **Rakan**, **Volibear**, **Shaco**, and **Ezreal** alongside real DataDragon Map `30` metadata.
+
+### Changed
+- **Binary Cache Schema (`CACHE_SCHEMA_VERSION = 4`)**: Incremented `CACHE_SCHEMA_VERSION` in `src-tauri/src/storage/lz4_cache.rs` to safely regenerate cached DataDragon bundles with Map `30` item classifications (`map30_items`, `arena_prismatics`, `arena_consumables`) and localized Arena augments.
+
 ## [0.2.3] - 2026-11-19
 
 Eliminated single-game troll builds (`play == 1`), fixed 48h new-patch protection priority, improved ARAM sample quality (`tier=all`), and hardened damage-type inference.

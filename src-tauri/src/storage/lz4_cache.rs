@@ -5,7 +5,7 @@ use std::path::Path;
 
 use super::paths::{atomic_write, now_unix_secs, touch_mtime};
 
-pub const CACHE_SCHEMA_VERSION: u32 = 3;
+pub const CACHE_SCHEMA_VERSION: u32 = 4;
 pub const OPGG_CACHE_TTL_SECS: u64 = 48 * 3600;
 pub const PROFILE_CACHE_TTL_SECS: u64 = 48 * 3600;
 pub const PROFILE_SWR_SECS: u64 = 5 * 60;
