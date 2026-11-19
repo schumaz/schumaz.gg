@@ -17,7 +17,7 @@ interface ArenaTierListCardProps {
 }
 
 /**
- * Scrollable tier-grouped Arena champion list displaying Top 4 rate, 1st place rate, pick rate, and ban rate.
+ * Scrollable tier-grouped Arena (`3x6`) champion list displaying Top 3 rate, 1st place rate, pick rate, and ban rate.
  */
 export function ArenaTierListCard({
   tierLoading,
@@ -111,7 +111,7 @@ export function ArenaTierListCard({
                         <div className="aram-classic-stats">
                           {champ.win_rate !== null && champ.win_rate !== undefined && (
                             <span className="aram-stat-pill">
-                              <span className="aram-stat-label">{t("arenaTab.top4Label")}</span>
+                              <span className="aram-stat-label">{t("arenaTab.top3Label")}</span>
                               <span
                                 className={`aram-stat-val ${
                                   champ.win_rate >= 53

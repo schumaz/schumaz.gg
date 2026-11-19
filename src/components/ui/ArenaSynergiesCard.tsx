@@ -9,8 +9,8 @@ export interface ArenaSynergiesCardProps {
 }
 
 /**
- * Shared Arena (`CHERRY`) duo partner synergies card displaying top paired champions
- * with Top 4 and 1st place win metrics.
+ * Shared Arena (`CHERRY` / 3x6) ally synergies card displaying top ally champions
+ * with Top 3 and 1st place win metrics.
  */
 export function ArenaSynergiesCard({
   synergies,
@@ -38,7 +38,7 @@ export function ArenaSynergiesCard({
       ) : (
         <div className="arena-synergies-grid" data-testid="arena-synergies-grid">
           {visibleSynergies.map((syn) => {
-            const hasTop4 = typeof syn.win_rate === "number" && syn.win_rate > 0;
+            const hasTop3 = typeof syn.win_rate === "number" && syn.win_rate > 0;
             const hasFirst = typeof syn.first_place_rate === "number" && syn.first_place_rate > 0;
             const content = (
               <>
@@ -65,11 +65,11 @@ export function ArenaSynergiesCard({
                     {syn.name}
                   </span>
                   <div className="arena-synergy-stats">
-                    {hasTop4 && (
+                    {hasTop3 && (
                       <span
                         className={`arena-synergy-metric ${(syn.win_rate ?? 0) >= 55 ? "is-high" : ""}`}
                       >
-                        {(syn.win_rate ?? 0).toFixed(1)}% {t("arena.top4Short")}
+                        {(syn.win_rate ?? 0).toFixed(1)}% {t("arena.top3Short")}
                       </span>
                     )}
                     {hasFirst && (

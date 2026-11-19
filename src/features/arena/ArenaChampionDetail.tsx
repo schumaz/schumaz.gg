@@ -25,7 +25,7 @@ interface ArenaChampionDetailProps {
 }
 
 /**
- * Detailed Arena champion consultation view displaying Augments, Best Duos, and Arena Item Blocks.
+ * Detailed Arena (`3x6`) champion consultation view displaying Augments, Best Synergies, and Arena Item Blocks.
  */
 export function ArenaChampionDetail({
   selectedChampion,

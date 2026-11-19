@@ -118,7 +118,7 @@ export function FiltersHeader({
             <span className="badge-meta">{resolvedQueueLabel}</span>
             {isArena && (build.win_rate ?? 0) > 0 && (
               <span className="badge badge-neutral badge-stat">
-                {t("filters.top4Rate", { rate: (build.win_rate ?? 0).toFixed(1) })}
+                {t("filters.top3Rate", { rate: (build.win_rate ?? 0).toFixed(1) })}
               </span>
             )}
             {isArena && (build.first_place_rate ?? 0) > 0 && (

@@ -83,7 +83,7 @@ export interface TabTranslations {
     noDataAvailable: string;
     detailStatus: string;
     detailStatusFallback: string;
-    top4Label: string;
+    top3Label: string;
     firstPlaceLabel: string;
   };
   aram: {

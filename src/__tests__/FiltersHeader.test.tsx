@@ -47,8 +47,8 @@ describe("FiltersHeader", () => {
       />
     );
 
-    expect(screen.getByText("Arena (2v2v2v2)")).toBeInTheDocument();
-    expect(screen.getByText("52.4% Top 4")).toBeInTheDocument();
+    expect(screen.getByText("Arena (3x6)")).toBeInTheDocument();
+    expect(screen.getByText("52.4% Top 3")).toBeInTheDocument();
     expect(screen.getByText("15.2% 1º Lugar")).toBeInTheDocument();
     expect(screen.queryByTestId("filter-tier")).not.toBeInTheDocument();
     expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();

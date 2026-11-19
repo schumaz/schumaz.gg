@@ -1,5 +1,5 @@
 use crate::build_provider::ddragon::resolve_spell_metadata_for_locale;
-use crate::models::{AppLocale, DataDragonCache, RecentMatchInfo};
+use crate::models::{AppLocale, DataDragonCache, MAP_ARENA, RecentMatchInfo};
 
 use super::queue_mapper::map_queue_mode_for_locale;
 
@@ -99,7 +99,11 @@ pub fn parse_recent_matches_for_locale(
             let queue_id = game.get("queueId").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let game_mode = game.get("gameMode").and_then(|v| v.as_str()).unwrap_or("");
             let (game_mode_key, game_mode_label) =
-                map_queue_mode_for_locale(queue_id, game_mode, locale);
+                if game.get("mapId").and_then(|v| v.as_i64()) == Some(MAP_ARENA as i64) {
+                    ("arena".to_string(), "Arena".to_string())
+                } else {
+                    map_queue_mode_for_locale(queue_id, game_mode, locale)
+                };
 
             let champion_id = participant
                 .get("championId")

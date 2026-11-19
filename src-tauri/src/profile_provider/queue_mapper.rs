@@ -1,4 +1,7 @@
-use crate::models::{AppLocale, QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750};
+use crate::models::{
+    AppLocale, QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1740, QUEUE_ARENA_1750,
+    is_arena_game_mode,
+};
 
 /// Maps LCU `queueId` and `gameMode` to normalized filter key and localized mode label.
 pub fn map_queue_mode_for_locale(
@@ -12,7 +15,7 @@ pub fn map_queue_mode_for_locale(
         400 | 430 | 480 | 490 => ("normal".to_string(), "Normal".to_string()),
         450 => ("aram".to_string(), "ARAM".to_string()),
         2400 => ("aram_mayhem".to_string(), "ARAM Mayhem".to_string()),
-        QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1750 => {
+        QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1740 | QUEUE_ARENA_1750 => {
             ("arena".to_string(), "Arena".to_string())
         }
         900 | 1010 | 1900 => ("urf".to_string(), "URF".to_string()),
@@ -46,7 +49,7 @@ pub fn map_queue_mode_for_locale(
                 ("aram_mayhem".to_string(), "ARAM Mayhem".to_string())
             } else if mode_upper == "ARAM" {
                 ("aram".to_string(), "ARAM".to_string())
-            } else if mode_upper == "CHERRY" || mode_upper == "ARENA" {
+            } else if is_arena_game_mode(&mode_upper) {
                 ("arena".to_string(), "Arena".to_string())
             } else if mode_upper.contains("URF") {
                 ("urf".to_string(), "URF".to_string())
@@ -87,9 +90,22 @@ mod tests {
             map_queue_mode_for_locale(1300, "", AppLocale::EnUs).1,
             "Nexus Blitz"
         );
-        assert_eq!(
-            map_queue_mode_for_locale(1750, "", AppLocale::EnUs),
-            ("arena".to_string(), "Arena".to_string())
-        );
+        for arena_id in [
+            QUEUE_ARENA,
+            QUEUE_ARENA_1710,
+            QUEUE_ARENA_1740,
+            QUEUE_ARENA_1750,
+        ] {
+            assert_eq!(
+                map_queue_mode_for_locale(arena_id, "", AppLocale::EnUs),
+                ("arena".to_string(), "Arena".to_string())
+            );
+        }
+        for arena_mode in ["CHERRY", "ARENA", "TGR", "ARENA_3X6"] {
+            assert_eq!(
+                map_queue_mode_for_locale(1799, arena_mode, AppLocale::PtBr),
+                ("arena".to_string(), "Arena".to_string())
+            );
+        }
     }
 }

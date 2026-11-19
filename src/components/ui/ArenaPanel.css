@@ -1,4 +1,4 @@
-/* Shared Arena (`CHERRY`) Build Panel Styles (Champ Select + Arena Detail) */
+/* Shared Arena (`CHERRY` / 3x6) Build Panel Styles (Champ Select + Arena Detail) */
 .dashboard-split-grid.is-arena-grid {
   flex: 1;
 }
@@ -254,7 +254,7 @@
   padding: 8px;
 }
 
-/* Best Duos / Synergies Card */
+/* Best Synergies / Allies Card */
 .arena-synergies-card {
   flex-shrink: 0;
   display: flex;

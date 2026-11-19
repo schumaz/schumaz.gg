@@ -179,10 +179,10 @@ export type AramChampionRank_Serialize = {
 
 export type AramMode = "aram" | "aram_mayhem";
 
-/**  Recommended Arena (`CHERRY`) augment entry with stats and localized metadata. */
+/**  Recommended Arena (`CHERRY` / 3x6) augment entry with stats and localized metadata. */
 export type ArenaAugmentEntry = ArenaAugmentEntry_Serialize | ArenaAugmentEntry_Deserialize;
 
-/**  Recommended Arena (`CHERRY`) augment entry with stats and localized metadata. */
+/**  Recommended Arena (`CHERRY` / 3x6) augment entry with stats and localized metadata. */
 export type ArenaAugmentEntry_Deserialize = {
 	id: number,
 	name: string,
@@ -193,7 +193,7 @@ export type ArenaAugmentEntry_Deserialize = {
 	play: number,
 	win: number,
 	first_place: number,
-	/**  Top 4 finish rate (0–100%). */
+	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
 	win_rate: number | null,
 	/**  1st place finish rate (0–100%). */
 	first_place_rate: number | null,
@@ -202,7 +202,7 @@ export type ArenaAugmentEntry_Deserialize = {
 	pick_rate: number | null,
 };
 
-/**  Recommended Arena (`CHERRY`) augment entry with stats and localized metadata. */
+/**  Recommended Arena (`CHERRY` / 3x6) augment entry with stats and localized metadata. */
 export type ArenaAugmentEntry_Serialize = {
 	id: number,
 	name: string,
@@ -213,7 +213,7 @@ export type ArenaAugmentEntry_Serialize = {
 	play: number,
 	win: number,
 	first_place: number,
-	/**  Top 4 finish rate (0–100%). */
+	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
 	win_rate: number | null,
 	/**  1st place finish rate (0–100%). */
 	first_place_rate: number | null,
@@ -222,10 +222,10 @@ export type ArenaAugmentEntry_Serialize = {
 	pick_rate: number | null,
 };
 
-/**  Ranked champion entry in the Arena (`CHERRY`) tier list. */
+/**  Ranked champion entry in the Arena (`CHERRY` / 3x6) tier list. */
 export type ArenaChampionEntry = ArenaChampionEntry_Serialize | ArenaChampionEntry_Deserialize;
 
-/**  Ranked champion entry in the Arena (`CHERRY`) tier list. */
+/**  Ranked champion entry in the Arena (`CHERRY` / 3x6) tier list. */
 export type ArenaChampionEntry_Deserialize = {
 	id: number,
 	key: string,
@@ -234,7 +234,7 @@ export type ArenaChampionEntry_Deserialize = {
 	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5). */
 	tier: number,
 	rank: number,
-	/**  Top 4 finish rate (0–100%). */
+	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
 	win_rate?: number | null,
 	/**  1st place finish rate (0–100%). */
 	first_place_rate?: number | null,
@@ -245,7 +245,7 @@ export type ArenaChampionEntry_Deserialize = {
 	play?: number,
 };
 
-/**  Ranked champion entry in the Arena (`CHERRY`) tier list. */
+/**  Ranked champion entry in the Arena (`CHERRY` / 3x6) tier list. */
 export type ArenaChampionEntry_Serialize = {
 	id: number,
 	key: string,
@@ -254,7 +254,7 @@ export type ArenaChampionEntry_Serialize = {
 	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5). */
 	tier: number,
 	rank: number,
-	/**  Top 4 finish rate (0–100%). */
+	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
 	win_rate: number | null,
 	/**  1st place finish rate (0–100%). */
 	first_place_rate: number | null,
@@ -265,7 +265,7 @@ export type ArenaChampionEntry_Serialize = {
 	play: number,
 };
 
-/**  Recommended Arena (`CHERRY`) duo partner synergy entry. */
+/**  Recommended Arena (`CHERRY` / 3x6) ally synergy entry. */
 export type ArenaSynergyEntry = {
 	champion_id: number,
 	key: string,
@@ -275,7 +275,7 @@ export type ArenaSynergyEntry = {
 	play: number,
 	win: number,
 	first_place: number,
-	/**  Top 4 finish rate (0–100%). */
+	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
 	win_rate: number | null,
 	/**  1st place finish rate (0–100%). */
 	first_place_rate: number | null,
@@ -284,10 +284,10 @@ export type ArenaSynergyEntry = {
 	pick_rate: number | null,
 };
 
-/**  Full Arena (`CHERRY`) tier list payload including active patch and available patches. */
+/**  Full Arena (`CHERRY` / 3x6) tier list payload including active patch and available patches. */
 export type ArenaTierListResponse = ArenaTierListResponse_Serialize | ArenaTierListResponse_Deserialize;
 
-/**  Full Arena (`CHERRY`) tier list payload including active patch and available patches. */
+/**  Full Arena (`CHERRY` / 3x6) tier list payload including active patch and available patches. */
 export type ArenaTierListResponse_Deserialize = {
 	active_patch: string,
 	available_patches: string[],
@@ -296,7 +296,7 @@ export type ArenaTierListResponse_Deserialize = {
 	champions: ArenaChampionEntry_Deserialize[],
 };
 
-/**  Full Arena (`CHERRY`) tier list payload including active patch and available patches. */
+/**  Full Arena (`CHERRY` / 3x6) tier list payload including active patch and available patches. */
 export type ArenaTierListResponse_Serialize = {
 	active_patch: string,
 	available_patches: string[],

@@ -72,7 +72,7 @@ export interface BuildTranslations {
     raritySilver: string;
     rarityGold: string;
     rarityPrismatic: string;
-    top4Short: string;
+    top3Short: string;
     firstPlaceShort: string;
     avgPlaceShort: string;
     synergiesTitle: string;

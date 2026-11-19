@@ -45,7 +45,12 @@ fn test_extract_queue_id_with_aram_mayhem_game_mode() {
 
 #[test]
 fn test_extract_queue_id_and_classify_arena_variants() {
-    for arena_id in [QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750] {
+    for arena_id in [
+        QUEUE_ARENA,
+        QUEUE_ARENA_1710,
+        QUEUE_ARENA_1740,
+        QUEUE_ARENA_1750,
+    ] {
         let fixture = serde_json::json!({
             "gameData": {
                 "queue": { "id": arena_id }
@@ -65,6 +70,41 @@ fn test_extract_queue_id_and_classify_arena_variants() {
         "map": { "id": 30 }
     });
     assert_eq!(extract_queue_id(&fixture_cherry_1710), Ok(QUEUE_ARENA_1710));
+
+    let fixture_arena_3x6_1750 = serde_json::json!({
+        "gameData": {
+            "queue": {
+                "id": 1750,
+                "gameMode": "CHERRY",
+                "type": "TGR",
+                "shortName": "Arena 3x6"
+            }
+        },
+        "map": { "id": 30 }
+    });
+    assert_eq!(
+        extract_queue_id(&fixture_arena_3x6_1750),
+        Ok(QUEUE_ARENA_1750)
+    );
+
+    let fixture_tgr_mode_only = serde_json::json!({
+        "gameData": { "gameMode": "TGR" }
+    });
+    assert_eq!(extract_queue_id(&fixture_tgr_mode_only), Ok(QUEUE_ARENA));
+
+    let fixture_tgr_new_queue_id = serde_json::json!({
+        "gameData": {
+            "queue": {
+                "id": 1799,
+                "gameMode": "TGR",
+                "shortName": "TGR · ARENA 3X6 · BLIND"
+            }
+        },
+        "map": { "id": 30 }
+    });
+    let extracted_future = extract_queue_id(&fixture_tgr_new_queue_id).unwrap();
+    assert_eq!(extracted_future, QUEUE_ARENA);
+    assert_eq!(QueueMode::from(extracted_future), QueueMode::Arena);
 
     let fixture_cherry_mode_only = serde_json::json!({
         "gameData": { "gameMode": "CHERRY" }
@@ -89,16 +129,18 @@ fn test_evaluate_ws_event_arena() {
         "localPlayerCellId": 0,
         "actions": [],
         "myTeam": [
-            { "cellId": 0, "championId": 350, "championPickIntent": 0 }
+            { "cellId": 0, "championId": 350, "championPickIntent": 0 },
+            { "cellId": 1, "championId": 11, "championPickIntent": 0 },
+            { "cellId": 2, "championId": 106, "championPickIntent": 0 }
         ]
     });
 
-    let transition = evaluate_ws_event("Update", &fixture_arena, QUEUE_ARENA);
+    let transition = evaluate_ws_event("Update", &fixture_arena, QUEUE_ARENA_1750);
     assert_eq!(
         transition,
         WsSessionTransition::Active(ChampSelectedPayload {
             champion_id: 350,
-            queue_id: QUEUE_ARENA,
+            queue_id: QUEUE_ARENA_1750,
             queue_mode: QueueMode::Arena,
             locked_in: true,
             assigned_position: None,

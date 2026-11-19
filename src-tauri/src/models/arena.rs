@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Localized Arena (`CHERRY`) augment catalog entry from `cherry-augments.json`.
+/// Localized Arena (`CHERRY` / 3x6) augment catalog entry from `cherry-augments.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct ArenaAugmentMetadata {
     pub id: i32,
@@ -15,7 +15,7 @@ pub struct ArenaAugmentMetadata {
     pub rarity: i32,
 }
 
-/// Ranked champion entry in the Arena (`CHERRY`) tier list.
+/// Ranked champion entry in the Arena (`CHERRY` / 3x6) tier list.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct ArenaChampionEntry {
     pub id: i32,
@@ -25,7 +25,7 @@ pub struct ArenaChampionEntry {
     /// Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5).
     pub tier: i32,
     pub rank: i32,
-    /// Top 4 finish rate (0–100%).
+    /// Top 3 finish / win rate (0–100%) in Arena 3x6.
     pub win_rate: Option<f64>,
     /// 1st place finish rate (0–100%).
     pub first_place_rate: Option<f64>,
@@ -37,7 +37,7 @@ pub struct ArenaChampionEntry {
     pub play: i64,
 }
 
-/// Full Arena (`CHERRY`) tier list payload including active patch and available patches.
+/// Full Arena (`CHERRY` / 3x6) tier list payload including active patch and available patches.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct ArenaTierListResponse {
     pub active_patch: String,
@@ -47,7 +47,7 @@ pub struct ArenaTierListResponse {
     pub champions: Vec<ArenaChampionEntry>,
 }
 
-/// Recommended Arena (`CHERRY`) augment entry with stats and localized metadata.
+/// Recommended Arena (`CHERRY` / 3x6) augment entry with stats and localized metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Type)]
 pub struct ArenaAugmentEntry {
     pub id: i32,
@@ -61,7 +61,7 @@ pub struct ArenaAugmentEntry {
     pub play: i64,
     pub win: i64,
     pub first_place: i64,
-    /// Top 4 finish rate (0–100%).
+    /// Top 3 finish / win rate (0–100%) in Arena 3x6.
     pub win_rate: f64,
     /// 1st place finish rate (0–100%).
     pub first_place_rate: f64,
@@ -70,7 +70,7 @@ pub struct ArenaAugmentEntry {
     pub pick_rate: f64,
 }
 
-/// Recommended Arena (`CHERRY`) duo partner synergy entry.
+/// Recommended Arena (`CHERRY` / 3x6) ally synergy entry.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Type)]
 pub struct ArenaSynergyEntry {
     pub champion_id: i32,
@@ -81,7 +81,7 @@ pub struct ArenaSynergyEntry {
     pub play: i64,
     pub win: i64,
     pub first_place: i64,
-    /// Top 4 finish rate (0–100%).
+    /// Top 3 finish / win rate (0–100%) in Arena 3x6.
     pub win_rate: f64,
     /// 1st place finish rate (0–100%).
     pub first_place_rate: f64,

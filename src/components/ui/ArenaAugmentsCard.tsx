@@ -22,7 +22,7 @@ function getRarityVisualMeta(
 }
 
 /**
- * Shared Arena (`CHERRY`) augments card with rarity filtering and an optional compact notice
+ * Shared Arena (`CHERRY` / 3x6) augments card with rarity filtering and an optional compact notice
  * indicating that runes and summoner spells are managed by Arena mode.
  */
 export function ArenaAugmentsCard({
@@ -98,7 +98,7 @@ export function ArenaAugmentsCard({
         ) : (
           visibleAugments.map((aug) => {
             const rarityMeta = getRarityVisualMeta(aug.rarity, t);
-            const hasTop4 = typeof aug.win_rate === "number" && aug.win_rate > 0;
+            const hasTop3 = typeof aug.win_rate === "number" && aug.win_rate > 0;
             const hasFirst = typeof aug.first_place_rate === "number" && aug.first_place_rate > 0;
             const hasAvg = typeof aug.avg_placement === "number" && aug.avg_placement > 0;
 
@@ -137,11 +137,11 @@ export function ArenaAugmentsCard({
                       </span>
                     )}
                     <div className="arena-augment-stats">
-                      {hasTop4 && (
+                      {hasTop3 && (
                         <span
                           className={`arena-stat-chip ${(aug.win_rate ?? 0) >= 55 ? "is-high" : ""}`}
                         >
-                          {(aug.win_rate ?? 0).toFixed(1)}% {t("arena.top4Short")}
+                          {(aug.win_rate ?? 0).toFixed(1)}% {t("arena.top3Short")}
                         </span>
                       )}
                       {hasFirst && (

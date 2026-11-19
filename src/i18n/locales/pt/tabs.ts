@@ -73,7 +73,7 @@ export const ptTabs: TabTranslations = {
   },
   arenaTab: {
     title: "Arena",
-    modeBadge: "2v2v2v2",
+    modeBadge: "3x6",
     searchAria: "Buscar campeão na Arena",
     clearSearchAria: "Limpar busca na Arena",
     allTiers: "Todos",
@@ -86,7 +86,7 @@ export const ptTabs: TabTranslations = {
     noDataAvailable: "Nenhum dado da Arena disponível para este patch.",
     detailStatus: "{tier} · #{rank} Arena",
     detailStatusFallback: "Consulta Arena",
-    top4Label: "Top 4",
+    top3Label: "Top 3",
     firstPlaceLabel: "1º",
   },
   aram: {

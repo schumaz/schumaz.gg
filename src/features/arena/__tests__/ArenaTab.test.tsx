@@ -63,7 +63,7 @@ describe("ArenaTab UI", () => {
 
     const toolbar = screen.getByTestId("arena-filters-card");
     expect(within(toolbar).getByRole("heading", { name: "Arena" })).toHaveClass("page-hero-title");
-    expect(within(toolbar).getByText("2v2v2v2")).toHaveClass("arena-mode-badge");
+    expect(within(toolbar).getByText("3x6")).toHaveClass("arena-mode-badge");
     expect(screen.queryByTestId("ranked-lane-tabs")).not.toBeInTheDocument();
     expect(screen.queryByTestId("ranked-filter-tier")).not.toBeInTheDocument();
     expect(screen.queryByTestId("ranked-filter-region")).not.toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("ArenaTab UI", () => {
 
     const yiRow = screen.getByTestId("arena-champ-masteryi");
     expect(within(yiRow).getByText("#1")).toBeInTheDocument();
-    expect(within(yiRow).getByText("Top 4")).toBeInTheDocument();
+    expect(within(yiRow).getByText("Top 3")).toBeInTheDocument();
     expect(within(yiRow).getByText("56.4%")).toBeInTheDocument();
     expect(within(yiRow).getByText("1º")).toBeInTheDocument();
     expect(within(yiRow).getByText("16.8%")).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe("ArenaTab UI", () => {
     expect(onPatchChange).toHaveBeenCalledWith("16.22");
   });
 
-  it("renders ArenaChampionDetail with Augments, Best Duos, read-only Arena ItemBlocks, and Back button", () => {
+  it("renders ArenaChampionDetail with Augments, Best Synergies, read-only Arena ItemBlocks, and Back button", () => {
     const onBackToTierList = vi.fn();
     const onSelectSynergyChampion = vi.fn();
     const onSelectBuild = vi.fn();
@@ -152,9 +152,12 @@ describe("ArenaTab UI", () => {
     const view = screen.getByTestId("view-arena");
     expect(within(view).getByTestId("arena-champion-detail")).toBeInTheDocument();
     expect(within(view).getByTestId("champ-hero")).toHaveTextContent("OP · #1 Arena");
+    expect(within(view).getByTestId("champ-hero")).toHaveTextContent("Arena (3x6)");
     expect(within(view).queryByTestId("arena-mode-notice")).not.toBeInTheDocument();
     expect(within(view).getByTestId("arena-augments-card")).toBeInTheDocument();
-    expect(within(view).getByTestId("arena-synergies-card")).toBeInTheDocument();
+    const synergiesCard = within(view).getByTestId("arena-synergies-card");
+    expect(within(synergiesCard).getByText("Melhores Sinergias")).toBeInTheDocument();
+    expect(within(synergiesCard).getByText("2 aliados")).toBeInTheDocument();
     expect(within(view).getByTestId("item-blocks")).toBeInTheDocument();
     expect(within(view).getByText("Build Recomendada")).toBeInTheDocument();
     expect(within(view).getByText(/1\. Itens Prismáticos/i)).toBeInTheDocument();

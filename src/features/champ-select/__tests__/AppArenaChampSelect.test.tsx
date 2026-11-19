@@ -32,7 +32,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-describe("App — Arena (CHERRY) Champ Select Integration", () => {
+describe("App — Arena (CHERRY / 3x6) Champ Select Integration", () => {
   beforeEach(() => {
     eventListeners = {};
     localStorage.clear();
@@ -69,9 +69,11 @@ describe("App — Arena (CHERRY) Champ Select Integration", () => {
       queueId: 1700,
     });
 
-    expect(screen.getByText("Arena (2v2v2v2)")).toBeInTheDocument();
-    expect(screen.getByText("56.4% Top 4")).toBeInTheDocument();
+    expect(screen.getByText("Arena (3x6)")).toBeInTheDocument();
+    expect(screen.getByText("56.4% Top 3")).toBeInTheDocument();
     expect(screen.getByText("16.8% 1º Lugar")).toBeInTheDocument();
+    expect(screen.getByText("Melhores Sinergias")).toBeInTheDocument();
+    expect(screen.getByText("2 aliados")).toBeInTheDocument();
     expect(screen.queryByTestId("filter-tier")).not.toBeInTheDocument();
     expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
     expect(screen.queryByTestId("filter-region")).not.toBeInTheDocument();
@@ -128,7 +130,7 @@ describe("App — Arena (CHERRY) Champ Select Integration", () => {
     expect(invoke).not.toHaveBeenCalledWith("inject_summoner_spells", expect.anything());
   });
 
-  it("keeps orderedSpells empty and skips rune/spell injections while preserving queueId 1710 for Arena item builds", async () => {
+  it("keeps orderedSpells empty and skips rune/spell injections while preserving queueId 1750 for Arena 3x6 item builds", async () => {
     const { result } = renderHook(() => useLcuEvents("D"));
 
     await waitFor(() => {
@@ -139,7 +141,7 @@ describe("App — Arena (CHERRY) Champ Select Integration", () => {
       eventListeners["champ-selected"]({
         payload: {
           champion_id: 11,
-          queue_id: 1710,
+          queue_id: 1750,
           queue_mode: "Arena",
           locked_in: true,
         },
@@ -164,7 +166,7 @@ describe("App — Arena (CHERRY) Champ Select Integration", () => {
     expect(invoke).not.toHaveBeenCalledWith("update_build_filters", expect.anything());
     expect(invoke).toHaveBeenCalledWith("inject_item_build", {
       championId: 11,
-      queueId: 1710,
+      queueId: 1750,
       buildIndex: 1,
     });
   });

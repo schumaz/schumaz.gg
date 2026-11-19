@@ -1,7 +1,8 @@
 ﻿pub use crate::models::{
     ChampSelectedPayload, MAP_ARENA, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_ARENA, QUEUE_ARENA_1710,
-    QUEUE_ARENA_1750, QUEUE_FLEX, QUEUE_NORMAL_DRAFT, QUEUE_PRACTICE_TOOL, QUEUE_QUICKPLAY,
-    QUEUE_SOLO_DUO, QueueMode, is_arena_queue, queue_supports_runes, queue_supports_spells,
+    QUEUE_ARENA_1740, QUEUE_ARENA_1750, QUEUE_FLEX, QUEUE_NORMAL_DRAFT, QUEUE_PRACTICE_TOOL,
+    QUEUE_QUICKPLAY, QUEUE_SOLO_DUO, QueueMode, is_arena_game_mode, is_arena_queue,
+    queue_supports_runes, queue_supports_spells,
 };
 use std::time::Duration;
 
@@ -257,9 +258,10 @@ pub fn extract_assigned_position(session_json: &serde_json::Value) -> Option<Str
 }
 
 /// Extracts the queue ID from a `GET /lol-gameflow/v1/session` JSON payload.
-/// Supports Standard queues, ARAM Mayhem, Arena (`CHERRY` / Map `30`), Practice Tool, and Custom games.
+/// Supports Standard queues, ARAM Mayhem, Arena 3x6 (`CHERRY` / `ARENA` / `TGR` / Map `30`),
+/// Practice Tool, and Custom games.
 pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String> {
-    // 1. Check for Practice Tool, ARAM Mayhem, Arena (`CHERRY` / Map 30), or custom game indicators
+    // 1. Check for Practice Tool, ARAM Mayhem, Arena (`CHERRY`/`ARENA`/`TGR`/Map 30), or custom game indicators
     let game_mode = gameflow_json
         .pointer("/gameData/queue/gameMode")
         .or_else(|| gameflow_json.pointer("/gameData/gameMode"))
@@ -290,10 +292,19 @@ pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String
         .and_then(|v| v.as_i64())
         .map(|id| id as i32);
 
-    if game_mode.eq_ignore_ascii_case("CHERRY")
-        || game_mode.eq_ignore_ascii_case("ARENA")
-        || map_id == Some(MAP_ARENA)
-    {
+    let is_arena_label = [
+        "/gameData/queue/gameMode",
+        "/gameData/gameMode",
+        "/map/gameMode",
+        "/gameData/queue/type",
+        "/gameData/queue/shortName",
+        "/gameData/queue/name",
+    ]
+    .iter()
+    .filter_map(|ptr| gameflow_json.pointer(ptr).and_then(|v| v.as_str()))
+    .any(is_arena_game_mode);
+
+    if is_arena_label || map_id == Some(MAP_ARENA) {
         if let Some(id) = id_opt
             && is_arena_queue(id)
         {

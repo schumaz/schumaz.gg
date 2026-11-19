@@ -7,15 +7,25 @@ pub const QUEUE_ARAM: i32 = 450;
 pub const QUEUE_ARAM_MAYHEM: i32 = 2400;
 pub const QUEUE_ARENA: i32 = 1700;
 pub const QUEUE_ARENA_1710: i32 = 1710;
+pub const QUEUE_ARENA_1740: i32 = 1740;
 pub const QUEUE_ARENA_1750: i32 = 1750;
 pub const QUEUE_NORMAL_DRAFT: i32 = 400;
 pub const QUEUE_QUICKPLAY: i32 = 490;
 pub const QUEUE_PRACTICE_TOOL: i32 = -1;
 pub const MAP_ARENA: i32 = 30;
 
-/// Returns `true` for any known Riot Arena (`CHERRY`) queue ID (`1700`, `1710`, `1750`).
+/// Returns `true` for any known Riot Arena (`CHERRY` / 3x6) queue ID (`1700`, `1710`, `1740`, `1750`).
 pub const fn is_arena_queue(queue_id: i32) -> bool {
-    matches!(queue_id, QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1750)
+    matches!(
+        queue_id,
+        QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1740 | QUEUE_ARENA_1750
+    )
+}
+
+/// Returns `true` for Riot Arena (`CHERRY` / `ARENA` / `TGR` / `ARENA 3X6`) mode or queue type tokens.
+pub fn is_arena_game_mode(mode_or_type: &str) -> bool {
+    let upper = mode_or_type.trim().to_ascii_uppercase();
+    upper == "CHERRY" || upper == "ARENA" || upper == "TGR" || upper.contains("ARENA")
 }
 
 /// Returns `true` when the queue supports custom rune pages (disabled in ARAM Mayhem and Arena).
@@ -44,7 +54,9 @@ impl From<i32> for QueueMode {
         match queue_id {
             QUEUE_ARAM => QueueMode::Aram,
             QUEUE_ARAM_MAYHEM => QueueMode::AramMayhem,
-            QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1750 => QueueMode::Arena,
+            QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1740 | QUEUE_ARENA_1750 => {
+                QueueMode::Arena
+            }
             QUEUE_PRACTICE_TOOL => QueueMode::PracticeTool,
             QUEUE_SOLO_DUO | QUEUE_FLEX | QUEUE_NORMAL_DRAFT | QUEUE_QUICKPLAY => {
                 QueueMode::SummonersRift

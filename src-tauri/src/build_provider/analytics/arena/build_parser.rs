@@ -193,9 +193,9 @@ pub(crate) fn extract_arena_champion_play_count(json: &serde_json::Value) -> i64
         .unwrap_or(0)
 }
 
-/// Parses OP.GG's `GET /api/global/champions/arena/{champion_id}` payload into an Arena
+/// Parses OP.GG's `GET /api/global/champions/arena/{champion_id}` payload into an Arena (`3x6`)
 /// `ChampionBuild` with `supports_runes: false`, `supports_spells: false`, dedicated Map `30`
-/// item blocks, augments, and duo synergies.
+/// item blocks, augments, and ally synergies.
 pub fn parse_arena_champion_payload(
     opgg_json: &serde_json::Value,
     champion_id: i32,

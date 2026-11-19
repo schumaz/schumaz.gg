@@ -92,7 +92,7 @@ export const ptCore: CoreTranslations = {
     backToTierListTitle: "Voltar para Tier List Ranqueada",
     backToArenaTierListTitle: "Voltar para Tier List da Arena",
     pickRate: "{rate}% Pick Rate",
-    top4Rate: "{rate}% Top 4",
+    top3Rate: "{rate}% Top 3",
     firstPlaceRate: "{rate}% 1º Lugar",
     protectedVolume: "Volume Protegido ({patch})",
     latestPatch: "Patch {patch} (Mais atual)",
@@ -105,7 +105,7 @@ export const ptCore: CoreTranslations = {
       "O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava. Falta 1 hora para liberar o acesso automático ao patch mais novo.",
     protectionTooltipWithHoursN:
       "O programa trava o patch mais novo por 48h para garantir integridade dos dados, mas a escolha manual do usuário desconsidera essa trava. Faltam {hours} horas para liberar o acesso automático ao patch mais novo.",
-    queueArena: "Arena (2v2v2v2)",
+    queueArena: "Arena (3x6)",
     queueAramMayhem: "ARAM Mayhem (Howling Abyss)",
     queueAram: "ARAM (Howling Abyss)",
     queuePracticeTool: "Modo Treino (Build Ranqueada)",

@@ -179,7 +179,7 @@ pub fn build_fallback_champion_build(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750};
+    use crate::models::{QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1740, QUEUE_ARENA_1750};
 
     #[test]
     fn test_opgg_queue_param_and_default_spells_adaptation() {
@@ -226,7 +226,12 @@ mod tests {
         assert!(!mayhem_fallback.supports_runes);
         assert!(mayhem_fallback.supports_spells);
 
-        for arena_queue in [QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750] {
+        for arena_queue in [
+            QUEUE_ARENA,
+            QUEUE_ARENA_1710,
+            QUEUE_ARENA_1740,
+            QUEUE_ARENA_1750,
+        ] {
             let arena_fallback = build_fallback_champion_build(103, "Ahri", arena_queue);
             assert!(!arena_fallback.supports_runes);
             assert!(!arena_fallback.supports_spells);

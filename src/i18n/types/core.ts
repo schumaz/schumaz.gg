@@ -105,7 +105,7 @@ export interface CoreTranslations {
     backToTierListTitle: string;
     backToArenaTierListTitle: string;
     pickRate: string;
-    top4Rate: string;
+    top3Rate: string;
     firstPlaceRate: string;
     protectedVolume: string;
     latestPatch: string;

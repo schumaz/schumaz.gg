@@ -31,7 +31,7 @@ describe("ArenaTab App integration & repeated dock click", () => {
     });
   });
 
-  it("loads Arena tier list on dock click, opens detail, jumps via duo synergy, and returns on repeated Arena dock click", async () => {
+  it("loads Arena tier list on dock click, opens detail, jumps via ally synergy, and returns on repeated Arena dock click", async () => {
     render(<App />);
 
     const arenaDockBtn = await screen.findByRole("button", { name: "Arena" });
@@ -66,7 +66,7 @@ describe("ArenaTab App integration & repeated dock click", () => {
     );
     expect(injectedCalls).toHaveLength(0);
 
-    // Clicking duo synergy partner Lulu jumps to Lulu's Arena detail
+    // Clicking ally synergy partner Lulu jumps to Lulu's Arena detail
     fireEvent.click(within(arenaView).getByTestId("arena-synergy-117"));
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("get_arena_champion_build", {

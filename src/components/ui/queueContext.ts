@@ -1,15 +1,15 @@
 import type { ChampionBuild, ChampSelectedPayload } from "../../types";
 
 export const QUEUE_ID_ARENA = 1700;
-export const ARENA_QUEUE_IDS = new Set<number>([1700, 1710, 1750]);
+export const ARENA_QUEUE_IDS = new Set<number>([1700, 1710, 1740, 1750]);
 
-/** Returns true for any Riot Arena (`CHERRY`) queue ID (`1700`, `1710`, `1750`). */
+/** Returns true for any Riot Arena (`CHERRY` / 3x6) queue ID (`1700`, `1710`, `1740`, `1750`). */
 export function isArenaQueueId(queueId?: number | null): boolean {
   return typeof queueId === "number" && ARENA_QUEUE_IDS.has(queueId);
 }
 
 /**
- * Returns true when the active Champ Select payload or build represents Arena (`CHERRY`).
+ * Returns true when the active Champ Select payload or build represents Arena (`CHERRY` / 3x6).
  * Safely distinguishes Arena (`supports_spells === false`) from ARAM Mayhem (`supports_runes === false`).
  */
 export function isArenaBuildContext(

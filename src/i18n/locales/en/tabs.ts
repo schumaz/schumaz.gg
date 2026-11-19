@@ -73,7 +73,7 @@ export const enTabs: TabTranslations = {
   },
   arenaTab: {
     title: "Arena",
-    modeBadge: "2v2v2v2",
+    modeBadge: "3x6",
     searchAria: "Search champion in Arena",
     clearSearchAria: "Clear search in Arena",
     allTiers: "All",
@@ -86,7 +86,7 @@ export const enTabs: TabTranslations = {
     noDataAvailable: "No Arena data available for this patch.",
     detailStatus: "{tier} · #{rank} Arena",
     detailStatusFallback: "Arena Lookup",
-    top4Label: "Top 4",
+    top3Label: "Top 3",
     firstPlaceLabel: "1st",
   },
   aram: {

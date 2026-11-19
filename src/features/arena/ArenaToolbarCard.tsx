@@ -19,7 +19,7 @@ interface ArenaToolbarCardProps {
 }
 
 /**
- * Top toolbar card for the Arena tier list with search, champion tier filter, and patch controls.
+ * Top toolbar card for the Arena (`3x6`) tier list with search, champion tier filter, and patch controls.
  */
 export function ArenaToolbarCard({
   filters,
