@@ -40,6 +40,9 @@ function App({ forceStartupLoading }: AppProps = {}) {
   const rankedPatchChangeRef = useRef<(() => void) | null>(null);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
+    if (lcu.build?.supports_spells === false || lcu.champSelect?.queue_mode === "Arena") {
+      return;
+    }
     const reordered = computeOrderedSpells(
       lcu.build?.spells,
       lcu.selectedSecondarySpellId,

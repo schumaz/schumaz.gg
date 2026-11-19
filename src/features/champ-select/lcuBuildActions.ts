@@ -5,20 +5,24 @@ import {
 } from "../../types";
 import { buildIpc, injectorIpc } from "../../services/ipc";
 import { computeOrderedSpells } from "../../utils/spells";
+import {
+  isAramBuildContextMode,
+  isArenaBuildContext,
+  isArenaQueueId,
+  QUEUE_ID_ARENA,
+} from "../../components/ui/queueContext";
 
-export function isAramBuildContext(
+export function resolveChampSelectBuildContext(
   champSelect: ChampSelectedPayload | null,
   currentBuild: ChampionBuild
-): { champId: number; qId: number; isAram: boolean } {
+): { champId: number; qId: number; isAram: boolean; isArena: boolean } {
   const champId = champSelect?.champion_id || currentBuild.champion_id;
-  const qId = champSelect?.queue_id || (currentBuild.supports_runes === false ? 2400 : 420);
-  const isAram =
-    champSelect?.queue_mode === "Aram" ||
-    champSelect?.queue_mode === "AramMayhem" ||
-    qId === 450 ||
-    qId === 2400 ||
-    currentBuild.supports_runes === false;
-  return { champId, qId, isAram };
+  const isArena = isArenaBuildContext(currentBuild, champSelect);
+  const isAram = isAramBuildContextMode(currentBuild, champSelect);
+  const qId =
+    champSelect?.queue_id ||
+    (isArena ? QUEUE_ID_ARENA : currentBuild.supports_runes === false ? 2400 : 420);
+  return { champId, qId, isAram, isArena };
 }
 
 export async function fetchFilteredChampSelectBuild(
@@ -27,13 +31,20 @@ export async function fetchFilteredChampSelectBuild(
   filterType?: "position" | "tier" | "region" | "patch",
   value?: string
 ): Promise<ChampionBuild> {
-  const { champId, qId, isAram } = isAramBuildContext(champSelect, currentBuild);
+  const { champId, qId, isAram, isArena } = resolveChampSelectBuildContext(
+    champSelect,
+    currentBuild
+  );
   const patchArg =
     filterType === "patch" && value !== undefined
       ? value.trim() || null
       : currentBuild.patch_fallback_applied
       ? null
       : currentBuild.active_patch || null;
+
+  if (isArena) {
+    return buildIpc.updateBuildFilters(champId, qId, null, null, null, patchArg);
+  }
 
   return buildIpc.updateBuildFilters(
     champId,
@@ -53,13 +64,14 @@ export async function fetchRecommendedPayloadBuild(
   payload: ChampSelectedPayload
 ): Promise<ChampionBuild> {
   const qId = payload.queue_id || 420;
+  const isArena = payload.queue_mode === "Arena" || isArenaQueueId(qId);
   const isAram =
     payload.queue_mode === "Aram" ||
     payload.queue_mode === "AramMayhem" ||
     qId === 450 ||
     qId === 2400;
 
-  return !isAram && payload.assigned_position
+  return !isAram && !isArena && payload.assigned_position
     ? buildIpc.updateBuildFilters(
         payload.champion_id,
         qId,
@@ -77,10 +89,11 @@ export async function injectSecondarySpellAction(
   flashKey: FlashKeyPreference,
   spellsInverted: boolean
 ) {
+  if (!build || build.supports_spells === false) return;
   const reordered = computeOrderedSpells(
-    build?.spells,
+    build.spells,
     spellId,
-    build?.spell_choices,
+    build.spell_choices,
     flashKey,
     spellsInverted
   );
@@ -89,7 +102,7 @@ export async function injectSecondarySpellAction(
       await injectorIpc.injectSummonerSpells(
         reordered[0].id,
         reordered[1].id,
-        build?.champion_id ?? null,
+        build.champion_id ?? null,
         spellId
       );
     } catch (e) {
@@ -99,6 +112,7 @@ export async function injectSecondarySpellAction(
 }
 
 export async function injectRunePageAction(build: ChampionBuild, pageIndex: number) {
+  if (build.supports_runes === false) return;
   if (!build.rune_pages || pageIndex >= build.rune_pages.length) return;
   const page = build.rune_pages[pageIndex];
   try {
@@ -120,8 +134,10 @@ export async function injectItemBuildAction(
   champSelect: ChampSelectedPayload | null,
   index: number
 ) {
+  const isArena = isArenaBuildContext(build, champSelect);
   const activeQueueId =
-    champSelect?.queue_id ?? (build.supports_runes === false ? 2400 : null);
+    champSelect?.queue_id ??
+    (isArena ? QUEUE_ID_ARENA : build.supports_runes === false ? 2400 : null);
   try {
     await injectorIpc.injectItemBuild(build.champion_id, activeQueueId, index);
   } catch (e) {

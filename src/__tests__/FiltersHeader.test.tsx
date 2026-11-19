@@ -24,6 +24,38 @@ const summonerRiftChampSelect: ChampSelectedPayload = {
 };
 
 describe("FiltersHeader", () => {
+  it("renders Arena badge, Arena metrics, and hides Elo/Rota/Servidor selectors when queue_mode is Arena", () => {
+    const arenaChampSelect: ChampSelectedPayload = {
+      champion_id: 103,
+      queue_id: 1700,
+      queue_mode: "Arena",
+      locked_in: true,
+    };
+
+    render(
+      <FiltersHeader
+        build={{
+          ...mockBuild,
+          active_tier: "arena",
+          supports_runes: false,
+          supports_spells: false,
+          first_place_rate: 15.2,
+        }}
+        champSelect={arenaChampSelect}
+        loading={false}
+        onFilterChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Arena (2v2v2v2)")).toBeInTheDocument();
+    expect(screen.getByText("52.4% Top 4")).toBeInTheDocument();
+    expect(screen.getByText("15.2% 1º Lugar")).toBeInTheDocument();
+    expect(screen.queryByTestId("filter-tier")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("filter-position")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("filter-region")).not.toBeInTheDocument();
+    expect(screen.getByTestId("filter-patch")).toBeInTheDocument();
+  });
+
   it("renders ARAM Mayhem badge and hides Rota selector when queue_mode is AramMayhem", () => {
     const mockChampSelect: ChampSelectedPayload = {
       champion_id: 103,

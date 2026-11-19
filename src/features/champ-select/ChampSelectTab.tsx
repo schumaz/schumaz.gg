@@ -4,10 +4,13 @@ import {
   SpellMetadata,
   SummonerInfo,
 } from "../../types";
+import { ArenaAugmentsCard } from "../../components/ui/ArenaAugmentsCard";
+import { ArenaSynergiesCard } from "../../components/ui/ArenaSynergiesCard";
 import { FiltersHeader } from "../../components/ui/FiltersHeader";
 import { ItemBlocks } from "../../components/ui/ItemBlocks";
 import { RuneTree } from "../../components/ui/RuneTree";
 import { SpellsBar } from "../../components/ui/SpellsBar";
+import { isArenaBuildContext } from "../../components/ui/queueContext";
 import { IdleState } from "./IdleState";
 
 interface ChampSelectTabProps {
@@ -48,6 +51,8 @@ export function ChampSelectTab({
   onSelectSecondarySpell,
   onSelectBuild,
 }: ChampSelectTabProps) {
+  const isArena = isArenaBuildContext(build, champSelect);
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -63,21 +68,33 @@ export function ChampSelectTab({
             onFilterChange={onFilterChange}
           />
 
-          <div className="dashboard-split-grid">
-            <div className="dashboard-col dashboard-col-left">
-              <RuneTree
-                build={build}
-                selectedRunePageIndex={selectedRunePageIndex}
-                onSelectRunePage={onSelectRunePage}
-              />
+          <div className={`dashboard-split-grid ${isArena ? "is-arena-grid" : ""}`}>
+            <div className={`dashboard-col dashboard-col-left ${isArena ? "is-arena-col" : ""}`}>
+              {isArena ? (
+                <>
+                  <ArenaAugmentsCard
+                    augments={build.arena_augments ?? []}
+                    showModeNotice={true}
+                  />
+                  <ArenaSynergiesCard synergies={build.arena_synergies ?? []} />
+                </>
+              ) : (
+                <>
+                  <RuneTree
+                    build={build}
+                    selectedRunePageIndex={selectedRunePageIndex}
+                    onSelectRunePage={onSelectRunePage}
+                  />
 
-              <SpellsBar
-                orderedSpells={orderedSpells}
-                spellChoices={build.spell_choices}
-                selectedSecondarySpellId={selectedSecondarySpellId}
-                onInvertSpells={onInvertSpells}
-                onSelectSecondarySpell={onSelectSecondarySpell}
-              />
+                  <SpellsBar
+                    orderedSpells={orderedSpells}
+                    spellChoices={build.spell_choices}
+                    selectedSecondarySpellId={selectedSecondarySpellId}
+                    onInvertSpells={onInvertSpells}
+                    onSelectSecondarySpell={onSelectSecondarySpell}
+                  />
+                </>
+              )}
             </div>
 
             <div className="dashboard-col dashboard-col-right">

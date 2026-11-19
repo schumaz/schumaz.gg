@@ -103,6 +103,8 @@ export interface CoreTranslations {
     hovering: string;
     backToTierListTitle: string;
     pickRate: string;
+    top4Rate: string;
+    firstPlaceRate: string;
     protectedVolume: string;
     latestPatch: string;
     patchOption: string;
@@ -111,6 +113,7 @@ export interface CoreTranslations {
     protectionTooltipBase: string;
     protectionTooltipWithHours1: string;
     protectionTooltipWithHoursN: string;
+    queueArena: string;
     queueAramMayhem: string;
     queueAram: string;
     queuePracticeTool: string;

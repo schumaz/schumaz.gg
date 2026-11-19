@@ -3,6 +3,7 @@ import { ChampionBuild, ItemBlockKind } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 import { BuildSelector } from "./BuildSelector";
+import { isArenaBuildContext } from "./queueContext";
 
 interface ItemBlocksProps {
   build: ChampionBuild;
@@ -19,6 +20,7 @@ export function ItemBlocks({
 }: ItemBlocksProps) {
   const { t, formatNumber } = useTranslation();
 
+  const isArena = isArenaBuildContext(build);
   const activeBuildOption =
     build.build_options && build.build_options.length > selectedBuildIndex
       ? build.build_options[selectedBuildIndex]
@@ -43,6 +45,36 @@ export function ItemBlocks({
   }
   const activeBuildMetaText = activeBuildMetaParts.join(" · ");
 
+  const resolvedBlocks = build.item_blocks
+    .map((block) => {
+      const kind: ItemBlockKind = block.kind ?? "other";
+      let activeIds = block.item_ids;
+      let activeIcons = block.item_icon_urls;
+
+      if (activeBuildOption) {
+        if (kind === "core") {
+          activeIds = activeBuildOption.core_item_ids;
+          activeIcons = activeBuildOption.core_item_icon_urls;
+        } else if (kind === "final") {
+          activeIds = activeBuildOption.final_item_ids;
+          activeIcons = activeBuildOption.final_item_icon_urls;
+        } else if (
+          kind === "situational" &&
+          activeBuildOption.situational_item_ids &&
+          activeBuildOption.situational_item_ids.length > 0
+        ) {
+          activeIds = activeBuildOption.situational_item_ids;
+          activeIcons = activeBuildOption.situational_item_icon_urls || [];
+        }
+      }
+
+      return { block, kind, activeIds, activeIcons };
+    })
+    .filter((entry) => !isArena || entry.activeIds.length > 0);
+
+  const hasPrismaticBlock = resolvedBlocks.some((entry) => entry.kind === "prismatic");
+  const hasBootsBlock = resolvedBlocks.some((entry) => entry.kind === "boots");
+
   return (
     <section className="card item-blocks-preview" data-testid="item-blocks">
       <div className="item-blocks-header">
@@ -61,10 +93,10 @@ export function ItemBlocks({
         />
       </div>
 
-      <div className="grid-blocks">
-        {build.item_blocks.map((block, bIndex) => {
-          const kind: ItemBlockKind = block.kind ?? "other";
+      <div className={`grid-blocks ${hasPrismaticBlock ? "grid-blocks-arena" : ""}`}>
+        {resolvedBlocks.map(({ block, kind, activeIds, activeIcons }, bIndex) => {
           const isStarterBlock = kind === "starter";
+          const isPrismaticBlock = kind === "prismatic";
           const isCoreBlock = kind === "core";
           const isBootsBlock = kind === "boots";
           const isFinalBlock = kind === "final";
@@ -72,38 +104,24 @@ export function ItemBlocks({
 
           const localizedTitle = isStarterBlock
             ? t("items.blockStarter")
+            : isPrismaticBlock
+            ? t("items.blockPrismatic")
             : isCoreBlock
             ? t("items.blockCore")
             : isBootsBlock
-            ? t("items.blockBoots")
+            ? isArena
+              ? t("items.blockArenaBoots")
+              : t("items.blockBoots")
             : isFinalBlock
             ? t("items.blockFinal")
             : isSituationalBlock
             ? t("items.blockSituational")
             : block.title;
 
-          let activeIds = block.item_ids;
-          let activeIcons = block.item_icon_urls;
-
-          if (activeBuildOption) {
-            if (isCoreBlock) {
-              activeIds = activeBuildOption.core_item_ids;
-              activeIcons = activeBuildOption.core_item_icon_urls;
-            } else if (isFinalBlock) {
-              activeIds = activeBuildOption.final_item_ids;
-              activeIcons = activeBuildOption.final_item_icon_urls;
-            } else if (
-              isSituationalBlock &&
-              activeBuildOption.situational_item_ids &&
-              activeBuildOption.situational_item_ids.length > 0
-            ) {
-              activeIds = activeBuildOption.situational_item_ids;
-              activeIcons = activeBuildOption.situational_item_icon_urls || [];
-            }
-          }
-
           const blockKindClass = isStarterBlock
             ? "block-kind-starter"
+            : isPrismaticBlock
+            ? `block-kind-prismatic${hasBootsBlock ? "" : " block-span-full"}`
             : isCoreBlock
             ? "block-kind-core"
             : isBootsBlock
@@ -114,13 +132,21 @@ export function ItemBlocks({
             ? "block-kind-situational"
             : "block-span-full";
 
-          const blockTag = isCoreBlock
+          const blockTag = isPrismaticBlock
+            ? t("items.prismaticTag")
+            : isCoreBlock
             ? t("items.coreTrioTag")
             : isFinalBlock
             ? t("items.itemsCountTag", { count: activeIds.length })
             : isSituationalBlock
             ? t("items.optionalTag")
             : null;
+
+          const badgeVariantClass = isPrismaticBlock
+            ? "block-badge-prismatic"
+            : isCoreBlock
+            ? "block-badge-accent"
+            : "";
 
           return (
             <div key={`${kind}-${bIndex}`} className={`block-item ${blockKindClass}`}>
@@ -129,7 +155,7 @@ export function ItemBlocks({
                   {bIndex + 1}. {localizedTitle}
                 </h4>
                 {blockTag && (
-                  <span className={`block-badge ${isCoreBlock ? "block-badge-accent" : ""}`}>
+                  <span className={`block-badge ${badgeVariantClass}`}>
                     {blockTag}
                   </span>
                 )}

@@ -90,6 +90,8 @@ export const enCore: CoreTranslations = {
     hovering: "Selecting (Hover)",
     backToTierListTitle: "Back to Ranked Tier List",
     pickRate: "{rate}% Pick Rate",
+    top4Rate: "{rate}% Top 4",
+    firstPlaceRate: "{rate}% 1st Place",
     protectedVolume: "Protected Volume ({patch})",
     latestPatch: "Patch {patch} (Latest)",
     patchOption: "Patch {patch}",
@@ -101,6 +103,7 @@ export const enCore: CoreTranslations = {
       "The app locks the newest patch for 48h to ensure data integrity, while manual selection overrides this lock. 1 hour remaining until automatic access to the newest patch unlocks.",
     protectionTooltipWithHoursN:
       "The app locks the newest patch for 48h to ensure data integrity, while manual selection overrides this lock. {hours} hours remaining until automatic access to the newest patch unlocks.",
+    queueArena: "Arena (2v2v2v2)",
     queueAramMayhem: "ARAM Mayhem (Howling Abyss)",
     queueAram: "ARAM (Howling Abyss)",
     queuePracticeTool: "Practice Tool (Ranked Build)",

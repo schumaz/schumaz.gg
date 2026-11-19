@@ -120,6 +120,39 @@ describe("ItemBlocks", () => {
     expect(container.querySelector(".block-kind-situational img[alt='Item 3116']")).toBeInTheDocument();
   });
 
+  it("renders Arena Prismatic block and expands it to full width when champion has no boots (e.g. Cassiopeia)", () => {
+    const arenaNoBootsBuild: ChampionBuild = {
+      ...mockBuild,
+      champion_id: 69,
+      champion_name: "Cassiopeia",
+      active_tier: "arena",
+      supports_runes: false,
+      supports_spells: false,
+      build_options: [],
+      item_blocks: [
+        { kind: "prismatic", title: "Itens Prismáticos", item_ids: [443090, 447109], item_icon_urls: ["p1.png", "p2.png"] },
+        { kind: "core", title: "Primeiros 3 Itens", item_ids: [223003, 223116, 226653] },
+        { kind: "boots", title: "3 Botas Mais Feitas", item_ids: [] },
+        { kind: "final", title: "Build Final", item_ids: [223003, 223116, 226653, 223089] },
+        { kind: "situational", title: "Itens Situacionais / Úteis", item_ids: [223157] },
+      ],
+    };
+
+    const { container } = render(
+      <ItemBlocks
+        build={arenaNoBootsBuild}
+        selectedBuildIndex={0}
+        onSelectBuild={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("1. Itens Prismáticos")).toBeInTheDocument();
+    expect(screen.getByText("Prismático")).toBeInTheDocument();
+    expect(screen.queryByText(/Botas/i)).not.toBeInTheDocument();
+    expect(container.querySelector(".block-kind-prismatic.block-span-full")).toBeInTheDocument();
+    expect(container.querySelector(".grid-blocks-arena")).toBeInTheDocument();
+  });
+
   it("uses consultation labels in readOnly mode", () => {
     render(
       <ItemBlocks

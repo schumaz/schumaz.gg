@@ -6,6 +6,7 @@ import { FilterDropdown } from "./FilterDropdown";
 import { LoadingBar } from "./LoadingIndicators";
 import { getPositionOptions, getRegionOptions, getTierOptions } from "./filterOptions";
 import { computePatchUiMeta } from "./patchUiMeta";
+import { isAramBuildContextMode, isArenaBuildContext } from "./queueContext";
 
 export * from "./filterOptions";
 export * from "./patchUiMeta";
@@ -35,12 +36,8 @@ export function FiltersHeader({
   const { t } = useTranslation();
   const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
 
-  const isAram =
-    champSelect?.queue_mode === "Aram" ||
-    champSelect?.queue_mode === "AramMayhem" ||
-    champSelect?.queue_id === 450 ||
-    champSelect?.queue_id === 2400 ||
-    build.supports_runes === false;
+  const isArena = isArenaBuildContext(build, champSelect);
+  const isAram = isAramBuildContextMode(build, champSelect);
 
   const tierOptions = getTierOptions(t);
   const positionOptions = getPositionOptions(t);
@@ -68,7 +65,9 @@ export function FiltersHeader({
 
   const resolvedQueueLabel =
     queueModeLabel ??
-    (champSelect?.queue_mode === "AramMayhem"
+    (isArena
+      ? t("filters.queueArena")
+      : champSelect?.queue_mode === "AramMayhem"
       ? t("filters.queueAramMayhem")
       : champSelect?.queue_mode === "Aram"
       ? t("filters.queueAram")
@@ -124,6 +123,16 @@ export function FiltersHeader({
 
           <div className="champ-meta-row">
             <span className="badge-meta">{resolvedQueueLabel}</span>
+            {isArena && (build.win_rate ?? 0) > 0 && (
+              <span className="badge badge-neutral badge-stat">
+                {t("filters.top4Rate", { rate: (build.win_rate ?? 0).toFixed(1) })}
+              </span>
+            )}
+            {isArena && (build.first_place_rate ?? 0) > 0 && (
+              <span className="badge badge-neutral badge-stat">
+                {t("filters.firstPlaceRate", { rate: (build.first_place_rate ?? 0).toFixed(1) })}
+              </span>
+            )}
             {(build.pick_rate ?? 0) > 0 && (
               <span className="badge badge-neutral badge-stat">
                 {t("filters.pickRate", { rate: (build.pick_rate ?? 0).toFixed(1) })}
@@ -144,22 +153,24 @@ export function FiltersHeader({
       </div>
 
       <div className="champ-filters-bar" data-testid="champ-filters-bar">
-        <div className="filter-group">
-          <label id="filter-tier-label" htmlFor="filter-tier" className="filter-label">
-            {t("filters.eloLabel")}
-          </label>
-          <FilterDropdown
-            id="filter-tier"
-            labelId="filter-tier-label"
-            testId="filter-tier"
-            value={build.active_tier || "emerald_plus"}
-            options={tierOptions}
-            disabled={loading}
-            onChange={(val) => onFilterChange("tier", val)}
-          />
-        </div>
+        {!isArena && (
+          <div className="filter-group">
+            <label id="filter-tier-label" htmlFor="filter-tier" className="filter-label">
+              {t("filters.eloLabel")}
+            </label>
+            <FilterDropdown
+              id="filter-tier"
+              labelId="filter-tier-label"
+              testId="filter-tier"
+              value={build.active_tier || "emerald_plus"}
+              options={tierOptions}
+              disabled={loading}
+              onChange={(val) => onFilterChange("tier", val)}
+            />
+          </div>
+        )}
 
-        {!isAram && (
+        {!isAram && !isArena && (
           <div className="filter-group">
             <label id="filter-position-label" htmlFor="filter-position" className="filter-label">
               {t("filters.laneLabel")}
@@ -176,20 +187,22 @@ export function FiltersHeader({
           </div>
         )}
 
-        <div className="filter-group">
-          <label id="filter-region-label" htmlFor="filter-region" className="filter-label">
-            {t("filters.regionLabel")}
-          </label>
-          <FilterDropdown
-            id="filter-region"
-            labelId="filter-region-label"
-            testId="filter-region"
-            value={build.active_region || "global"}
-            options={regionOptions}
-            disabled={loading}
-            onChange={(val) => onFilterChange("region", val)}
-          />
-        </div>
+        {!isArena && (
+          <div className="filter-group">
+            <label id="filter-region-label" htmlFor="filter-region" className="filter-label">
+              {t("filters.regionLabel")}
+            </label>
+            <FilterDropdown
+              id="filter-region"
+              labelId="filter-region-label"
+              testId="filter-region"
+              value={build.active_region || "global"}
+              options={regionOptions}
+              disabled={loading}
+              onChange={(val) => onFilterChange("region", val)}
+            />
+          </div>
+        )}
 
         <div className="filter-group filter-group-patch">
           <label id="filter-patch-label" htmlFor="filter-patch" className="filter-label">

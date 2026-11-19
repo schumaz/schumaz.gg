@@ -48,14 +48,35 @@ export interface BuildTranslations {
     usageLabel: string;
     pickLabel: string;
     coreTrioTag: string;
+    prismaticTag: string;
     itemsCountTag: string;
     optionalTag: string;
     blockStarter: string;
+    blockPrismatic: string;
     blockCore: string;
     blockBoots: string;
+    blockArenaBoots: string;
     blockFinal: string;
     blockSituational: string;
     build1MostPopular: string;
     buildOptionNumber: string;
+  };
+  arena: {
+    modeNoticeBadge: string;
+    modeNoticeText: string;
+    augmentsTitle: string;
+    augmentsEmpty: string;
+    augmentsFilterEmpty: string;
+    rarityFilterAria: string;
+    rarityAll: string;
+    raritySilver: string;
+    rarityGold: string;
+    rarityPrismatic: string;
+    top4Short: string;
+    firstPlaceShort: string;
+    avgPlaceShort: string;
+    synergiesTitle: string;
+    synergiesEmpty: string;
+    synergiesCount: string;
   };
 }

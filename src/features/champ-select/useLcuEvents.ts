@@ -9,6 +9,7 @@ import {
 import { lcuIpc } from "../../services/ipc";
 import { translate } from "../../i18n";
 import { computeOrderedSpells } from "../../utils/spells";
+import { isArenaBuildContext } from "../../components/ui/queueContext";
 import {
   fetchFilteredChampSelectBuild,
   injectItemBuildAction,
@@ -82,13 +83,16 @@ export function useLcuEvents(
   ) => {
     const currentBuild = buildRef.current ?? build;
     if (!currentBuild) return;
+    if (isArenaBuildContext(currentBuild, champSelectRef.current ?? champSelect) && filterType !== "patch") {
+      return;
+    }
     const fetchSeq = ++latestFetchSeqRef.current;
     setLoading(true);
     setErrorMsg(null);
     try {
       const updatedBuild = await fetchFilteredChampSelectBuild(
         currentBuild,
-        champSelect,
+        champSelectRef.current ?? champSelect,
         filterType,
         value
       );
@@ -97,7 +101,7 @@ export function useLcuEvents(
         setBuild(updatedBuild);
       }
     } catch (err: unknown) {
-      console.error("Falha ao atualizar filtros da build:", err);
+      console.error("Failed to update build filters:", err);
       if (latestFetchSeqRef.current === fetchSeq) {
         setErrorMsg(
           typeof err === "string"
@@ -169,20 +173,26 @@ export function useLcuEvents(
     };
   }, []);
 
-  const orderedSpells = computeOrderedSpells(
-    build?.spells,
-    selectedSecondarySpellId,
-    build?.spell_choices,
-    flashKey,
-    spellsInverted
-  );
+  const isArena = isArenaBuildContext(build, champSelect);
+
+  const orderedSpells = isArena
+    ? []
+    : computeOrderedSpells(
+        build?.spells,
+        selectedSecondarySpellId,
+        build?.spell_choices,
+        flashKey,
+        spellsInverted
+      );
 
   const handleSelectSecondarySpell = async (spellId: number) => {
+    if (isArena || build?.supports_spells === false) return;
     setSelectedSecondarySpellId(spellId);
     await injectSecondarySpellAction(build, spellId, flashKey, spellsInverted);
   };
 
   const handleSelectRunePage = async (pageIndex: number) => {
+    if (isArena || build?.supports_runes === false) return;
     if (!build?.rune_pages || pageIndex >= build.rune_pages.length) return;
     setSelectedRunePageIndex(pageIndex);
     await injectRunePageAction(build, pageIndex);

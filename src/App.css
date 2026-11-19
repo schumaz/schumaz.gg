@@ -1,6 +1,7 @@
 @import "./styles/tokens-shell.css";
 @import "./styles/cards-controls.css";
 @import "./features/champ-select/ChampSelect.css";
+@import "./components/ui/ArenaPanel.css";
 @import "./features/settings/SettingsTab.css";
 @import "./features/profile/ProfileTab.css";
 @import "./features/aram/AramTab.css";
