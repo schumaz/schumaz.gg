@@ -6,7 +6,26 @@ pub fn extract_top_core_build_options(
     all_candidates: &[i32],
     damage_type: &str,
 ) -> Vec<ItemBuildOption> {
-    let tear_upgrade = resolve_tear_to_completed_item(core_entries, "", damage_type);
+    let tear_upgrade = resolve_tear_to_completed_item(core_entries).or_else(|| {
+        all_candidates
+            .iter()
+            .map(|&id| normalize_tear_item_dynamic(id))
+            .find(|id| TEAR_COMPLETED_ITEMS.contains(id))
+    });
+    extract_top_core_build_options_with_tear(
+        core_entries,
+        all_candidates,
+        damage_type,
+        tear_upgrade,
+    )
+}
+
+pub fn extract_top_core_build_options_with_tear(
+    core_entries: &[ItemStatEntry],
+    all_candidates: &[i32],
+    damage_type: &str,
+    tear_upgrade: Option<i32>,
+) -> Vec<ItemBuildOption> {
     let mut options: Vec<ItemBuildOption> = Vec::new();
 
     // 1. Filter core combinations with >= 2 non-boot, non-starter, non-component items
@@ -30,12 +49,7 @@ pub fn extract_top_core_build_options(
 
     for combo in valid_combos {
         let mut items = Vec::new();
-        for &id in &combo.ids {
-            let norm_id = if id == 3070 {
-                tear_upgrade
-            } else {
-                normalize_tear_item_dynamic(id)
-            };
+        for norm_id in resolve_tear_item_ids(&combo.ids, tear_upgrade) {
             if items.len() < 3
                 && !is_boot_item_dynamic(norm_id)
                 && !is_starter_item(norm_id)
@@ -49,11 +63,7 @@ pub fn extract_top_core_build_options(
         // Fill up to 3 core items from all_candidates if needed
         if items.len() < 3 {
             for &cand in all_candidates {
-                let norm_cand = if cand == 3070 {
-                    tear_upgrade
-                } else {
-                    normalize_tear_item_dynamic(cand)
-                };
+                let norm_cand = normalize_tear_item_dynamic(cand);
                 if items.len() < 3
                     && !items.contains(&norm_cand)
                     && !is_boot_item_dynamic(norm_cand)
@@ -90,11 +100,7 @@ pub fn extract_top_core_build_options(
     if options.is_empty() {
         let mut fallback = Vec::new();
         for &c in all_candidates {
-            let norm_c = if c == 3070 {
-                tear_upgrade
-            } else {
-                normalize_tear_item_dynamic(c)
-            };
+            let norm_c = normalize_tear_item_dynamic(c);
             if fallback.len() < 3
                 && !fallback.contains(&norm_c)
                 && !is_boot_item_dynamic(norm_c)

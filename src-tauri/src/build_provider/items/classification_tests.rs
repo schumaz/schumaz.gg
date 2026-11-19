@@ -14,31 +14,43 @@ fn test_normalize_tear_item_dynamic_and_static_fallbacks() {
 }
 
 #[test]
-fn test_resolve_tear_to_completed_item_by_archetype() {
+fn test_resolve_tear_to_completed_item_from_payload_entries() {
     let empty_entries: Vec<ItemStatEntry> = Vec::new();
+    assert_eq!(resolve_tear_to_completed_item(&empty_entries), None);
+
+    let mana_only_entries = vec![ItemStatEntry {
+        ids: vec![3070, 6655, 4645, 3089],
+        play: 5000,
+        win: 2600,
+        pick_rate: 40.0,
+    }];
+    assert_eq!(resolve_tear_to_completed_item(&mana_only_entries), None);
+
+    let weighted_entries = vec![
+        ItemStatEntry {
+            ids: vec![3040],
+            play: 500,
+            win: 250,
+            pick_rate: 5.0,
+        },
+        ItemStatEntry {
+            ids: vec![2530],
+            play: 12000,
+            win: 6400,
+            pick_rate: 45.0,
+        },
+    ];
     assert_eq!(
-        resolve_tear_to_completed_item(&empty_entries, "support", "AP"),
-        2526
-    ); // Whispering Circlet
-    assert_eq!(
-        resolve_tear_to_completed_item(&empty_entries, "mid", "AP"),
-        3003
-    ); // Archangel's Staff
-    assert_eq!(
-        resolve_tear_to_completed_item(&empty_entries, "adc", "AD"),
-        3004
-    ); // Manamune
-    assert_eq!(
-        resolve_tear_to_completed_item(&empty_entries, "top", "TANK"),
-        3119
-    ); // Winter's Approach
+        resolve_tear_to_completed_item(&weighted_entries),
+        Some(2526)
+    );
 }
 
 #[test]
 fn test_diadem_of_songs_normalizes_to_whispering_circlet() {
     assert_eq!(normalize_tear_item_dynamic(2530), 2526);
     assert_eq!(
-        resolve_tear_item_ids(&[2530, 3001, 3070], 2526),
+        resolve_tear_item_ids(&[2530, 3001, 3070], Some(2526)),
         vec![2526, 3001]
     );
 }

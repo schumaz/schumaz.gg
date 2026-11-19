@@ -1,7 +1,7 @@
 ﻿use super::super::models::{ItemStatEntry, UnifiedBuildOption};
 use super::affinity::*;
 use super::classification::*;
-use super::core_final_options::extract_top_core_build_options;
+use super::core_final_options::extract_top_core_build_options_with_tear;
 use std::collections::HashMap;
 
 pub fn build_cohesive_final_build_for_core(
@@ -10,20 +10,11 @@ pub fn build_cohesive_final_build_for_core(
     fifth_entries: &[ItemStatEntry],
     sixth_entries: &[ItemStatEntry],
     candidate_entries: &[ItemStatEntry],
-    damage_type: &str,
+    _damage_type: &str,
 ) -> Vec<i32> {
     let mut build_6 = core_items.to_vec();
     let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
         extract_core_archetype_tags(core_items);
-
-    let all_for_tear: Vec<ItemStatEntry> = fourth_entries
-        .iter()
-        .chain(fifth_entries.iter())
-        .chain(sixth_entries.iter())
-        .chain(candidate_entries.iter())
-        .cloned()
-        .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, "", damage_type);
 
     let pick_best_item_for_slot =
         |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
@@ -32,11 +23,7 @@ pub fn build_cohesive_final_build_for_core(
             let mut idx = 0;
             for entry in entries {
                 for &id in &entry.ids {
-                    let norm_id = if id == 3070 {
-                        tear_upgrade
-                    } else {
-                        normalize_tear_item_dynamic(id)
-                    };
+                    let norm_id = normalize_tear_item_dynamic(id);
                     if !current_build.contains(&norm_id)
                         && !is_boot_item_dynamic(norm_id)
                         && !is_starter_item(norm_id)
@@ -91,11 +78,7 @@ pub fn build_cohesive_final_build_for_core(
         let mut f_idx = 0;
         for entry in all_remaining_entries {
             for &id in &entry.ids {
-                let norm_id = if id == 3070 {
-                    tear_upgrade
-                } else {
-                    normalize_tear_item_dynamic(id)
-                };
+                let norm_id = normalize_tear_item_dynamic(id);
                 if !build_6.contains(&norm_id)
                     && !is_boot_item_dynamic(norm_id)
                     && !is_starter_item(norm_id)
@@ -143,20 +126,10 @@ pub fn build_situational_items_for_option(
     candidate_entries: &[ItemStatEntry],
     extra_entries: &[ItemStatEntry],
     general_situational: &[i32],
-    damage_type: &str,
+    _damage_type: &str,
 ) -> Vec<i32> {
     let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
         extract_core_archetype_tags(core_items);
-
-    let all_for_tear: Vec<ItemStatEntry> = fourth_entries
-        .iter()
-        .chain(fifth_entries.iter())
-        .chain(sixth_entries.iter())
-        .chain(candidate_entries.iter())
-        .chain(extra_entries.iter())
-        .cloned()
-        .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, "", damage_type);
 
     let all_entries = fourth_entries
         .iter()
@@ -171,11 +144,7 @@ pub fn build_situational_items_for_option(
 
     for entry in all_entries {
         for &id in &entry.ids {
-            let norm_id = if id == 3070 {
-                tear_upgrade
-            } else {
-                normalize_tear_item_dynamic(id)
-            };
+            let norm_id = normalize_tear_item_dynamic(id);
             if !core_items.contains(&norm_id)
                 && !final_items.contains(&norm_id)
                 && !is_boot_item_dynamic(norm_id)
@@ -191,11 +160,7 @@ pub fn build_situational_items_for_option(
 
     // Include items from general_situational as candidate pool if not already present
     for &id in general_situational {
-        let norm_id = if id == 3070 {
-            tear_upgrade
-        } else {
-            normalize_tear_item_dynamic(id)
-        };
+        let norm_id = normalize_tear_item_dynamic(id);
         if !core_items.contains(&norm_id)
             && !final_items.contains(&norm_id)
             && !is_boot_item_dynamic(norm_id)
@@ -239,11 +204,27 @@ pub fn build_unified_build_options(
     damage_type: &str,
     _position: &str,
 ) -> Vec<UnifiedBuildOption> {
+    let all_for_tear: Vec<ItemStatEntry> = core_entries
+        .iter()
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .chain(candidate_entries.iter())
+        .chain(extra_entries.iter())
+        .cloned()
+        .collect();
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear);
+
     let cand_ids: Vec<i32> = candidate_entries
         .iter()
         .flat_map(|e| e.ids.clone())
         .collect();
-    let core_opts = extract_top_core_build_options(core_entries, &cand_ids, damage_type);
+    let core_opts = extract_top_core_build_options_with_tear(
+        core_entries,
+        &cand_ids,
+        damage_type,
+        tear_upgrade,
+    );
 
     let mut unified_options = Vec::new();
     for (idx, core_opt) in core_opts.into_iter().enumerate() {

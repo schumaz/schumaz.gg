@@ -186,12 +186,13 @@ pub fn parse_opgg_analysis_payload_for_mode(
         .chain(sixth_entries.iter())
         .cloned()
         .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear, position, damage_type);
+    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear);
 
-    let normalize_entries = |entries: &mut [ItemStatEntry]| {
+    let normalize_entries = |entries: &mut Vec<ItemStatEntry>| {
         for entry in entries.iter_mut() {
             entry.ids = resolve_tear_item_ids(&entry.ids, tear_upgrade);
         }
+        entries.retain(|e| !e.ids.is_empty());
     };
     normalize_entries(&mut core_entries);
     normalize_entries(&mut candidate_entries);

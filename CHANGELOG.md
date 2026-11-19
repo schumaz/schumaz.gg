@@ -5,6 +5,16 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-11-19
+
+Accurate Tear of the Goddess (`3070`) item ordering across Core and Final builds.
+
+### Fixed
+- **Tear of the Goddess (`3070` / `323070` / `773070`) Core & Final Build Ordering**: Refactored `resolve_tear_item_ids`, `resolve_tear_to_completed_item`, and Tear component filtering across `classification.rs`, `blocks.rs`, `core_final_options.rs`, `options.rs`, `rest_parser.rs`, and `mcp_parser.rs` so an early Tear purchase no longer forces its legendary evolution (`Manamune`, `Archangel's Staff`, `Whispering Circlet`, `Winter's Approach`) into slot 1.
+  - Drops raw Tear components when the combination already contains a completed/evolved Tear legendary, preserving real completion order (e.g. *Trinity Force → Manamune* on Ezreal, *Rod of Ages → Archangel's Staff* on Veigar, *Moonstone → Whispering Circlet* on Lulu, and Jayce's build order).
+  - Drops raw Tear without inventing an upgrade or displacing the 3rd legendary when 3 completed items are already built or when no Tear evolution exists in the payload.
+  - Appends a confirmed Tear evolution **after** completed legendaries only when fewer than 3 completed items are present alongside raw Tear (e.g. Seraphine / Lulu short core builds).
+
 ## [0.2.1] - 2026-11-19
 
 Dynamic mode-based summoner spell filtering for ARAM Mayhem and Classic ARAM.

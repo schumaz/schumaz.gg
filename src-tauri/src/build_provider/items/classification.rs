@@ -1,4 +1,5 @@
 use super::super::models::{ItemClassificationCache, ItemStatEntry};
+use std::collections::HashMap;
 
 pub static TEST_CLASSIFICATION_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -79,6 +80,16 @@ pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
     }
 }
 
+pub const TEAR_COMPONENT_IDS: [i32; 3] = [
+    3070,   // Tear of the Goddess (Summoner's Rift / ARAM)
+    323070, // Tear of the Goddess (Swiftplay / mode variant)
+    773070, // Tear of the Goddess (mode variant)
+];
+
+pub fn is_tear_component(id: i32) -> bool {
+    TEAR_COMPONENT_IDS.contains(&id)
+}
+
 pub const TEAR_COMPLETED_ITEMS: [i32; 4] = [
     2526, // Whispering Circlet (Circuleto Sussurrante)
     3003, // Archangel's Staff (Cajado do Arcanjo)
@@ -86,52 +97,89 @@ pub const TEAR_COMPLETED_ITEMS: [i32; 4] = [
     3119, // Winter's Approach (Aproximação do Inverno)
 ];
 
-/// Resolves a raw Tear of the Goddess (3070) into its completed purchasable legendary item
-/// by inspecting the champion's candidate/depth entries or defaulting by position and damage type.
-pub fn resolve_tear_to_completed_item(
-    entries: &[ItemStatEntry],
-    position: &str,
-    damage_type: &str,
-) -> i32 {
-    // 1. Look for any completed tear item in the champion's item entries
+/// Detects the champion's most-played completed purchasable Tear legendary item across payload entries.
+/// Returns `None` when no completed/evolved Tear item appears anywhere in `entries`, so raw Tear
+/// components bought solely for early mana never invent a Tear legendary.
+pub fn resolve_tear_to_completed_item(entries: &[ItemStatEntry]) -> Option<i32> {
+    let mut play_by_item: HashMap<i32, (i64, usize)> = HashMap::new();
+    let mut seen_counter = 0usize;
+
     for entry in entries {
         for &id in &entry.ids {
             let norm = normalize_tear_item_dynamic(id);
             if TEAR_COMPLETED_ITEMS.contains(&norm) {
-                return norm;
+                let slot = play_by_item.entry(norm).or_insert_with(|| {
+                    let idx = seen_counter;
+                    seen_counter += 1;
+                    (0, idx)
+                });
+                slot.0 += entry.play.max(1);
             }
         }
     }
 
-    // 2. Fallback based on champion position / archetype
-    let norm_pos = position.to_lowercase();
-    if norm_pos == "support" || norm_pos == "supp" || norm_pos == "utility" {
-        2526 // Whispering Circlet (Circuleto Sussurrante)
-    } else if damage_type == "AP" {
-        3003 // Archangel's Staff (Cajado do Arcanjo)
-    } else if damage_type == "TANK" || norm_pos == "top" {
-        3119 // Winter's Approach (Aproximação do Inverno)
-    } else {
-        3004 // Manamune
-    }
+    play_by_item
+        .into_iter()
+        .max_by(|(id_a, (play_a, idx_a)), (id_b, (play_b, idx_b))| {
+            play_a
+                .cmp(play_b)
+                .then_with(|| idx_b.cmp(idx_a))
+                .then_with(|| id_b.cmp(id_a))
+        })
+        .map(|(id, _)| id)
 }
 
 /// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
-/// and optionally promoting Tear of the Goddess (3070) to its completed item,
-/// deduplicating while preserving original order.
-pub fn resolve_tear_item_ids(ids: &[i32], tear_upgrade: i32) -> Vec<i32> {
-    let mut result = Vec::new();
+/// and safely handling raw Tear of the Goddess components (`3070`, `323070`, `773070`):
+/// 1. If the combination already includes a completed/evolved Tear item, raw Tear is dropped
+///    to preserve the real completion slot of the legendary.
+/// 2. If the combination already has 3+ completed items without evolving Tear, raw Tear is
+///    dropped as an early mana component without inventing an upgrade or pushing out the 3rd item.
+/// 3. Only when the combination has 1..3 completed items, contains raw Tear, and the payload
+///    confirms a completed Tear evolution (`tear_upgrade == Some(id)`), `tear_upgrade` is appended
+///    after the already completed legendaries (never forcing the 1st slot).
+pub fn resolve_tear_item_ids(ids: &[i32], tear_upgrade: Option<i32>) -> Vec<i32> {
+    let mut normalized = Vec::new();
+    let mut has_tear_component = false;
+
     for &id in ids {
-        let norm = if id == 3070 {
-            tear_upgrade
-        } else {
-            normalize_tear_item_dynamic(id)
-        };
-        if !result.contains(&norm) {
-            result.push(norm);
+        if is_tear_component(id) {
+            has_tear_component = true;
+            continue;
+        }
+        let norm = normalize_tear_item_dynamic(id);
+        if !normalized.contains(&norm) {
+            normalized.push(norm);
         }
     }
-    result
+
+    if !has_tear_component {
+        return normalized;
+    }
+
+    let has_completed_tear = normalized
+        .iter()
+        .any(|id| TEAR_COMPLETED_ITEMS.contains(id));
+    if has_completed_tear {
+        return normalized;
+    }
+
+    let completed_count = normalized
+        .iter()
+        .filter(|&&id| {
+            !is_boot_item_dynamic(id) && !is_starter_item(id) && !is_component_item_dynamic(id)
+        })
+        .count();
+
+    if completed_count > 0
+        && completed_count < 3
+        && let Some(upgrade_id) = tear_upgrade
+        && !normalized.contains(&upgrade_id)
+    {
+        normalized.push(upgrade_id);
+    }
+
+    normalized
 }
 
 /// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
@@ -178,6 +226,8 @@ pub fn is_component_item(id: i32) -> bool {
         | 3057 // Sheen
         | 3067 // Kindlegem
         | 3070 // Tear of the Goddess
+        | 323070 // Tear of the Goddess (mode variant)
+        | 773070 // Tear of the Goddess (mode variant)
         | 3076 // Bramble Vest
         | 3077 // Tiamat
         | 3082 // Warden's Mail
@@ -231,3 +281,7 @@ pub fn is_boot_item(item_id: i32) -> bool {
 #[cfg(test)]
 #[path = "classification_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tear_resolution_tests.rs"]
+mod tear_tests;
