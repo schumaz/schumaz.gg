@@ -7,10 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] - 2026-11-19
 
-Replaced the rotating square loading ring in `IdleIsland` with a concentric SVG rounded-perimeter light trail animation.
+### English
 
-### Fixed
-- **`IdleIsland` Loading Ring Animation (`IdleState.tsx`, `ChampSelect.css`, `loading-skeleton.css`, `tokens-shell.css`)**: Replaced the `animation: spin` rotated rounded-square border on `.idle-icon-box.is-loading .idle-spinner-ring` (seen in *Loading Profile* and *Loading Build*) with a concentric `<svg><rect pathLength="100" /></svg>` perimeter trail (`idleSpinnerTrailOrbit` / `idleSpinnerBeamOrbit`) aligned to the icon container's rounded geometry, eliminating protruding rotating corners while preserving automatic pausing in inactive tabs, minimized windows, GPU-effects-disabled mode, and `prefers-reduced-motion`.
+Consolidated public release since `v0.2.0` featuring full end-to-end **Arena (`3x6`)** support, build/spell/Tear accuracy fixes across Ranked & ARAM, and a refined `IdleIsland` loading animation.
+
+#### Added
+- **Dedicated `Arena` Tab**: Added the **Arena** tab between **Ranked** and **ARAM**, featuring a searchable **Arena (`3x6`)** Tier List (`OP`, `1`–`5`) with Top 3 / Win Rate, 1st Place Rate, and Pick/Ban metrics, plus a Champion Detail view with rarity-filterable **Augments** (*Silver*, *Gold*, *Prismatic*), **Best Synergies**, and 5-block Arena items (**Prismatic Items**, **Core 3**, **Boots**, **Final Build**, and **Situational**).
+- **Live Arena (`3x6`) Support in Champion Select**: Automatically detects Arena queues (`1700`, `1710`, `1750`, `CHERRY` / `ARENA` / `TGR`, or Map `30`), injects only the **Map `30` Shop Item Set** (safely skipping disabled runes and summoner spells with a localized status notice), and displays Arena Augments, Best Synergies, Prismatic Items, and selectable Core 1/2/3 build options on the **Runes** tab.
+- **Map `30` Arena Build Engine**: Separates `2750g` **Prismatic Items** without blocking `2500g` Arena legendaries or 4-digit Arena exclusives, filters anvils/consumables and low-sample troll boots, safely normalizes Arena Tear evolutions (`223121 → 223119`, `223042 → 223004`, `223040 → 223003`, `222530 → 222526`), and preserves AP/AD archetype cohesion.
+
+#### Fixed
+- **`IdleIsland` Loading Ring Animation**: Replaced the rotating rounded-square border on *Loading Profile* and *Loading Build* with a concentric SVG rounded-perimeter light trail aligned to the icon container's rounded geometry, eliminating protruding rotating corners while preserving automatic pausing in inactive tabs, minimized windows, GPU-effects-disabled mode, and `prefers-reduced-motion`.
+- **Single-Game Troll Build Elimination**: Stopped inflating `play == 1` core combinations over consolidated builds (`play >= 2`), prevented empty build payloads from fabricating default items, and improved weighted AD/AP damage-type inference.
+- **48h New-Patch Protection & ARAM Sample Quality**: Fixed 48h new-patch fallback priority against frozen timestamps, validated trend patch versions, and defaulted ARAM (`450`) and ARAM Mayhem (`2400`) build queries to `tier = "all"` (with automatic fallback whenever narrower tiers have fewer than `100` games).
+- **Tear of the Goddess Item Ordering**: Preserved real legendary completion order in Core and Final builds so early Tear purchases no longer force *Manamune*, *Archangel's Staff*, *Whispering Circlet*, or *Winter's Approach* into slot 1.
+- **Dynamic Mode-Based Summoner Spell Filtering**: Filtered recommended and injected summoner spells by DataDragon queue `modes` (`CLASSIC`, `ARAM`, `KIWI`), preventing disabled spells such as **Exhaust** in ARAM Mayhem and **Teleport** in ARAM/Mayhem.
+
+#### Changed
+- **Binary Cache Schema (`v4`)**: Automatically invalidates legacy local `.lz4` build and DataDragon caches on startup so Map `30` item classifications, localized Arena Augments, spell mode filters, and cleaned build samples regenerate seamlessly.
+
+### Português (BR)
+
+Release pública consolidada desde a `v0.2.0` trazendo suporte completo ao modo **Arena (`3x6`)**, correções de precisão para builds/feitiços/Lágrima em Ranqueada e ARAM, e uma animação de carregamento redesenhada na `IdleIsland`.
+
+#### Adicionado
+- **Aba dedicada `Arena`**: Nova aba **Arena** entre **Ranqueada** e **ARAM**, com Tier List pesquisável de **Arena (`3x6`)** (`OP`, `1`–`5`) exibindo Top 3 / Taxa de Vitória, Taxa de 1º Lugar e Escolha/Banimento, além da tela de detalhes do campeão com **Aprimoramentos (Augments)** filtráveis por raridade (*Prata*, *Ouro*, *Prismático*), **Melhores Sinergias** e itens em 5 blocos (**Itens Prismáticos**, **Core 3**, **Botas**, **Build Final** e **Situacionais**).
+- **Suporte ao vivo para Arena (`3x6`) no Champion Select**: Detecta automaticamente filas de Arena (`1700`, `1710`, `1750`, `CHERRY` / `ARENA` / `TGR` ou Mapa `30`), injeta apenas o **Conjunto de Itens da Loja (Mapa `30`)** — pulando com segurança runas e feitiços desativados com aviso localizado — e exibe Aprimoramentos, Melhores Sinergias, Itens Prismáticos e opções selecionáveis de Core 1/2/3 na aba **Runas**.
+- **Motor de Builds do Mapa `30` (Arena)**: Separa **Itens Prismáticos** (`2750g`) sem bloquear lendários compráveis de `2500g` ou exclusivos da Arena, filtra bigornas/consumíveis e botas sem amostra, normaliza evoluções da Lágrima no Mapa `30` (`223121 → 223119`, `223042 → 223004`, `223040 → 223003`, `222530 → 222526`) e preserva a coesão de arquétipo AP/AD.
+
+#### Corrigido
+- **Animação de Carregamento da `IdleIsland`**: Substituiu a borda giratória em *Carregando Perfil* e *Carregando Build* por uma trilha luminosa SVG concêntrica alinhada ao contorno arredondado do ícone, eliminando cantos giratórios salientes e mantendo pausa automática em abas inativas, janelas minimizadas, modo sem efeitos de GPU e `prefers-reduced-motion`.
+- **Eliminação de Builds Troll de 1 Partida**: Removeu a inflação de combinações `play == 1` sobre builds consolidadas (`play >= 2`), impediu a criação de itens artificiais em payloads vazios e aprimorou a inferência ponderada de dano AD/AP.
+- **Proteção de Novo Patch (48h) e Amostragem no ARAM**: Corrigiu a prioridade do fallback de 48h contra timestamps congelados, validou a versão nas tendências de patch e definiu `tier = "all"` por padrão no ARAM (`450`) e ARAM Desordem (`2400`), com fallback automático sempre que tiers mais restritos tiverem menos de `100` jogos.
+- **Ordem de Itens da Lágrima da Deusa**: Preservou a ordem real de conclusão dos lendários nas builds Core e Final para que a compra antecipada da Lágrima não force *Manamune*, *Cajado do Arcanjo*, *Diadema Sussurrante* ou *Aproximação Invernal* no 1º slot.
+- **Filtragem Dinâmica de Feitiços por Modo de Fila**: Passou a filtrar feitiços recomendados e injetados pelos `modes` do DataDragon (`CLASSIC`, `ARAM`, `KIWI`), evitando feitiços desativados como **Exaustão** no ARAM Desordem e **Teleporte** no ARAM/Desordem.
+
+#### Alterado
+- **Esquema de Cache Binário (`v4`)**: Invalida automaticamente caches `.lz4` antigos na inicialização para regenerar classificações de itens do Mapa `30`, Aprimoramentos localizados da Arena, filtros de feitiços por modo e amostras limpas de builds.
 
 ## [0.3.0] - 2026-11-19
 
