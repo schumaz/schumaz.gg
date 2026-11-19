@@ -44,6 +44,69 @@ fn test_extract_queue_id_with_aram_mayhem_game_mode() {
 }
 
 #[test]
+fn test_extract_queue_id_and_classify_arena_variants() {
+    for arena_id in [QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750] {
+        let fixture = serde_json::json!({
+            "gameData": {
+                "queue": { "id": arena_id }
+            }
+        });
+        assert_eq!(extract_queue_id(&fixture), Ok(arena_id));
+        assert_eq!(QueueMode::from(arena_id), QueueMode::Arena);
+        assert!(is_arena_queue(arena_id));
+        assert!(!queue_supports_runes(arena_id));
+        assert!(!queue_supports_spells(arena_id));
+    }
+
+    let fixture_cherry_1710 = serde_json::json!({
+        "gameData": {
+            "queue": { "id": 1710, "gameMode": "CHERRY" }
+        },
+        "map": { "id": 30 }
+    });
+    assert_eq!(extract_queue_id(&fixture_cherry_1710), Ok(QUEUE_ARENA_1710));
+
+    let fixture_cherry_mode_only = serde_json::json!({
+        "gameData": { "gameMode": "CHERRY" }
+    });
+    assert_eq!(extract_queue_id(&fixture_cherry_mode_only), Ok(QUEUE_ARENA));
+
+    let fixture_map30_only = serde_json::json!({
+        "gameData": { "queue": { "id": 0 } },
+        "map": { "id": MAP_ARENA }
+    });
+    assert_eq!(extract_queue_id(&fixture_map30_only), Ok(QUEUE_ARENA));
+
+    let fixture_queue_map_id_30 = serde_json::json!({
+        "gameData": { "queue": { "mapId": MAP_ARENA } }
+    });
+    assert_eq!(extract_queue_id(&fixture_queue_map_id_30), Ok(QUEUE_ARENA));
+}
+
+#[test]
+fn test_evaluate_ws_event_arena() {
+    let fixture_arena = serde_json::json!({
+        "localPlayerCellId": 0,
+        "actions": [],
+        "myTeam": [
+            { "cellId": 0, "championId": 350, "championPickIntent": 0 }
+        ]
+    });
+
+    let transition = evaluate_ws_event("Update", &fixture_arena, QUEUE_ARENA);
+    assert_eq!(
+        transition,
+        WsSessionTransition::Active(ChampSelectedPayload {
+            champion_id: 350,
+            queue_id: QUEUE_ARENA,
+            queue_mode: QueueMode::Arena,
+            locked_in: true,
+            assigned_position: None,
+        })
+    );
+}
+
+#[test]
 fn test_evaluate_ws_event_aram_mayhem() {
     let fixture_mayhem = serde_json::json!({
         "localPlayerCellId": 0,

@@ -13,11 +13,11 @@ pub struct InjectionTargets {
 }
 
 /// Determines which build components should be injected for a build and user preferences.
-/// Modes without rune support (e.g. ARAM Mayhem) never target runes.
+/// Modes without rune/spell support (e.g. ARAM Mayhem, Arena) never target disabled categories.
 pub fn plan_safety_injection(build: &ChampionBuild, prefs: &UserPreferences) -> InjectionTargets {
     InjectionTargets {
         runes: prefs.auto_inject_runes && build.supports_runes,
-        spells: prefs.auto_inject_spells,
+        spells: prefs.auto_inject_spells && build.supports_spells,
         items: prefs.auto_inject_items,
     }
 }
@@ -28,6 +28,7 @@ pub struct AppliedInjectionState {
     pub champion_id: i32,
     pub queue_id: i32,
     pub supports_runes: bool,
+    pub supports_spells: bool,
     pub runes_injected: bool,
     pub spells_injected: bool,
     pub items_injected: bool,
@@ -39,13 +40,14 @@ impl AppliedInjectionState {
             champion_id: build.champion_id,
             queue_id,
             supports_runes: build.supports_runes,
+            supports_spells: build.supports_spells,
             runes_injected: report.runes_injected,
             spells_injected: report.spells_injected,
             items_injected: report.items_injected,
         }
     }
 
-    /// Returns true when the applied state matches the target champion, mode rune support,
+    /// Returns true when the applied state matches the target champion, mode rune/spell support,
     /// and every injection category enabled in user preferences succeeded.
     pub fn matches_expected(
         &self,
@@ -57,6 +59,7 @@ impl AppliedInjectionState {
         if self.champion_id != champion_id
             || self.queue_id != queue_id
             || self.supports_runes != build.supports_runes
+            || self.supports_spells != build.supports_spells
         {
             return false;
         }

@@ -1,5 +1,6 @@
-use super::super::items::set_dynamic_item_classifications;
+use super::super::items::{get_dynamic_item_classifications, set_dynamic_item_classifications};
 use super::super::models::{DataDragonCache, ItemClassificationCache};
+use super::augments::fetch_arena_augments_catalog;
 use super::parsers::{
     parse_all_ddragon_champions, parse_ddragon_item_classifications, parse_ddragon_runes,
     parse_ddragon_summoners, parse_latest_ddragon_version,
@@ -138,8 +139,15 @@ async fn load_ddragon_bundle_for_version(
         HashMap::new()
     };
 
-    let (champions_res, runes_res, item_classifications, spells) =
-        tokio::join!(champions_fut, runes_fut, items_fut, summoners_fut);
+    let arena_augments_fut = fetch_arena_augments_catalog(client, base_url, locale);
+
+    let (champions_res, runes_res, item_classifications, spells, arena_augments) = tokio::join!(
+        champions_fut,
+        runes_fut,
+        items_fut,
+        summoners_fut,
+        arena_augments_fut
+    );
 
     let champions = parse_all_ddragon_champions(&champions_res?, version)?;
     let runes = parse_ddragon_runes(&runes_res?)?;
@@ -150,6 +158,7 @@ async fn load_ddragon_bundle_for_version(
             champions,
             runes,
             spells,
+            arena_augments,
         },
         item_classifications,
     })
@@ -192,7 +201,8 @@ pub async fn load_ddragon_cache_from_base_url(
     load_ddragon_cache_from_base_url_for_locale(client, base_url, AppLocale::PtBr).await
 }
 
-/// Checks `/api/versions.json` and refreshes both RAM and `metadata_{locale}.lz4` if a newer version exists.
+/// Checks `/api/versions.json` and refreshes both RAM and `metadata_{locale}.lz4` if a newer version exists
+/// or if Arena metadata (`arena_augments` / `map30_items`) is absent in an older cached bundle.
 /// Falls back to the existing RAM/disk cache on network errors (*Stale-While-Error*).
 pub async fn refresh_ddragon_if_outdated_with_base(
     client: &reqwest::Client,
@@ -225,8 +235,15 @@ pub async fn refresh_ddragon_if_outdated_with_base(
         }
     };
 
+    let needs_arena_backfill = base_url == DDRAGON_BASE_URL
+        && existing.as_ref().is_some_and(|c| {
+            c.arena_augments.is_empty()
+                || get_dynamic_item_classifications().is_some_and(|cls| cls.map30_items.is_empty())
+        });
+
     if let Some(ref cached) = existing
         && cached.version == version
+        && !needs_arena_backfill
     {
         return Ok(Arc::clone(cached));
     }

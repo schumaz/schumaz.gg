@@ -35,6 +35,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_aram_mayhem_augments,
             commands::get_ranked_tier_list,
             commands::get_ranked_champion_build,
+            commands::get_arena_tier_list,
+            commands::get_arena_champion_build,
             commands::get_bootstrap_status,
             commands::get_app_distribution_info,
             commands::get_hardware_acceleration_status,

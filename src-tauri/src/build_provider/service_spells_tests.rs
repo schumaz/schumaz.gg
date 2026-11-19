@@ -43,6 +43,8 @@ fn ddragon_cache_with_real_spell_modes() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells,
+
+        ..Default::default()
     }
 }
 

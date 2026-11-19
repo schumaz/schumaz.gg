@@ -143,4 +143,9 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
   patch_fallback_applied: false,
   patch_protection_remaining_hours: null,
   supports_runes: true,
+  supports_spells: true,
+  arena_augments: [],
+  arena_synergies: [],
+  first_place_rate: null,
+  avg_placement: null,
 };

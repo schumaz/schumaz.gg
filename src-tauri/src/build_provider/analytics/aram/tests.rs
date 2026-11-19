@@ -30,6 +30,7 @@ fn test_ddragon() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     }
 }
 

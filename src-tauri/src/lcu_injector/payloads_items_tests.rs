@@ -58,6 +58,10 @@ fn test_build_item_sets_payload_structure() {
             .unwrap(),
         222
     );
+    assert_eq!(
+        first_set.get("associatedMaps").unwrap(),
+        &serde_json::json!([11, 12, 30])
+    );
 
     let blocks = first_set.get("blocks").unwrap().as_array().unwrap();
     assert_eq!(blocks.len(), 4);

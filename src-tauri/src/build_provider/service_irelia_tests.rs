@@ -43,6 +43,7 @@ fn irelia_ddragon_cache() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     }
 }
 

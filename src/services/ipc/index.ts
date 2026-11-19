@@ -1,4 +1,5 @@
 export { aramIpc } from "./aram.ipc";
+export { arenaIpc } from "./arena.ipc";
 export { assetsIpc, isTauriRuntime, SCHUMAZ_ASSET_PROTOCOL } from "./assets.ipc";
 export { buildIpc } from "./build.ipc";
 export { injectorIpc } from "./injector.ipc";

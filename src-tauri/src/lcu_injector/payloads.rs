@@ -168,7 +168,7 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
             {
                 "title": format!("{}{}", build.champion_name, SCHUMAZ_PAGE_SUFFIX),
                 "associatedChampions": [build.champion_id],
-                "associatedMaps": [11, 12],
+                "associatedMaps": [11, 12, 30],
                 "blocks": blocks,
                 "mode": "any",
                 "type": "custom"

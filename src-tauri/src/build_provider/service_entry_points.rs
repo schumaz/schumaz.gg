@@ -1,13 +1,15 @@
 use super::analytics::{
     OPGG_MCP_ENDPOINT, OPGG_REST_API_BASE, fetch_aram_mayhem_augments_for_locale,
-    fetch_aram_tier_list, fetch_ranked_tier_list, shared_http_client,
+    fetch_aram_tier_list, fetch_arena_champion_build, fetch_arena_tier_list,
+    fetch_ranked_tier_list, shared_http_client,
 };
 use super::ddragon::get_or_init_ddragon_cache;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::service::get_recommended_build_with_filters_and_endpoints_with_dir;
 use super::service_helpers::FastSpellRecommendation;
 use crate::models::{
-    AramAugmentEntry, AramChampionRank, AramMode, QUEUE_SOLO_DUO, RankedTierListResponse,
+    AramAugmentEntry, AramChampionRank, AramMode, ArenaTierListResponse, QUEUE_SOLO_DUO,
+    RankedTierListResponse,
 };
 
 pub async fn get_recommended_build_with_filters(
@@ -224,4 +226,23 @@ pub async fn get_ranked_champion_build_service(
         patch,
     )
     .await
+}
+
+/// Domain service entry point for fetching the Arena (`CHERRY`) tier list.
+pub async fn get_arena_tier_list_service(
+    patch: Option<&str>,
+) -> Result<ArenaTierListResponse, String> {
+    let http_client = shared_http_client();
+    let ddragon = get_or_init_ddragon_cache(http_client).await?;
+    fetch_arena_tier_list(http_client, patch, &ddragon).await
+}
+
+/// Domain service entry point for fetching a read-only Arena (`CHERRY`) champion build preview.
+pub async fn get_arena_champion_build_service(
+    champion_id: i32,
+    patch: Option<&str>,
+) -> Result<ChampionBuild, String> {
+    let http_client = shared_http_client();
+    let ddragon = get_or_init_ddragon_cache(http_client).await?;
+    fetch_arena_champion_build(http_client, champion_id, patch, &ddragon).await
 }

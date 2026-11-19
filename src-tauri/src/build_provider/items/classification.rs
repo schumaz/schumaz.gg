@@ -1,10 +1,18 @@
 use super::super::models::{ItemClassificationCache, ItemStatEntry};
 use std::collections::HashMap;
+use std::ops::RangeInclusive;
 
 pub static TEST_CLASSIFICATION_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 static DYNAMIC_ITEM_CLASSIFICATIONS: std::sync::RwLock<Option<ItemClassificationCache>> =
     std::sync::RwLock::new(None);
+
+/// Item ID range reserved for Arena (`CHERRY`) anvils (e.g. `220000` Stat Anvil, `220007` Prismatic Item Anvil).
+pub const ARENA_ANVIL_ID_RANGE: RangeInclusive<i32> = 220_000..=220_011;
+/// Item ID prefix range for Arena `44xxxx` items (note: `447111` costs `2500g` and is NOT a Prismatic).
+pub const ARENA_PRISMATIC_ID_RANGE: RangeInclusive<i32> = 440_000..=449_999;
+/// Canonical DataDragon total gold cost shared by all 46 real Arena Prismatic items (`sell == 1100`).
+pub const ARENA_PRISMATIC_GOLD: i64 = 2750;
 
 pub fn set_dynamic_item_classifications(cache: ItemClassificationCache) {
     if let Ok(mut guard) = DYNAMIC_ITEM_CLASSIFICATIONS.write() {
@@ -63,6 +71,70 @@ pub fn is_completed_item_dynamic(id: i32) -> bool {
     false
 }
 
+/// Dynamically checks whether `id` is a real Arena Prismatic (`44xxxx` with `gold == 2750` from DataDragon).
+/// Never classifies `447111` (Overlord's Bloodmail, `2500g`) as a Prismatic.
+pub fn is_arena_prismatic_dynamic(id: i32) -> bool {
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && cache.arena_prismatics.contains(&id)
+    {
+        return true;
+    }
+    false
+}
+
+/// Dynamically checks whether `id` is enabled on Riot Map `30` (Arena).
+/// Returns `true` when the DataDragon Map 30 catalog has not been populated yet.
+pub fn is_map30_item_dynamic(id: i32) -> bool {
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && !cache.map30_items.is_empty()
+    {
+        return cache.map30_items.contains(&id);
+    }
+    true
+}
+
+/// Returns `true` for Arena anvils (`220000..=220011`), juices/consumables, and any item tagged
+/// `"Consumable"` in DataDragon `item.json`.
+pub fn is_arena_anvil_or_consumable(id: i32) -> bool {
+    if ARENA_ANVIL_ID_RANGE.contains(&id) {
+        return true;
+    }
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && cache.arena_consumables.contains(&id)
+    {
+        return true;
+    }
+    matches!(id, 2142..=2146 | 222141 | 3400 | 3599 | 3600)
+}
+
+/// Normalizes an evolved Arena item (Map `30`) to its purchasable Map `30` base item while
+/// preventing Riot's DataDragon `specialRecipe` bug (`223121 -> 3119`) from leaking SR IDs.
+pub fn normalize_arena_item_id(id: i32) -> i32 {
+    match id {
+        223042 => return 223004, // Arena Muramana -> Arena Manamune
+        223040 => return 223003, // Arena Seraph's Embrace -> Arena Archangel's Staff
+        223121 => return 223119, // Arena Fimbulwinter -> Arena Winter's Approach
+        222530 => return 222526, // Arena Diadem of Songs -> Arena Whispering Circlet
+        _ => {}
+    }
+    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
+        && let Some(cache) = guard.as_ref()
+        && let Some(&base_id) = cache.evolved_fallbacks.get(&id)
+    {
+        if cache.map30_items.is_empty() || cache.map30_items.contains(&base_id) {
+            return base_id;
+        }
+        let map30_candidate = 220_000 + base_id;
+        if cache.map30_items.contains(&map30_candidate) {
+            return map30_candidate;
+        }
+    }
+    id
+}
+
 /// Normalizes an evolved item (like Muramana, Seraph's Embrace, Fimbulwinter, Diadem of Songs) to its purchasable base.
 pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
     if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
@@ -72,30 +144,31 @@ pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
         return base_id;
     }
     match id {
-        3042 => 3004, // Muramana -> Manamune
-        3040 => 3003, // Seraph's Embrace -> Archangel's Staff
-        3121 => 3119, // Fimbulwinter -> Winter's Approach
-        2530 => 2526, // Diadem of Songs -> Whispering Circlet
+        3042 => 3004,     // Muramana -> Manamune
+        3040 => 3003,     // Seraph's Embrace -> Archangel's Staff
+        3121 => 3119,     // Fimbulwinter -> Winter's Approach
+        2530 => 2526,     // Diadem of Songs -> Whispering Circlet
+        223042 => 223004, // Arena Muramana -> Arena Manamune
+        223040 => 223003, // Arena Seraph's Embrace -> Arena Archangel's Staff
+        223121 => 223119, // Arena Fimbulwinter -> Arena Winter's Approach
+        222530 => 222526, // Arena Diadem of Songs -> Arena Whispering Circlet
         other => other,
     }
 }
 
-pub const TEAR_COMPONENT_IDS: [i32; 3] = [
-    3070,   // Tear of the Goddess (Summoner's Rift / ARAM)
-    323070, // Tear of the Goddess (Swiftplay / mode variant)
-    773070, // Tear of the Goddess (mode variant)
-];
+pub const TEAR_COMPONENT_IDS: [i32; 3] = [3070, 323070, 773070];
 
 pub fn is_tear_component(id: i32) -> bool {
     TEAR_COMPONENT_IDS.contains(&id)
 }
 
-pub const TEAR_COMPLETED_ITEMS: [i32; 4] = [
-    2526, // Whispering Circlet (Circuleto Sussurrante)
-    3003, // Archangel's Staff (Cajado do Arcanjo)
-    3004, // Manamune
-    3119, // Winter's Approach (Aproximação do Inverno)
-];
+pub const TEAR_COMPLETED_ITEMS: [i32; 4] = [2526, 3003, 3004, 3119];
+
+pub const ARENA_TEAR_COMPLETED_ITEMS: [i32; 4] = [222526, 223003, 223004, 223119];
+
+pub fn is_tear_completed_item(id: i32) -> bool {
+    TEAR_COMPLETED_ITEMS.contains(&id) || ARENA_TEAR_COMPLETED_ITEMS.contains(&id)
+}
 
 /// Detects the champion's most-played completed purchasable Tear legendary item across payload entries.
 /// Returns `None` when no completed/evolved Tear item appears anywhere in `entries`, so raw Tear
@@ -130,14 +203,7 @@ pub fn resolve_tear_to_completed_item(entries: &[ItemStatEntry]) -> Option<i32> 
 }
 
 /// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
-/// and safely handling raw Tear of the Goddess components (`3070`, `323070`, `773070`):
-/// 1. If the combination already includes a completed/evolved Tear item, raw Tear is dropped
-///    to preserve the real completion slot of the legendary.
-/// 2. If the combination already has 3+ completed items without evolving Tear, raw Tear is
-///    dropped as an early mana component without inventing an upgrade or pushing out the 3rd item.
-/// 3. Only when the combination has 1..3 completed items, contains raw Tear, and the payload
-///    confirms a completed Tear evolution (`tear_upgrade == Some(id)`), `tear_upgrade` is appended
-///    after the already completed legendaries (never forcing the 1st slot).
+/// and safely handling raw Tear of the Goddess components (`3070`, `323070`, `773070`).
 pub fn resolve_tear_item_ids(ids: &[i32], tear_upgrade: Option<i32>) -> Vec<i32> {
     let mut normalized = Vec::new();
     let mut has_tear_component = false;
@@ -198,83 +264,72 @@ pub fn normalize_item_ids_dedup(ids: &[i32]) -> Vec<i32> {
 pub fn is_component_item(id: i32) -> bool {
     matches!(
         id,
-        1001 // Boots of Speed
-        | 1004 // Faerie Charm
-        | 1006 // Rejuvenation Bead
-        | 1011 // Giant's Belt
-        | 1018 // Cloak of Agility
-        | 1026 // Blasting Wand
-        | 1027 // Sapphire Crystal
-        | 1028 // Ruby Crystal
-        | 1029 // Cloth Armor
-        | 1031 // Chain Vest
-        | 1033 // Null-Magic Mantle
-        | 1036 // Long Sword
-        | 1037 // Pickaxe
-        | 1038 // B. F. Sword
-        | 1042 // Dagger
-        | 1043 // Recurve Bow
-        | 1052 // Amplifying Tome
-        | 1057 // Negatron Cloak
-        | 1058 // Needlessly Large Rod
-        | 2015 // Kircheis Shard
-        | 2420 // Seeker's Armguard
-        | 3024 // Glacial Buckler
-        | 3035 // Last Whisper
-        | 3044 // Phage
-        | 3051 // Hearthbound Axe
-        | 3057 // Sheen
-        | 3067 // Kindlegem
-        | 3070 // Tear of the Goddess
-        | 323070 // Tear of the Goddess (mode variant)
-        | 773070 // Tear of the Goddess (mode variant)
-        | 3076 // Bramble Vest
-        | 3077 // Tiamat
-        | 3082 // Warden's Mail
-        | 3086 // Zeal
-        | 3105 // Aegis of the Legion
-        | 3108 // Fiendish Codex
-        | 3113 // Aether Wisp
-        | 3114 // Forbidden Idol
-        | 3123 // Executioner's Calling
-        | 3133 // Caulfield's Warhammer
-        | 3134 // Serrated Dirk
-        | 3140 // Quicksilver Sash
-        | 3144 // Scout's Slingshot
-        | 3145 // Hextech Alternator
-        | 3147 // Haunting Guise
-        | 3155 // Hexdrinker
-        | 3211 // Spectre's Cowl
-        | 3801 // Crystalline Bracer
-        | 3802 // Lost Chapter
-        | 3803 // Catalyst of Aeons
-        | 3916 // Oblivion Orb
+        1001 | 1004
+            | 1006
+            | 1011
+            | 1018
+            | 1026
+            | 1027
+            | 1028
+            | 1029
+            | 1031
+            | 1033
+            | 1036
+            | 1037
+            | 1038
+            | 1042
+            | 1043
+            | 1052
+            | 1057
+            | 1058
+            | 2015
+            | 2420
+            | 3024
+            | 3035
+            | 3044
+            | 3051
+            | 3057
+            | 3067
+            | 3070
+            | 323070
+            | 773070
+            | 3076
+            | 3077
+            | 3082
+            | 3086
+            | 3105
+            | 3108
+            | 3113
+            | 3114
+            | 3123
+            | 3133
+            | 3134
+            | 3140
+            | 3144
+            | 3145
+            | 3147
+            | 3155
+            | 3211
+            | 3801
+            | 3802
+            | 3803
+            | 3916
     )
 }
 
 pub fn is_starter_item(id: i32) -> bool {
     matches!(
         id,
-        1054 | 1055 | 1056 | 1082 | 1083 | 1086 | 1101..=1103 | 2003 | 2031 | 2033 | 2051 | 2055 | 2138 | 2139 | 2140 | 3112 | 3177 | 3184 | 3865..=3877
+        1054 | 1055 | 1056 | 1082 | 1083 | 1086 | 1101..=1103 | 2003 | 2031 | 2033 | 2051 | 2055
+            | 2138 | 2139 | 2140 | 3112 | 3177 | 3184 | 3865..=3877
     )
 }
 
 pub fn is_boot_item(item_id: i32) -> bool {
     matches!(
         item_id,
-        1001 // Boots
-        | 2422 // Slightly Magical Footwear
-        | 3006 // Berserker's Greaves
-        | 3008 // Gluttonous Greaves / Symbiotic Soles
-        | 3009 // Boots of Swiftness
-        | 3010 // Symbiotic Soles
-        | 3013 // Synchronized Souls (empowered)
-        | 3020 // Sorcerer's Shoes
-        | 3047 // Plated Steelcaps
-        | 3111 // Mercury's Treads
-        | 3117 // Boots of Mobility
-        | 3158 // Ionian Boots of Lucidity
-        | 3170..=3176 // Tier 3 boots (Swiftmarch, Crimson Lucidity, Gunmetal Greaves, etc.)
+        1001 | 2422 | 3006 | 3008 | 3009 | 3010 | 3013 | 3020 | 3047 | 3111 | 3117 | 3158 | 3170
+            ..=3176 | 223005 | 223006 | 223008 | 223009 | 223020 | 223047 | 223111 | 223158
     )
 }
 

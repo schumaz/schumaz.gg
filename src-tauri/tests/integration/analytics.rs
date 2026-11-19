@@ -85,6 +85,7 @@ async fn test_get_recommended_build_uses_fallback_when_opgg_returns_500() {
         champions: champions_map,
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     };
 
     // Even though OP.GG fails with 500, this function must not fail, returning a resilient fallback!

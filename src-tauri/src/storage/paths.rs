@@ -22,6 +22,7 @@ pub struct AppPaths {
     pub opgg_builds_dir: PathBuf,
     pub opgg_ranked_dir: PathBuf,
     pub opgg_aram_dir: PathBuf,
+    pub opgg_arena_dir: PathBuf,
     pub profile_dir: PathBuf,
     pub assets_dir: PathBuf,
 }
@@ -38,6 +39,7 @@ impl AppPaths {
         let opgg_builds_dir = opgg_dir.join("builds");
         let opgg_ranked_dir = opgg_dir.join("ranked");
         let opgg_aram_dir = opgg_dir.join("aram");
+        let opgg_arena_dir = opgg_dir.join("arena");
         let profile_dir = cache_dir.join("profile");
         let assets_dir = cache_dir.join("assets");
 
@@ -53,6 +55,7 @@ impl AppPaths {
             opgg_builds_dir,
             opgg_ranked_dir,
             opgg_aram_dir,
+            opgg_arena_dir,
             profile_dir,
             assets_dir,
         }
@@ -81,6 +84,7 @@ impl AppPaths {
             &self.opgg_builds_dir,
             &self.opgg_ranked_dir,
             &self.opgg_aram_dir,
+            &self.opgg_arena_dir,
             &self.profile_dir,
             &self.assets_dir,
         ] {
@@ -217,6 +221,10 @@ mod tests {
         assert_eq!(paths.webview_dir, root.join("WebView"));
         assert_eq!(paths.ddragon_dir, root.join("Cache").join("ddragon"));
         assert_eq!(paths.opgg_dir, root.join("Cache").join("opgg"));
+        assert_eq!(
+            paths.opgg_arena_dir,
+            root.join("Cache").join("opgg").join("arena")
+        );
         assert_eq!(paths.profile_dir, root.join("Cache").join("profile"));
         assert_eq!(paths.assets_dir, root.join("Cache").join("assets"));
         assert_eq!(
@@ -230,6 +238,7 @@ mod tests {
         assert!(paths.webview_dir.is_dir());
         assert!(paths.ddragon_dir.is_dir());
         assert!(paths.opgg_dir.is_dir());
+        assert!(paths.opgg_arena_dir.is_dir());
         assert!(paths.profile_dir.is_dir());
         assert!(paths.assets_dir.is_dir());
 

@@ -7,6 +7,7 @@ import {
   injectorIpc,
   profileIpc,
   rankedIpc,
+  arenaIpc,
   aramIpc,
   settingsIpc,
   updaterIpc,
@@ -26,6 +27,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_cached_player_profile") return Promise.resolve(null);
     if (cmd === "get_ranked_tier_list") return Promise.resolve(null);
     if (cmd === "get_ranked_champion_build") return Promise.resolve(null);
+    if (cmd === "get_arena_tier_list") return Promise.resolve(null);
+    if (cmd === "get_arena_champion_build") return Promise.resolve(null);
     if (cmd === "get_aram_tier_list") return Promise.resolve([]);
     if (cmd === "get_aram_mayhem_augments") return Promise.resolve([]);
     if (cmd === "get_app_settings") return Promise.resolve(null);
@@ -49,7 +52,7 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     vi.clearAllMocks();
   });
 
-  it("delegates lcu, build, injector, profile, ranked, aram, settings, and window commands", async () => {
+  it("delegates lcu, build, injector, profile, ranked, arena, aram, settings, and window commands", async () => {
     await lcuIpc.getSummonerStatus();
     expect(invoke).toHaveBeenCalledWith("get_summoner_status");
 
@@ -119,6 +122,15 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
       position: "mid",
       tier: "emerald_plus",
       region: "br",
+      patch: "16.22",
+    });
+
+    await arenaIpc.getArenaTierList("16.22");
+    expect(invoke).toHaveBeenCalledWith("get_arena_tier_list", { patch: "16.22" });
+
+    await arenaIpc.getArenaChampionBuild(350, "16.22");
+    expect(invoke).toHaveBeenCalledWith("get_arena_champion_build", {
+      championId: 350,
       patch: "16.22",
     });
 
@@ -210,28 +222,17 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     expect(typeof unlisten).toBe("function");
     expect(capturedHandler).toBeDefined();
 
-    capturedHandler?.({
-      payload: {
-        summonerId: 100,
-        gameName: "Tester",
-        tagLine: "NA1",
-        displayName: "Tester",
-        summonerLevel: 50,
-        profileIconId: 1,
-      },
-    });
+    const mockSummoner = {
+      summonerId: 100,
+      gameName: "Tester",
+      tagLine: "NA1",
+      displayName: "Tester",
+      summonerLevel: 50,
+      profileIconId: 1,
+    };
+    capturedHandler?.({ payload: mockSummoner });
 
-    expect(received).toEqual([
-      {
-        summonerId: 100,
-        gameName: "Tester",
-        tagLine: "NA1",
-        displayName: "Tester",
-        summonerLevel: 50,
-        profileIconId: 1,
-      },
-    ]);
-
+    expect(received).toEqual([mockSummoner]);
     expect(assetsIpc.isTauriRuntime()).toBe(false);
     expect(assetsIpc.convertAssetFileSrc("v1_xyz.png")).toBe("schumaz-asset://localhost/v1_xyz.png");
   });

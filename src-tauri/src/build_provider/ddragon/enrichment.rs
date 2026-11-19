@@ -1,3 +1,4 @@
+use super::super::analytics::aram::normalize_opgg_champion_key;
 use super::super::models::{ChampionBuild, DataDragonCache, ItemBlockKind};
 use super::super::spells::{
     SPELL_CLARITY_ID, SPELL_MARK_ID, ddragon_mode_for_queue, sanitize_spell_choices_for_mode,
@@ -5,10 +6,12 @@ use super::super::spells::{
 };
 use super::metadata::{resolve_rune_metadata_for_locale, resolve_spell_metadata_for_locale};
 use crate::lcu_injector::FlashKeyPreference;
-use crate::models::AppLocale;
+use crate::models::{AppLocale, is_arena_queue};
 
 fn infer_mode_from_build(build: &ChampionBuild) -> Option<&'static str> {
-    if !build.active_position.trim().is_empty() {
+    if !build.supports_spells {
+        Some("CHERRY")
+    } else if !build.active_position.trim().is_empty() {
         Some("CLASSIC")
     } else if !build.supports_runes {
         Some("KIWI")
@@ -31,6 +34,7 @@ pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
         }
         block.title = match (locale, block.kind) {
             (AppLocale::EnUs, ItemBlockKind::Starter) => "Starter Items".to_string(),
+            (AppLocale::EnUs, ItemBlockKind::Prismatic) => "Prismatic Items".to_string(),
             (AppLocale::EnUs, ItemBlockKind::Core) => "First 3 Items".to_string(),
             (AppLocale::EnUs, ItemBlockKind::Boots) => "Top 3 Boots".to_string(),
             (AppLocale::EnUs, ItemBlockKind::Final) => "Final Build".to_string(),
@@ -38,6 +42,7 @@ pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
                 "Situational / Utility Items".to_string()
             }
             (AppLocale::PtBr, ItemBlockKind::Starter) => "Itens Iniciais".to_string(),
+            (AppLocale::PtBr, ItemBlockKind::Prismatic) => "Itens Prismáticos".to_string(),
             (AppLocale::PtBr, ItemBlockKind::Core) => "Primeiros 3 Itens".to_string(),
             (AppLocale::PtBr, ItemBlockKind::Boots) => "3 Botas Mais Feitas".to_string(),
             (AppLocale::PtBr, ItemBlockKind::Final) => "Build Final".to_string(),
@@ -65,6 +70,14 @@ pub fn apply_build_spells_for_queue_with_preference_and_locale(
     locale: AppLocale,
     queue_id: Option<i32>,
 ) {
+    if !build.supports_spells || queue_id.is_some_and(is_arena_queue) {
+        build.spell1_id = 0;
+        build.spell2_id = 0;
+        build.spells.clear();
+        build.spell_choices.clear();
+        return;
+    }
+
     let is_jungle = build.active_position.eq_ignore_ascii_case("jungle");
     let mode = queue_id
         .map(ddragon_mode_for_queue)
@@ -200,6 +213,38 @@ pub fn enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
         opt.core_item_icon_urls = item_icon_urls(&cache.version, &opt.core_item_ids);
         opt.final_item_icon_urls = item_icon_urls(&cache.version, &opt.final_item_ids);
         opt.situational_item_icon_urls = item_icon_urls(&cache.version, &opt.situational_item_ids);
+    }
+
+    for aug in &mut build.arena_augments {
+        if let Some(meta) = cache.arena_augments.get(&aug.id) {
+            aug.name = meta.name.clone();
+            if !meta.desc.is_empty() {
+                aug.desc = meta.desc.clone();
+            }
+            if !meta.icon_url.is_empty() {
+                aug.icon_url = meta.icon_url.clone();
+            }
+            if aug.rarity == 0 && meta.rarity > 0 {
+                aug.rarity = meta.rarity;
+            }
+        } else if aug.name.is_empty() {
+            aug.name = match locale {
+                AppLocale::PtBr => format!("Aprimoramento {}", aug.id),
+                AppLocale::EnUs => format!("Augment {}", aug.id),
+            };
+        }
+    }
+
+    for syn in &mut build.arena_synergies {
+        if let Some(meta) = cache.champions.get(&syn.champion_id) {
+            syn.name = meta.display_name.clone();
+            syn.key = normalize_opgg_champion_key(&meta.key_name);
+            if !meta.icon_url.is_empty() {
+                syn.icon_url = meta.icon_url.clone();
+            }
+        } else if syn.name.is_empty() {
+            syn.name = format!("Champion {}", syn.champion_id);
+        }
     }
 
     localize_build_labels(build, locale);

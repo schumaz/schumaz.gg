@@ -1,4 +1,4 @@
-use crate::models::AppLocale;
+use crate::models::{AppLocale, QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750};
 
 /// Maps LCU `queueId` and `gameMode` to normalized filter key and localized mode label.
 pub fn map_queue_mode_for_locale(
@@ -12,7 +12,9 @@ pub fn map_queue_mode_for_locale(
         400 | 430 | 480 | 490 => ("normal".to_string(), "Normal".to_string()),
         450 => ("aram".to_string(), "ARAM".to_string()),
         2400 => ("aram_mayhem".to_string(), "ARAM Mayhem".to_string()),
-        1700 | 1710 => ("arena".to_string(), "Arena".to_string()),
+        QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1750 => {
+            ("arena".to_string(), "Arena".to_string())
+        }
         900 | 1010 | 1900 => ("urf".to_string(), "URF".to_string()),
         1300 => (
             "nexus_blitz".to_string(),
@@ -84,6 +86,10 @@ mod tests {
         assert_eq!(
             map_queue_mode_for_locale(1300, "", AppLocale::EnUs).1,
             "Nexus Blitz"
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(1750, "", AppLocale::EnUs),
+            ("arena".to_string(), "Arena".to_string())
         );
     }
 }

@@ -108,6 +108,12 @@ fn spawn_prewarm_task(
                 active_locale,
                 dd,
             );
+            build_provider::analytics::arena::prewarm_arena_tier_list_from_dir(
+                &paths.opgg_arena_dir,
+                settings.automation.patch_48h_protection,
+                active_locale,
+                dd,
+            );
             build_provider::analytics::aram::prewarm_aram_tier_lists_from_dir(
                 &paths.opgg_aram_dir,
                 active_locale,

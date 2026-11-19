@@ -46,6 +46,13 @@ export const commands = {
 	 *  without emitting Champ Select events or injecting into LCU.
 	 */
 	getRankedChampionBuild: (championId: number, position: string | null, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_ranked_champion_build", { championId, position, tier, region, patch }),
+	/**  Tauri command to fetch the Arena (`CHERRY`) champion tier list, optionally filtered by patch. */
+	getArenaTierList: (patch: string | null) => __TAURI_INVOKE<ArenaTierListResponse_Serialize>("get_arena_tier_list", { patch }),
+	/**
+	 *  Tauri command to fetch a read-only Arena (`CHERRY`) champion build preview
+	 *  (items, prismatics, augments, synergies) without injecting into LCU.
+	 */
+	getArenaChampionBuild: (championId: number, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_arena_champion_build", { championId, patch }),
 	/**  Returns the current backend startup/prewarm bootstrap status. */
 	getBootstrapStatus: () => __TAURI_INVOKE<BootstrapStatus>("get_bootstrap_status"),
 	/**  Returns the runtime distribution mode (`isPortable`), current app version, and GitHub Releases URL. */
@@ -172,6 +179,132 @@ export type AramChampionRank_Serialize = {
 
 export type AramMode = "aram" | "aram_mayhem";
 
+/**  Recommended Arena (`CHERRY`) augment entry with stats and localized metadata. */
+export type ArenaAugmentEntry = ArenaAugmentEntry_Serialize | ArenaAugmentEntry_Deserialize;
+
+/**  Recommended Arena (`CHERRY`) augment entry with stats and localized metadata. */
+export type ArenaAugmentEntry_Deserialize = {
+	id: number,
+	name: string,
+	desc?: string,
+	icon_url?: string,
+	/**  Canonical rarity (`1` = Silver, `4` = Gold, `8` = Prismatic). */
+	rarity: number,
+	play: number,
+	win: number,
+	first_place: number,
+	/**  Top 4 finish rate (0–100%). */
+	win_rate: number | null,
+	/**  1st place finish rate (0–100%). */
+	first_place_rate: number | null,
+	/**  Average placement (e.g. `3.25`). */
+	avg_placement: number | null,
+	pick_rate: number | null,
+};
+
+/**  Recommended Arena (`CHERRY`) augment entry with stats and localized metadata. */
+export type ArenaAugmentEntry_Serialize = {
+	id: number,
+	name: string,
+	desc: string,
+	icon_url: string,
+	/**  Canonical rarity (`1` = Silver, `4` = Gold, `8` = Prismatic). */
+	rarity: number,
+	play: number,
+	win: number,
+	first_place: number,
+	/**  Top 4 finish rate (0–100%). */
+	win_rate: number | null,
+	/**  1st place finish rate (0–100%). */
+	first_place_rate: number | null,
+	/**  Average placement (e.g. `3.25`). */
+	avg_placement: number | null,
+	pick_rate: number | null,
+};
+
+/**  Ranked champion entry in the Arena (`CHERRY`) tier list. */
+export type ArenaChampionEntry = ArenaChampionEntry_Serialize | ArenaChampionEntry_Deserialize;
+
+/**  Ranked champion entry in the Arena (`CHERRY`) tier list. */
+export type ArenaChampionEntry_Deserialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5). */
+	tier: number,
+	rank: number,
+	/**  Top 4 finish rate (0–100%). */
+	win_rate?: number | null,
+	/**  1st place finish rate (0–100%). */
+	first_place_rate?: number | null,
+	/**  Average placement (e.g. `3.41`). */
+	avg_placement?: number | null,
+	pick_rate?: number | null,
+	ban_rate?: number | null,
+	play?: number,
+};
+
+/**  Ranked champion entry in the Arena (`CHERRY`) tier list. */
+export type ArenaChampionEntry_Serialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5). */
+	tier: number,
+	rank: number,
+	/**  Top 4 finish rate (0–100%). */
+	win_rate: number | null,
+	/**  1st place finish rate (0–100%). */
+	first_place_rate: number | null,
+	/**  Average placement (e.g. `3.41`). */
+	avg_placement: number | null,
+	pick_rate: number | null,
+	ban_rate: number | null,
+	play: number,
+};
+
+/**  Recommended Arena (`CHERRY`) duo partner synergy entry. */
+export type ArenaSynergyEntry = {
+	champion_id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	op_rank: number,
+	play: number,
+	win: number,
+	first_place: number,
+	/**  Top 4 finish rate (0–100%). */
+	win_rate: number | null,
+	/**  1st place finish rate (0–100%). */
+	first_place_rate: number | null,
+	/**  Average placement (e.g. `2.99`). */
+	avg_placement: number | null,
+	pick_rate: number | null,
+};
+
+/**  Full Arena (`CHERRY`) tier list payload including active patch and available patches. */
+export type ArenaTierListResponse = ArenaTierListResponse_Serialize | ArenaTierListResponse_Deserialize;
+
+/**  Full Arena (`CHERRY`) tier list payload including active patch and available patches. */
+export type ArenaTierListResponse_Deserialize = {
+	active_patch: string,
+	available_patches: string[],
+	patch_fallback_applied: boolean,
+	patch_protection_remaining_hours?: number | null,
+	champions: ArenaChampionEntry_Deserialize[],
+};
+
+/**  Full Arena (`CHERRY`) tier list payload including active patch and available patches. */
+export type ArenaTierListResponse_Serialize = {
+	active_patch: string,
+	available_patches: string[],
+	patch_fallback_applied: boolean,
+	patch_protection_remaining_hours: number | null,
+	champions: ArenaChampionEntry_Serialize[],
+};
+
 export type BootstrapProgress = BootstrapStatus;
 
 export type BootstrapStatus = {
@@ -288,6 +421,11 @@ export type ChampionBuild_Deserialize = {
 	patch_fallback_applied?: boolean,
 	patch_protection_remaining_hours?: number | null,
 	supports_runes?: boolean,
+	supports_spells?: boolean,
+	arena_augments?: ArenaAugmentEntry_Deserialize[],
+	arena_synergies?: ArenaSynergyEntry[],
+	first_place_rate?: number | null,
+	avg_placement?: number | null,
 };
 
 /**  Complete build recommendations fetched and parsed from OP.GG enriched with DataDragon visual assets. */
@@ -320,6 +458,11 @@ export type ChampionBuild_Serialize = {
 	patch_fallback_applied: boolean,
 	patch_protection_remaining_hours: number | null,
 	supports_runes: boolean,
+	supports_spells: boolean,
+	arena_augments: ArenaAugmentEntry_Serialize[],
+	arena_synergies: ArenaSynergyEntry[],
+	first_place_rate: number | null,
+	avg_placement: number | null,
 };
 
 /**  Top champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
@@ -368,13 +511,13 @@ export type InjectionReport = {
 	message: string,
 };
 
-/**  An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots). */
+/**  An individual item group for the shop (e.g. Starters, Prismatic, Core 3, Final Build, Boots). */
 export type ItemBlock = ItemBlock_Serialize | ItemBlock_Deserialize;
 
 /**  Semantic category of a shop item block. */
-export type ItemBlockKind = "starter" | "core" | "boots" | "final" | "situational" | "other";
+export type ItemBlockKind = "starter" | "prismatic" | "core" | "boots" | "final" | "situational" | "other";
 
-/**  An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots). */
+/**  An individual item group for the shop (e.g. Starters, Prismatic, Core 3, Final Build, Boots). */
 export type ItemBlock_Deserialize = {
 	kind?: ItemBlockKind,
 	title: string,
@@ -382,7 +525,7 @@ export type ItemBlock_Deserialize = {
 	item_icon_urls?: string[],
 };
 
-/**  An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots). */
+/**  An individual item group for the shop (e.g. Starters, Prismatic, Core 3, Final Build, Boots). */
 export type ItemBlock_Serialize = {
 	kind: ItemBlockKind,
 	title: string,
@@ -505,7 +648,7 @@ export type ProfileAppearanceSettings = {
 export type ProfileRefreshRequested = null;
 
 /**  Game queue classifications. */
-export type QueueMode = "SummonersRift" | "Aram" | "AramMayhem" | "PracticeTool" | "Other";
+export type QueueMode = "SummonersRift" | "Aram" | "AramMayhem" | "Arena" | "PracticeTool" | "Other";
 
 export type RankedChampionEntry = RankedChampionEntry_Serialize | RankedChampionEntry_Deserialize;
 

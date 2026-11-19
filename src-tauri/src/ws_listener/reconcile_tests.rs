@@ -47,7 +47,7 @@ impl FinalReconcileGateway for MockGateway {
         let report = InjectionReport {
             champion_name: build.champion_name.clone(),
             runes_injected: build.supports_runes,
-            spells_injected: true,
+            spells_injected: build.supports_spells,
             items_injected: true,
             message: "OK".to_string(),
         };
@@ -236,6 +236,7 @@ async fn test_reconcile_same_champion_preserves_selections_and_respects_aram_may
             champion_id: 103,
             queue_id: QUEUE_ARAM_MAYHEM,
             supports_runes: false,
+            supports_spells: true,
             runes_injected: false,
             spells_injected: true,
             items_injected: true,

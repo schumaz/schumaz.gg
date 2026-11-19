@@ -2,6 +2,7 @@ use std::sync::{Arc, OnceLock};
 
 use super::extract::{
     ChampSelectedPayload, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_PRACTICE_TOOL, QUEUE_SOLO_DUO,
+    is_arena_queue, queue_supports_runes, queue_supports_spells,
 };
 use crate::build_provider::ChampionBuild;
 use crate::lcu_injector::{AppliedInjectionState, UserPreferences};
@@ -95,7 +96,10 @@ pub fn resolve_effective_build_position(
     payload: &ChampSelectedPayload,
     build_queue_id: i32,
 ) -> Option<String> {
-    if build_queue_id == QUEUE_ARAM || build_queue_id == QUEUE_ARAM_MAYHEM {
+    if build_queue_id == QUEUE_ARAM
+        || build_queue_id == QUEUE_ARAM_MAYHEM
+        || is_arena_queue(build_queue_id)
+    {
         None
     } else {
         payload.assigned_position.clone()
@@ -108,7 +112,8 @@ pub(crate) fn build_matches_payload(
     build_queue_id: i32,
 ) -> bool {
     build.champion_id == actual.champion_id
-        && build.supports_runes == (build_queue_id != QUEUE_ARAM_MAYHEM)
+        && build.supports_runes == queue_supports_runes(build_queue_id)
+        && build.supports_spells == queue_supports_spells(build_queue_id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,5 +172,65 @@ pub fn evaluate_reconciliation_decision(
 
     ReconciliationDecision::SafetyReinject {
         need_build_fetch: !has_matching_build,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{QUEUE_ARENA, QueueMode};
+
+    #[test]
+    fn test_arena_reconciliation_recognizes_item_only_injection() {
+        let payload = ChampSelectedPayload {
+            champion_id: 350,
+            queue_id: QUEUE_ARENA,
+            queue_mode: QueueMode::Arena,
+            locked_in: true,
+            assigned_position: Some("support".to_string()),
+        };
+        assert_eq!(resolve_effective_build_queue_id(&payload), QUEUE_ARENA);
+        assert_eq!(
+            resolve_effective_build_position(&payload, QUEUE_ARENA),
+            None
+        );
+
+        let arena_build = ChampionBuild {
+            champion_id: 350,
+            champion_name: "Yuumi".to_string(),
+            supports_runes: false,
+            supports_spells: false,
+            ..Default::default()
+        };
+        assert!(build_matches_payload(&arena_build, &payload, QUEUE_ARENA));
+
+        let mut wrong_flags_build = arena_build.clone();
+        wrong_flags_build.supports_spells = true;
+        assert!(!build_matches_payload(
+            &wrong_flags_build,
+            &payload,
+            QUEUE_ARENA
+        ));
+
+        let state = ChampSelectSessionState {
+            last_payload: Some(payload.clone()),
+            last_build: Some(arena_build),
+            last_applied: Some(AppliedInjectionState {
+                champion_id: 350,
+                queue_id: QUEUE_ARENA,
+                supports_runes: false,
+                supports_spells: false,
+                runes_injected: false,
+                spells_injected: false,
+                items_injected: true,
+            }),
+            ui_displayed_champion_id: Some(350),
+            reconciled_champion_id: Some(350),
+        };
+        let prefs = UserPreferences::default();
+        assert_eq!(
+            evaluate_reconciliation_decision(&state, &payload, &prefs, QUEUE_ARENA),
+            ReconciliationDecision::AlreadyReconciled
+        );
     }
 }

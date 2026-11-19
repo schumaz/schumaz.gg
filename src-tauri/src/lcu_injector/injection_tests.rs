@@ -9,11 +9,11 @@ use crate::models::AppLocale;
 use std::sync::Mutex;
 
 #[derive(Default)]
-struct MockInjectionSink {
-    rune_payloads: Mutex<Vec<serde_json::Value>>,
-    spell_pairs: Mutex<Vec<(i32, i32)>>,
-    item_payloads: Mutex<Vec<serde_json::Value>>,
-    fail_spells: bool,
+pub(super) struct MockInjectionSink {
+    pub(super) rune_payloads: Mutex<Vec<serde_json::Value>>,
+    pub(super) spell_pairs: Mutex<Vec<(i32, i32)>>,
+    pub(super) item_payloads: Mutex<Vec<serde_json::Value>>,
+    pub(super) fail_spells: bool,
 }
 
 impl SafetyInjectionSink for MockInjectionSink {
@@ -78,6 +78,7 @@ fn test_format_injection_report_message_localizes_pt_br_and_en_us() {
         format_injection_report_message(
             AppLocale::EnUs,
             true,
+            true,
             Some(&Ok(())),
             Some(&Err("timeout".to_string())),
             Some(&Ok(())),
@@ -88,6 +89,7 @@ fn test_format_injection_report_message_localizes_pt_br_and_en_us() {
         format_injection_report_message(
             AppLocale::PtBr,
             true,
+            true,
             Some(&Ok(())),
             Some(&Err("timeout".to_string())),
             Some(&Ok(())),
@@ -95,15 +97,23 @@ fn test_format_injection_report_message_localizes_pt_br_and_en_us() {
         "Runas injetadas | Falha nos Feitiços: timeout | Itens injetados"
     );
     assert_eq!(
-        format_injection_report_message(AppLocale::EnUs, false, None, None, None),
+        format_injection_report_message(AppLocale::EnUs, false, true, None, None, None),
         "ARAM Mayhem mode (runes disabled by Riot)"
     );
     assert_eq!(
-        format_injection_report_message(AppLocale::EnUs, true, None, None, None),
+        format_injection_report_message(AppLocale::EnUs, false, false, None, None, Some(&Ok(())),),
+        "Arena mode (runes and spells disabled by Riot) | Items injected"
+    );
+    assert_eq!(
+        format_injection_report_message(AppLocale::PtBr, false, false, None, None, Some(&Ok(())),),
+        "Modo Arena (runas e feitiços desativados pela Riot) | Itens injetados"
+    );
+    assert_eq!(
+        format_injection_report_message(AppLocale::EnUs, true, true, None, None, None),
         "No injections enabled in preferences"
     );
     assert_eq!(
-        format_injection_report_message(AppLocale::PtBr, true, None, None, None),
+        format_injection_report_message(AppLocale::PtBr, true, true, None, None, None),
         "Nenhuma injeção configurada nas preferências"
     );
 }
@@ -190,6 +200,7 @@ async fn test_safety_reinject_with_runes_mode_preserves_manual_selections() {
             ..Default::default()
         }],
         supports_runes: true,
+        supports_spells: true,
         ..Default::default()
     };
 
@@ -242,6 +253,7 @@ async fn test_safety_reinject_aram_mayhem_skips_runes_and_injects_spells_and_ite
             ..Default::default()
         }],
         supports_runes: false,
+        supports_spells: true,
         ..Default::default()
     };
 
@@ -283,6 +295,7 @@ async fn test_applied_injection_state_detects_partial_failure() {
         spell1_id: 4,
         spell2_id: 14,
         supports_runes: true,
+        supports_spells: true,
         ..Default::default()
     };
     let prefs = UserPreferences::default();

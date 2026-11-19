@@ -42,6 +42,7 @@ pub fn ddragon_mode_for_queue(queue_id: i32) -> &'static str {
     match queue_id {
         crate::models::QUEUE_ARAM_MAYHEM => "KIWI",
         crate::models::QUEUE_ARAM => "ARAM",
+        q if crate::models::is_arena_queue(q) => "CHERRY",
         _ => "CLASSIC",
     }
 }

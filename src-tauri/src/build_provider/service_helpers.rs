@@ -5,7 +5,7 @@ use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_local
 use super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::patch::{extract_patch_trend_timestamps, resolve_effective_patch};
 use super::spells::{ddragon_mode_for_queue, extract_summoner_spell_choices_for_mode};
-use crate::models::{AppLocale, FlashKeyPreference};
+use crate::models::{AppLocale, FlashKeyPreference, queue_supports_spells};
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +62,9 @@ pub(super) fn extract_fast_spells_from_rest(
     queue_id: i32,
     ddragon_cache: &DataDragonCache,
 ) -> Option<FastSpellRecommendation> {
+    if !queue_supports_spells(queue_id) {
+        return None;
+    }
     let analysis = json_res
         .get("data")
         .or_else(|| json_res.pointer("/result/data"))
@@ -97,6 +100,10 @@ pub(super) fn send_build_fast_spells(
     champion_id: i32,
     build: &ChampionBuild,
 ) {
+    if !build.supports_spells {
+        let _ = fast_spells_tx.take();
+        return;
+    }
     if let Some(tx) = fast_spells_tx.take() {
         let _ = tx.send(FastSpellRecommendation {
             champion_id,

@@ -11,6 +11,7 @@ fn test_enrich_build_with_ddragon_populates_urls_spells_and_shards() {
         champions: HashMap::new(),
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     };
 
     ddragon_cache.champions.insert(
@@ -85,6 +86,7 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
         champions: HashMap::new(),
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     };
 
     // 1. ARAM Tristana: Flash (4) + Curar (7) primary, Barreira (21) secondary
@@ -176,6 +178,7 @@ fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() 
         champions: HashMap::new(),
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     };
 
     // Stale/legacy ARAM Mayhem build with Flash + Exhaust and [Exhaust, Heal] choices
@@ -310,6 +313,7 @@ fn test_en_us_localization_for_shards_spells_and_build_labels() {
         champions: HashMap::new(),
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     };
 
     enrich_build_with_ddragon_with_flash_key_and_locale(

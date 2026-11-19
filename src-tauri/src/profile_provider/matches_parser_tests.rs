@@ -43,6 +43,8 @@ fn sample_cache() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells,
+
+        ..Default::default()
     }
 }
 

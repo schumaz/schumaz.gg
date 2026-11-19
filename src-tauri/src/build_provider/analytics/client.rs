@@ -10,6 +10,7 @@ pub use super::versions::{
     fetch_opgg_versions, fetch_opgg_versions_from_base, fetch_opgg_versions_with_cache_dir,
     opgg_versions_file_path, peek_latest_cached_opgg_version,
 };
+use crate::models::{queue_supports_runes, queue_supports_spells};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -114,7 +115,8 @@ pub async fn get_recommended_build_with_endpoint(
 
     let queue_param = opgg_queue_param_from_id(queue_id);
     let spell_mode = ddragon_mode_for_queue(queue_id);
-    let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
+    let supports_runes = queue_supports_runes(queue_id);
+    let supports_spells = queue_supports_spells(queue_id);
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
@@ -136,6 +138,7 @@ pub async fn get_recommended_build_with_endpoint(
         build.active_position.clear();
     }
     build.supports_runes = supports_runes;
+    build.supports_spells = supports_spells;
     enrich_build_with_ddragon_for_queue(&mut build, ddragon_cache, queue_id);
     build
 }

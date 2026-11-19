@@ -1,13 +1,14 @@
 use super::analytics::{
-    fetch_opgg_mcp_depth_items, fetch_opgg_versions_from_base,
-    parse_opgg_analysis_payload_for_mode, resolve_champion_most_played_lane,
+    OPGG_REST_API_BASE, fetch_arena_champion_build_with_base_and_dir, fetch_opgg_mcp_depth_items,
+    fetch_opgg_versions_from_base, parse_opgg_analysis_payload_for_mode,
+    resolve_champion_most_played_lane,
 };
 use super::cache::{
     load_disk_build_envelope, make_build_cache_key, store_disk_build, store_ram_cached_build,
     try_get_fresh_disk_build, try_get_ram_cached_build,
 };
 use super::ddragon::enrich_build_with_ddragon_for_queue;
-use super::fallback::champion_default_lane;
+use super::fallback::{build_fallback_champion_build, champion_default_lane};
 use super::models::{ChampionBuild, DataDragonCache};
 pub use super::service_helpers::FastSpellRecommendation;
 use super::service_helpers::{
@@ -16,6 +17,7 @@ use super::service_helpers::{
     send_build_fast_spells,
 };
 use super::spells::ddragon_mode_for_queue;
+use crate::models::{is_arena_queue, queue_supports_runes, queue_supports_spells};
 use std::path::Path;
 
 #[cfg(test)]
@@ -42,11 +44,47 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         .get(&champion_id)
         .map(|c| c.key_name.as_str())
         .unwrap_or("Unknown");
+    let prefs = crate::lcu_injector::get_user_preferences();
+    let active_locale = prefs.language;
+
+    if is_arena_queue(queue_id) {
+        let _ = fast_spells_tx.take();
+        let arena_dir = if rest_base == OPGG_REST_API_BASE {
+            crate::storage::global_paths()
+                .map(|p| p.opgg_arena_dir.as_path())
+                .or(builds_dir)
+        } else {
+            builds_dir
+        };
+        let now_unix = crate::storage::now_unix_secs();
+        match fetch_arena_champion_build_with_base_and_dir(
+            client,
+            rest_base,
+            champion_id,
+            patch,
+            ddragon_cache,
+            patch_48h_protection,
+            now_unix,
+            active_locale,
+            arena_dir,
+        )
+        .await
+        {
+            Ok(build) => return Ok(build),
+            Err(_) => {
+                let mut fallback = build_fallback_champion_build(champion_id, champ_name, queue_id);
+                enrich_build_with_ddragon_for_queue(&mut fallback, ddragon_cache, queue_id);
+                return Ok(fallback);
+            }
+        }
+    }
+
     let is_aram = queue_id == crate::ws_listener::QUEUE_ARAM
         || queue_id == crate::ws_listener::QUEUE_ARAM_MAYHEM;
     let mode = if is_aram { "aram" } else { "ranked" };
     let spell_mode = ddragon_mode_for_queue(queue_id);
-    let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
+    let supports_runes = queue_supports_runes(queue_id);
+    let supports_spells = queue_supports_spells(queue_id);
     let target_region = region.unwrap_or("global");
     let target_tier = match tier.map(str::trim).filter(|t| !t.is_empty()) {
         Some(explicit) => explicit,
@@ -59,8 +97,6 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         position.unwrap_or("").trim()
     };
     let manual_patch_trimmed = patch.unwrap_or("").trim();
-    let prefs = crate::lcu_injector::get_user_preferences();
-    let active_locale = prefs.language;
 
     let build_cache_key = make_build_cache_key(
         active_locale,
@@ -186,7 +222,8 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     let patch_fallback_applied = fetch_outcome.patch_fallback_applied;
     let patch_protection_remaining_hours = fetch_outcome.patch_protection_remaining_hours;
 
-    if let Ok(ref json_res) = fetch_outcome.result
+    if supports_spells
+        && let Ok(ref json_res) = fetch_outcome.result
         && let Some(fast) =
             extract_fast_spells_from_rest(json_res, champion_id, is_jungle, queue_id, ddragon_cache)
         && let Some(tx) = fast_spells_tx.take()
@@ -242,9 +279,10 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     build.patch_fallback_applied = patch_fallback_applied;
     build.patch_protection_remaining_hours = patch_protection_remaining_hours;
     build.supports_runes = supports_runes;
+    build.supports_spells = supports_spells;
 
     enrich_build_with_ddragon_for_queue(&mut build, ddragon_cache, queue_id);
-    if let Some(tx) = fast_spells_tx.take() {
+    if supports_spells && let Some(tx) = fast_spells_tx.take() {
         let _ = tx.send(FastSpellRecommendation {
             champion_id,
             spell1_id: build.spell1_id,

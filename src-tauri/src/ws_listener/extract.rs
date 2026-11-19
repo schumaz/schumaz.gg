@@ -1,6 +1,7 @@
 ﻿pub use crate::models::{
-    ChampSelectedPayload, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_FLEX, QUEUE_NORMAL_DRAFT,
-    QUEUE_PRACTICE_TOOL, QUEUE_QUICKPLAY, QUEUE_SOLO_DUO, QueueMode,
+    ChampSelectedPayload, MAP_ARENA, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_ARENA, QUEUE_ARENA_1710,
+    QUEUE_ARENA_1750, QUEUE_FLEX, QUEUE_NORMAL_DRAFT, QUEUE_PRACTICE_TOOL, QUEUE_QUICKPLAY,
+    QUEUE_SOLO_DUO, QueueMode, is_arena_queue, queue_supports_runes, queue_supports_spells,
 };
 use std::time::Duration;
 
@@ -256,12 +257,13 @@ pub fn extract_assigned_position(session_json: &serde_json::Value) -> Option<Str
 }
 
 /// Extracts the queue ID from a `GET /lol-gameflow/v1/session` JSON payload.
-/// Supports Standard queues, ARAM Mayhem, Practice Tool, and Custom games.
+/// Supports Standard queues, ARAM Mayhem, Arena (`CHERRY` / Map `30`), Practice Tool, and Custom games.
 pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String> {
-    // 1. Check for Practice Tool, ARAM Mayhem, or custom game indicators in gameMode
+    // 1. Check for Practice Tool, ARAM Mayhem, Arena (`CHERRY` / Map 30), or custom game indicators
     let game_mode = gameflow_json
         .pointer("/gameData/queue/gameMode")
         .or_else(|| gameflow_json.pointer("/gameData/gameMode"))
+        .or_else(|| gameflow_json.pointer("/map/gameMode"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
@@ -276,15 +278,34 @@ pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String
         return Ok(QUEUE_ARAM_MAYHEM);
     }
 
-    let is_custom = gameflow_json
-        .pointer("/gameData/isCustomGame")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
     let id_opt = gameflow_json
         .pointer("/gameData/queue/id")
         .and_then(|v| v.as_i64())
         .map(|id| id as i32);
+
+    let map_id = gameflow_json
+        .pointer("/map/id")
+        .or_else(|| gameflow_json.pointer("/gameData/queue/mapId"))
+        .or_else(|| gameflow_json.pointer("/gameData/mapId"))
+        .and_then(|v| v.as_i64())
+        .map(|id| id as i32);
+
+    if game_mode.eq_ignore_ascii_case("CHERRY")
+        || game_mode.eq_ignore_ascii_case("ARENA")
+        || map_id == Some(MAP_ARENA)
+    {
+        if let Some(id) = id_opt
+            && is_arena_queue(id)
+        {
+            return Ok(id);
+        }
+        return Ok(QUEUE_ARENA);
+    }
+
+    let is_custom = gameflow_json
+        .pointer("/gameData/isCustomGame")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     if let Some(id) = id_opt {
         if id == -1 || (is_custom && id <= 0) {

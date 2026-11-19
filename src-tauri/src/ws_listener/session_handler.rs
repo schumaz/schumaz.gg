@@ -6,8 +6,8 @@ use super::coordinator::ChampSelectCoordinator;
 use super::extract::{
     ChampSelectedPayload, FINALIZATION_SAFETY_WINDOW_MS, FinalizationAction, QUEUE_ARAM,
     QUEUE_ARAM_MAYHEM, QUEUE_PRACTICE_TOOL, QUEUE_SOLO_DUO, QueueMode, WsSessionTransition,
-    evaluate_finalization_window, extract_champ_select_timer, should_emit_champ_select,
-    should_request_lock_in_attention,
+    evaluate_finalization_window, extract_champ_select_timer, is_arena_queue,
+    queue_supports_spells, should_emit_champ_select, should_request_lock_in_attention,
 };
 use super::gameflow::sync_gameflow_phase_before_champ_select_end;
 use super::reconcile::{LiveLcuReconcileGateway, TauriReconcileEmitter, reconcile_final_session};
@@ -96,6 +96,7 @@ async fn run_champ_select_build_and_inject(
     let champ_id = payload.champion_id;
     let q_id = resolve_effective_build_queue_id(&payload);
     let assigned_pos = resolve_effective_build_position(&payload, q_id);
+    let supports_spells = queue_supports_spells(q_id);
     let http_client = crate::build_provider::shared_http_client();
     let (fast_tx, fast_rx) =
         tokio::sync::oneshot::channel::<crate::build_provider::FastSpellRecommendation>();
@@ -106,6 +107,9 @@ async fn run_champ_select_build_and_inject(
     let spell_conn = Arc::clone(&conn);
     let spell_seq_guard = seq_guard.clone();
     let fast_spell_fut = async move {
+        if !supports_spells {
+            return false;
+        }
         let Ok(fast) = fast_rx.await else {
             return false;
         };
@@ -136,7 +140,7 @@ async fn run_champ_select_build_and_inject(
         None,
         None,
         None,
-        Some(fast_tx),
+        if supports_spells { Some(fast_tx) } else { None },
     );
 
     let (summoner_opt, spells_already_injected, build_res) =
@@ -276,8 +280,12 @@ pub async fn update_build_filters_and_reinject(
 ) -> Result<crate::build_provider::ChampionBuild, String> {
     let http_client = crate::build_provider::shared_http_client();
     let q_id = queue_id.unwrap_or(QUEUE_SOLO_DUO);
-    let is_aram = q_id == QUEUE_ARAM || q_id == QUEUE_ARAM_MAYHEM;
-    let effective_position = if is_aram { None } else { position.as_deref() };
+    let no_position_mode = q_id == QUEUE_ARAM || q_id == QUEUE_ARAM_MAYHEM || is_arena_queue(q_id);
+    let effective_position = if no_position_mode {
+        None
+    } else {
+        position.as_deref()
+    };
 
     let build = crate::build_provider::get_recommended_build_with_filters(
         http_client,

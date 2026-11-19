@@ -1,4 +1,5 @@
 pub mod aram;
+pub mod arena;
 pub mod client;
 pub mod mcp_extractors;
 pub mod mcp_parser;
@@ -10,6 +11,7 @@ pub mod rest_parser;
 pub mod versions;
 
 pub use aram::*;
+pub use arena::*;
 pub use client::*;
 pub use mcp_extractors::*;
 pub use mcp_parser::*;

@@ -1,3 +1,4 @@
+use super::arena::{ArenaAugmentEntry, ArenaAugmentMetadata, ArenaSynergyEntry};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -13,6 +14,15 @@ pub struct ItemClassificationCache {
     pub completed: std::collections::HashSet<i32>,
     pub evolved_fallbacks: std::collections::HashMap<i32, i32>,
     pub item_tags: std::collections::HashMap<i32, Vec<String>>,
+    /// Arena (`CHERRY`) Prismatic items (`44xxxx` with `gold.total == 2750`).
+    #[serde(default)]
+    pub arena_prismatics: std::collections::HashSet<i32>,
+    /// All items enabled on Riot Map `30` (Arena).
+    #[serde(default)]
+    pub map30_items: std::collections::HashSet<i32>,
+    /// Arena anvils (`220000..=220011`) and `Consumable`-tagged items.
+    #[serde(default)]
+    pub arena_consumables: std::collections::HashSet<i32>,
 }
 
 /// Champion metadata translated from Riot's DataDragon.
@@ -64,7 +74,7 @@ pub struct RunePageOption {
     pub perks: Vec<RuneMetadata>,
 }
 
-/// In-memory cache holding champion, rune, and summoner spell metadata from DataDragon.
+/// In-memory cache holding champion, rune, spell, and Arena augment metadata from DataDragon/CDragon.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct DataDragonCache {
     pub version: String,
@@ -72,6 +82,8 @@ pub struct DataDragonCache {
     pub runes: HashMap<i32, RuneMetadata>,
     #[serde(default)]
     pub spells: HashMap<i32, SpellMetadata>,
+    #[serde(default)]
+    pub arena_augments: HashMap<i32, ArenaAugmentMetadata>,
 }
 
 /// Complete unified build archetype (Core 3 + matching 6-item Final Build).
@@ -109,6 +121,7 @@ pub struct ItemBuildOption {
 #[serde(rename_all = "snake_case")]
 pub enum ItemBlockKind {
     Starter,
+    Prismatic,
     Core,
     Boots,
     Final,
@@ -122,6 +135,8 @@ impl ItemBlockKind {
     pub fn infer_from_title(title: &str) -> Self {
         if title.contains("Itens Iniciais") || title.contains("Starter Items") {
             Self::Starter
+        } else if title.contains("Itens Prismáticos") || title.contains("Prismatic Items") {
+            Self::Prismatic
         } else if title.contains("Primeiros 3 Itens") || title.contains("First 3 Items") {
             Self::Core
         } else if title.contains("Botas") || title.contains("Boots") {
@@ -141,7 +156,7 @@ impl ItemBlockKind {
     }
 }
 
-/// An individual item group for the shop (e.g. Starters, Core 3, Final Build, Boots).
+/// An individual item group for the shop (e.g. Starters, Prismatic, Core 3, Final Build, Boots).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct ItemBlock {
     #[serde(default)]
@@ -153,7 +168,7 @@ pub struct ItemBlock {
 }
 
 /// Complete build recommendations fetched and parsed from OP.GG enriched with DataDragon visual assets.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct ChampionBuild {
     pub champion_id: i32,
     pub champion_name: String,
@@ -201,6 +216,56 @@ pub struct ChampionBuild {
     pub patch_protection_remaining_hours: Option<u32>,
     #[serde(default = "default_true")]
     pub supports_runes: bool,
+    #[serde(default = "default_true")]
+    pub supports_spells: bool,
+    #[serde(default)]
+    pub arena_augments: Vec<ArenaAugmentEntry>,
+    #[serde(default)]
+    pub arena_synergies: Vec<ArenaSynergyEntry>,
+    #[serde(default)]
+    pub first_place_rate: Option<f64>,
+    #[serde(default)]
+    pub avg_placement: Option<f64>,
+}
+
+impl Default for ChampionBuild {
+    fn default() -> Self {
+        Self {
+            champion_id: 0,
+            champion_name: String::new(),
+            win_rate: 0.0,
+            pick_rate: 0.0,
+            primary_style_id: 0,
+            sub_style_id: 0,
+            selected_perk_ids: Vec::new(),
+            spell1_id: 0,
+            spell2_id: 0,
+            item_blocks: Vec::new(),
+            rune_pages: Vec::new(),
+            build_options: Vec::new(),
+            champion_icon_url: String::new(),
+            primary_style_name: String::new(),
+            primary_style_icon_url: String::new(),
+            sub_style_name: String::new(),
+            sub_style_icon_url: String::new(),
+            perks: Vec::new(),
+            spells: Vec::new(),
+            spell_choices: Vec::new(),
+            active_position: String::new(),
+            active_tier: String::new(),
+            active_region: String::new(),
+            active_patch: String::new(),
+            available_patches: Vec::new(),
+            patch_fallback_applied: false,
+            patch_protection_remaining_hours: None,
+            supports_runes: true,
+            supports_spells: true,
+            arena_augments: Vec::new(),
+            arena_synergies: Vec::new(),
+            first_place_rate: None,
+            avg_placement: None,
+        }
+    }
 }
 
 /// Detailed stats for an item or item set from OP.GG.

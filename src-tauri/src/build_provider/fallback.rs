@@ -1,10 +1,13 @@
 use super::models::{ChampionBuild, ItemBlock, ItemBlockKind};
-use crate::ws_listener::QUEUE_ARAM_MAYHEM;
+use crate::models::{
+    QUEUE_ARAM_MAYHEM, is_arena_queue, queue_supports_runes, queue_supports_spells,
+};
 
-/// Maps a queue ID into an OP.GG queue argument string ("aram" or "ranked").
+/// Maps a queue ID into an OP.GG queue argument string ("aram", "arena", or "ranked").
 pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
     match queue_id {
         450 | QUEUE_ARAM_MAYHEM => "aram",
+        q if is_arena_queue(q) => "arena",
         _ => "ranked",
     }
 }
@@ -14,6 +17,8 @@ pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
 pub fn default_spells_for_queue(queue_id: i32) -> (i32, i32) {
     if queue_id == 450 || queue_id == QUEUE_ARAM_MAYHEM {
         (4, 32)
+    } else if is_arena_queue(queue_id) {
+        (0, 0)
     } else {
         (4, 14)
     }
@@ -38,6 +43,55 @@ pub fn build_fallback_champion_build(
     champion_name: &str,
     queue_id: i32,
 ) -> ChampionBuild {
+    if is_arena_queue(queue_id) {
+        return ChampionBuild {
+            champion_id,
+            champion_name: champion_name.to_string(),
+            win_rate: 50.0,
+            pick_rate: 0.0,
+            primary_style_id: 0,
+            sub_style_id: 0,
+            selected_perk_ids: vec![],
+            spell1_id: 0,
+            spell2_id: 0,
+            item_blocks: vec![
+                ItemBlock {
+                    kind: ItemBlockKind::Prismatic,
+                    title: "Itens Prismáticos".to_string(),
+                    item_ids: vec![],
+                    item_icon_urls: vec![],
+                },
+                ItemBlock {
+                    kind: ItemBlockKind::Core,
+                    title: "Primeiros 3 Itens".to_string(),
+                    item_ids: vec![],
+                    item_icon_urls: vec![],
+                },
+                ItemBlock {
+                    kind: ItemBlockKind::Boots,
+                    title: "3 Botas Mais Feitas".to_string(),
+                    item_ids: vec![],
+                    item_icon_urls: vec![],
+                },
+                ItemBlock {
+                    kind: ItemBlockKind::Final,
+                    title: "Build Final".to_string(),
+                    item_ids: vec![],
+                    item_icon_urls: vec![],
+                },
+                ItemBlock {
+                    kind: ItemBlockKind::Situational,
+                    title: "Itens Situacionais / Úteis".to_string(),
+                    item_ids: vec![],
+                    item_icon_urls: vec![],
+                },
+            ],
+            supports_runes: false,
+            supports_spells: false,
+            ..Default::default()
+        };
+    }
+
     let (spell1_id, spell2_id) = default_spells_for_queue(queue_id);
 
     // Universal standard rune page: Precision (8000) + Domination (8100)
@@ -116,7 +170,8 @@ pub fn build_fallback_champion_build(
         sub_style_icon_url: String::new(),
         perks: vec![],
         spells: vec![],
-        supports_runes: queue_id != QUEUE_ARAM_MAYHEM,
+        supports_runes: queue_supports_runes(queue_id),
+        supports_spells: queue_supports_spells(queue_id),
         ..Default::default()
     }
 }
@@ -124,6 +179,7 @@ pub fn build_fallback_champion_build(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750};
 
     #[test]
     fn test_opgg_queue_param_and_default_spells_adaptation() {
@@ -132,6 +188,9 @@ mod tests {
 
         assert_eq!(opgg_queue_param_from_id(QUEUE_ARAM_MAYHEM), "aram");
         assert_eq!(default_spells_for_queue(QUEUE_ARAM_MAYHEM), (4, 32));
+
+        assert_eq!(opgg_queue_param_from_id(QUEUE_ARENA), "arena");
+        assert_eq!(default_spells_for_queue(QUEUE_ARENA), (0, 0));
 
         assert_eq!(opgg_queue_param_from_id(420), "ranked");
         assert_eq!(default_spells_for_queue(420), (4, 14)); // Flash + Ignite
@@ -149,6 +208,7 @@ mod tests {
         assert_eq!(aram_fallback.spell1_id, 4);
         assert_eq!(aram_fallback.spell2_id, 32);
         assert!(aram_fallback.supports_runes);
+        assert!(aram_fallback.supports_spells);
         assert_eq!(aram_fallback.item_blocks.len(), 5);
         assert_eq!(aram_fallback.item_blocks[0].kind, ItemBlockKind::Starter);
         assert_eq!(aram_fallback.item_blocks[1].kind, ItemBlockKind::Core);
@@ -164,12 +224,30 @@ mod tests {
         assert_eq!(mayhem_fallback.spell2_id, 32);
         assert_eq!(mayhem_fallback.item_blocks[0].item_ids, vec![2051, 2003]);
         assert!(!mayhem_fallback.supports_runes);
+        assert!(mayhem_fallback.supports_spells);
+
+        for arena_queue in [QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1750] {
+            let arena_fallback = build_fallback_champion_build(103, "Ahri", arena_queue);
+            assert!(!arena_fallback.supports_runes);
+            assert!(!arena_fallback.supports_spells);
+            assert_eq!(arena_fallback.spell1_id, 0);
+            assert_eq!(arena_fallback.spell2_id, 0);
+            assert_eq!(arena_fallback.item_blocks[0].kind, ItemBlockKind::Prismatic);
+            assert!(
+                !arena_fallback
+                    .item_blocks
+                    .iter()
+                    .flat_map(|b| b.item_ids.iter())
+                    .any(|id| matches!(id, 1055 | 1056 | 2003))
+            );
+        }
 
         let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
         assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
         assert_eq!(ranked_fallback.spell1_id, 4);
         assert_eq!(ranked_fallback.spell2_id, 14);
         assert!(ranked_fallback.supports_runes);
+        assert!(ranked_fallback.supports_spells);
 
         let practice_fallback = build_fallback_champion_build(103, "Ahri", -1);
         assert_eq!(practice_fallback.selected_perk_ids.len(), 9);
@@ -177,5 +255,6 @@ mod tests {
         assert_eq!(practice_fallback.spell2_id, 14);
         assert_eq!(practice_fallback.item_blocks[0].item_ids, vec![1055, 2003]);
         assert!(practice_fallback.supports_runes);
+        assert!(practice_fallback.supports_spells);
     }
 }

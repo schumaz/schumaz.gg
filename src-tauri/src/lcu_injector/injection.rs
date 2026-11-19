@@ -18,33 +18,46 @@ pub const CHAMP_SELECT_MY_SELECTION_ENDPOINT: &str = "/lol-champ-select/v1/sessi
 pub(crate) fn format_injection_report_message(
     locale: AppLocale,
     supports_runes: bool,
+    supports_spells: bool,
     runes_res: Option<&Result<(), String>>,
     spells_res: Option<&Result<(), String>>,
     items_res: Option<&Result<(), String>>,
 ) -> String {
     let mut parts = Vec::new();
 
-    if !supports_runes {
+    if !supports_runes && !supports_spells {
         parts.push(match locale {
-            AppLocale::PtBr => "Modo ARAM Mayhem (runas desativadas pela Riot)".to_string(),
-            AppLocale::EnUs => "ARAM Mayhem mode (runes disabled by Riot)".to_string(),
+            AppLocale::PtBr => "Modo Arena (runas e feitiços desativados pela Riot)".to_string(),
+            AppLocale::EnUs => "Arena mode (runes and spells disabled by Riot)".to_string(),
         });
-    } else if let Some(r) = runes_res {
-        parts.push(match (locale, r) {
-            (AppLocale::PtBr, Ok(_)) => "Runas injetadas".to_string(),
-            (AppLocale::PtBr, Err(e)) => format!("Falha nas Runas: {e}"),
-            (AppLocale::EnUs, Ok(_)) => "Runes injected".to_string(),
-            (AppLocale::EnUs, Err(e)) => format!("Runes failed: {e}"),
-        });
-    }
+    } else {
+        if !supports_runes {
+            parts.push(match locale {
+                AppLocale::PtBr => "Modo ARAM Mayhem (runas desativadas pela Riot)".to_string(),
+                AppLocale::EnUs => "ARAM Mayhem mode (runes disabled by Riot)".to_string(),
+            });
+        } else if let Some(r) = runes_res {
+            parts.push(match (locale, r) {
+                (AppLocale::PtBr, Ok(_)) => "Runas injetadas".to_string(),
+                (AppLocale::PtBr, Err(e)) => format!("Falha nas Runas: {e}"),
+                (AppLocale::EnUs, Ok(_)) => "Runes injected".to_string(),
+                (AppLocale::EnUs, Err(e)) => format!("Runes failed: {e}"),
+            });
+        }
 
-    if let Some(s) = spells_res {
-        parts.push(match (locale, s) {
-            (AppLocale::PtBr, Ok(_)) => "Feitiços injetados".to_string(),
-            (AppLocale::PtBr, Err(e)) => format!("Falha nos Feitiços: {e}"),
-            (AppLocale::EnUs, Ok(_)) => "Spells injected".to_string(),
-            (AppLocale::EnUs, Err(e)) => format!("Spells failed: {e}"),
-        });
+        if !supports_spells {
+            parts.push(match locale {
+                AppLocale::PtBr => "Feitiços desativados neste modo".to_string(),
+                AppLocale::EnUs => "Spells disabled in this mode".to_string(),
+            });
+        } else if let Some(s) = spells_res {
+            parts.push(match (locale, s) {
+                (AppLocale::PtBr, Ok(_)) => "Feitiços injetados".to_string(),
+                (AppLocale::PtBr, Err(e)) => format!("Falha nos Feitiços: {e}"),
+                (AppLocale::EnUs, Ok(_)) => "Spells injected".to_string(),
+                (AppLocale::EnUs, Err(e)) => format!("Spells failed: {e}"),
+            });
+        }
     }
 
     if let Some(i) = items_res {
@@ -190,7 +203,7 @@ pub async fn inject_item_sets(
 }
 
 /// Executes concurrent injection of runes, summoner spells, and item sets against any
-/// `SafetyInjectionSink`, respecting mode rune support and explicit preferences.
+/// `SafetyInjectionSink`, respecting mode rune/spell support and explicit preferences.
 pub async fn inject_champion_build_with_sink(
     sink: &impl SafetyInjectionSink,
     summoner_id: u64,
@@ -237,6 +250,7 @@ pub async fn inject_champion_build_with_sink(
     let message = format_injection_report_message(
         prefs.language,
         build.supports_runes,
+        build.supports_spells,
         runes_res.as_ref(),
         spells_res.as_ref(),
         items_res.as_ref(),
@@ -278,7 +292,8 @@ pub async fn safety_reinject_build_with_sink(
 }
 
 /// Performs a full safety re-injection into the live LCU before match load without skipping spells,
-/// respecting mode rune support (e.g. ARAM Mayhem skips runes) and preserving manual ChampionSelections.
+/// respecting mode rune/spell support (e.g. ARAM Mayhem skips runes, Arena skips runes & spells)
+/// and preserving manual ChampionSelections.
 pub async fn safety_reinject_build(
     conn: &crate::lcu_connector::LcuConnection,
     summoner_id: u64,
@@ -302,3 +317,7 @@ pub async fn inject_champion_build(
 #[cfg(test)]
 #[path = "injection_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "injection_arena_tests.rs"]
+mod arena_tests;

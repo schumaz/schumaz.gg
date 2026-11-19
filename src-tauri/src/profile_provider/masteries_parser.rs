@@ -98,6 +98,7 @@ mod tests {
             champions,
             runes: HashMap::new(),
             spells: HashMap::new(),
+            ..Default::default()
         }
     }
 

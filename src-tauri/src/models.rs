@@ -1,4 +1,5 @@
 pub mod aram;
+pub mod arena;
 pub mod build;
 pub mod events;
 pub mod injector;
@@ -8,6 +9,7 @@ pub mod updater;
 pub mod ws;
 
 pub use aram::*;
+pub use arena::*;
 pub use build::*;
 pub use events::*;
 pub use injector::*;

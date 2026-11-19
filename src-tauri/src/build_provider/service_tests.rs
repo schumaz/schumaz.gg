@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 use crate::models::ChampionMetadata;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -30,6 +30,7 @@ pub(super) fn test_ddragon_cache() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells: HashMap::new(),
+        ..Default::default()
     }
 }
 
