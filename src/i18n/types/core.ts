@@ -66,6 +66,7 @@ export interface CoreTranslations {
     profile: string;
     runes: string;
     ranked: string;
+    arena: string;
     aram: string;
     settings: string;
   };
@@ -102,6 +103,7 @@ export interface CoreTranslations {
     lockedIn: string;
     hovering: string;
     backToTierListTitle: string;
+    backToArenaTierListTitle: string;
     pickRate: string;
     top4Rate: string;
     firstPlaceRate: string;

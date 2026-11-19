@@ -4,6 +4,7 @@ import { SettingsTab, type usePreferences } from "./features/settings";
 import { ProfileTab, type usePlayerProfile } from "./features/profile";
 import { ChampSelectTab, type useLcuEvents } from "./features/champ-select";
 import { AramTab, type useAram } from "./features/aram";
+import { ArenaTab, type useArena } from "./features/arena";
 import { RankedTab, type useRanked } from "./features/ranked";
 
 export interface AppTabsViewportProps {
@@ -13,6 +14,7 @@ export interface AppTabsViewportProps {
   lcu: ReturnType<typeof useLcuEvents>;
   playerProfile: ReturnType<typeof usePlayerProfile>;
   ranked: ReturnType<typeof useRanked>;
+  arena: ReturnType<typeof useArena>;
   aram: ReturnType<typeof useAram>;
   updater: ReturnType<typeof useAppUpdater>;
   onInvertSpells: () => void;
@@ -25,6 +27,7 @@ export function AppTabsViewport({
   lcu,
   playerProfile,
   ranked,
+  arena,
   aram,
   updater,
   onInvertSpells,
@@ -87,6 +90,27 @@ export function AppTabsViewport({
         onSelectBuild={ranked.setSelectedBuildIndex}
         savedChampionTierFilter={navigationState?.rankedChampionTierFilter}
         onChampionTierFilterChange={(tier) => updateNavigationState({ rankedChampionTierFilter: tier })}
+      />
+
+      <ArenaTab
+        isActive={activeTab === "arena"}
+        filters={arena.filters}
+        tierData={arena.tierData}
+        tierLoading={arena.tierLoading}
+        tierError={arena.tierError}
+        selectedChampion={arena.selectedChampion}
+        championBuild={arena.championBuild}
+        buildLoading={arena.buildLoading}
+        buildError={arena.buildError}
+        selectedBuildIndex={arena.selectedBuildIndex}
+        onPatchChange={arena.handlePatchChange}
+        onDetailFilterChange={arena.handleDetailFilterChange}
+        onSelectChampion={arena.selectChampion}
+        onSelectSynergyChampion={arena.selectChampionById}
+        onBackToTierList={arena.clearSelectedChampion}
+        onRetryTierList={arena.retryTierList}
+        onRetryBuild={arena.retryChampionBuild}
+        onSelectBuild={arena.setSelectedBuildIndex}
       />
 
       <AramTab

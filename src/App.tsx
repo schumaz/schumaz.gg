@@ -24,6 +24,7 @@ import {
 import { ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
 import { useLcuEvents } from "./features/champ-select";
 import { useAram } from "./features/aram";
+import { useArena } from "./features/arena";
 import { useRanked } from "./features/ranked";
 import { AppTabsViewport } from "./AppTabsViewport";
 
@@ -38,6 +39,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
   const isAppMinimized = useWindowMinimized();
   const rankedPatchChangeRef = useRef<(() => void) | null>(null);
+  const arenaPatchChangeRef = useRef<(() => void) | null>(null);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
     if (lcu.build?.supports_spells === false || lcu.champSelect?.queue_mode === "Arena") {
@@ -58,6 +60,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
   const handlePatchProtectionChange = () => {
     if (lcu.build) lcu.handleFilterChange("patch", "");
     rankedPatchChangeRef.current?.();
+    arenaPatchChangeRef.current?.();
   };
 
   const prefs = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
@@ -102,18 +105,15 @@ function App({ forceStartupLoading }: AppProps = {}) {
     [navigationState, updateNavigationState]
   );
 
+  const patch48hProtection = preferences.patch48hProtection ?? true;
   const aram = useAram(activeTab === "aram", currentChampionId, locale, aramPersistence);
-  const ranked = useRanked(
-    activeTab === "ranked",
-    preferences.flashKey,
-    preferences.patch48hProtection ?? true,
-    locale,
-    rankedPersistence
-  );
+  const ranked = useRanked(activeTab === "ranked", preferences.flashKey, patch48hProtection, locale, rankedPersistence);
+  const arena = useArena(activeTab === "arena", patch48hProtection, locale);
 
   useEffect(() => {
     rankedPatchChangeRef.current = ranked.handlePatchProtectionChange;
-  }, [ranked.handlePatchProtectionChange]);
+    arenaPatchChangeRef.current = arena.handlePatchProtectionChange;
+  }, [ranked.handlePatchProtectionChange, arena.handlePatchProtectionChange]);
 
   const playerProfile = usePlayerProfile(lcu.summoner, locale);
 
@@ -159,6 +159,12 @@ function App({ forceStartupLoading }: AppProps = {}) {
     if (wasAlreadyOnRanked && ranked.selectedChampion) ranked.clearSelectedChampion();
   };
 
+  const handleArenaDockClick = () => {
+    const wasAlreadyOnArena = activeTab === "arena";
+    setActiveTab("arena");
+    if (wasAlreadyOnArena && arena.selectedChampion) arena.clearSelectedChampion();
+  };
+
   return (
     <I18nProvider locale={locale} onLocaleChange={prefs.changeLanguage}>
       <main
@@ -191,6 +197,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
           lcu={lcu}
           playerProfile={playerProfile}
           ranked={ranked}
+          arena={arena}
           aram={aram}
           updater={updater}
           onInvertSpells={handleInvertSpells}
@@ -199,8 +206,9 @@ function App({ forceStartupLoading }: AppProps = {}) {
         <NavigationDock
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          onAramClick={handleAramDockClick}
           onRankedClick={handleRankedDockClick}
+          onArenaClick={handleArenaDockClick}
+          onAramClick={handleAramDockClick}
           animationsPaused={isAppMinimized || !prefs.hardwareAcceleration || boot.isBooting}
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />

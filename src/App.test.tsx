@@ -73,21 +73,30 @@ describe("App Component", () => {
     expect(screen.getByText(/5. Itens Situacionais \/ Úteis/i)).toBeInTheDocument();
   });
 
-  it("renders the floating bottom dock with 5 navigation tabs in order: Perfil, Runas, Ranqueada, Aram and Configurações", async () => {
+  it("renders the floating bottom dock with 6 navigation tabs in order: Perfil, Runas, Ranqueada, Arena, Aram and Configurações", async () => {
     render(<App />);
     const dockNav = await screen.findByRole("navigation", { name: /navegação principal/i });
     expect(dockNav).toBeInTheDocument();
 
     const buttons = Array.from(dockNav.querySelectorAll("button"));
-    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Perfil", "Runas", "Ranqueada", "Aram", "Configurações"]);
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual([
+      "Perfil",
+      "Runas",
+      "Ranqueada",
+      "Arena",
+      "Aram",
+      "Configurações",
+    ]);
 
     const profileBtn = screen.getByRole("button", { name: /^perfil$/i });
     const runesBtn = screen.getByRole("button", { name: /^runas$/i });
+    const arenaBtn = screen.getByRole("button", { name: /^arena$/i });
     const aramBtn = screen.getByRole("button", { name: /^aram$/i });
     const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
 
     expect(profileBtn).toHaveAttribute("aria-current", "page");
     expect(runesBtn).not.toHaveAttribute("aria-current");
+    expect(arenaBtn).not.toHaveAttribute("aria-current");
     expect(aramBtn).not.toHaveAttribute("aria-current");
     expect(settingsBtn).not.toHaveAttribute("aria-current");
   });

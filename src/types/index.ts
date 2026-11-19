@@ -1,4 +1,4 @@
-export type ActiveTab = "profile" | "runes" | "ranked" | "aram" | "settings";
+export type ActiveTab = "profile" | "runes" | "ranked" | "arena" | "aram" | "settings";
 
 export type {
   AppLocale,

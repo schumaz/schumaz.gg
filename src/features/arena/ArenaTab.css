@@ -1,0 +1,208 @@
+/* ============================================================
+   Arena Tab (Tier List + Detailed Champion View)
+   ============================================================ */
+.arena-layout,
+.arena-detail-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.arena-toolbar-card {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(10, 10, 10, 0.9));
+  border: 1px solid var(--border-highlight);
+  padding: 10px 16px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.arena-toolbar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.arena-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.arena-hero-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.arena-hero-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.arena-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+  flex-shrink: 0;
+}
+
+.arena-filters-bar {
+  padding-top: 8px;
+}
+
+.arena-tier-filter-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.arena-tier-filter-dot.tier-all {
+  background: linear-gradient(135deg, #a78bfa, #38bdf8);
+}
+
+.arena-tier-filter-dot.tier-op {
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+.arena-tier-filter-dot.tier-1 {
+  background: #60a5fa;
+}
+
+.arena-tier-filter-dot.tier-2 {
+  background: #4ade80;
+}
+
+.arena-tier-filter-dot.tier-3 {
+  background: #facc15;
+}
+
+.arena-tier-filter-dot.tier-4 {
+  background: #94a3b8;
+}
+
+.arena-tier-filter-dot.tier-5 {
+  background: #fb923c;
+}
+
+/* Main Scrollable List Card */
+.arena-list-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.arena-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-right: 4px;
+}
+
+.arena-tier-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 4px;
+}
+
+.arena-tier-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arena-tier-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.arena-tier-group-count {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.arena-tier-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.arena-champ-row {
+  width: 100%;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.arena-champ-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-border);
+}
+
+.arena-champ-row:active {
+  transform: scale(0.996);
+}
+
+.arena-champ-row:focus-visible {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.arena-stat-val-accent {
+  color: var(--accent-primary-hover);
+}

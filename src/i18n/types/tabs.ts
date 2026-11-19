@@ -68,6 +68,24 @@ export interface TabTranslations {
     detailStatusFallback: string;
     rankInLaneTitle: string;
   };
+  arenaTab: {
+    title: string;
+    modeBadge: string;
+    searchAria: string;
+    clearSearchAria: string;
+    allTiers: string;
+    loadingTierList: string;
+    loadingBuild: string;
+    fetchTierListError: string;
+    fetchBuildError: string;
+    noChampFoundSearch: string;
+    noChampFoundTier: string;
+    noDataAvailable: string;
+    detailStatus: string;
+    detailStatusFallback: string;
+    top4Label: string;
+    firstPlaceLabel: string;
+  };
   aram: {
     chooserTitle: string;
     chooserSubtitle: string;

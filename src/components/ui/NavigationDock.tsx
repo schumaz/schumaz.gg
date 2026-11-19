@@ -9,6 +9,7 @@ interface NavigationDockProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   onRankedClick?: () => void;
+  onArenaClick?: () => void;
   onAramClick?: () => void;
   animationsPaused?: boolean;
   aramIconSrc?: string;
@@ -18,6 +19,7 @@ export function NavigationDock({
   activeTab,
   onTabChange,
   onRankedClick,
+  onArenaClick,
   onAramClick,
   animationsPaused = false,
   aramIconSrc = ARAM_DOCK_ICON_URL,
@@ -112,6 +114,41 @@ export function NavigationDock({
           <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
         </svg>
         <span>{t("nav.ranked")}</span>
+      </button>
+
+      <button
+        type="button"
+        className={`dock-btn ${activeTab === "arena" ? "active" : ""}`}
+        onClick={() => {
+          if (onArenaClick) {
+            onArenaClick();
+          } else {
+            onTabChange("arena");
+          }
+        }}
+        aria-current={activeTab === "arena" ? "page" : undefined}
+      >
+        <svg
+          className="dock-icon"
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
+          <line x1="13" y1="19" x2="19" y2="13" />
+          <line x1="16" y1="16" x2="20" y2="20" />
+          <line x1="19" y1="21" x2="21" y2="19" />
+          <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" />
+          <line x1="5" y1="14" x2="9" y2="18" />
+          <line x1="7" y1="17" x2="4" y2="20" />
+          <line x1="3" y1="19" x2="5" y2="21" />
+        </svg>
+        <span>{t("nav.arena")}</span>
       </button>
 
       <button

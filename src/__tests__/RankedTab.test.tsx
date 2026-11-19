@@ -8,13 +8,14 @@ import {
 } from "../features/ranked/__tests__/rankedFixtures";
 
 describe("NavigationDock Ranqueada position", () => {
-  it("places Ranqueada button strictly between Runas and Aram", () => {
+  it("places Ranqueada and Arena strictly between Runas and Aram", () => {
     render(<NavigationDock activeTab="ranked" onTabChange={vi.fn()} />);
     const buttons = screen.getAllByRole("button");
     expect(buttons.map((b) => b.textContent?.trim())).toEqual([
       "Perfil",
       "Runas",
       "Ranqueada",
+      "Arena",
       "Aram",
       "Configurações",
     ]);

@@ -15,11 +15,9 @@ interface FiltersHeaderProps {
   build: ChampionBuild;
   champSelect: ChampSelectedPayload | null;
   loading: boolean;
-  onFilterChange: (
-    filterType: "position" | "tier" | "region" | "patch",
-    value: string
-  ) => void;
+  onFilterChange: (filterType: "position" | "tier" | "region" | "patch", value: string) => void;
   onBackToTierList?: () => void;
+  backButtonTitle?: string;
   statusTagText?: string;
   queueModeLabel?: string;
 }
@@ -30,6 +28,7 @@ export function FiltersHeader({
   loading,
   onFilterChange,
   onBackToTierList,
+  backButtonTitle,
   statusTagText,
   queueModeLabel,
 }: FiltersHeaderProps) {
@@ -38,24 +37,18 @@ export function FiltersHeader({
 
   const isArena = isArenaBuildContext(build, champSelect);
   const isAram = isAramBuildContextMode(build, champSelect);
-
   const tierOptions = getTierOptions(t);
   const positionOptions = getPositionOptions(t);
   const regionOptions = getRegionOptions(t);
 
-  const {
-    patchOptions,
-    patchDropdownOptions,
-    isPatchProtectionActive,
-    remainingHoursShort,
-    protectionTooltipText,
-  } = computePatchUiMeta({
-    activePatch: build?.active_patch,
-    availablePatches: build?.available_patches,
-    patchFallbackApplied: build?.patch_fallback_applied,
-    remainingHours: build?.patch_protection_remaining_hours,
-    t,
-  });
+  const { patchOptions, patchDropdownOptions, isPatchProtectionActive, remainingHoursShort, protectionTooltipText } =
+    computePatchUiMeta({
+      activePatch: build?.active_patch,
+      availablePatches: build?.available_patches,
+      patchFallbackApplied: build?.patch_fallback_applied,
+      remainingHours: build?.patch_protection_remaining_hours,
+      t,
+    });
 
   const resolvedTagText =
     statusTagText ?? (champSelect?.locked_in ? t("filters.lockedIn") : t("filters.hovering"));
@@ -87,7 +80,7 @@ export function FiltersHeader({
               className="ranked-back-btn"
               data-testid="ranked-back-btn"
               onClick={onBackToTierList}
-              title={t("filters.backToTierListTitle")}
+              title={backButtonTitle ?? t("filters.backToTierListTitle")}
             >
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="15 18 9 12 15 6" />
