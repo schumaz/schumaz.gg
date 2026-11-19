@@ -1,4 +1,6 @@
 pub const PATCH_PROTECTION_SECS: u64 = 2 * 86_400; // 48 hours = 172,800s
+pub const PATCH_HIGH_VOLUME_SAMPLE: u64 = 1000;
+pub const MIN_MATURE_SAMPLE: u64 = 30;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatchSelectionResult {
@@ -6,6 +8,71 @@ pub struct PatchSelectionResult {
     pub fallback_applied: bool,
     pub remaining_hours: Option<u32>,
     pub remaining_seconds: Option<u64>,
+}
+
+/// Extracts `(latest_created_at_iso, prev_patch_last_created_at_iso)` from `data.trends.win`
+/// (or top-level `trends.win`), matching each entry's `version` field when present so that
+/// an unpopulated newly-released patch never inherits the previous patch's frozen timestamp.
+pub fn extract_patch_trend_timestamps<'a>(
+    analysis_json: &'a serde_json::Value,
+    latest_patch: &str,
+    prev_patch: Option<&str>,
+) -> (Option<&'a str>, Option<&'a str>) {
+    let Some(win_trends) = analysis_json
+        .pointer("/data/trends/win")
+        .or_else(|| analysis_json.pointer("/trends/win"))
+        .and_then(|v| v.as_array())
+    else {
+        return (None, None);
+    };
+
+    let has_version_fields = win_trends.iter().any(|entry| {
+        entry
+            .get("version")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| !v.trim().is_empty())
+    });
+
+    if has_version_fields {
+        let latest_trimmed = latest_patch.trim();
+        let prev_trimmed = prev_patch.map(str::trim).filter(|s| !s.is_empty());
+
+        let latest_iso = if latest_trimmed.is_empty() {
+            None
+        } else {
+            win_trends.iter().find_map(|entry| {
+                let ver = entry.get("version").and_then(|v| v.as_str())?.trim();
+                if ver == latest_trimmed {
+                    entry.get("created_at").and_then(|v| v.as_str())
+                } else {
+                    None
+                }
+            })
+        };
+
+        let prev_iso = prev_trimmed.and_then(|prev| {
+            win_trends.iter().find_map(|entry| {
+                let ver = entry.get("version").and_then(|v| v.as_str())?.trim();
+                if ver == prev {
+                    entry.get("created_at").and_then(|v| v.as_str())
+                } else {
+                    None
+                }
+            })
+        });
+
+        (latest_iso, prev_iso)
+    } else {
+        let latest_iso = win_trends
+            .first()
+            .and_then(|entry| entry.get("created_at"))
+            .and_then(|v| v.as_str());
+        let prev_iso = win_trends
+            .get(1)
+            .and_then(|entry| entry.get("created_at"))
+            .and_then(|v| v.as_str());
+        (latest_iso, prev_iso)
+    }
 }
 
 /// Parses an ISO 8601 timestamp string (e.g. "2026-11-07T22:59:29+09:00" or "2026-11-07T22:59:29Z")
@@ -62,6 +129,22 @@ pub fn parse_iso8601_to_unix(iso_str: &str) -> Option<u64> {
     }
 }
 
+fn fallback_result(prev_patch: &str, age_secs: Option<u64>) -> PatchSelectionResult {
+    let (remaining_hours, remaining_seconds) = match age_secs {
+        Some(age) if age < PATCH_PROTECTION_SECS => {
+            let rem_secs = PATCH_PROTECTION_SECS - age;
+            (Some(rem_secs.div_ceil(3600) as u32), Some(rem_secs))
+        }
+        _ => (None, None),
+    };
+    PatchSelectionResult {
+        effective_patch: prev_patch.to_string(),
+        fallback_applied: true,
+        remaining_hours,
+        remaining_seconds,
+    }
+}
+
 /// Resolves the effective patch respecting the 48h protection rule (when enabled),
 /// manual user overrides, sample volume maturity, and exposes remaining protection time.
 pub fn resolve_effective_patch(
@@ -103,9 +186,11 @@ pub fn resolve_effective_patch(
         };
     }
 
+    let previous = &versions[1];
+
     // High sample volume: if latest patch already has >= 1000 recorded games, it is mature
     if let Some(play) = play_count
-        && play >= 1000
+        && play >= PATCH_HIGH_VOLUME_SAMPLE
     {
         return PatchSelectionResult {
             effective_patch: latest.clone(),
@@ -115,36 +200,43 @@ pub fn resolve_effective_patch(
         };
     }
 
-    // If previous patch ended more than 48 hours ago, current patch has been active > 48h
-    if let Some(prev_iso) = prev_patch_last_created_at_iso
-        && let Some(prev_unix) = parse_iso8601_to_unix(prev_iso)
-    {
-        let age_secs = now_unix.saturating_sub(prev_unix);
-        if age_secs >= PATCH_PROTECTION_SECS {
-            return PatchSelectionResult {
-                effective_patch: latest.clone(),
-                fallback_applied: false,
-                remaining_hours: None,
-                remaining_seconds: None,
-            };
-        }
-    }
-
-    // If latest_created_at_iso indicates < 48h age and sample volume is low, fall back
+    // Priority 1: evaluate latest patch creation timestamp first so a frozen older timestamp
+    // from the previous patch can never bypass the 48h protection window.
     if let Some(created_at) = latest_created_at_iso
         && let Some(created_unix) = parse_iso8601_to_unix(created_at)
     {
         let age_secs = now_unix.saturating_sub(created_unix);
         if age_secs < PATCH_PROTECTION_SECS {
-            let remaining_secs = PATCH_PROTECTION_SECS - age_secs;
-            let remaining_hours = remaining_secs.div_ceil(3600) as u32;
-            return PatchSelectionResult {
-                effective_patch: versions[1].clone(),
-                fallback_applied: true,
-                remaining_hours: Some(remaining_hours),
-                remaining_seconds: Some(remaining_secs),
-            };
+            return fallback_result(previous, Some(age_secs));
         }
+        // Even past 48h, fall back if explicit sample count is below minimum maturity threshold.
+        if let Some(play) = play_count
+            && play < MIN_MATURE_SAMPLE
+        {
+            return fallback_result(previous, None);
+        }
+        return PatchSelectionResult {
+            effective_patch: latest.clone(),
+            fallback_applied: false,
+            remaining_hours: None,
+            remaining_seconds: None,
+        };
+    }
+
+    // Priority 2: latest patch has no trend timestamp yet (e.g. just launched with 0 or few games).
+    // Fall back whenever sample count is below MIN_MATURE_SAMPLE or previous patch ended < 48h ago.
+    let prev_age_secs = prev_patch_last_created_at_iso
+        .and_then(parse_iso8601_to_unix)
+        .map(|prev_unix| now_unix.saturating_sub(prev_unix));
+
+    if play_count.unwrap_or(0) < MIN_MATURE_SAMPLE {
+        return fallback_result(previous, prev_age_secs);
+    }
+
+    if let Some(age_secs) = prev_age_secs
+        && age_secs < PATCH_PROTECTION_SECS
+    {
+        return fallback_result(previous, Some(age_secs));
     }
 
     PatchSelectionResult {
@@ -195,142 +287,5 @@ pub fn select_effective_patch(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_iso8601_to_unix() {
-        let ts = parse_iso8601_to_unix("2026-11-07T22:59:29+09:00");
-        assert!(ts.is_some());
-        let unix_secs = ts.unwrap();
-        assert!(unix_secs > 1_700_000_000);
-    }
-
-    #[test]
-    fn test_select_effective_patch_under_48h_falls_back() {
-        let versions = vec!["16.22".to_string(), "16.21".to_string()];
-        let created_at = "2026-11-07T22:59:29+09:00";
-        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
-        let now_unix = created_unix + 36000; // 10h later
-
-        let (patch, fallback) = select_effective_patch(&versions, Some(created_at), now_unix, None);
-        assert_eq!(patch, "16.21");
-        assert!(fallback);
-    }
-
-    #[test]
-    fn test_resolve_effective_patch_exposes_remaining_hours_and_seconds() {
-        let versions = vec!["16.22".to_string(), "16.21".to_string()];
-        let created_at = "2026-11-07T12:00:00Z";
-        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
-
-        // 10h elapsed -> 38h remaining
-        let res_10h = resolve_effective_patch(
-            &versions,
-            Some(created_at),
-            None,
-            Some(250),
-            created_unix + 10 * 3600,
-            None,
-            true,
-        );
-        assert_eq!(res_10h.effective_patch, "16.21");
-        assert!(res_10h.fallback_applied);
-        assert_eq!(res_10h.remaining_hours, Some(38));
-        assert_eq!(res_10h.remaining_seconds, Some(38 * 3600));
-
-        // 47h 30m elapsed -> 1800s left -> rounds up to 1h remaining
-        let res_30m = resolve_effective_patch(
-            &versions,
-            Some(created_at),
-            None,
-            Some(250),
-            created_unix + 47 * 3600 + 1800,
-            None,
-            true,
-        );
-        assert_eq!(res_30m.effective_patch, "16.21");
-        assert!(res_30m.fallback_applied);
-        assert_eq!(res_30m.remaining_hours, Some(1));
-        assert_eq!(res_30m.remaining_seconds, Some(1800));
-    }
-
-    #[test]
-    fn test_resolve_effective_patch_when_protection_disabled_selects_latest() {
-        let versions = vec!["16.22".to_string(), "16.21".to_string()];
-        let created_at = "2026-11-07T12:00:00Z";
-        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
-        let now_unix = created_unix + 3600; // Only 1h old, low volume
-
-        let res = resolve_effective_patch(
-            &versions,
-            Some(created_at),
-            None,
-            Some(100),
-            now_unix,
-            None,
-            false,
-        );
-        assert_eq!(res.effective_patch, "16.22");
-        assert!(!res.fallback_applied);
-        assert_eq!(res.remaining_hours, None);
-        assert_eq!(res.remaining_seconds, None);
-    }
-
-    #[test]
-    fn test_select_effective_patch_over_48h_keeps_latest() {
-        let versions = vec!["16.22".to_string(), "16.21".to_string()];
-        let created_at = "2026-11-05T12:00:00Z";
-        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
-        let now_unix = created_unix + (3 * 86400); // 3 days later
-
-        let (patch, fallback) = select_effective_patch(&versions, Some(created_at), now_unix, None);
-        assert_eq!(patch, "16.22");
-        assert!(!fallback);
-    }
-
-    #[test]
-    fn test_select_effective_patch_respects_user_override() {
-        let versions = vec!["16.22".to_string(), "16.21".to_string()];
-        let created_at = "2026-11-07T22:59:29+09:00";
-        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
-        let now_unix = created_unix + 1000;
-
-        let res = resolve_effective_patch(
-            &versions,
-            Some(created_at),
-            None,
-            None,
-            now_unix,
-            Some("16.22"),
-            true,
-        );
-        assert_eq!(res.effective_patch, "16.22");
-        assert!(!res.fallback_applied);
-        assert_eq!(res.remaining_hours, None);
-        assert_eq!(res.remaining_seconds, None);
-    }
-
-    #[test]
-    fn test_select_effective_patch_with_volume_keeps_latest_when_play_count_is_high() {
-        let versions = vec!["16.22".to_string(), "16.21".to_string()];
-        // Even if snapshot created_at was today (under 48h):
-        let created_at = "2026-11-07T22:59:29+09:00";
-        let created_unix = parse_iso8601_to_unix(created_at).unwrap();
-        let now_unix = created_unix + 10000;
-
-        // When play count is >= 1000, 16.22 is kept with fallback = false
-        let res = resolve_effective_patch(
-            &versions,
-            Some(created_at),
-            None,
-            Some(84510),
-            now_unix,
-            None,
-            true,
-        );
-        assert_eq!(res.effective_patch, "16.22");
-        assert!(!res.fallback_applied);
-        assert_eq!(res.remaining_hours, None);
-    }
-}
+#[path = "patch_tests.rs"]
+mod tests;

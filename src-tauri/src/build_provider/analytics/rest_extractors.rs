@@ -1,4 +1,4 @@
-use super::super::items::extract_core_archetype_tags;
+use super::super::items::{get_item_tags_dynamic, is_offensive_ad_tag, is_offensive_ap_tag};
 use super::super::models::{ItemStatEntry, RunePageOption};
 use super::super::runes::extract_top_rune_pages;
 
@@ -141,34 +141,77 @@ pub fn extract_rest_runes_and_pages(
     ))
 }
 
+fn extract_primary_champion_role(analysis: &serde_json::Value) -> Option<&str> {
+    let roles = analysis
+        .pointer("/summary/roles")
+        .and_then(|v| v.as_array())?;
+    roles
+        .iter()
+        .max_by_key(|r| {
+            r.pointer("/stats/play")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0)
+        })
+        .or_else(|| roles.first())
+        .and_then(|r| r.get("name"))
+        .and_then(|v| v.as_str())
+}
+
+/// Infers `"AD"` or `"AP"` dynamically from explicit payload metadata, weighted DataDragon
+/// item tags aggregated across `core_items` + `last_items`, and champion role classification.
 pub fn infer_rest_damage_type(
     analysis: &serde_json::Value,
     core_entries: &[ItemStatEntry],
+    last_entries: &[ItemStatEntry],
 ) -> String {
-    if let Some(dt) = analysis.get("damage_type").and_then(|v| v.as_str()) {
+    if let Some(dt) = analysis
+        .get("damage_type")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         return dt.to_string();
     }
 
-    let core_is_ad = core_entries
-        .first()
-        .map(|c| extract_core_archetype_tags(&c.ids).3)
-        .unwrap_or(false);
-    let core_is_ap = core_entries
-        .first()
-        .map(|c| extract_core_archetype_tags(&c.ids).4)
-        .unwrap_or(false);
+    let mut ad_weight: i64 = 0;
+    let mut ap_weight: i64 = 0;
+    let mut has_spell_damage_tag = false;
 
-    if core_is_ad {
-        "AD".to_string()
-    } else if core_is_ap {
-        "AP".to_string()
-    } else if analysis
-        .pointer("/summary/roles/0/name")
-        .and_then(|v| v.as_str())
-        .is_some_and(|r| r.eq_ignore_ascii_case("MARKSMAN"))
-    {
-        "AD".to_string()
-    } else {
-        "AP".to_string()
+    for entry in core_entries.iter().chain(last_entries.iter()) {
+        let weight = entry.play.max(1);
+        for &id in &entry.ids {
+            let tags = get_item_tags_dynamic(id);
+            if tags.is_empty() {
+                continue;
+            }
+            if tags.iter().any(|t| t == "SpellDamage") {
+                has_spell_damage_tag = true;
+            }
+            if tags.iter().any(|t| is_offensive_ad_tag(t)) {
+                ad_weight = ad_weight.saturating_add(weight);
+            }
+            if tags.iter().any(|t| is_offensive_ap_tag(t)) {
+                ap_weight = ap_weight.saturating_add(weight);
+            }
+        }
     }
+
+    if ad_weight > ap_weight {
+        return "AD".to_string();
+    }
+    if ap_weight > ad_weight {
+        return "AP".to_string();
+    }
+
+    if !has_spell_damage_tag
+        && extract_primary_champion_role(analysis).is_some_and(|role| {
+            role.eq_ignore_ascii_case("FIGHTER")
+                || role.eq_ignore_ascii_case("ASSASSIN")
+                || role.eq_ignore_ascii_case("MARKSMAN")
+        })
+    {
+        return "AD".to_string();
+    }
+
+    "AP".to_string()
 }

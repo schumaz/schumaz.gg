@@ -5,6 +5,19 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-11-19
+
+Eliminated single-game troll builds (`play == 1`), fixed 48h new-patch protection priority, improved ARAM sample quality (`tier=all`), and hardened damage-type inference.
+
+### Fixed
+- **Single-Game Troll Build Inflation (`rest_parser.rs`)**: Stopped inflating real `play == 1` core combinations to synthetic weights (`10000 - idx`) that caused 1-game troll builds (such as AP Irelia `[6655, 3118, 4646]` in ARAM Mayhem) to overtake real consolidated builds (`[3153, 6610, 6333]`). Synthetic descending weights are now applied only when the entire array lacks explicit `"play"` statistics, while 1-game outliers are filtered out whenever consolidated combinations (`play >= 2`) exist.
+- **48h New-Patch Protection & Trend Version Validation (`patch.rs`, `service_helpers.rs`, `analytics/ranked.rs`)**: Prioritized `latest_created_at_iso < 48h` (with `< 1000` games) over frozen timestamps from `prev_patch_last_created_at_iso`, matched each `data.trends.win` entry by `version`, and triggered fallback to the previous patch when a newly released patch has fewer than `MIN_MATURE_SAMPLE` (`30`) recorded games.
+- **Empty Payload Validation & Damage-Type Inference (`rest_parser.rs`, `rest_extractors.rs`, `ddragon/parsers.rs`)**: Returned an error when both `core_items` and `last_items` are empty (even when `supports_runes == false`) so resilient fallback triggers instead of fabricating default items; aggregated weighted AD/AP tags across `core_items` + `last_items` (supplemented from DataDragon `stats`), mapping `FIGHTER`, `ASSASSIN`, and `MARKSMAN` to `"AD"` when no `"SpellDamage"` tags are present.
+- **ARAM & ARAM Mayhem Sample Volume (`service.rs`, `service_helpers.rs`)**: Defaulted ARAM (`450`) and ARAM Mayhem (`2400`) build queries to `tier = "all"`, with automatic fallback from narrower tiers (such as `emerald_plus`) to `"all"` whenever sample volume is under `100` games.
+
+### Changed
+- **Binary Cache Schema (`CACHE_SCHEMA_VERSION = 3`)**: Incremented `CACHE_SCHEMA_VERSION` in `src-tauri/src/storage/lz4_cache.rs` to automatically purge previously cached builds affected by the `play == 1` inflation and 48h protection bugs.
+
 ## [0.2.2] - 2026-11-19
 
 Accurate Tear of the Goddess (`3070`) item ordering across Core and Final builds.

@@ -1,4 +1,5 @@
 use super::*;
+use crate::build_provider::models::ItemClassificationCache;
 
 #[test]
 fn test_real_opgg_aram_tristana_payload_blocks_options_and_spells() {
@@ -167,4 +168,116 @@ fn test_real_opgg_aram_tristana_payload_blocks_options_and_spells() {
     assert!(!mayhem_build.supports_runes);
     assert_eq!(mayhem_build.item_blocks, aram_build.item_blocks);
     assert_eq!(mayhem_build.build_options, aram_build.build_options);
+}
+
+#[test]
+fn test_irelia_aram_mayhem_does_not_inflate_play_1_troll_ap_build() {
+    // Regression for real cached Irelia 16.23 payload where `play == 1` AP troll build
+    // `[6655, 3118, 4646]` used to be inflated to `play = 9992`, overtaking `[3153, 6610, 6333]` (play = 14).
+    let irelia_json = serde_json::json!({
+        "data": {
+            "summary": {
+                "id": 39,
+                "average_stats": { "play": 79, "win_rate": 0.481, "pick_rate": 0.032 },
+                "roles": [{ "name": "FIGHTER", "stats": { "play": 79, "win": 38 } }]
+            },
+            "summoner_spells": [{ "ids": [4, 32], "play": 55, "win": 27 }],
+            "starter_items": [{ "ids": [3184, 2003], "play": 48, "win": 24 }],
+            "boots": [{ "ids": [3111], "play": 36, "win": 18 }],
+            "core_items": [
+                { "ids": [3153, 6610, 6333], "play": 14, "win": 9, "pick_rate": 0.177 },
+                { "ids": [3153, 3078, 6333], "play": 6, "win": 4, "pick_rate": 0.076 },
+                { "ids": [6655, 3118, 4646], "play": 1, "win": 1, "pick_rate": 0.013 }
+            ],
+            "last_items": [
+                { "ids": [3153], "play": 64, "win": 33 },
+                { "ids": [6610], "play": 40, "win": 21 },
+                { "ids": [6333], "play": 34, "win": 18 },
+                { "ids": [3053], "play": 22, "win": 11 }
+            ],
+            "runes": []
+        }
+    });
+
+    let build = parse_opgg_analysis_payload_with_options(&irelia_json, 39, "Irelia", false)
+        .expect("Irelia ARAM Mayhem payload should parse");
+
+    assert_eq!(build.item_blocks[1].item_ids, vec![3153, 6610, 6333]);
+    assert_eq!(build.build_options.len(), 2);
+    assert_eq!(build.build_options[0].core_item_ids, vec![3153, 6610, 6333]);
+    assert_eq!(build.build_options[0].play, 14);
+    assert_eq!(build.build_options[1].core_item_ids, vec![3153, 3078, 6333]);
+    assert_eq!(build.build_options[1].play, 6);
+    assert!(!build.item_blocks[3].item_ids.contains(&6655));
+    assert!(!build.item_blocks[4].item_ids.contains(&6655));
+}
+
+#[test]
+fn test_empty_core_and_last_items_returns_err_even_without_runes() {
+    let empty_mayhem = serde_json::json!({
+        "data": {
+            "summary": {
+                "id": 39,
+                "average_stats": { "play": 0, "win_rate": 0.0, "pick_rate": 0.0 },
+                "roles": [{ "name": "FIGHTER", "stats": { "play": 0, "win": 0 } }]
+            },
+            "core_items": [],
+            "last_items": [],
+            "runes": []
+        }
+    });
+
+    let err = parse_opgg_analysis_payload_with_options(&empty_mayhem, 39, "Irelia", false)
+        .expect_err("Empty core_items and last_items must error even when supports_runes == false");
+    assert!(err.contains("core_items"));
+}
+
+#[test]
+fn test_infer_rest_damage_type_uses_aggregated_tags_and_fighter_assassin_fallback() {
+    let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+    let mut cache = ItemClassificationCache::default();
+    cache
+        .item_tags
+        .insert(3153, vec!["Damage".to_string(), "AttackSpeed".to_string()]);
+    cache
+        .item_tags
+        .insert(6655, vec!["SpellDamage".to_string(), "Mana".to_string()]);
+    set_dynamic_item_classifications(cache);
+
+    // 1. Aggregated `last_items` AD tags resolve "AD" even when `core_items` is empty
+    let fighter_analysis = serde_json::json!({
+        "summary": { "roles": [{ "name": "FIGHTER", "stats": { "play": 100 } }] }
+    });
+    let ad_last = vec![ItemStatEntry {
+        ids: vec![3153],
+        play: 50,
+        win: 25,
+        pick_rate: 0.5,
+    }];
+    assert_eq!(
+        infer_rest_damage_type(&fighter_analysis, &[], &ad_last),
+        "AD"
+    );
+
+    // 2. FIGHTER / ASSASSIN without SpellDamage tags default to "AD"
+    let assassin_analysis = serde_json::json!({
+        "summary": { "roles": [{ "name": "ASSASSIN", "stats": { "play": 100 } }] }
+    });
+    assert_eq!(infer_rest_damage_type(&fighter_analysis, &[], &[]), "AD");
+    assert_eq!(infer_rest_damage_type(&assassin_analysis, &[], &[]), "AD");
+
+    // 3. AP Assassin with SpellDamage items resolves "AP"
+    let ap_last = vec![ItemStatEntry {
+        ids: vec![6655],
+        play: 50,
+        win: 25,
+        pick_rate: 0.5,
+    }];
+    assert_eq!(
+        infer_rest_damage_type(&assassin_analysis, &[], &ap_last),
+        "AP"
+    );
+
+    // Clean up dynamic cache for test isolation
+    set_dynamic_item_classifications(ItemClassificationCache::default());
 }

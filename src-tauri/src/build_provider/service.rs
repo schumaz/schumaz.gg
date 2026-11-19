@@ -48,7 +48,11 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     let spell_mode = ddragon_mode_for_queue(queue_id);
     let supports_runes = queue_id != crate::ws_listener::QUEUE_ARAM_MAYHEM;
     let target_region = region.unwrap_or("global");
-    let target_tier = tier.unwrap_or("emerald_plus");
+    let target_tier = match tier.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(explicit) => explicit,
+        None if is_aram => "all",
+        None => "emerald_plus",
+    };
     let pos_cache_key = if is_aram {
         ""
     } else {
@@ -178,6 +182,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     )
     .await;
     let effective_patch = fetch_outcome.effective_patch;
+    let effective_tier = fetch_outcome.effective_tier;
     let patch_fallback_applied = fetch_outcome.patch_fallback_applied;
     let patch_protection_remaining_hours = fetch_outcome.patch_protection_remaining_hours;
 
@@ -230,7 +235,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     };
 
     build.active_position = target_position.unwrap_or_default();
-    build.active_tier = target_tier.to_string();
+    build.active_tier = effective_tier;
     build.active_region = target_region.to_string();
     build.active_patch = effective_patch.clone();
     build.available_patches = available_versions;
@@ -278,3 +283,7 @@ mod patch_tests;
 #[cfg(test)]
 #[path = "service_spells_tests.rs"]
 mod spells_tests;
+
+#[cfg(test)]
+#[path = "service_irelia_tests.rs"]
+mod irelia_tests;

@@ -8,6 +8,19 @@ use super::rest_extractors::{
 };
 use std::collections::HashMap;
 
+fn json_has_explicit_play_stats(val: Option<&serde_json::Value>) -> bool {
+    match val {
+        Some(serde_json::Value::Array(arr)) => arr.iter().any(|elem| {
+            elem.as_object()
+                .and_then(|obj| obj.get("play"))
+                .and_then(|p| p.as_i64())
+                .is_some()
+        }),
+        Some(serde_json::Value::Object(obj)) => obj.get("play").and_then(|p| p.as_i64()).is_some(),
+        _ => false,
+    }
+}
+
 pub fn parse_opgg_analysis_payload(
     opgg_json: &serde_json::Value,
     champion_id: i32,
@@ -117,26 +130,45 @@ pub fn parse_opgg_analysis_payload_for_mode(
             .or_else(|| analysis.pointer("/boots")),
     );
 
-    let mut candidate_entries = Vec::new();
-    let mut core_entries = parse_json_item_entries(
+    let core_val = analysis
+        .pointer("/items/core")
+        .or_else(|| analysis.pointer("/core_items"));
+    let mut core_entries = parse_json_item_entries(core_val);
+    let other_entries = parse_json_item_entries(
         analysis
-            .pointer("/items/core")
-            .or_else(|| analysis.pointer("/core_items")),
+            .pointer("/items/situational")
+            .or_else(|| analysis.pointer("/last_items")),
     );
-    // Select the #1 most played Core Build combination to identify core_ids
-    core_entries.sort_by_key(|e| std::cmp::Reverse(e.play));
-    let mut core_ids = Vec::new();
-    for (idx, entry) in core_entries.iter_mut().enumerate() {
-        if entry.play == 1 {
+
+    // Reject empty payloads (even when supports_runes == false) so resilient fallback triggers
+    // instead of fabricating default items.
+    if core_entries.is_empty() && other_entries.is_empty() {
+        return Err("Missing core_items and last_items in OP.GG payload".to_string());
+    }
+
+    let has_real_play_stats =
+        json_has_explicit_play_stats(core_val) || core_entries.iter().any(|e| e.play > 1);
+    if !has_real_play_stats {
+        // Apply descending synthetic weights only when the entire array lacks real `play` stats.
+        for (idx, entry) in core_entries.iter_mut().enumerate() {
             entry.play = 10000 - (idx as i64);
         }
-        if idx == 0 {
-            core_ids.extend_from_slice(&entry.ids);
+    } else {
+        // Preserve real `play == 1` as `1` and drop single-game outliers when consolidated
+        // combinations (`play >= 2`) exist.
+        core_entries.sort_by(|a, b| b.play.cmp(&a.play).then_with(|| b.win.cmp(&a.win)));
+        if core_entries.iter().any(|e| e.play >= 2) {
+            core_entries.retain(|e| e.play >= 2);
         }
     }
-    candidate_entries.extend(core_entries.clone());
 
-    let damage_type_owned = infer_rest_damage_type(analysis, &core_entries);
+    let core_ids = core_entries
+        .first()
+        .map(|entry| entry.ids.clone())
+        .unwrap_or_default();
+    let mut candidate_entries = core_entries.clone();
+
+    let damage_type_owned = infer_rest_damage_type(analysis, &core_entries, &other_entries);
     let damage_type = damage_type_owned.as_str();
 
     let mut fourth_entries = parse_json_item_entries(
@@ -154,12 +186,6 @@ pub fn parse_opgg_analysis_payload_for_mode(
         analysis
             .pointer("/sixth_items")
             .or_else(|| analysis.pointer("/items/sixth_items")),
-    );
-
-    let other_entries = parse_json_item_entries(
-        analysis
-            .pointer("/items/situational")
-            .or_else(|| analysis.pointer("/last_items")),
     );
 
     for entry in other_entries {

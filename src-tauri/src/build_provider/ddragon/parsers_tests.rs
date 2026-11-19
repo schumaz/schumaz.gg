@@ -133,3 +133,26 @@ fn test_parse_ddragon_item_classifications_handles_special_recipe_evolutions() {
     set_dynamic_item_classifications(cache);
     assert_eq!(normalize_tear_item_dynamic(9942), 9904);
 }
+
+#[test]
+fn test_parse_ddragon_item_classifications_supplements_offensive_tags_from_stats() {
+    let items_json = serde_json::json!({
+        "data": {
+            "6610": {
+                "name": "Sundered Sky",
+                "gold": { "total": 3100 },
+                "tags": ["Health"],
+                "stats": { "FlatPhysicalDamageMod": 40.0 }
+            },
+            "4646": {
+                "name": "Stormsurge",
+                "gold": { "total": 2900 },
+                "tags": [],
+                "stats": { "FlatMagicDamageMod": 90.0 }
+            }
+        }
+    });
+    let cache = parse_ddragon_item_classifications(&items_json);
+    assert!(cache.item_tags[&6610].iter().any(|t| t == "Damage"));
+    assert!(cache.item_tags[&4646].iter().any(|t| t == "SpellDamage"));
+}

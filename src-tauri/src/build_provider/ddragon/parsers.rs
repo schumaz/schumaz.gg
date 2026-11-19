@@ -146,7 +146,28 @@ pub fn parse_ddragon_item_classifications(
                     .and_then(|t| t.as_array())
                     .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
                     .unwrap_or_default();
-                let string_tags: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+                let mut string_tags: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+
+                // Supplement missing offensive tags from numeric `stats` so newly added Riot items
+                // are still classified accurately for AD/AP archetype and damage inference.
+                if let Some(stats) = item_val.get("stats").and_then(|s| s.as_object()) {
+                    let stat_tag_pairs = [
+                        ("FlatPhysicalDamageMod", "Damage"),
+                        ("FlatMagicDamageMod", "SpellDamage"),
+                        ("FlatCritChanceMod", "CriticalStrike"),
+                        ("PercentAttackSpeedMod", "AttackSpeed"),
+                    ];
+                    for (stat_key, tag_name) in stat_tag_pairs {
+                        if stats
+                            .get(stat_key)
+                            .and_then(|v| v.as_f64())
+                            .is_some_and(|val| val > 0.0)
+                            && !string_tags.iter().any(|t| t == tag_name)
+                        {
+                            string_tags.push(tag_name.to_string());
+                        }
+                    }
+                }
                 item_tags.insert(id, string_tags);
 
                 let in_store = item_val

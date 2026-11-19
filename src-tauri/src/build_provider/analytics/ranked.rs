@@ -9,7 +9,7 @@ use super::client::{
     peek_latest_cached_opgg_version,
 };
 use crate::build_provider::models::DataDragonCache;
-use crate::build_provider::patch::resolve_effective_patch;
+use crate::build_provider::patch::{extract_patch_trend_timestamps, resolve_effective_patch};
 use crate::models::{AppLocale, RankedTierListResponse};
 use std::path::Path;
 use std::time::Instant;
@@ -177,12 +177,13 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
                 .await;
 
                 if let Ok(analysis_json) = probe_analysis {
-                    let created_at_iso = analysis_json
-                        .pointer("/data/trends/win/0/created_at")
-                        .and_then(|v| v.as_str());
-                    let prev_patch_created_at_iso = analysis_json
-                        .pointer("/data/trends/win/1/created_at")
-                        .and_then(|v| v.as_str());
+                    let latest_patch = available_versions
+                        .first()
+                        .map(String::as_str)
+                        .unwrap_or(&effective_patch);
+                    let prev_patch = available_versions.get(1).map(String::as_str);
+                    let (created_at_iso, prev_patch_created_at_iso) =
+                        extract_patch_trend_timestamps(&analysis_json, latest_patch, prev_patch);
 
                     let selection = resolve_effective_patch(
                         &available_versions,

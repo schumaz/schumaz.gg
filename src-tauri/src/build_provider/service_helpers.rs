@@ -3,7 +3,7 @@ use super::analytics::{
 };
 use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_locale;
 use super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
-use super::patch::resolve_effective_patch;
+use super::patch::{extract_patch_trend_timestamps, resolve_effective_patch};
 use super::spells::{ddragon_mode_for_queue, extract_summoner_spell_choices_for_mode};
 use crate::models::{AppLocale, FlashKeyPreference};
 use std::time::Duration;
@@ -17,10 +17,12 @@ pub struct FastSpellRecommendation {
 }
 
 pub(super) const MCP_DEPTH_TIMEOUT: Duration = Duration::from_millis(2500);
+pub(super) const ARAM_MIN_TIER_SAMPLE: u64 = 100;
 
 pub(super) struct RestFetchOutcome {
     pub(super) result: Result<serde_json::Value, String>,
     pub(super) effective_patch: String,
+    pub(super) effective_tier: String,
     pub(super) patch_fallback_applied: bool,
     pub(super) patch_protection_remaining_hours: Option<u32>,
 }
@@ -28,6 +30,29 @@ pub(super) struct RestFetchOutcome {
 pub(super) enum FallbackBuild {
     Stale(ChampionBuild),
     Mcp(ChampionBuild),
+}
+
+fn extract_rest_play_count(json: &serde_json::Value) -> Option<u64> {
+    json.pointer("/data/summary/average_stats/play")
+        .or_else(|| json.pointer("/data/average_stats/play"))
+        .and_then(|v| v.as_u64())
+}
+
+fn rest_payload_has_items(json: &serde_json::Value) -> bool {
+    let analysis = json
+        .get("data")
+        .or_else(|| json.pointer("/result/data"))
+        .unwrap_or(json);
+    let has_non_empty = |ptr: &str| {
+        analysis
+            .pointer(ptr)
+            .and_then(|v| v.as_array())
+            .is_some_and(|arr| !arr.is_empty())
+    };
+    has_non_empty("/core_items")
+        || has_non_empty("/items/core")
+        || has_non_empty("/last_items")
+        || has_non_empty("/items/situational")
 }
 
 pub(super) fn extract_fast_spells_from_rest(
@@ -133,11 +158,12 @@ pub(super) async fn fetch_rest_with_patch_protection(
     mut effective_patch: String,
     patch_48h_protection: bool,
 ) -> RestFetchOutcome {
+    let mut effective_tier = target_tier.to_string();
     let mut patch_fallback_applied = false;
     let mut patch_protection_remaining_hours = None;
     let now_unix = crate::storage::now_unix_secs();
 
-    let result = if manual_patch_trimmed.is_empty() {
+    let mut result = if manual_patch_trimmed.is_empty() {
         let probe_res = fetch_opgg_rest_champion_analysis_from_base(
             client,
             rest_base,
@@ -145,22 +171,20 @@ pub(super) async fn fetch_rest_with_patch_protection(
             mode,
             champion_id,
             target_position,
-            target_tier,
+            &effective_tier,
             Some(&effective_patch),
         )
         .await;
         match probe_res {
             Ok(probe_json) => {
-                let created_at_iso = probe_json
-                    .pointer("/data/trends/win/0/created_at")
-                    .and_then(|v| v.as_str());
-                let prev_patch_created_at_iso = probe_json
-                    .pointer("/data/trends/win/1/created_at")
-                    .and_then(|v| v.as_str());
-                let play_count = probe_json
-                    .pointer("/data/summary/average_stats/play")
-                    .or_else(|| probe_json.pointer("/data/average_stats/play"))
-                    .and_then(|v| v.as_u64());
+                let latest_patch = available_versions
+                    .first()
+                    .map(String::as_str)
+                    .unwrap_or(&effective_patch);
+                let prev_patch = available_versions.get(1).map(String::as_str);
+                let (created_at_iso, prev_patch_created_at_iso) =
+                    extract_patch_trend_timestamps(&probe_json, latest_patch, prev_patch);
+                let play_count = extract_rest_play_count(&probe_json);
                 let selection = resolve_effective_patch(
                     available_versions,
                     created_at_iso,
@@ -181,7 +205,7 @@ pub(super) async fn fetch_rest_with_patch_protection(
                         mode,
                         champion_id,
                         target_position,
-                        target_tier,
+                        &effective_tier,
                         Some(&effective_patch),
                     )
                     .await
@@ -199,15 +223,49 @@ pub(super) async fn fetch_rest_with_patch_protection(
             mode,
             champion_id,
             target_position,
-            target_tier,
+            &effective_tier,
             Some(&effective_patch),
         )
         .await
     };
 
+    // Automatic ARAM tier fallback (`emerald_plus` -> `all`) when explicit tier sample is too small
+    if mode.eq_ignore_ascii_case("aram") && !effective_tier.eq_ignore_ascii_case("all") {
+        let (needs_broader_sample, prev_play, prev_has_items) = match &result {
+            Ok(json) => {
+                let play = extract_rest_play_count(json).unwrap_or(0);
+                let has_items = rest_payload_has_items(json);
+                (play < ARAM_MIN_TIER_SAMPLE || !has_items, play, has_items)
+            }
+            Err(_) => (true, 0, false),
+        };
+
+        if needs_broader_sample
+            && let Ok(all_json) = fetch_opgg_rest_champion_analysis_from_base(
+                client,
+                rest_base,
+                target_region,
+                mode,
+                champion_id,
+                target_position,
+                "all",
+                Some(&effective_patch),
+            )
+            .await
+        {
+            let all_has_items = rest_payload_has_items(&all_json);
+            let all_play = extract_rest_play_count(&all_json).unwrap_or(0);
+            if all_has_items && (!prev_has_items || all_play > prev_play) {
+                result = Ok(all_json);
+                effective_tier = "all".to_string();
+            }
+        }
+    }
+
     RestFetchOutcome {
         result,
         effective_patch,
+        effective_tier,
         patch_fallback_applied,
         patch_protection_remaining_hours,
     }
