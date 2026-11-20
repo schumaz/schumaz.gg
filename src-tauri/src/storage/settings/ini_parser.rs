@@ -1,7 +1,7 @@
 use super::{
     AppSettings, SEC_AUTOMATION, SEC_GENERAL, SEC_GRAPHICS, SEC_NAVIGATION, SEC_PROFILE_APPEARANCE,
     SEC_WINDOW, parse_aram_mode, parse_bool, parse_flash_key, parse_locale,
-    validate_champion_tier_filter, validate_ranked_lane, validate_rarity_filter,
+    validate_champion_tier_filter, validate_ranked_lane,
 };
 
 pub fn parse_user_settings_ini(raw: &str) -> AppSettings {
@@ -132,6 +132,13 @@ pub fn parse_user_settings_ini(raw: &str) -> AppSettings {
                         settings.window.window_maximized = b;
                     }
                 }
+                "WindowMonitor" => {
+                    settings.window.window_monitor = if val.is_empty() {
+                        None
+                    } else {
+                        Some(val.to_string())
+                    };
+                }
                 _ => {}
             },
             SEC_NAVIGATION => match key {
@@ -142,9 +149,6 @@ pub fn parse_user_settings_ini(raw: &str) -> AppSettings {
                     if !val.is_empty() {
                         settings.navigation.profile_match_mode_filter = val.to_string();
                     }
-                }
-                "AramMayhemRarityFilter" => {
-                    settings.navigation.aram_mayhem_rarity_filter = validate_rarity_filter(val);
                 }
                 "AramMayhemLastChampion" => {
                     settings.navigation.aram_mayhem_last_champion = if val.is_empty() {
@@ -220,15 +224,15 @@ mod tests {
         s.graphics.hardware_acceleration = false;
         s.window = WindowSettings {
             window_width: 1280.0,
-            window_height: 800.0,
-            window_x: Some(150.0),
+            window_height: 720.0,
+            window_x: Some(2050.0),
             window_y: Some(80.0),
             window_maximized: true,
+            window_monitor: Some(r"\\.\DISPLAY2".to_string()),
         };
         s.navigation = NavigationState {
             saved_aram_mode: Some(AramMode::AramMayhem),
             profile_match_mode_filter: "ranked_solo".to_string(),
-            aram_mayhem_rarity_filter: "8".to_string(),
             aram_mayhem_last_champion: Some("ahri".to_string()),
             ranked_filter_region: "kr".to_string(),
             ranked_filter_tier: "master_plus".to_string(),
@@ -239,19 +243,31 @@ mod tests {
         };
 
         let ini = serialize_user_settings_ini(&s);
+        assert!(!ini.contains("AramMayhemRarityFilter"));
+        assert!(ini.contains(r"WindowMonitor=\\.\DISPLAY2"));
         let parsed = parse_user_settings_ini(&ini);
         assert_eq!(parsed, s);
 
-        // Existing INI with unknown/legacy keys (like bLegacyStorageMigrated=True) ignores unknown keys gracefully
+        // Existing INI with unknown/removed keys ignores them gracefully
         let legacy_ini = "
 [/Script/SchumazGG.GeneralSettings]
 Language=pt_BR
 bLanguageOnboardingCompleted=True
 bLegacyStorageMigrated=True
+[/Script/SchumazGG.NavigationState]
+AramMayhemRarityFilter=8
+AramMayhemLastChampion=Ahri
 ";
         let parsed_legacy = parse_user_settings_ini(legacy_ini);
         assert!(parsed_legacy.general.language_onboarding_completed);
         assert!(!parsed_legacy.general.flash_onboarding_completed);
+        assert_eq!(
+            parsed_legacy
+                .navigation
+                .aram_mayhem_last_champion
+                .as_deref(),
+            Some("ahri")
+        );
 
         // Corrupt / malformed manual edits fall back per-key without losing valid keys
         let edited = format!(

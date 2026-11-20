@@ -5,6 +5,28 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-11-20
+
+### English
+
+UX polish release updating the default window layout to centered `1280×720`, adding accurate multi-monitor and mixed-DPI window restoration, and making the ARAM Mayhem augment rarity filter ephemeral per session.
+
+#### Changed
+- **Default `1280×720` Centered Window & Monitor Persistence**: Updated default first-launch window dimensions to `1280×720` centered on the primary display (`tauri.conf.json` and `window_bounds.rs`), and added `WindowMonitor` persistence in `UserSettings.ini` (`window.current_monitor()`) alongside physical virtual-desktop positioning and per-monitor DPI scaling. Reopening the app now restores the exact position, size, monitor, and maximized state chosen by the user across multi-monitor and mixed-DPI setups, with a safe centered `1280×720` clamped fallback whenever a saved monitor is disconnected.
+
+#### Fixed
+- **Ephemeral ARAM Mayhem Rarity Filter**: Removed `AramMayhemRarityFilter` / `aramMayhemRarityFilter` persistence from `UserSettings.ini`, IPC bindings, and the ARAM tab so the augment rarity filter always opens on **All** on startup instead of remaining stuck on the last selected rarity from a previous session.
+
+### Português (BR)
+
+Release de polimento de UX atualizando a janela padrão para `1280×720` centralizada, adicionando restauração fiel em setups multi-monitor com DPIs distintos e tornando o filtro de raridade do ARAM Desordem efêmero por sessão.
+
+#### Alterado
+- **Janela Padrão `1280×720` Centralizada e Persistência de Monitor**: Atualizou o tamanho padrão de primeira abertura para `1280×720` centralizado no monitor principal (`tauri.conf.json` e `window_bounds.rs`), e passou a salvar `WindowMonitor` em `UserSettings.ini` (`window.current_monitor()`) junto ao posicionamento físico no desktop virtual e escala DPI por monitor. Ao reabrir o aplicativo, a posição, o tamanho, o monitor e o estado maximizado escolhidos pelo usuário são restaurados com precisão inclusive em múltiplos monitores com DPIs diferentes, com fallback centralizado em `1280×720` e *clamping* seguro caso o monitor salvo esteja desconectado.
+
+#### Corrigido
+- **Reset do Filtro de Raridade no ARAM Desordem**: Removeu completamente a persistência de `AramMayhemRarityFilter` / `aramMayhemRarityFilter` do `UserSettings.ini`, dos contratos IPC e da aba ARAM, garantindo que o filtro de raridade das cartinhas sempre abra na opção **Todos** ao iniciar o aplicativo em vez de ficar preso na última raridade selecionada em sessões anteriores.
+
 ## [0.3.1] - 2026-11-19
 
 ### English

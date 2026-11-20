@@ -92,7 +92,7 @@ Resumo cronológico das entregas concluídas e arquivadas do projeto.
 
 ---
 
-## 7. Correções de Builds/Feitiços, Modo Arena (`3x6`) & Animação `IdleIsland` (`P11.4` – `P11.8` · `v0.2.1` – `v0.3.1`)
+## 7. Correções de Builds/Feitiços, Modo Arena (`3x6`) & Polimento UX (`P11.4` – `P11.9` · `v0.2.1` – `v0.3.2`)
 
 - **[P11.4 - Bugfix Feitiços/ARAM Mayhem] Filtragem dinâmica de feitiços por modo (`v0.2.1`)** (`ddragon/parsers.rs`, `models/build.rs`, `spells/`, `service_helpers.rs`, `ddragon/enrichment.rs`, `lz4_cache.rs`)
   - Persistência do campo `modes: Vec<String>` em `SpellMetadata` (incrementando `CACHE_SCHEMA_VERSION = 2`) e filtragem dinâmica de combinações, `spell_choices`, feitiços REST e fallbacks conforme a fila ativa (`"KIWI"` para ARAM Mayhem `2400`, `"ARAM"` para ARAM Clássico `450` e `"CLASSIC"` para SR), bloqueando *Exaustão* (`3`) no ARAM Mayhem e *Teleporte* (`12`) no ARAM/Mayhem e priorizando *Marca/Bola de Neve* (`32`) nos fallbacks.
@@ -105,3 +105,6 @@ Resumo cronológico das entregas concluídas e arquivadas do projeto.
   - Nova aba **Arena** entre **Ranqueada** e **ARAM** no `NavigationDock` com Tier List (`3x6`, 6 trios / 18 jogadores), busca, filtro de Tier (`OP` / `1`–`5`), detalhe do campeão com **Aprimoramentos** filtráveis por raridade (*Prata*, *Ouro*, *Prismático*), **Melhores Sinergias** e 5 blocos de itens da Arena, além de suporte completo ao vivo na aba `Runas`.
 - **[P11.8 - Bugfix UI/Animação] Substituição do quadrado girando em `IdleIsland` (`.idle-spinner-ring`) (`v0.3.1`)** (`IdleState.tsx`, `ChampSelect.css`, `loading-skeleton.css`, `tokens-shell.css`, `IdleState.test.tsx`)
   - Substituição da rotação de borda quadrada (`animation: spin`) em `.idle-icon-box.is-loading .idle-spinner-ring` (*Carregando Perfil* e *Carregando Build*) por um `<svg><rect pathLength="100" /></svg>` concêntrico com trilha de luz perimetral (`idleSpinnerTrailOrbit` / `idleSpinnerBeamOrbit`) alinhada ao `border-radius` do container, mantendo pausa/ocultação em `.inactive-tab`, `.app-minimized`, `.gpu-effects-disabled` e `prefers-reduced-motion`.
+- **[P11.9 - UX / Polimento] Janela padrão `1280×720` centralizada, persistência de monitor & reset do filtro de raridade no ARAM Mayhem (`v0.3.2`)** (`tauri.conf.json`, `storage/window_bounds.rs`, `storage/settings/`, `app_bootstrap.rs`, `app_bootstrap/window_events.rs`, `AppTabsViewport.tsx`, `AramTab.tsx`)
+  - Remoção completa da persistência de `AramMayhemRarityFilter` / `aramMayhemRarityFilter` (em `UserSettings.ini`, contratos IPC/`bindings.ts` e frontend), mantendo o filtro de raridade das cartinhas do ARAM Mayhem como estado local efêmero sempre iniciado em **Todos (`All`)**.
+  - Atualização da janela padrão para `1280×720` centralizada na primeira abertura e persistência de `WindowMonitor` (`window.current_monitor()`) com restauração física multi-monitor/DPI distinto (incluindo janela maximizada e fallback centralizado em `1280×720` com *clamping* seguro quando o monitor salvo está desconectado).

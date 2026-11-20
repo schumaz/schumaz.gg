@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AramAugmentEntry, AramChampionRank, AramMode } from "../../types";
 import {
   AugmentRarityFilter,
   normalizeAramSearch,
-  parseRarityFilter,
   sortAugmentsBestToWorst,
 } from "./aramHelpers";
 import { AramModeChooser } from "./AramModeChooser";
@@ -27,8 +26,6 @@ interface AramTabProps {
   onSelectChampion: (championKey: string) => void;
   onRetryTierList: (mode: AramMode) => void;
   onRetryAugments: () => void;
-  savedRarityFilter?: string;
-  onRarityFilterChange?: (rarity: AugmentRarityFilter) => void;
 }
 
 export function AramTab({
@@ -46,26 +43,11 @@ export function AramTab({
   onSelectChampion,
   onRetryTierList,
   onRetryAugments,
-  savedRarityFilter,
-  onRarityFilterChange,
 }: AramTabProps) {
   const [aramSearch, setAramSearch] = useState("");
   const [mayhemChampSearch, setMayhemChampSearch] = useState("");
   const [augmentSearch, setAugmentSearch] = useState("");
-  const [rarityFilter, setRarityFilter] = useState<AugmentRarityFilter>(() =>
-    parseRarityFilter(savedRarityFilter)
-  );
-
-  useEffect(() => {
-    if (savedRarityFilter !== undefined) {
-      setRarityFilter(parseRarityFilter(savedRarityFilter));
-    }
-  }, [savedRarityFilter]);
-
-  const handleSelectRarityFilter = (next: AugmentRarityFilter) => {
-    setRarityFilter(next);
-    onRarityFilterChange?.(next);
-  };
+  const [rarityFilter, setRarityFilter] = useState<AugmentRarityFilter>("all");
 
   const activeMode = savedMode ?? "aram";
   const currentChampions = tierLists[activeMode] ?? [];
@@ -133,7 +115,7 @@ export function AramTab({
           onSelectChampion={onSelectChampion}
           onRetryTierList={onRetryTierList}
           rarityFilter={rarityFilter}
-          onSelectRarityFilter={handleSelectRarityFilter}
+          onSelectRarityFilter={setRarityFilter}
           augmentSearch={augmentSearch}
           onAugmentSearchChange={setAugmentSearch}
           augmentsLoading={augmentsLoading}

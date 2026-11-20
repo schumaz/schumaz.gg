@@ -10,7 +10,6 @@ export const MAX_PROFILE_BLUR_PX = 32;
 export const DEFAULT_NAVIGATION_STATE: NavigationState = {
   savedAramMode: null,
   profileMatchModeFilter: "all",
-  aramMayhemRarityFilter: "all",
   aramMayhemLastChampion: null,
   rankedFilterRegion: "global",
   rankedFilterTier: "emerald_plus",
@@ -62,10 +61,6 @@ export function mergeNavigationState(
       patch.profileMatchModeFilter !== undefined && patch.profileMatchModeFilter !== null
         ? patch.profileMatchModeFilter
         : base.profileMatchModeFilter,
-    aramMayhemRarityFilter:
-      patch.aramMayhemRarityFilter !== undefined && patch.aramMayhemRarityFilter !== null
-        ? patch.aramMayhemRarityFilter
-        : base.aramMayhemRarityFilter,
     aramMayhemLastChampion:
       patch.aramMayhemLastChampion !== undefined
         ? patch.aramMayhemLastChampion === ""

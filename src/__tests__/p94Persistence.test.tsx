@@ -43,15 +43,15 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
     },
     window: {
       windowWidth: 1280,
-      windowHeight: 800,
+      windowHeight: 720,
       windowX: null,
       windowY: null,
       windowMaximized: false,
+      windowMonitor: null,
     },
     navigation: {
       savedAramMode: "aram_mayhem",
       profileMatchModeFilter: "420",
-      aramMayhemRarityFilter: "8",
       aramMayhemLastChampion: "ahri",
       rankedFilterRegion: "kr",
       rankedFilterTier: "master_plus",
@@ -128,7 +128,7 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
 
       act(() => {
         result.current.updateProfileBlur(75);
-        result.current.updateNavigationState({ aramMayhemRarityFilter: "4" });
+        result.current.updateNavigationState({ rankedChampionTierFilter: "1" });
       });
 
       expect(invoke).toHaveBeenCalledWith("update_profile_appearance", {
@@ -136,7 +136,7 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
         wallpaperVisible: true,
       });
       expect(invoke).toHaveBeenCalledWith("update_navigation_state", {
-        patch: { aramMayhemRarityFilter: "4" },
+        patch: { rankedChampionTierFilter: "1" },
       });
       expect(localStorage.getItem("schumaz_profile_ui_blur")).toBeNull();
     });

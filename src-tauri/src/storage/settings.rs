@@ -67,6 +67,7 @@ pub struct WindowSettings {
     pub window_x: Option<f64>,
     pub window_y: Option<f64>,
     pub window_maximized: bool,
+    pub window_monitor: Option<String>,
 }
 
 impl Default for WindowSettings {
@@ -77,6 +78,7 @@ impl Default for WindowSettings {
             window_x: None,
             window_y: None,
             window_maximized: false,
+            window_monitor: None,
         }
     }
 }
@@ -86,7 +88,6 @@ impl Default for WindowSettings {
 pub struct NavigationState {
     pub saved_aram_mode: Option<AramMode>,
     pub profile_match_mode_filter: String,
-    pub aram_mayhem_rarity_filter: String,
     pub aram_mayhem_last_champion: Option<String>,
     pub ranked_filter_region: String,
     pub ranked_filter_tier: String,
@@ -101,7 +102,6 @@ impl Default for NavigationState {
         Self {
             saved_aram_mode: None,
             profile_match_mode_filter: "all".to_string(),
-            aram_mayhem_rarity_filter: "all".to_string(),
             aram_mayhem_last_champion: None,
             ranked_filter_region: "global".to_string(),
             ranked_filter_tier: "emerald_plus".to_string(),
@@ -129,13 +129,12 @@ pub struct AppSettings {
 pub struct NavigationStatePatch {
     pub saved_aram_mode: Option<AramMode>,
     pub profile_match_mode_filter: Option<String>,
-    pub aram_mayhem_rarity_filter: Option<String>,
-    /// Empty string clears `aram_mayhem_last_champion` to `None`.\npub aram_mayhem_last_champion: Option<String>,
+    /// Empty string clears `aram_mayhem_last_champion` to `None`.
     pub aram_mayhem_last_champion: Option<String>,
     pub ranked_filter_region: Option<String>,
     pub ranked_filter_tier: Option<String>,
     pub ranked_filter_lane: Option<String>,
-    /// Empty string clears `ranked_filter_patch` to `None`.\npub ranked_filter_patch: Option<String>,
+    /// Empty string clears `ranked_filter_patch` to `None`.
     pub ranked_filter_patch: Option<String>,
     pub ranked_champion_tier_filter: Option<String>,
     pub last_summoner_id: Option<u64>,
@@ -186,13 +185,6 @@ pub(super) fn format_aram_mode(mode: AramMode) -> &'static str {
 
 pub(super) fn clamp_profile_blur(val: u32) -> u32 {
     val.min(100)
-}
-
-pub(super) fn validate_rarity_filter(raw: &str) -> String {
-    match raw.trim() {
-        "all" | "1" | "4" | "8" => raw.trim().to_string(),
-        _ => "all".to_string(),
-    }
 }
 
 pub(super) fn validate_ranked_lane(raw: &str) -> String {

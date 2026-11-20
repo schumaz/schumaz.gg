@@ -12,13 +12,6 @@ export const LEAGUE_ARAM_ICON_URL =
 export const LEAGUE_ARAM_MAYHEM_ICON_URL =
   "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/kiwi/augments/icons/poroking_large.png";
 
-export function parseRarityFilter(raw: string | null | undefined): AugmentRarityFilter {
-  if (raw === "1") return 1;
-  if (raw === "4") return 4;
-  if (raw === "8") return 8;
-  return "all";
-}
-
 export function normalizeAramSearch(value: string): string {
   return value
     .toLowerCase()

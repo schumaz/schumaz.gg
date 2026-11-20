@@ -39,15 +39,15 @@ function makeIniSettings(overrides: Partial<AppSettings["general"]> = {}): AppSe
     },
     window: {
       windowWidth: 1280,
-      windowHeight: 800,
+      windowHeight: 720,
       windowX: null,
       windowY: null,
       windowMaximized: false,
+      windowMonitor: null,
     },
     navigation: {
       savedAramMode: null,
       profileMatchModeFilter: "all",
-      aramMayhemRarityFilter: "all",
       aramMayhemLastChampion: null,
       rankedFilterRegion: "global",
       rankedFilterTier: "emerald_plus",

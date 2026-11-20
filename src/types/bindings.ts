@@ -558,13 +558,12 @@ export type NavigationStatePatch = NavigationStatePatch_Serialize | NavigationSt
 export type NavigationStatePatch_Deserialize = {
 	savedAramMode?: AramMode | null,
 	profileMatchModeFilter?: string | null,
-	aramMayhemRarityFilter?: string | null,
-	/**  Empty string clears `aram_mayhem_last_champion` to `None`.\npub aram_mayhem_last_champion: Option<String>, */
+	/**  Empty string clears `aram_mayhem_last_champion` to `None`. */
 	aramMayhemLastChampion?: string | null,
 	rankedFilterRegion?: string | null,
 	rankedFilterTier?: string | null,
 	rankedFilterLane?: string | null,
-	/**  Empty string clears `ranked_filter_patch` to `None`.\npub ranked_filter_patch: Option<String>, */
+	/**  Empty string clears `ranked_filter_patch` to `None`. */
 	rankedFilterPatch?: string | null,
 	rankedChampionTierFilter?: string | null,
 	lastSummonerId?: number | null,
@@ -573,13 +572,12 @@ export type NavigationStatePatch_Deserialize = {
 export type NavigationStatePatch_Serialize = {
 	savedAramMode: AramMode | null,
 	profileMatchModeFilter: string | null,
-	aramMayhemRarityFilter: string | null,
-	/**  Empty string clears `aram_mayhem_last_champion` to `None`.\npub aram_mayhem_last_champion: Option<String>, */
+	/**  Empty string clears `aram_mayhem_last_champion` to `None`. */
 	aramMayhemLastChampion: string | null,
 	rankedFilterRegion: string | null,
 	rankedFilterTier: string | null,
 	rankedFilterLane: string | null,
-	/**  Empty string clears `ranked_filter_patch` to `None`.\npub ranked_filter_patch: Option<String>, */
+	/**  Empty string clears `ranked_filter_patch` to `None`. */
 	rankedFilterPatch: string | null,
 	rankedChampionTierFilter: string | null,
 	lastSummonerId: number | null,
@@ -588,7 +586,6 @@ export type NavigationStatePatch_Serialize = {
 export type NavigationState_Deserialize = {
 	savedAramMode?: AramMode | null,
 	profileMatchModeFilter: string,
-	aramMayhemRarityFilter: string,
 	aramMayhemLastChampion?: string | null,
 	rankedFilterRegion: string,
 	rankedFilterTier: string,
@@ -601,7 +598,6 @@ export type NavigationState_Deserialize = {
 export type NavigationState_Serialize = {
 	savedAramMode: AramMode | null,
 	profileMatchModeFilter: string,
-	aramMayhemRarityFilter: string,
 	aramMayhemLastChampion: string | null,
 	rankedFilterRegion: string,
 	rankedFilterTier: string,
@@ -907,6 +903,7 @@ export type WindowSettings_Deserialize = {
 	windowX?: number | null,
 	windowY?: number | null,
 	windowMaximized: boolean,
+	windowMonitor?: string | null,
 };
 
 export type WindowSettings_Serialize = {
@@ -915,6 +912,7 @@ export type WindowSettings_Serialize = {
 	windowX: number | null,
 	windowY: number | null,
 	windowMaximized: boolean,
+	windowMonitor: string | null,
 };
 
 /* Tauri Specta runtime */

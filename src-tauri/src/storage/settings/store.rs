@@ -7,7 +7,7 @@ use super::ini_parser::parse_user_settings_ini;
 use super::ini_serializer::serialize_user_settings_ini;
 use super::{
     AppSettings, NavigationState, NavigationStatePatch, clamp_profile_blur,
-    validate_champion_tier_filter, validate_ranked_lane, validate_rarity_filter,
+    validate_champion_tier_filter, validate_ranked_lane,
 };
 
 pub fn load_user_settings(ini_path: &Path) -> AppSettings {
@@ -35,9 +35,6 @@ pub fn apply_navigation_patch(nav: &mut NavigationState, patch: NavigationStateP
         } else {
             trimmed.to_string()
         };
-    }
-    if let Some(rarity) = patch.aram_mayhem_rarity_filter {
-        nav.aram_mayhem_rarity_filter = validate_rarity_filter(&rarity);
     }
     if let Some(champ) = patch.aram_mayhem_last_champion {
         let trimmed = champ.trim().to_ascii_lowercase();

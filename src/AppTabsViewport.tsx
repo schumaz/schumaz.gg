@@ -128,8 +128,6 @@ export function AppTabsViewport({
         onSelectChampion={aram.selectChampion}
         onRetryTierList={aram.retryTierList}
         onRetryAugments={aram.retryAugments}
-        savedRarityFilter={navigationState?.aramMayhemRarityFilter}
-        onRarityFilterChange={(rarity) => updateNavigationState({ aramMayhemRarityFilter: String(rarity) })}
       />
 
       <SettingsTab

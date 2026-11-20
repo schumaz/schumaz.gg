@@ -86,9 +86,15 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         None => out.push_str("WindowY=\n"),
     }
     out.push_str(&format!(
-        "bWindowMaximized={}\n\n",
+        "bWindowMaximized={}\n",
         fmt_bool(s.window.window_maximized)
     ));
+    match s.window.window_monitor.as_deref().map(str::trim) {
+        Some(monitor) if !monitor.is_empty() => {
+            out.push_str(&format!("WindowMonitor={monitor}\n\n"))
+        }
+        _ => out.push_str("WindowMonitor=\n\n"),
+    }
 
     out.push_str(&format!("[{SEC_NAVIGATION}]\n"));
     match s.navigation.saved_aram_mode {
@@ -98,10 +104,6 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
     out.push_str(&format!(
         "ProfileMatchModeFilter={}\n",
         s.navigation.profile_match_mode_filter
-    ));
-    out.push_str(&format!(
-        "AramMayhemRarityFilter={}\n",
-        s.navigation.aram_mayhem_rarity_filter
     ));
     match &s.navigation.aram_mayhem_last_champion {
         Some(c) => out.push_str(&format!("AramMayhemLastChampion={c}\n")),

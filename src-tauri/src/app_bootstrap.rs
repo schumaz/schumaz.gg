@@ -5,7 +5,7 @@ pub use window_events::{
     should_pause_window_animations,
 };
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::Ordering};
 
 use tauri::Manager;
 use tauri_specta::Event;
@@ -133,10 +133,78 @@ fn spawn_prewarm_task(
     });
 }
 
+fn collect_monitor_rects(app: &tauri::App) -> Vec<storage::MonitorRect> {
+    let primary_key = app.primary_monitor().ok().flatten().map(|m| {
+        (
+            m.name().cloned(),
+            m.position().x,
+            m.position().y,
+            m.size().width,
+            m.size().height,
+        )
+    });
+
+    app.available_monitors()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| {
+            let work = m.work_area();
+            let is_primary = primary_key.as_ref().is_some_and(|pk| {
+                pk.0.as_ref() == m.name()
+                    && pk.1 == m.position().x
+                    && pk.2 == m.position().y
+                    && pk.3 == m.size().width
+                    && pk.4 == m.size().height
+            });
+            storage::MonitorRect {
+                name: m.name().cloned(),
+                x: f64::from(work.position.x),
+                y: f64::from(work.position.y),
+                width: f64::from(work.size.width),
+                height: f64::from(work.size.height),
+                scale_factor: m.scale_factor(),
+                is_primary,
+            }
+        })
+        .collect()
+}
+
+fn apply_validated_window_bounds(
+    window: &tauri::WebviewWindow,
+    bounds: &storage::ValidatedWindowBounds,
+) {
+    let target_phys_size = tauri::PhysicalSize::new(
+        (bounds.width * bounds.scale_factor).round().max(1.0) as u32,
+        (bounds.height * bounds.scale_factor).round().max(1.0) as u32,
+    );
+
+    if let (Some(x), Some(y)) = (bounds.x, bounds.y) {
+        let target_pos = tauri::PhysicalPosition::new(x, y);
+        // Move to the target monitor first so Windows assigns its DPI, then apply physical size,
+        // and re-apply position in case WM_DPICHANGED shifted the origin.
+        let _ = window.set_position(tauri::Position::Physical(target_pos));
+        let _ = window.set_size(tauri::Size::Physical(target_phys_size));
+        let _ = window.set_position(tauri::Position::Physical(target_pos));
+    } else {
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+            bounds.width,
+            bounds.height,
+        )));
+        if bounds.center {
+            let _ = window.center();
+        }
+    }
+
+    if bounds.maximized {
+        let _ = window.maximize();
+    }
+    let _ = window.show();
+}
+
 /// Initializes local storage, loads settings, builds the main window, and spawns background tasks.
 pub fn setup_app(
     app: &mut tauri::App,
-    window_tracker: &Arc<Mutex<storage::WindowSettings>>,
+    window_state: &WindowRuntimeState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
     let bootstrap_state = BootstrapState::default();
@@ -154,7 +222,7 @@ pub fn setup_app(
     let active_locale = settings.general.language.unwrap_or_default();
     lcu_injector::set_active_locale(active_locale);
 
-    if let Ok(mut guard) = window_tracker.lock() {
+    if let Ok(mut guard) = window_state.window_tracker.lock() {
         *guard = settings.window.clone();
     }
 
@@ -164,39 +232,50 @@ pub fn setup_app(
 
     bootstrap_state.update(&app_handle, "settings_loaded", 20, false, false);
 
-    // 3. Validate window bounds against connected monitors in logical coordinates
-    let monitors: Vec<storage::MonitorRect> = app
-        .available_monitors()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|m| {
-            let scale = m.scale_factor();
-            let pos = m.position().to_logical::<f64>(scale);
-            let size = m.size().to_logical::<f64>(scale);
-            storage::MonitorRect {
-                x: pos.x,
-                y: pos.y,
-                width: size.width,
-                height: size.height,
-            }
-        })
-        .collect();
+    // 3. Validate window bounds & monitor against connected displays (physical work-area + DPI)
+    let monitors = collect_monitor_rects(app);
     let bounds = storage::validate_window_bounds(&settings.window, &monitors);
 
     if let Some(mut window_config) = app.config().app.windows.first().cloned() {
+        window_state.restoring_window.store(true, Ordering::SeqCst);
+
         window_config.width = bounds.width;
         window_config.height = bounds.height;
-        window_config.x = bounds.x;
-        window_config.y = bounds.y;
-        window_config.center = bounds.center;
-        window_config.maximized = bounds.maximized;
+        window_config.x = None;
+        window_config.y = None;
+        window_config.center = bounds.x.is_none() || bounds.y.is_none();
+        window_config.maximized = false;
+        window_config.visible = false;
         window_config.additional_browser_args =
             Some(storage::browser_args_for_hardware_acceleration(
                 settings.graphics.hardware_acceleration,
             ));
-        tauri::WebviewWindowBuilder::from_config(&app_handle, &window_config)?
-            .data_directory(paths.webview_dir.clone())
-            .build()?;
+
+        let build_result = tauri::WebviewWindowBuilder::from_config(&app_handle, &window_config)
+            .and_then(|builder| builder.data_directory(paths.webview_dir.clone()).build());
+
+        match build_result {
+            Ok(window) => {
+                apply_validated_window_bounds(&window, &bounds);
+                if let Ok(mut guard) = window_state.window_tracker.lock() {
+                    guard.window_width = bounds.width;
+                    guard.window_height = bounds.height;
+                    if let (Some(x), Some(y)) = (bounds.x, bounds.y) {
+                        guard.window_x = Some(f64::from(x));
+                        guard.window_y = Some(f64::from(y));
+                    }
+                    guard.window_maximized = bounds.maximized;
+                    if bounds.monitor_name.is_some() {
+                        guard.window_monitor = bounds.monitor_name.clone();
+                    }
+                }
+                window_state.restoring_window.store(false, Ordering::SeqCst);
+            }
+            Err(err) => {
+                window_state.restoring_window.store(false, Ordering::SeqCst);
+                return Err(err.into());
+            }
+        }
     }
 
     // Background task 1: Monitor LCU process liveness

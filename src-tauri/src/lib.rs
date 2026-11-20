@@ -106,14 +106,14 @@ pub fn run() {
         })
         .invoke_handler(builder.invoke_handler())
         .setup({
-            let window_tracker = runtime_state.window_tracker.clone();
+            let window_state = runtime_state.clone();
             move |app| {
                 #[cfg(desktop)]
                 app.handle()
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
 
                 builder.mount_events(app);
-                app_bootstrap::setup_app(app, &window_tracker)
+                app_bootstrap::setup_app(app, &window_state)
             }
         })
         .run(tauri::generate_context!())
