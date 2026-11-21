@@ -1,6 +1,6 @@
 use super::augment_interpolate::{
-    infer_ability_slot_from_desc, infer_ability_slot_from_name_id, interpolate_arena_desc,
-    normalize_augment_lookup_name,
+    infer_ability_slot_from_desc, infer_ability_slot_from_name_id,
+    interpolate_arena_desc_for_locale, normalize_augment_lookup_name,
 };
 use crate::build_provider::analytics::aram::{clean_augment_description, is_internal_augment_key};
 use crate::models::{AppLocale, ArenaAugmentMetadata};
@@ -146,9 +146,10 @@ pub fn parse_cdragon_cherry_augments(
 /// Supplements empty descriptions (and missing legacy entries) in `augments` using
 /// CommunityDragon's `cdragon/arena/{locale}.json`, including normalized name fallback
 /// for shared Arena <-> ARAM Mayhem (`id >= 1000`) augments.
-pub fn supplement_arena_augment_descriptions(
+pub fn supplement_arena_augment_descriptions_for_locale(
     augments: &mut HashMap<i32, ArenaAugmentMetadata>,
     arena_json: &serde_json::Value,
+    locale: AppLocale,
 ) {
     let Some(arr) = arena_json.get("augments").and_then(|v| v.as_array()) else {
         return;
@@ -166,7 +167,7 @@ pub fn supplement_arena_augment_descriptions(
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let data_values = entry.get("dataValues").and_then(|v| v.as_object());
-        let cleaned = interpolate_arena_desc(raw_desc, data_values);
+        let cleaned = interpolate_arena_desc_for_locale(raw_desc, data_values, locale);
         let inferred_slot = infer_ability_slot_from_desc(raw_desc);
         let entry_name = entry
             .get("name")
@@ -232,6 +233,13 @@ pub fn supplement_arena_augment_descriptions(
     }
 }
 
+pub fn supplement_arena_augment_descriptions(
+    augments: &mut HashMap<i32, ArenaAugmentMetadata>,
+    arena_json: &serde_json::Value,
+) {
+    supplement_arena_augment_descriptions_for_locale(augments, arena_json, AppLocale::EnUs);
+}
+
 /// Best-effort fetch of localized Arena augments metadata (`cherry-augments.json` + optional descriptions).
 pub(super) async fn fetch_arena_augments_catalog(
     client: &reqwest::Client,
@@ -272,7 +280,7 @@ pub(super) async fn fetch_arena_augments_catalog(
 
     let (mut map, desc_json) = tokio::join!(cherry_fut, desc_fut);
     if let Some(json) = desc_json {
-        supplement_arena_augment_descriptions(&mut map, &json);
+        supplement_arena_augment_descriptions_for_locale(&mut map, &json, locale);
     }
     map
 }

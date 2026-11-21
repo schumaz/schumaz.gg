@@ -1,7 +1,8 @@
 use super::super::items::{get_dynamic_item_classifications, set_dynamic_item_classifications};
 use super::super::models::{DataDragonCache, ItemClassificationCache};
+use super::augment_interpolate::{has_raw_riot_augment_markup, strip_riot_inline_markup};
 use super::fetch::{fetch_ddragon_versions, load_ddragon_bundle_for_version};
-use crate::build_provider::analytics::aram::is_internal_augment_key;
+use crate::build_provider::analytics::aram::{clean_augment_description, is_internal_augment_key};
 use crate::models::AppLocale;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -54,7 +55,18 @@ pub fn load_ddragon_bundle_from_dir(dir: &Path, locale: AppLocale) -> Option<Dat
 }
 
 pub fn hydrate_ddragon_from_dir(dir: &Path, locale: AppLocale) -> Option<Arc<DataDragonCache>> {
-    let bundle = load_ddragon_bundle_from_dir(dir, locale)?;
+    let mut bundle = load_ddragon_bundle_from_dir(dir, locale)?;
+    let mut healed_dirty_desc = false;
+    for aug in bundle.ddragon.arena_augments.values_mut() {
+        if has_raw_riot_augment_markup(&aug.desc) {
+            let stripped = strip_riot_inline_markup(&aug.desc, Some(locale));
+            aug.desc = clean_augment_description(&stripped);
+            healed_dirty_desc = true;
+        }
+    }
+    if healed_dirty_desc {
+        let _ = save_ddragon_bundle_to_dir(dir, locale, &bundle);
+    }
     if let Some(classifications) = bundle.item_classifications {
         set_dynamic_item_classifications(classifications);
     }
@@ -133,9 +145,9 @@ pub async fn refresh_ddragon_if_outdated_with_base(
     let needs_arena_backfill = base_url == DDRAGON_BASE_URL
         && existing.as_ref().is_some_and(|c| {
             c.arena_augments.is_empty()
-                || c.arena_augments
-                    .values()
-                    .any(|a| is_internal_augment_key(&a.name))
+                || c.arena_augments.values().any(|a| {
+                    is_internal_augment_key(&a.name) || has_raw_riot_augment_markup(&a.desc)
+                })
                 || !c.arena_augments.values().any(|a| a.ability_slot.is_some())
                 || get_dynamic_item_classifications().is_some_and(|cls| cls.map30_items.is_empty())
         });
@@ -250,7 +262,7 @@ pub async fn get_or_init_ddragon_cache_for_locale(
     Ok(loaded)
 }
 
-/// Gets the cached DataDragon data for the currently active locale or initializes it if not yet loaded.
+/// Gets the cached DataDragon data for the active user locale (defaults to PT-BR).
 pub async fn get_or_init_ddragon_cache(
     client: &reqwest::Client,
 ) -> Result<Arc<DataDragonCache>, String> {

@@ -1,4 +1,5 @@
 use crate::build_provider::analytics::aram::clean_augment_description;
+use crate::models::AppLocale;
 
 pub(super) fn infer_ability_slot_from_name_id(raw: &str) -> Option<String> {
     let upper = raw.trim().to_ascii_uppercase();
@@ -32,6 +33,114 @@ pub(super) fn normalize_augment_lookup_name(raw: &str) -> String {
         .collect()
 }
 
+/// Given a slice starting at `'%'`, returns the inclusive byte index of the closing `'%'`
+/// when it matches a Riot inline icon token such as `%i:scaleCrit%`, `%i:scaleAP%`,
+/// `%i:Augment%`, or `%is:scalecrit%` (`%<ascii_letters>:<token>%`), ignoring normal percentages.
+fn find_riot_icon_token_end(slice_from_pct: &str) -> Option<usize> {
+    let bytes = slice_from_pct.as_bytes();
+    if bytes.first() != Some(&b'%') {
+        return None;
+    }
+
+    let mut i = 1usize;
+    while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+        i += 1;
+    }
+    if i == 1 || bytes.get(i) != Some(&b':') {
+        return None;
+    }
+    i += 1;
+
+    let payload_start = i;
+    while i < bytes.len()
+        && (bytes[i].is_ascii_alphanumeric() || matches!(bytes[i], b'_' | b'-' | b'.'))
+    {
+        i += 1;
+    }
+    if i > payload_start && bytes.get(i) == Some(&b'%') {
+        Some(i)
+    } else {
+        None
+    }
+}
+
+/// Returns `true` if `desc` still contains raw Riot inline icon tokens (`%i:...%`) or
+/// unresolved Mustache/template tokens (`{{ ... }}`).
+pub(crate) fn has_raw_riot_augment_markup(desc: &str) -> bool {
+    if let Some(open) = desc.find("{{")
+        && desc[open + 2..].contains("}}")
+    {
+        return true;
+    }
+
+    let bytes = desc.as_bytes();
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b'%' && find_riot_icon_token_end(&desc[i..]).is_some() {
+            return true;
+        }
+    }
+    false
+}
+
+fn resolve_riot_brace_token(token: &str, locale: Option<AppLocale>) -> &'static str {
+    let key = token.trim();
+    if key.eq_ignore_ascii_case("Item_Keyword_OnHit") {
+        return match locale {
+            Some(AppLocale::PtBr) => "ao contato",
+            _ => "On-Hit",
+        };
+    }
+    if key.eq_ignore_ascii_case("Item_Grievous_Wounds") {
+        return match locale {
+            Some(AppLocale::PtBr) => "Feridas Dolorosas",
+            _ => "Grievous Wounds",
+        };
+    }
+    " "
+}
+
+/// Resolves known Riot template tokens (`{{ Item_Keyword_OnHit }}`, `{{ Item_Grievous_Wounds }}`),
+/// strips unresolved `{{ ... }}` summary references, and removes inline icon tokens (`%i:...%`).
+pub(crate) fn strip_riot_inline_markup(raw: &str, locale: Option<AppLocale>) -> String {
+    if !has_raw_riot_augment_markup(raw) {
+        return raw.to_string();
+    }
+
+    // 1. Resolve or strip `{{ ... }}` template tokens.
+    let mut after_braces = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(open) = rest.find("{{") {
+        let after_open = &rest[open + 2..];
+        let Some(close) = after_open.find("}}") else {
+            break;
+        };
+        after_braces.push_str(&rest[..open]);
+        after_braces.push_str(resolve_riot_brace_token(&after_open[..close], locale));
+        rest = &after_open[close + 2..];
+    }
+    after_braces.push_str(rest);
+
+    // 2. Strip Riot inline icon tokens (`%i:scaleCrit%`, `%i:scaleAP%`, `%i:Augment%`, etc.).
+    let mut out = String::with_capacity(after_braces.len());
+    let bytes = after_braces.as_bytes();
+    let mut i = 0usize;
+    let mut chunk_start = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(end_rel) = find_riot_icon_token_end(&after_braces[i..])
+        {
+            out.push_str(&after_braces[chunk_start..i]);
+            out.push(' ');
+            i += end_rel + 1;
+            chunk_start = i;
+            continue;
+        }
+        i += 1;
+    }
+    out.push_str(&after_braces[chunk_start..]);
+    out
+}
+
 fn format_data_value(val: f64) -> String {
     let rounded = (val * 10.0).round() / 10.0;
     if (rounded.fract()).abs() < 1e-6 {
@@ -54,9 +163,10 @@ fn lookup_data_value(dv: &serde_json::Map<String, serde_json::Value>, key: &str)
     })
 }
 
-pub(super) fn interpolate_arena_desc(
+pub(super) fn interpolate_arena_desc_for_locale(
     raw: &str,
     data_values: Option<&serde_json::Map<String, serde_json::Value>>,
+    locale: AppLocale,
 ) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut rest = raw;
@@ -121,5 +231,6 @@ pub(super) fn interpolate_arena_desc(
         }
     }
     out.push_str(rest);
-    clean_augment_description(&out)
+    let cleaned_markup = strip_riot_inline_markup(&out, Some(locale));
+    clean_augment_description(&cleaned_markup)
 }

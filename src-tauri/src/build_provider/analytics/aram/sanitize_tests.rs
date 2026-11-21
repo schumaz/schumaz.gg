@@ -1,6 +1,9 @@
 use super::*;
 use crate::build_provider::analytics::aram::augments::fetch_aram_mayhem_augments_with_base_locale_and_dir;
-use crate::build_provider::analytics::aram::cache::{aram_augments_file_path, get_augments_cache};
+use crate::build_provider::analytics::aram::cache::{
+    aram_augments_file_path, get_augments_cache, has_valid_augment_descriptions,
+    rehydrate_aram_augments,
+};
 use crate::build_provider::analytics::aram::parsers::parse_aram_mayhem_augments_html_for_locale;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, ArenaAugmentMetadata};
@@ -175,6 +178,26 @@ fn test_placeholder_detection_preserves_legitimate_question_marks_and_triple_q_n
     assert!(!has_unresolved_augment_placeholder(
         "Your Missing Pings launch a missile."
     ));
+}
+
+#[test]
+fn test_riot_inline_icon_tokens_flagged_and_cleaned_on_rehydration() {
+    let mut dirty = vec![AramAugmentEntry {
+        id: 1097,
+        name: "Witchful Thinking".to_string(),
+        tier: 0,
+        rarity: Some(1),
+        performance: 95.0,
+        popular: 2.7,
+        icon_url: "https://raw.communitydragon.org/latest/wt.png".to_string(),
+        desc: "Gain %i:scaleAP% 60 Ability Power.".to_string(),
+    }];
+    assert!(!has_valid_augment_descriptions(&dirty));
+
+    let empty_dd = DataDragonCache::default();
+    rehydrate_aram_augments(&mut dirty, &empty_dd);
+    assert_eq!(dirty[0].desc, "Gain 60 Ability Power.");
+    assert!(has_valid_augment_descriptions(&dirty));
 }
 
 #[tokio::test]

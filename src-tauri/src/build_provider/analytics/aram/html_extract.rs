@@ -1,3 +1,4 @@
+use crate::build_provider::ddragon::strip_riot_inline_markup;
 use crate::models::AppLocale;
 
 const ABILITY_SLOT_MARKER: &str = "__ABILITY_SLOT__";
@@ -197,18 +198,28 @@ pub fn clean_augment_description(raw: &str) -> String {
         }
     }
 
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
+    let without_riot_tokens = strip_riot_inline_markup(&out, None);
+    without_riot_tokens
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" ,", ",")
+        .replace(" .", ".")
+        .replace(" !", "!")
+        .replace(" :", ":")
+        .replace(" ;", ";")
 }
 
 /// Cleans HTML augment descriptions while resolving `<font color='#F0C200'>?</font>` ability-slot
-/// tokens (using `ability_slot` when known or a localized term) and residual `?` placeholders.
+/// tokens (using `ability_slot` when known or a localized term), Riot inline markup, and `?` placeholders.
 pub fn clean_augment_description_with_context(
     raw: &str,
     locale: AppLocale,
     ability_slot: Option<&str>,
 ) -> String {
     let pre = replace_ability_slot_font_tags(raw, ability_slot);
-    let stripped = clean_augment_description(&pre);
+    let localized = strip_riot_inline_markup(&pre, Some(locale));
+    let stripped = clean_augment_description(&localized);
     let with_slots = resolve_ability_slot_markers(&stripped, locale);
     sanitize_augment_placeholders(&with_slots, locale)
 }

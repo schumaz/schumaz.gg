@@ -7,6 +7,7 @@ pub mod item_parser;
 pub mod metadata;
 mod parsers;
 
+pub(crate) use augment_interpolate::{has_raw_riot_augment_markup, strip_riot_inline_markup};
 pub use augments::*;
 pub use cache::*;
 pub use enrichment::*;

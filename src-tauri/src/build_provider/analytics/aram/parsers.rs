@@ -1,7 +1,8 @@
 use super::html_extract::{
-    clean_augment_description_with_context, decode_next_f_stream, extract_balanced_json_array,
-    is_internal_augment_key, normalize_opgg_champion_key, round_pct,
+    clean_augment_description, clean_augment_description_with_context, decode_next_f_stream,
+    extract_balanced_json_array, is_internal_augment_key, normalize_opgg_champion_key, round_pct,
 };
+use crate::build_provider::ddragon::{has_raw_riot_augment_markup, strip_riot_inline_markup};
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank};
 use serde::Deserialize;
@@ -83,8 +84,14 @@ pub(crate) fn hydrate_mayhem_augments(
             if name.is_empty() || is_internal_augment_key(name) {
                 return None;
             }
-            let desc = if !meta.desc.trim().is_empty() {
-                meta.desc.clone()
+            let meta_desc = if has_raw_riot_augment_markup(&meta.desc) {
+                let localized = strip_riot_inline_markup(&meta.desc, Some(locale));
+                clean_augment_description(&localized)
+            } else {
+                meta.desc.trim().to_string()
+            };
+            let desc = if !meta_desc.is_empty() {
+                meta_desc
             } else {
                 clean_augment_description_with_context(
                     item.desc.as_deref().unwrap_or(""),
