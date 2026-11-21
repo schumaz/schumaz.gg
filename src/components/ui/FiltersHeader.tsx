@@ -1,10 +1,11 @@
-import { useState } from "react";
 import { useTranslation } from "../../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
+import { getChampionTierClass, getChampionTierLabel } from "./championTier";
 import { FilterDropdown } from "./FilterDropdown";
 import { LoadingBar } from "./LoadingIndicators";
 import { getPositionOptions, getRegionOptions, getTierOptions } from "./filterOptions";
+import { PatchProtectionIndicator } from "./PatchProtectionIndicator";
 import { computePatchUiMeta } from "./patchUiMeta";
 import { isAramBuildContextMode, isArenaBuildContext } from "./queueContext";
 
@@ -33,7 +34,6 @@ export function FiltersHeader({
   queueModeLabel,
 }: FiltersHeaderProps) {
   const { t } = useTranslation();
-  const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
 
   const isArena = isArenaBuildContext(build, champSelect);
   const isAram = isAramBuildContextMode(build, champSelect);
@@ -109,6 +109,15 @@ export function FiltersHeader({
           <h2 className="champ-name" title={build.champion_name}>
             {build.champion_name}
           </h2>
+
+          {typeof build.tier === "number" && (
+            <span
+              className={`aram-tier-pill champ-hero-tier-pill ${getChampionTierClass(build.tier)}`}
+              data-testid="champ-tier-badge"
+            >
+              {getChampionTierLabel(build.tier)}
+            </span>
+          )}
         </div>
 
         <div className="champ-hero-right">
@@ -212,33 +221,10 @@ export function FiltersHeader({
           />
 
           {isPatchProtectionActive && (
-            <div
-              className="patch-protection-wrap"
-              onMouseEnter={() => setShowProtectionTooltip(true)}
-              onMouseLeave={() => setShowProtectionTooltip(false)}
-            >
-              <button
-                type="button"
-                className="patch-protection-indicator"
-                data-testid="patch-protection-indicator"
-                aria-label={protectionTooltipText}
-                aria-describedby={showProtectionTooltip ? "patch-protection-tooltip" : undefined}
-                onFocus={() => setShowProtectionTooltip(true)}
-                onBlur={() => setShowProtectionTooltip(false)}
-              >
-                !
-              </button>
-              {remainingHoursShort && (
-                <span className="patch-protection-hours" data-testid="patch-protection-hours">
-                  {remainingHoursShort}
-                </span>
-              )}
-              {showProtectionTooltip && (
-                <div id="patch-protection-tooltip" role="tooltip" className="patch-protection-tooltip" data-testid="patch-protection-tooltip">
-                  {protectionTooltipText}
-                </div>
-              )}
-            </div>
+            <PatchProtectionIndicator
+              remainingHoursShort={remainingHoursShort}
+              tooltipText={protectionTooltipText}
+            />
           )}
         </div>
       </div>

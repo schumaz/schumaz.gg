@@ -30,6 +30,16 @@ struct RestAramAverageStats {
     tier: Option<i32>,
     #[serde(default)]
     rank: Option<i32>,
+    #[serde(default)]
+    tier_data: Option<RestAramTierData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RestAramTierData {
+    #[serde(default)]
+    tier: Option<i32>,
+    #[serde(default)]
+    rank: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,14 +167,28 @@ pub fn parse_classic_aram_champions(
                 .map(|m| normalize_opgg_champion_key(&m.key_name))
                 .unwrap_or_else(|| item.id.to_string());
             let icon_url = meta.map(|m| m.icon_url.clone()).unwrap_or_default();
+            let raw_tier = stats
+                .tier_data
+                .as_ref()
+                .and_then(|td| td.tier)
+                .or(stats.tier)
+                .unwrap_or(5);
+            let rank = stats
+                .tier_data
+                .as_ref()
+                .and_then(|td| td.rank)
+                .or(stats.rank)
+                .unwrap_or(999);
 
             Some(AramChampionRank {
                 id: item.id,
                 key,
                 name,
                 icon_url,
-                tier: stats.tier.unwrap_or(5),
-                rank: stats.rank.unwrap_or(999),
+                // OP.GG ARAM tier starts at 1 (1 = OP, 2 = Tier 1, ..., 5 = Tier 4).
+                // Normalize to 0-based canonical tiers (0 = OP, 1 = Tier 1, ..., 4 = Tier 4).
+                tier: raw_tier.saturating_sub(1).clamp(0, 4),
+                rank,
                 win_rate: stats.win_rate.map(round_pct),
                 pick_rate: stats.pick_rate.map(round_pct),
             })
@@ -227,9 +251,9 @@ pub fn parse_aram_mayhem_champions_html(
                 key,
                 name,
                 icon_url,
-                // OP.GG Mayhem tier starts at 1 (1 = OP, 2 = Tier 1, 3 = Tier 2, ...).
-                // Normalize to 0-based canonical tiers (0 = OP, 1 = Tier 1, ..., 5 = Tier 5).
-                tier: item.tier.saturating_sub(1),
+                // OP.GG Mayhem tier starts at 1 (1 = OP, 2 = Tier 1, ..., 5 = Tier 4).
+                // Normalize to 0-based canonical tiers (0 = OP, 1 = Tier 1, ..., 4 = Tier 4).
+                tier: item.tier.saturating_sub(1).clamp(0, 4),
                 rank: item.rank,
                 win_rate: None,
                 pick_rate: None,

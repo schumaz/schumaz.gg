@@ -4,7 +4,8 @@ use super::super::spells::extract_summoner_spell_choices_for_mode;
 use super::mcp_extractors::parse_json_item_entries;
 use super::mcp_parser::parse_opgg_mcp_text_for_mode;
 use super::rest_extractors::{
-    extract_rest_runes_and_pages, extract_rest_win_and_pick_rates, infer_rest_damage_type,
+    extract_rest_runes_and_pages, extract_rest_tier, extract_rest_win_and_pick_rates,
+    infer_rest_damage_type,
 };
 use std::collections::HashMap;
 
@@ -97,6 +98,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
         .or_else(|| analysis.pointer("/summary/position"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
+    let tier = extract_rest_tier(analysis, position);
     let is_jungle = position.eq_ignore_ascii_case("jungle");
 
     // Extract summoner spells filtered by active mode and DataDragon spell catalog
@@ -266,6 +268,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
         champion_name: champion_name.to_string(),
         win_rate,
         pick_rate,
+        tier,
         primary_style_id,
         sub_style_id,
         selected_perk_ids,

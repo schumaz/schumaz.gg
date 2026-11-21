@@ -112,10 +112,10 @@ pub fn parse_arena_tier_list(
             .as_ref()
             .and_then(|td| td.tier)
             .or(stats.tier)
-            .unwrap_or(6);
-        // OP.GG Arena tiers start at 1 (1 = OP, 2 = Tier 1, ..., 5 = Tier 4/5).
-        // Normalize to canonical 0-based tiers (0 = OP, 1 = Tier 1, ..., 5 = Tier 5).
-        let normalized_tier = raw_tier.saturating_sub(1).clamp(0, 5);
+            .unwrap_or(5);
+        // OP.GG Arena tiers start at 1 (1 = OP, 2 = Tier 1, ..., 5 = Tier 4).
+        // Normalize to canonical 0-based tiers (0 = OP, 1 = Tier 1, ..., 4 = Tier 4).
+        let normalized_tier = raw_tier.saturating_sub(1).clamp(0, 4);
 
         let rank = stats
             .tier_data

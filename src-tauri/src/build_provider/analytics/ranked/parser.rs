@@ -143,10 +143,10 @@ pub fn parse_ranked_tier_list(
                 .as_ref()
                 .and_then(|td| td.tier)
                 .or(fallback_tier)
-                .unwrap_or(6);
-            // OP.GG ranked tier starts at 1 (1 = OP, 2 = Tier 1, 3 = Tier 2, ...).
-            // Normalize to 0-based canonical tiers (0 = OP, 1 = Tier 1, ..., 5 = Tier 5).
-            let normalized_tier = raw_tier.saturating_sub(1);
+                .unwrap_or(5);
+            // OP.GG ranked tier starts at 1 (1 = OP, 2 = Tier 1, ..., 5 = Tier 4).
+            // Normalize to 0-based canonical tiers (0 = OP, 1 = Tier 1, ..., 4 = Tier 4).
+            let normalized_tier = raw_tier.saturating_sub(1).clamp(0, 4);
             let rank = stats
                 .tier_data
                 .as_ref()

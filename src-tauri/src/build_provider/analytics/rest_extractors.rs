@@ -1,6 +1,65 @@
 use super::super::items::{get_item_tags_dynamic, is_offensive_ad_tag, is_offensive_ap_tag};
 use super::super::models::{ItemStatEntry, RunePageOption};
 use super::super::runes::extract_top_rune_pages;
+use super::positions::normalize_opgg_lane_name;
+
+/// Normalizes OP.GG's 1-based meta tier (`1` = OP, `2` = Tier 1, `3` = Tier 2, `4` = Tier 3,
+/// `5` = Tier 4) into our canonical 0-based scale (`0..=4`). Returns `None` for non-positive values.
+pub(crate) fn normalize_opgg_tier(raw: i32) -> Option<i32> {
+    if raw <= 0 {
+        return None;
+    }
+    Some((raw - 1).clamp(0, 4))
+}
+
+/// Extracts and normalizes the champion's canonical tier (`0 = OP`, `1..=4 = Tier 1..4`) for the
+/// active lane/mode from an OP.GG REST analysis payload.
+pub fn extract_rest_tier(analysis: &serde_json::Value, position: &str) -> Option<i32> {
+    if analysis
+        .pointer("/summary/is_rip")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let normalized_pos = normalize_opgg_lane_name(position.trim());
+    if let Some(target_lane) = normalized_pos
+        && let Some(positions) = analysis
+            .pointer("/summary/positions")
+            .and_then(|v| v.as_array())
+        && !positions.is_empty()
+    {
+        let matched = positions.iter().find(|entry| {
+            entry
+                .get("name")
+                .and_then(|v| v.as_str())
+                .and_then(normalize_opgg_lane_name)
+                == Some(target_lane)
+        });
+        let raw = matched.and_then(|entry| {
+            entry
+                .pointer("/stats/tier_data/tier")
+                .or_else(|| entry.pointer("/stats/tier"))
+                .and_then(|v| v.as_i64())
+                .map(|n| n as i32)
+        })?;
+        return normalize_opgg_tier(raw);
+    }
+
+    let raw = analysis
+        .pointer("/summary/average_stats/tier_data/tier")
+        .or_else(|| analysis.pointer("/summary/average_stats/tier"))
+        .or_else(|| analysis.pointer("/average_stats/tier_data/tier"))
+        .or_else(|| analysis.pointer("/average_stats/tier"))
+        .or_else(|| analysis.pointer("/stats/tier_data/tier"))
+        .or_else(|| analysis.pointer("/stats/tier"))
+        .or_else(|| analysis.get("tier"))
+        .and_then(|v| v.as_i64())
+        .map(|n| n as i32)?;
+
+    normalize_opgg_tier(raw)
+}
 
 pub fn extract_rest_win_and_pick_rates(analysis: &serde_json::Value) -> (f64, f64) {
     let raw_win_rate = analysis

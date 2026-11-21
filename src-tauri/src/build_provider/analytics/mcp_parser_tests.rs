@@ -24,6 +24,7 @@ fn test_parse_opgg_mcp_text_real_ahri_payload() {
     // win_rate: 0.51 converted to 51.0%, pick_rate: 0.12 converted to 12.0%
     assert_eq!(build.win_rate, 51.0);
     assert_eq!(build.pick_rate, 12.0);
+    assert_eq!(build.tier, None);
 
     // Runes: Domination 8100 + Sorcery 8200
     assert_eq!(build.primary_style_id, 8100);
@@ -83,14 +84,23 @@ fn test_parse_opgg_mcp_text_real_ahri_payload() {
 
 #[test]
 fn test_parse_opgg_mcp_text_with_play_in_average_stats() {
-    let text_with_play = "class LolGetChampionAnalysis: data\nclass Data: summary\nclass Summary: average_stats\nclass AverageStats: play,win_rate,pick_rate\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(80342,0.512,0.118)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003]),CoreItems([4,14]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])))";
+    let text_with_play = "class LolGetChampionAnalysis: data\nclass Data: summary\nclass Summary: average_stats\nclass AverageStats: play,win_rate,pick_rate,tier\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(80342,0.512,0.118,1)),CoreItems([3118,4645,3157]),CoreItems([3020]),CoreItems([1056,2003]),CoreItems([4,14]),Runes(8100,[8112,8139,8140,8106],8200,[8210,8226],[5005,5008,5001])))";
     let build = parse_opgg_mcp_text(text_with_play, 103, "Ahri")
-        .expect("Parsing payload with play field in AverageStats should succeed");
+        .expect("Parsing payload with play and tier fields in AverageStats should succeed");
     assert_eq!(build.win_rate, 51.2);
     assert_eq!(build.pick_rate, 11.8);
+    assert_eq!(build.tier, Some(0));
     assert_eq!(build.item_blocks[1].item_ids, vec![3118, 4645, 3157]);
     // Build final first 3 items must be identical to clean_core in exact sequential order
     assert_eq!(&build.item_blocks[3].item_ids[..3], &[3118, 4645, 3157]);
+
+    let text_tier_four = text_with_play.replace(
+        "AverageStats(80342,0.512,0.118,1)",
+        "AverageStats(80342,0.512,0.118,5)",
+    );
+    let build_t4 = parse_opgg_mcp_text(&text_tier_four, 103, "Ahri")
+        .expect("Parsing payload with raw tier 5 should succeed");
+    assert_eq!(build_t4.tier, Some(4));
 }
 
 #[test]

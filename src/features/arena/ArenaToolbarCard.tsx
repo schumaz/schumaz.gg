@@ -66,11 +66,6 @@ export function ArenaToolbarCard({
         label: "Tier 4",
         icon: <span className="arena-tier-filter-dot tier-4" />,
       },
-      {
-        value: "5",
-        label: "Tier 5",
-        icon: <span className="arena-tier-filter-dot tier-5" />,
-      },
     ],
     [t]
   );

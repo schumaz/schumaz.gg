@@ -5,6 +5,7 @@ use super::super::spells::extract_summoner_spell_choices_for_mode;
 use super::mcp_extractors::{extract_all_core_items_from_text, extract_mcp_grouped_item_lists};
 use super::mcp_stats::{
     extract_mcp_summoner_spell_entries, is_known_summoner_spell_id, parse_mcp_average_stats,
+    parse_mcp_tier,
 };
 use std::collections::HashMap;
 
@@ -36,8 +37,9 @@ pub fn parse_opgg_mcp_text_for_mode(
     spell_mode: Option<&str>,
     spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
 ) -> Result<ChampionBuild, String> {
-    // 1. Extract win_rate and pick_rate: AverageStats(...)
+    // 1. Extract win_rate, pick_rate, and canonical tier from AverageStats(...)
     let (win_rate, pick_rate) = parse_mcp_average_stats(text);
+    let tier = parse_mcp_tier(text);
 
     // 2. Extract Runes (supports both legacy `Runes(8100,...)` and OP.GG MCP `Runes(id,8100,"Domination",...)`)
     let top_rune_pages = extract_all_mcp_runes(text);
@@ -235,6 +237,7 @@ pub fn parse_opgg_mcp_text_for_mode(
         champion_name: champion_name.to_string(),
         win_rate,
         pick_rate,
+        tier,
         primary_style_id,
         sub_style_id,
         selected_perk_ids,

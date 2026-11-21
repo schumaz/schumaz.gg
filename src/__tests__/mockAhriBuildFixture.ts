@@ -10,6 +10,7 @@ export const mockAhriBuild: ChampionBuild = {
   patch_fallback_applied: false,
   win_rate: 51.4,
   pick_rate: 8.4,
+  tier: 0,
   spell1_id: 4,
   spell2_id: 14,
   champion_icon_url: "ahri.png",

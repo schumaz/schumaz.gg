@@ -140,7 +140,9 @@ fn test_parse_arena_champion_payload_extracts_augments_synergies_and_enriches_lo
                     "play": 10000,
                     "first_place": 1800,
                     "total_place": 32500,
-                    "pick_rate": 0.085
+                    "pick_rate": 0.085,
+                    "tier": 2,
+                    "tier_data": { "tier": 2 }
                 }
             },
             "boots": [{ "ids": [223158], "play": 9000, "win": 4800, "pick_rate": 0.9 }],
@@ -180,6 +182,7 @@ fn test_parse_arena_champion_payload_extracts_augments_synergies_and_enriches_lo
 
     assert!(!build.supports_runes);
     assert!(!build.supports_spells);
+    assert_eq!(build.tier, Some(1));
     assert_eq!(build.spell1_id, 0);
     assert_eq!(build.spell2_id, 0);
     assert!(build.spells.is_empty());

@@ -84,11 +84,6 @@ export function getChampionTierFilterOptions(
       label: "Tier 4",
       icon: <span className="ranked-tier-filter-dot tier-4" />,
     },
-    {
-      value: "5",
-      label: "Tier 5",
-      icon: <span className="ranked-tier-filter-dot tier-5" />,
-    },
   ];
 }
 
@@ -145,7 +140,7 @@ export function groupByTier(
 ): TierGroup[] {
   const tierMap = new Map<number, RankedChampionEntry[]>();
   for (const item of entries) {
-    const normalizedTier = Math.max(0, item.tier);
+    const normalizedTier = Math.max(0, Math.min(4, item.tier));
     const list = tierMap.get(normalizedTier);
     if (list) {
       list.push(item);

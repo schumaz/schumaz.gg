@@ -230,6 +230,14 @@
   white-space: nowrap;
 }
 
+.aram-tier-pill.champ-hero-tier-pill {
+  width: auto;
+  min-width: 58px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  align-self: center;
+}
+
 .champ-meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -468,4 +476,3 @@
   color: var(--accent-warning);
   font-weight: 600;
 }
-

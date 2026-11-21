@@ -102,6 +102,7 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
   champion_name: "Ahri",
   win_rate: 51.2,
   pick_rate: 11.5,
+  tier: 0,
   primary_style_id: 8100,
   sub_style_id: 8200,
   selected_perk_ids: [8112, 8126, 8138, 8135, 8226, 8210, 5008, 5008, 5001],

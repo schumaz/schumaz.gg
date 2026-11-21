@@ -210,7 +210,7 @@ pub(super) fn validate_ranked_lane(raw: &str) -> String {
 
 pub(super) fn validate_champion_tier_filter(raw: &str) -> String {
     match raw.trim() {
-        "all" | "0" | "1" | "2" | "3" | "4" | "5" => raw.trim().to_string(),
+        "all" | "0" | "1" | "2" | "3" | "4" => raw.trim().to_string(),
         _ => "all".to_string(),
     }
 }

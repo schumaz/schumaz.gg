@@ -157,6 +157,7 @@ fn test_parse_opgg_analysis_extracts_9_runes_spells_and_items() {
     let build = result.unwrap();
     assert_eq!(build.champion_id, 103);
     assert_eq!(build.champion_name, "Ahri");
+    assert_eq!(build.tier, None);
     assert_eq!(build.primary_style_id, 8100);
     assert_eq!(build.sub_style_id, 8200);
     assert_eq!(build.selected_perk_ids.len(), 9);
@@ -189,7 +190,7 @@ fn test_parse_opgg_analysis_allows_missing_runes_when_supports_runes_is_false() 
     let mayhem_json = serde_json::json!({
         "data": {
             "damage_type": "AD",
-            "summary": { "average_stats": { "win_rate": 0.52, "pick_rate": 0.08 } },
+            "summary": { "average_stats": { "win_rate": 0.52, "pick_rate": 0.08, "tier": 5 } },
             "runes": [],
             "summoner_spells": [
                 { "ids": [4, 7], "play": 32000, "win": 17000 }
@@ -216,6 +217,7 @@ fn test_parse_opgg_analysis_allows_missing_runes_when_supports_runes_is_false() 
     let build = parse_opgg_analysis_payload_with_options(&mayhem_json, 18, "Tristana", false)
         .expect("ARAM Mayhem payload without runes should parse successfully");
     assert!(!build.supports_runes);
+    assert_eq!(build.tier, Some(4));
     assert_eq!(build.primary_style_id, 0);
     assert_eq!(build.sub_style_id, 0);
     assert!(build.selected_perk_ids.is_empty());
@@ -231,4 +233,59 @@ fn test_parse_opgg_analysis_allows_missing_runes_when_supports_runes_is_false() 
         .expect("JSON with supports_runes: false and no runes should succeed");
     assert!(!build_from_flag.supports_runes);
     assert!(build_from_flag.selected_perk_ids.is_empty());
+}
+
+#[test]
+fn test_parse_opgg_analysis_extracts_position_tier_and_handles_off_meta_and_rip() {
+    let base_payload = |position: &str, is_rip: bool| {
+        serde_json::json!({
+            "data": {
+                "position": position,
+                "summary": {
+                    "is_rip": is_rip,
+                    "average_stats": { "win_rate": 0.515, "pick_rate": 0.092, "tier": 1 },
+                    "positions": [
+                        { "name": "MID", "stats": { "tier_data": { "tier": 1, "rank": 2 } } },
+                        { "name": "SUPPORT", "stats": { "tier_data": { "tier": 3, "rank": 18 } } },
+                        { "name": "ADC", "stats": { "tier_data": { "tier": 6, "rank": 40 } } }
+                    ]
+                },
+                "runes": {
+                    "primary_style_id": 8200,
+                    "sub_style_id": 8300,
+                    "primary_perk_ids": [8229, 8226, 8210, 8237],
+                    "sub_perk_ids": [8345, 8347],
+                    "stat_shards": [5008, 5008, 5001]
+                },
+                "spells": [4, 14],
+                "items": {
+                    "starters": [1056, 2003],
+                    "core": [6655, 4645, 3089],
+                    "situational": [3157],
+                    "boots": [3020]
+                }
+            }
+        })
+    };
+
+    // Active position "mid" matches MID tier 1 -> canonical 0 (OP)
+    let mid_build = parse_opgg_analysis_payload(&base_payload("mid", false), 99, "Lux").unwrap();
+    assert_eq!(mid_build.tier, Some(0));
+
+    // Active position "support" matches SUPPORT tier 3 -> canonical 2 (Tier 2)
+    let sup_build =
+        parse_opgg_analysis_payload(&base_payload("support", false), 99, "Lux").unwrap();
+    assert_eq!(sup_build.tier, Some(2));
+
+    // Raw tier > 5 clamps to canonical 4 (Tier 4; Tier 5 does not exist)
+    let adc_build = parse_opgg_analysis_payload(&base_payload("adc", false), 99, "Lux").unwrap();
+    assert_eq!(adc_build.tier, Some(4));
+
+    // Off-meta position missing from summary.positions must return None (not leak average_stats.tier)
+    let jg_build = parse_opgg_analysis_payload(&base_payload("jungle", false), 99, "Lux").unwrap();
+    assert_eq!(jg_build.tier, None);
+
+    // RIP champions must return None
+    let rip_build = parse_opgg_analysis_payload(&base_payload("mid", true), 99, "Lux").unwrap();
+    assert_eq!(rip_build.tier, None);
 }

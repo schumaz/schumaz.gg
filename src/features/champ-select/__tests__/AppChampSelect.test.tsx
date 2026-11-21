@@ -100,6 +100,9 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     });
 
     expect(screen.getByText("Ahri")).toBeInTheDocument();
+    const tierBadge = screen.getByTestId("champ-tier-badge");
+    expect(tierBadge).toHaveTextContent("OP");
+    expect(tierBadge).toHaveClass("aram-tier-pill", "tier-op");
     expect(screen.queryByText(/Win Rate/i)).not.toBeInTheDocument();
     expect(screen.getByText(/8.4% Pick Rate/i)).toBeInTheDocument();
     expect(screen.queryByTestId("reapply-build-btn")).not.toBeInTheDocument();
@@ -178,6 +181,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
       eventListeners["recommended-build"]({
         payload: {
           ...mockAhriBuild,
+          tier: null,
           active_patch: "16.21",
           patch_fallback_applied: true,
         },
@@ -189,6 +193,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     });
 
     expect(screen.getByText(/Volume Protegido \(16\.21\)/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("champ-tier-badge")).not.toBeInTheDocument();
   });
 
   it("displays Practice Tool badge and allows toggling secondary spell choice", async () => {

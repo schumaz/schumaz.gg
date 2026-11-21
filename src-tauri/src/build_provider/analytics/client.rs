@@ -55,7 +55,7 @@ pub async fn fetch_opgg_champion_analysis(
                 "position": "mid",
                 "desired_output_fields": [
                     "data.damage_type",
-                    "data.summary.average_stats.{win_rate,pick_rate,play}",
+                    "data.summary.average_stats.{win_rate,pick_rate,play,tier}",
                     "data.runes[].{primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[],play,win}",
                     "data.summoner_spells.{ids[],play,win}",
                     "data.starter_items.{ids[],play,win,pick_rate}",

@@ -26,7 +26,7 @@ pub struct ArenaChampionEntry {
     pub key: String,
     pub name: String,
     pub icon_url: String,
-    /// Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5).
+    /// Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `4` = Tier 4).
     pub tier: i32,
     pub rank: i32,
     /// Top 3 finish / win rate (0–100%) in Arena 3x6.

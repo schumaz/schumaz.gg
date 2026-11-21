@@ -450,12 +450,6 @@
   color: #cbd5e1;
 }
 
-.aram-tier-pill.tier-5 {
-  background: rgba(180, 83, 9, 0.22);
-  border: 1px solid rgba(217, 119, 6, 0.45);
-  color: #fdba74;
-}
-
 /* ARAM Mayhem Split Layout */
 .aram-mayhem-grid {
   flex: 1;

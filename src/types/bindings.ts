@@ -310,7 +310,7 @@ export type ArenaChampionEntry_Deserialize = {
 	key: string,
 	name: string,
 	icon_url: string,
-	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5). */
+	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `4` = Tier 4). */
 	tier: number,
 	rank: number,
 	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
@@ -330,7 +330,7 @@ export type ArenaChampionEntry_Serialize = {
 	key: string,
 	name: string,
 	icon_url: string,
-	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `5` = Tier 5). */
+	/**  Canonical 0-based tier (`0` = OP, `1` = Tier 1, ..., `4` = Tier 4). */
 	tier: number,
 	rank: number,
 	/**  Top 3 finish / win rate (0–100%) in Arena 3x6. */
@@ -483,6 +483,8 @@ export type ChampionBuild_Deserialize = {
 	champion_name: string,
 	win_rate: number | null,
 	pick_rate: number | null,
+	/**  Canonical 0-based meta tier (`0` = OP, `1` = Tier 1, `2` = Tier 2, `3` = Tier 3, `4` = Tier 4). */
+	tier?: number | null,
 	primary_style_id: number,
 	sub_style_id: number,
 	selected_perk_ids: number[],
@@ -520,6 +522,8 @@ export type ChampionBuild_Serialize = {
 	champion_name: string,
 	win_rate: number | null,
 	pick_rate: number | null,
+	/**  Canonical 0-based meta tier (`0` = OP, `1` = Tier 1, `2` = Tier 2, `3` = Tier 3, `4` = Tier 4). */
+	tier: number | null,
 	primary_style_id: number,
 	sub_style_id: number,
 	selected_perk_ids: number[],

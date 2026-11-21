@@ -1,5 +1,6 @@
 use super::super::aram::normalize_opgg_champion_key;
 use super::super::mcp_extractors::parse_json_item_entries;
+use super::super::rest_extractors::normalize_opgg_tier;
 use super::items::build_arena_item_blocks_and_options;
 use crate::build_provider::models::{ChampionBuild, DataDragonCache};
 use crate::models::{ArenaAugmentEntry, ArenaSynergyEntry};
@@ -255,6 +256,19 @@ pub fn parse_arena_champion_payload(
         .map(normalize_pct)
         .unwrap_or(0.0);
 
+    let is_rip = data
+        .pointer("/summary/is_rip")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let tier = if is_rip {
+        None
+    } else {
+        stats
+            .and_then(|s| s.pointer("/tier_data/tier").or_else(|| s.get("tier")))
+            .and_then(|v| v.as_i64())
+            .and_then(|raw| normalize_opgg_tier(raw as i32))
+    };
+
     let (item_blocks, build_options) = build_arena_item_blocks_and_options(
         &boot_entries,
         &prism_entries,
@@ -269,6 +283,7 @@ pub fn parse_arena_champion_payload(
         champion_name: champion_name.to_string(),
         win_rate,
         pick_rate,
+        tier,
         primary_style_id: 0,
         sub_style_id: 0,
         selected_perk_ids: Vec::new(),

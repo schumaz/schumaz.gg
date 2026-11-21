@@ -85,15 +85,20 @@ fn test_parse_classic_aram_champions_sorts_by_rank_and_normalizes_rates() {
     let json = serde_json::json!({
         "data": [
             { "id": 4, "average_stats": { "win_rate": 0.522, "pick_rate": 0.078, "tier": 2, "rank": 16 } },
-            { "id": 50, "average_stats": { "win_rate": 0.633, "pick_rate": 0.091, "tier": 0, "rank": 1 } }
+            { "id": 50, "average_stats": { "win_rate": 0.633, "pick_rate": 0.091, "tier": 1, "rank": 1 } },
+            { "id": 103, "average_stats": { "win_rate": 0.471, "pick_rate": 0.041, "tier": 5, "rank": 120 } }
         ]
     });
     let list = parse_classic_aram_champions(&json, &test_ddragon()).unwrap();
-    assert_eq!(list.len(), 2);
+    assert_eq!(list.len(), 3);
     assert_eq!((list[0].id, list[0].rank, list[0].tier), (50, 1, 0));
     assert_eq!(list[0].name, "Swain");
     assert_eq!(list[0].win_rate, Some(63.3));
-    assert_eq!((list[1].id, list[1].key.as_str()), (4, "twistedfate"));
+    assert_eq!(
+        (list[1].id, list[1].key.as_str(), list[1].tier),
+        (4, "twistedfate", 1)
+    );
+    assert_eq!((list[2].id, list[2].rank, list[2].tier), (103, 120, 4));
 }
 
 #[test]

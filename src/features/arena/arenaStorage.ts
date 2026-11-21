@@ -10,7 +10,7 @@ export const DEFAULT_ARENA_FILTERS: ArenaFilters = {
 
 const ARENA_PATCH_STORAGE_KEY = "schumaz.arena.filterPatch";
 const ARENA_TIER_STORAGE_KEY = "schumaz.arena.championTierFilter";
-const VALID_ARENA_TIERS = new Set<string>(["all", "0", "1", "2", "3", "4", "5"]);
+const VALID_ARENA_TIERS = new Set<string>(["all", "0", "1", "2", "3", "4"]);
 
 /**
  * Builds the in-memory tier list cache key scoped by patch, 48h patch protection, and locale.
@@ -55,7 +55,7 @@ export function saveArenaFilters(filters: ArenaFilters): void {
 }
 
 /**
- * Loads the persisted champion tier filter (`all`, `0`..`5`) for the Arena tier list.
+ * Loads the persisted champion tier filter (`all`, `0`..`4`) for the Arena tier list.
  */
 export function loadSavedArenaTierFilter(): string {
   try {
@@ -68,7 +68,7 @@ export function loadSavedArenaTierFilter(): string {
 }
 
 /**
- * Persists the champion tier filter (`all`, `0`..`5`) for the Arena tier list.
+ * Persists the champion tier filter (`all`, `0`..`4`) for the Arena tier list.
  */
 export function saveArenaTierFilter(tier: string): void {
   try {

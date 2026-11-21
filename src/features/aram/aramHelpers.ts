@@ -1,6 +1,8 @@
 import { TranslationKey, TranslationParams, translate } from "../../i18n";
 import { AramAugmentEntry } from "../../types";
 
+export { getChampionTierClass, getChampionTierLabel } from "../../components/ui/championTier";
+
 export type AugmentRarityFilter = "all" | 1 | 4 | 8;
 
 type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;
@@ -18,20 +20,6 @@ export function normalizeAramSearch(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "");
-}
-
-export function getChampionTierLabel(tier: number): string {
-  if (tier <= 0) return "OP";
-  return `Tier ${tier}`;
-}
-
-export function getChampionTierClass(tier: number): string {
-  if (tier <= 0) return "tier-op";
-  if (tier === 1) return "tier-1";
-  if (tier === 2) return "tier-2";
-  if (tier === 3) return "tier-3";
-  if (tier === 4) return "tier-4";
-  return "tier-5";
 }
 
 export function getAugmentTierLabel(tier: number): string {

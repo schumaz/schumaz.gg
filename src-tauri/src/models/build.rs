@@ -174,6 +174,9 @@ pub struct ChampionBuild {
     pub champion_name: String,
     pub win_rate: f64,
     pub pick_rate: f64,
+    /// Canonical 0-based meta tier (`0` = OP, `1` = Tier 1, `2` = Tier 2, `3` = Tier 3, `4` = Tier 4).
+    #[serde(default)]
+    pub tier: Option<i32>,
     pub primary_style_id: i32,
     pub sub_style_id: i32,
     pub selected_perk_ids: Vec<i32>,
@@ -235,6 +238,7 @@ impl Default for ChampionBuild {
             champion_name: String::new(),
             win_rate: 0.0,
             pick_rate: 0.0,
+            tier: None,
             primary_style_id: 0,
             sub_style_id: 0,
             selected_perk_ids: Vec::new(),
