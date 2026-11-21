@@ -36,8 +36,11 @@ describe("App Component", () => {
     });
   });
 
-  it("does not render manual injection buttons as injection is strictly automatic", () => {
+  it("does not render manual injection buttons as injection is strictly automatic", async () => {
     render(<App />);
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("get_hardware_acceleration_status");
+    });
     expect(screen.queryByRole("button", { name: /Testar Injeção/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Reaplicar Build/i })).not.toBeInTheDocument();
   });
@@ -152,6 +155,9 @@ describe("App Component", () => {
   it("toggles preferences and persists them to UserSettings.ini", async () => {
     render(<App />);
     const settingsBtn = await screen.findByRole("button", { name: /^configurações$/i });
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("get_hardware_acceleration_status");
+    });
     fireEvent.click(settingsBtn);
 
     const runesToggle = screen.getByLabelText("Injetar Runas Automaticamente");
@@ -169,12 +175,14 @@ describe("App Component", () => {
     fireEvent.click(screen.getByTestId("patch-48h-accept-btn"));
     expect(patchProtToggle).not.toBeChecked();
 
-    expect(invoke).toHaveBeenCalledWith("sync_user_preferences", {
-      preferences: expect.objectContaining({
-        autoInjectRunes: false,
-        flashKey: "F",
-        patch48hProtection: false,
-      }),
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("sync_user_preferences", {
+        preferences: expect.objectContaining({
+          autoInjectRunes: false,
+          flashKey: "F",
+          patch48hProtection: false,
+        }),
+      });
     });
     expect(localStorage.getItem("schumaz_user_preferences")).toBeNull();
   });

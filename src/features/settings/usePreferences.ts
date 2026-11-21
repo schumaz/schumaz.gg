@@ -8,7 +8,7 @@ import {
   UserPreferences,
 } from "../../types";
 import { settingsIpc, windowIpc } from "../../services/ipc";
-import { DEFAULT_ONBOARDING_LOCALE, isValidAppLocale } from "../../i18n";
+import { DEFAULT_ONBOARDING_LOCALE, getSavedAppLocale, isValidAppLocale } from "../../i18n";
 import {
   DEFAULT_PROFILE_BLUR,
   clampProfileBlur,
@@ -24,13 +24,15 @@ export function usePreferences(
   onPatchProtectionChange?: (enabled: boolean) => void,
   onLocaleChange?: (locale: AppLocale) => void
 ) {
-  const [locale, setLocale] = useState<AppLocale>(DEFAULT_ONBOARDING_LOCALE);
+  const [locale, setLocale] = useState<AppLocale>(
+    () => getSavedAppLocale() ?? DEFAULT_ONBOARDING_LOCALE
+  );
   const [needsLanguageOnboarding, setNeedsLanguageOnboarding] = useState<boolean>(false);
   const [needsFlashOnboarding, setNeedsFlashOnboarding] = useState<boolean>(false);
   const [closeToTray, setCloseToTray] = useState<boolean>(false);
   const [preferences, setPreferences] = useState<UserPreferences>(() => ({
     ...DEFAULT_PREFERENCES,
-    language: DEFAULT_ONBOARDING_LOCALE,
+    language: getSavedAppLocale() ?? DEFAULT_ONBOARDING_LOCALE,
   }));
   const [profileBlur, setProfileBlur] = useState<number>(DEFAULT_PROFILE_BLUR);
   const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(true);

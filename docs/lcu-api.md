@@ -30,7 +30,7 @@ Tópicos de objetivos/missões: `/lol-objectives/v1/ready`, `/lol-objectives/v1/
 }
 ```
 > Ignorar `type == "ban"`. `assignedPosition`: `"top" | "jungle" | "middle" | "bottom" | "utility"`.
-> Filas: Solo/Duo `420`, Flex `440`, Normal `400`/`490`, ARAM `450`, ARAM Mayhem `2400` (`gameMode` contém `"MAYHEM"`), Practice Tool `-1` (`isCustomGame` ou `PRACTICETOOL`).
+> Filas: Solo/Duo `420`, Flex `440`, Normal `400`/`490`, ARAM `450`, ARAM Mayhem `2400` (`gameMode` contém `"MAYHEM"`), Arena `1700`/`1710`/`1750` (`CHERRY`/`ARENA`/`TGR` ou Mapa `30`), Practice Tool `-1` (`isCustomGame` ou `PRACTICETOOL`).
 
 ## Payload de Runas (`POST/PUT /lol-perks/v1/pages`)
 ```json

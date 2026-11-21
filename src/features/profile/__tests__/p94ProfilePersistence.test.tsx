@@ -178,8 +178,8 @@ describe("P9.4 usePlayerProfile startup cache & Stale-While-Revalidate", () => {
       expect(result.current.profile?.summoner.gameName).toBe("StaleUserLive");
     });
 
-    act(() => {
-      result.current.refreshProfile();
+    await act(async () => {
+      await result.current.refreshProfile();
     });
     expect(invoke).toHaveBeenCalledWith("get_player_profile", { forceRefresh: true });
   });

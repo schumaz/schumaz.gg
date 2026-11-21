@@ -164,7 +164,7 @@ describe("App — ARAM Modes & Match Lifecycle Navigation", () => {
       expect(eventListeners["match-ended"]).toBeDefined();
     });
 
-    const profileBtn = screen.getByRole("button", { name: /^perfil$/i });
+    const profileBtn = await screen.findByRole("button", { name: /^perfil$/i });
     const runesBtn = screen.getByRole("button", { name: /^runas$/i });
     const settingsBtn = screen.getByRole("button", { name: /^configurações$/i });
 

@@ -40,6 +40,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 
 - **Reidratação 100% DataDragon / CommunityDragon:** nomes localizados, ícones e catálogos (campeões, runas, feitiços, itens e augments) são reidratados localmente via `DataDragonCache` (DataDragon + CommunityDragon) antes de entregar o `ChampionBuild` ao `lcu_injector` ou à UI. As allowlists de imagens (`storage/assets.rs` e `src/utils/assets.ts`) aceitam exclusivamente `ddragon.leagueoflegends.com` e `raw.communitydragon.org`.
 - **TTLs, anti-flood e ARAM Mayhem:** listas de versões expiram em `3h` no disco (`VERSIONS_DISK_TTL_SECS`), builds/tier lists em `48h` (`OPGG_CACHE_TTL_SECS`) e ARAM Mayhem em `60 min` (RAM) / `72h` (disco, invalidado por patch), com *negative-cache/cooldown* de `45s` (`analytics/cooldown.rs`) após `429`/`5xx`/erros de rede. No ARAM Mayhem, a lista de campeões usa REST JSON (`OPGG_ARAM_REST_URL`) e os augments usam `OP.GG MCP` (`lol_list_aram_augments`) como fonte primária, mantendo `aram/html_extract.rs` isolado para complemento *best-effort* de tiers `tier < 3` e fallback final controlado por `ARAM_MAYHEM_HTML_FALLBACK_ENABLED`.
+- **Escala canônica de tiers (`0..=4`):** todos os parsers (Ranqueada, ARAM Clássico/Mayhem, Arena e builds no Champ Select) normalizam os tiers 1-based (`1..=5`) do OP.GG para a escala canônica 0-based `0 = OP`, `1 = Tier 1`, `2 = Tier 2`, `3 = Tier 3` e `4 = Tier 4`, compartilhada na UI via `src/components/ui/championTier.ts`.
 - **Conformidade (*Riot Game Integrity*):** o app opera 100% localmente via LCU, sem leitura de memória nem automação em partida. Caso o projeto venha a ser registrado futuramente no *Riot Developer Portal*, revisar a conformidade com políticas específicas por modo (ex.: restrições de visibilidade de *win rates* no modo Arena).
 
 ## 2. Regras de Modularização e Limites
@@ -57,7 +58,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 ├── scripts/                       # Automação de release, gatekeeper de linhas e higiene do target Cargo (run-tauri, sweep-cargo-target)
 ├── src/
 │   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, diagnostics, @tauri-apps/api, plugin-updater, plugin-opener)
-│   ├── components/ui/             # Componentes visuais puros (FiltersHeader, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, ItemBlocks, Docks)
+│   ├── components/ui/             # Componentes visuais puros (FiltersHeader, PatchProtectionIndicator, championTier, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, ItemBlocks, Docks)
 │   ├── hooks/                     # Hooks transversais do shell (useAppBootstrap, useAppUpdater, useWindowMinimized)
 │   ├── features/                  # Domínios isolados (cada qual com componentes, hooks, helpers e CSS locais)
 │   │   ├── champ-select/          # Sessão LCU, IdleState e auto-injeção
@@ -81,7 +82,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
         ├── logging.rs + logging/  # Logs rotativos locais (Logs/, logfmt 100% std, actor assíncrono, sanitizador, métricas lock-free, diagnóstico)
         ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta], incluindo diagnostics.rs)
         ├── models.rs + models/            # Structs serde/specta e Events IPC (incluindo diagnostics.rs)
-        ├── updater.rs                     # Detecção de modo Portable (feature + Registro HKCU/path) e info de distribuição
+        ├── updater.rs                     # Detecção de modo Portable (feature + Registro HKCU/path), cooldown 24h/HEAD e info de distribuição
         ├── storage.rs + storage/          # Infraestrutura: paths (Config/, Cache/, Logs/), cache .lz4, GC, assets, graphics, window_bounds, settings/ (INI)
         ├── lcu_connector.rs + lcu_connector/ # Cliente REST LCU, endpoints por domínio, motor de missões e monitor
         ├── profile_provider.rs + profile_provider/ # Cache de perfil/skins e parsers de ranked, maestrias e histórico
@@ -96,7 +97,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 | **LCU REST & Auth** | `src-tauri/src/lcu_connector.rs` (`lcu_connector/`) | `docs/lcu-api.md` |
 | **LCU WebSocket / Draft** | `src-tauri/src/ws_listener/` (`extract.rs`, `subscription.rs`, `polling.rs`, `reconcile.rs`) | `docs/lcu-api.md` |
 | **LCU Injeção (Runas/Spells/Itens)** | `src-tauri/src/lcu_injector/` (`payloads.rs`, `injection.rs`, `spell_rules.rs`) | `docs/lcu-api.md` |
-| **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `cooldown.rs`, `versions.rs`, `positions.rs`, `rest_parser.rs`, `mcp_{parser,extractors,stats}.rs`, `ranked.rs`, `arena/`, `aram.rs`, `aram/{augments,mcp_augments,parsers,cache,html_extract}.rs`) | `docs/opgg-api.md` |
+| **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `cooldown.rs`, `versions.rs`, `positions.rs`, `rest_extractors.rs`, `rest_parser.rs`, `mcp_{parser,extractors,stats}.rs`, `ranked.rs`, `arena/`, `aram.rs`, `aram/{augments,mcp_augments,parsers,cache,html_extract}.rs`) | `docs/opgg-api.md` |
 | **DataDragon Cache & Assets** | `src-tauri/src/build_provider/ddragon.rs` (`ddragon/`), `src-tauri/src/storage/assets.rs`, `src/utils/assets.ts` | — |
 | **Lógica de Itens (5 blocos / builds)** | `src-tauri/src/build_provider/items/` (`blocks.rs`, `options.rs`, `classification.rs`, `affinity.rs`) | — |
 | **System Tray, Autostart & WebView Sob Demanda** | `src-tauri/src/app_bootstrap/` (`tray.rs`, `window_factory.rs`, `prewarm.rs`, `window_events.rs`), `src-tauri/src/lib.rs`, `src-tauri/src/commands/system.rs` | `docs/tauri-v2-capabilities.md` |
