@@ -1,6 +1,6 @@
 use super::cache::{get_augments_cache, rehydrate_aram_names};
 use super::*;
-use crate::models::ChampionMetadata;
+use crate::models::{ArenaAugmentMetadata, ChampionMetadata};
 use std::collections::HashMap;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -25,13 +25,61 @@ fn test_ddragon() -> DataDragonCache {
             icon_url: "https://ddragon.example/Swain.png".to_string(),
         },
     );
+
+    let mut arena_augments = HashMap::new();
+    arena_augments.insert(
+        1074,
+        ArenaAugmentMetadata {
+            id: 1074,
+            name: "Raio Encolhedor".to_string(),
+            desc: "Ao contato Reduz dano.".to_string(),
+            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/shrinkray_small.png".to_string(),
+            rarity: 4,
+        },
+    );
+    arena_augments.insert(
+        2062,
+        ArenaAugmentMetadata {
+            id: 2062,
+            name: "Conjuração Ecoante".to_string(),
+            desc: "Conjura duas vezes.".to_string(),
+            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/echo_small.png".to_string(),
+            rarity: 8,
+        },
+    );
+    arena_augments.insert(
+        3075,
+        ArenaAugmentMetadata {
+            id: 3075,
+            name: "Coice".to_string(),
+            desc: "? causa dano.".to_string(),
+            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/recoil_small.png".to_string(),
+            rarity: 4,
+        },
+    );
+
     DataDragonCache {
         version: "16.22.1".to_string(),
         champions,
         runes: HashMap::new(),
         spells: HashMap::new(),
-        ..Default::default()
+        arena_augments,
     }
+}
+
+fn test_ddragon_en() -> DataDragonCache {
+    let mut dd = test_ddragon();
+    dd.arena_augments.insert(
+        3075,
+        ArenaAugmentMetadata {
+            id: 3075,
+            name: "Recoil".to_string(),
+            desc: "Extra damage.".to_string(),
+            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/recoil_small.png".to_string(),
+            rarity: 4,
+        },
+    );
+    dd
 }
 
 #[test]
@@ -123,58 +171,78 @@ fn test_rehydrate_aram_names_overwrites_and_clears_non_ddragon_icons() {
 }
 
 #[test]
-fn test_parse_aram_mayhem_augments_skips_entries_missing_name() {
-    let inner = r#"6c:["$","$L6d",null,{"data":[{"id":1032,"tier":5,"performance":97.14,"popular":0},{"id":1033,"name":null,"tier":5,"performance":50.0,"popular":0,"desc":null},{"id":1074,"tier":3,"performance":76.82,"popular":0.23,"name":"Raio Encolhedor","smallIcon":"https://img/shrink.png","rarity":4,"desc":"<OnHit>Ao contato</OnHit><br />Reduz dano."},{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Coice","smallIcon":"https://img/recoil.png","rarity":4,"desc":"<font color='#F0C200'>?</font> causa dano."},{"id":2062,"tier":0,"performance":114.24,"popular":3.2,"name":"Conjuração Ecoante","smallIcon":"https://img/echo.png","rarity":8,"desc":"Conjura duas vezes."}]}]"#;
+fn test_parse_aram_mayhem_augments_hydrates_from_ddragon_catalog_only() {
+    let inner = r#"6c:["$","$L6d",null,{"data":[{"id":1032,"tier":5,"performance":97.14,"popular":0},{"id":1033,"name":"Uncatalogued","tier":5,"performance":50.0,"popular":0,"smallIcon":"https://legacy-cdn.example/x.png","desc":"ignored"},{"id":1074,"tier":3,"performance":76.82,"popular":0.23,"name":"OPGG Wrong Name","smallIcon":"https://legacy-cdn.example/shrink.png","rarity":1,"desc":"OPGG Wrong Desc"},{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"OPGG Recoil","smallIcon":"https://legacy-cdn.example/recoil.png","rarity":1,"desc":"OPGG Desc"},{"id":2062,"tier":0,"performance":114.24,"popular":3.2,"name":"OPGG Echo","smallIcon":"https://legacy-cdn.example/echo.png","rarity":1,"desc":"OPGG Echo Desc"}]}]"#;
     let escaped = serde_json::to_string(inner).unwrap();
     let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
 
-    let augments = parse_aram_mayhem_augments_html(&html).unwrap();
+    let dd = test_ddragon();
+    let augments = parse_aram_mayhem_augments_html(&html, &dd).unwrap();
     assert_eq!(augments.len(), 3);
+    assert_eq!(augments[0].id, 3075);
     assert_eq!(augments[0].name, "Coice");
     assert_eq!(augments[0].tier, 0);
     assert_eq!(augments[0].rarity, Some(4));
+    assert_eq!(augments[0].performance, 99.62);
+    assert_eq!(augments[0].popular, 3.8);
     assert_eq!(augments[0].desc, "? causa dano.");
+    assert!(
+        augments[0]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
+    assert_eq!(augments[1].id, 2062);
     assert_eq!(augments[1].name, "Conjuração Ecoante");
     assert_eq!(augments[1].rarity, Some(8));
+    assert!(
+        augments[1]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
+    assert_eq!(augments[2].id, 1074);
     assert_eq!(augments[2].name, "Raio Encolhedor");
     assert_eq!(augments[2].desc, "Ao contato Reduz dano.");
+    assert!(
+        augments[2]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
 }
 
 #[tokio::test]
 async fn test_fetch_aram_mayhem_augments_with_mock_server_and_locale_cache_isolation() {
     let mock_server = MockServer::start().await;
-    let inner_pt = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Coice","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Dano extra."}]}]"#;
-    let html_pt = format!(
+    let inner =
+        r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8}]}]"#;
+    let html = format!(
         r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-        serde_json::to_string(inner_pt).unwrap()
-    );
-
-    let inner_en = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Recoil","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Extra damage."}]}]"#;
-    let html_en = format!(
-        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-        serde_json::to_string(inner_en).unwrap()
+        serde_json::to_string(inner).unwrap()
     );
 
     Mock::given(method("GET"))
         .and(path("/pt/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_pt))
+        .respond_with(ResponseTemplate::new(200).set_body_string(html.clone()))
         .expect(1)
         .mount(&mock_server)
         .await;
 
     Mock::given(method("GET"))
         .and(path("/en/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_en))
+        .respond_with(ResponseTemplate::new(200).set_body_string(html))
         .expect(1)
         .mount(&mock_server)
         .await;
 
     let client = reqwest::Client::new();
+    let dd_pt = test_ddragon();
+    let dd_en = test_ddragon_en();
+
     let pt_augments = fetch_aram_mayhem_augments_with_base_and_locale(
         &client,
         "Twisted Fate",
         &format!("{}/pt", mock_server.uri()),
         AppLocale::PtBr,
+        &dd_pt,
     )
     .await
     .unwrap();
@@ -184,12 +252,23 @@ async fn test_fetch_aram_mayhem_augments_with_mock_server_and_locale_cache_isola
         "Twisted Fate",
         &format!("{}/en", mock_server.uri()),
         AppLocale::EnUs,
+        &dd_en,
     )
     .await
     .unwrap();
 
     assert_eq!(pt_augments[0].name, "Coice");
     assert_eq!(en_augments[0].name, "Recoil");
+    assert!(
+        pt_augments[0]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
+    assert!(
+        en_augments[0]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
 }
 
 #[tokio::test]
@@ -202,7 +281,8 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
     std::fs::create_dir_all(&dir).unwrap();
 
     let mock_server = MockServer::start().await;
-    let inner_pt = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"Coice","smallIcon":"https://img/recoil.png","rarity":4,"desc":"Dano extra."}]}]"#;
+    let inner_pt =
+        r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8}]}]"#;
     let html_pt = format!(
         r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
         serde_json::to_string(inner_pt).unwrap()
@@ -216,11 +296,13 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
         .await;
 
     let client = reqwest::Client::new();
+    let dd = test_ddragon();
     let res1 = fetch_aram_mayhem_augments_with_base_locale_and_dir(
         &client,
         "Ahri",
         &format!("{}/pt", mock_server.uri()),
         AppLocale::PtBr,
+        &dd,
         Some(&dir),
     )
     .await
@@ -229,11 +311,15 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
     let file_path = aram_augments_file_path(&dir, AppLocale::PtBr, "ahri");
     assert!(file_path.exists());
 
-    // Clear RAM and expire disk timestamp -> Stale-While-Error rescues on 503
+    // Simulate legacy .lz4 entry with stale OP.GG CDN URL and expired timestamp ->
+    // Stale-While-Error must rescue on 503 AND rehydrate icon_url to CommunityDragon.
     if let Ok(mut g) = get_augments_cache().write() {
         g.clear();
     }
-    crate::storage::write_lz4_envelope_at(&file_path, "16.25", &res1, 1).unwrap();
+    let mut legacy = res1.clone();
+    legacy[0].icon_url = "https://legacy-cdn.example/recoil.png".to_string();
+    legacy[0].name = "Stale Legacy Name".to_string();
+    crate::storage::write_lz4_envelope_at(&file_path, "16.25", &legacy, 1).unwrap();
 
     let offline = MockServer::start().await;
     Mock::given(method("GET"))
@@ -247,11 +333,17 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
         "Ahri",
         &format!("{}/pt", offline.uri()),
         AppLocale::PtBr,
+        &dd,
         Some(&dir),
     )
     .await
     .unwrap();
     assert_eq!(rescued[0].name, "Coice");
+    assert!(
+        rescued[0]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

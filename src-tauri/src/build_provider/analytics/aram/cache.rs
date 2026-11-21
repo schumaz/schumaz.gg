@@ -49,6 +49,35 @@ pub(crate) fn rehydrate_aram_names(list: &mut [AramChampionRank], ddragon: &Data
     }
 }
 
+pub(crate) fn rehydrate_aram_augments(list: &mut Vec<AramAugmentEntry>, ddragon: &DataDragonCache) {
+    if ddragon.arena_augments.is_empty() {
+        for entry in list.iter_mut() {
+            let trimmed = entry.icon_url.trim();
+            let is_official = trimmed.starts_with("https://raw.communitydragon.org/")
+                || trimmed.starts_with("https://ddragon.leagueoflegends.com/");
+            if !is_official {
+                entry.icon_url.clear();
+            }
+        }
+        return;
+    }
+
+    list.retain_mut(|entry| {
+        let Some(meta) = ddragon.arena_augments.get(&entry.id) else {
+            return false;
+        };
+        let name = meta.name.trim();
+        if name.is_empty() {
+            return false;
+        }
+        entry.name = name.to_string();
+        entry.desc = meta.desc.clone();
+        entry.icon_url = meta.icon_url.clone();
+        entry.rarity = (meta.rarity > 0).then_some(meta.rarity);
+        true
+    });
+}
+
 /// Pre-warms valid (< 48h) ARAM and ARAM Mayhem tier lists from `.lz4` disk into RAM on startup.
 pub fn prewarm_aram_tier_lists_from_dir(
     dir: &Path,

@@ -1,6 +1,5 @@
 use super::html_extract::{
-    clean_augment_description, decode_next_f_stream, extract_balanced_json_array,
-    normalize_opgg_champion_key, round_pct,
+    decode_next_f_stream, extract_balanced_json_array, normalize_opgg_champion_key, round_pct,
 };
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AramAugmentEntry, AramChampionRank};
@@ -47,21 +46,11 @@ struct WebMayhemChampionItem {
 struct WebMayhemAugmentItem {
     id: i32,
     #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
     tier: i32,
-    #[serde(default)]
-    rarity: Option<i32>,
     #[serde(default)]
     performance: f64,
     #[serde(default)]
     popular: f64,
-    #[serde(rename = "smallIcon", default)]
-    small_icon: Option<String>,
-    #[serde(rename = "largeIcon", default)]
-    large_icon: Option<String>,
-    #[serde(default)]
-    desc: Option<String>,
 }
 
 pub fn parse_classic_aram_champions(
@@ -177,7 +166,10 @@ pub fn parse_aram_mayhem_champions_html(
     Ok(champions)
 }
 
-pub fn parse_aram_mayhem_augments_html(html: &str) -> Result<Vec<AramAugmentEntry>, String> {
+pub fn parse_aram_mayhem_augments_html(
+    html: &str,
+    ddragon: &DataDragonCache,
+) -> Result<Vec<AramAugmentEntry>, String> {
     let rsc = decode_next_f_stream(html);
     let source = if rsc.is_empty() { html } else { &rsc };
 
@@ -206,28 +198,21 @@ pub fn parse_aram_mayhem_augments_html(html: &str) -> Result<Vec<AramAugmentEntr
     let mut augments: Vec<AramAugmentEntry> = raw_items
         .into_iter()
         .filter_map(|item| {
-            let name = item.name?.trim().to_string();
+            let meta = ddragon.arena_augments.get(&item.id)?;
+            let name = meta.name.trim();
             if name.is_empty() {
                 return None;
             }
-            let small_icon = item.small_icon.unwrap_or_default();
-            let large_icon = item.large_icon.unwrap_or_default();
-            let icon_url = if !small_icon.is_empty() {
-                small_icon
-            } else {
-                large_icon
-            };
-            let desc = item.desc.unwrap_or_default();
 
             Some(AramAugmentEntry {
                 id: item.id,
-                name,
+                name: name.to_string(),
                 tier: item.tier,
-                rarity: item.rarity,
+                rarity: (meta.rarity > 0).then_some(meta.rarity),
                 performance: (item.performance * 100.0).round() / 100.0,
                 popular: (item.popular * 100.0).round() / 100.0,
-                icon_url,
-                desc: clean_augment_description(&desc),
+                icon_url: meta.icon_url.clone(),
+                desc: meta.desc.clone(),
             })
         })
         .collect();

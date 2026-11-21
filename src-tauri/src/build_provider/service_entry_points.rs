@@ -3,7 +3,10 @@ use super::analytics::{
     fetch_aram_tier_list, fetch_arena_champion_build, fetch_arena_champion_build_with_base_and_dir,
     fetch_arena_tier_list, fetch_ranked_tier_list, shared_http_client,
 };
-use super::ddragon::{enrich_build_with_ddragon_for_queue, get_or_init_ddragon_cache};
+use super::ddragon::{
+    enrich_build_with_ddragon_for_queue, get_or_init_ddragon_cache,
+    get_or_init_ddragon_cache_for_locale,
+};
 use super::fallback::build_fallback_champion_build;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::service::get_recommended_build_with_filters_and_endpoints_with_dir;
@@ -247,7 +250,8 @@ pub async fn get_aram_mayhem_augments_service(
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let http_client = shared_http_client();
     let locale = crate::lcu_injector::get_active_locale();
-    fetch_aram_mayhem_augments_for_locale(http_client, champion_key, locale).await
+    let ddragon = get_or_init_ddragon_cache_for_locale(http_client, locale).await?;
+    fetch_aram_mayhem_augments_for_locale(http_client, champion_key, locale, &ddragon).await
 }
 
 /// Domain service entry point for fetching the Ranked Solo/Duo tier list.

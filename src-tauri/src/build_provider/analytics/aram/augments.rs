@@ -2,9 +2,11 @@ use super::super::client::peek_latest_cached_opgg_version;
 use super::BROWSER_USER_AGENT;
 use super::cache::{
     ARAM_CACHE_TTL, aram_augments_file_path, aram_mayhem_augments_web_base, get_augments_cache,
+    rehydrate_aram_augments,
 };
 use super::html_extract::normalize_opgg_champion_key;
 use super::parsers::parse_aram_mayhem_augments_html;
+use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry};
 use std::path::Path;
 use std::time::Instant;
@@ -14,6 +16,7 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
     champion_key: &str,
     web_base: &str,
     locale: AppLocale,
+    ddragon: &DataDragonCache,
     aram_dir: Option<&Path>,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let started = Instant::now();
@@ -27,13 +30,17 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
         && let Some((ts, cached)) = guard.get(&cache_key)
         && ts.elapsed() < ARAM_CACHE_TTL
     {
-        crate::logging::record_data_resolution(
-            "aram_augments",
-            "ram_hit",
-            started.elapsed().as_millis(),
-            "",
-        );
-        return Ok(cached.clone());
+        let mut list = cached.clone();
+        rehydrate_aram_augments(&mut list, ddragon);
+        if !list.is_empty() {
+            crate::logging::record_data_resolution(
+                "aram_augments",
+                "ram_hit",
+                started.elapsed().as_millis(),
+                "",
+            );
+            return Ok(list);
+        }
     }
 
     let disk_env = aram_dir.and_then(|dir| {
@@ -55,16 +62,20 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
             _ => true,
         };
         if patch_ok {
-            if let Ok(mut guard) = get_augments_cache().write() {
-                guard.insert(cache_key.clone(), (Instant::now(), env.payload.clone()));
+            let mut list = env.payload.clone();
+            rehydrate_aram_augments(&mut list, ddragon);
+            if !list.is_empty() {
+                if let Ok(mut guard) = get_augments_cache().write() {
+                    guard.insert(cache_key.clone(), (Instant::now(), list.clone()));
+                }
+                crate::logging::record_data_resolution(
+                    "aram_augments",
+                    "disk_hit",
+                    started.elapsed().as_millis(),
+                    "",
+                );
+                return Ok(list);
             }
-            crate::logging::record_data_resolution(
-                "aram_augments",
-                "disk_hit",
-                started.elapsed().as_millis(),
-                "",
-            );
-            return Ok(env.payload.clone());
         }
     }
 
@@ -98,7 +109,7 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
             .text()
             .await
             .map_err(|e| format!("Failed to read ARAM Mayhem augments HTML: {}", e))?;
-        parse_aram_mayhem_augments_html(&html)
+        parse_aram_mayhem_augments_html(&html, ddragon)
     }
     .await;
 
@@ -109,13 +120,17 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
             if let Some(env) = disk_env
                 && !env.payload.is_empty()
             {
-                crate::logging::record_data_resolution(
-                    "aram_augments",
-                    "stale_fallback",
-                    started.elapsed().as_millis(),
-                    "",
-                );
-                return Ok(env.payload);
+                let mut rescued = env.payload;
+                rehydrate_aram_augments(&mut rescued, ddragon);
+                if !rescued.is_empty() {
+                    crate::logging::record_data_resolution(
+                        "aram_augments",
+                        "stale_fallback",
+                        started.elapsed().as_millis(),
+                        "",
+                    );
+                    return Ok(rescued);
+                }
             }
             return Err(err);
         }
@@ -146,26 +161,36 @@ pub async fn fetch_aram_mayhem_augments_with_base_and_locale(
     champion_key: &str,
     web_base: &str,
     locale: AppLocale,
+    ddragon: &DataDragonCache,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let dir = if web_base == aram_mayhem_augments_web_base(locale) {
         crate::storage::global_paths().map(|p| p.opgg_aram_dir.as_path())
     } else {
         None
     };
-    fetch_aram_mayhem_augments_with_base_locale_and_dir(client, champion_key, web_base, locale, dir)
-        .await
+    fetch_aram_mayhem_augments_with_base_locale_and_dir(
+        client,
+        champion_key,
+        web_base,
+        locale,
+        ddragon,
+        dir,
+    )
+    .await
 }
 
 pub async fn fetch_aram_mayhem_augments_with_base(
     client: &reqwest::Client,
     champion_key: &str,
     web_base: &str,
+    ddragon: &DataDragonCache,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     fetch_aram_mayhem_augments_with_base_and_locale(
         client,
         champion_key,
         web_base,
         crate::lcu_injector::get_active_locale(),
+        ddragon,
     )
     .await
 }
@@ -174,12 +199,14 @@ pub async fn fetch_aram_mayhem_augments_for_locale(
     client: &reqwest::Client,
     champion_key: &str,
     locale: AppLocale,
+    ddragon: &DataDragonCache,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     fetch_aram_mayhem_augments_with_base_and_locale(
         client,
         champion_key,
         aram_mayhem_augments_web_base(locale),
         locale,
+        ddragon,
     )
     .await
 }
@@ -187,7 +214,8 @@ pub async fn fetch_aram_mayhem_augments_for_locale(
 pub async fn fetch_aram_mayhem_augments(
     client: &reqwest::Client,
     champion_key: &str,
+    ddragon: &DataDragonCache,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let locale = crate::lcu_injector::get_active_locale();
-    fetch_aram_mayhem_augments_for_locale(client, champion_key, locale).await
+    fetch_aram_mayhem_augments_for_locale(client, champion_key, locale, ddragon).await
 }
