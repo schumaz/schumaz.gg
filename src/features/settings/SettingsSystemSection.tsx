@@ -17,6 +17,7 @@ interface SettingsSystemSectionProps {
   updateState?: AppUpdateState;
   distributionInfo?: AppDistributionInfo | null;
   lastUpdateCheckResult?: UpdateCheckResult;
+  lastUpdateCheckEpochSecs?: number | null;
   onCheckForUpdates?: () => void;
   onRestartToUpdate?: () => void;
   onOpenPortableRelease?: () => void;
@@ -36,6 +37,7 @@ export function SettingsSystemSection({
   updateState = { status: "idle" },
   distributionInfo = null,
   lastUpdateCheckResult = "idle",
+  lastUpdateCheckEpochSecs = null,
   onCheckForUpdates,
   onRestartToUpdate,
   onOpenPortableRelease,
@@ -66,6 +68,7 @@ export function SettingsSystemSection({
           updateState={updateState}
           distributionInfo={distributionInfo}
           lastUpdateCheckResult={lastUpdateCheckResult}
+          lastUpdateCheckEpochSecs={lastUpdateCheckEpochSecs}
           onCheckForUpdates={onCheckForUpdates}
           onRestartToUpdate={onRestartToUpdate}
           onOpenPortableRelease={onOpenPortableRelease}

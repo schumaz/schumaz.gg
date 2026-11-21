@@ -90,6 +90,7 @@ export interface SettingsTranslations {
     updatesModeInstalled: string;
     updatesModePortable: string;
     updatesStatusIdleInstalled: string;
+    updatesStatusIdleLastChecked: string;
     updatesStatusIdlePortable: string;
     updatesStatusChecking: string;
     updatesStatusDownloading: string;

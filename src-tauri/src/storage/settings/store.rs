@@ -145,3 +145,19 @@ pub fn update_navigation_settings(patch: NavigationStatePatch) -> Result<AppSett
         apply_navigation_patch(&mut s.navigation, patch);
     })
 }
+
+/// Returns the persisted Unix timestamp (seconds) of the last completed update check, if any.
+pub fn get_last_update_check_epoch_secs() -> Option<u64> {
+    settings_lock()
+        .read()
+        .ok()
+        .and_then(|g| g.settings.updater.last_check_epoch_secs)
+}
+
+/// Records the Unix timestamp (seconds) of a completed update check in `UserSettings.ini`.
+pub fn record_last_update_check_epoch_secs(epoch_secs: u64) -> Result<AppSettings, String> {
+    let normalized = (epoch_secs > 0).then_some(epoch_secs);
+    update_global_settings(|s| {
+        s.updater.last_check_epoch_secs = normalized;
+    })
+}

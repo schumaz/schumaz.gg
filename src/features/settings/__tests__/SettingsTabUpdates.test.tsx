@@ -5,13 +5,15 @@ import { SettingsTab } from "../SettingsTab";
 import { DEFAULT_PREFERENCES } from "../../../types";
 
 describe("SettingsTab — Updates & Version subsection", () => {
-  it("renders Updates & Version subsection for installed (NSIS) mode across check, up-to-date, error, and ready states", () => {
+  it("renders Updates & Version subsection for installed (NSIS) mode across idle, last-checked, check, up-to-date, error, and ready states", () => {
     const onCheck = vi.fn();
     const onRestart = vi.fn();
     const installedDist = {
       isPortable: false,
       currentVersion: "0.1.0-beta.1",
       releasesUrl: "https://github.com/schumaz/schumaz.gg/releases/latest",
+      lastCheckEpochSecs: null,
+      checkCooldownSecs: 86400,
     };
 
     const { rerender } = render(
@@ -33,7 +35,7 @@ describe("SettingsTab — Updates & Version subsection", () => {
       "Instalado · Auto-update"
     );
     expect(screen.getByTestId("settings-updates-status")).toHaveTextContent(
-      "Atualizações verificadas automaticamente ao iniciar."
+      "Atualizações verificadas automaticamente a cada 24h."
     );
 
     const checkBtn = screen.getByTestId("settings-updates-check-btn");
@@ -41,6 +43,23 @@ describe("SettingsTab — Updates & Version subsection", () => {
     expect(checkBtn).toBeEnabled();
     fireEvent.click(checkBtn);
     expect(onCheck).toHaveBeenCalledTimes(1);
+
+    // Idle with persisted last-check timestamp shows 24h cadence + last check label
+    rerender(
+      <SettingsTab
+        preferences={DEFAULT_PREFERENCES}
+        onUpdatePreference={vi.fn()}
+        distributionInfo={installedDist}
+        updateState={{ status: "idle" }}
+        lastUpdateCheckResult="idle"
+        lastUpdateCheckEpochSecs={1_760_000_000}
+        onCheckForUpdates={onCheck}
+        onRestartToUpdate={onRestart}
+      />
+    );
+    expect(screen.getByTestId("settings-updates-status")).toHaveTextContent(
+      /Verificação automática a cada 24h · Última verificação:/
+    );
 
     // Checking state disables button
     rerender(
@@ -118,6 +137,8 @@ describe("SettingsTab — Updates & Version subsection", () => {
       isPortable: true,
       currentVersion: "0.1.0-beta.1",
       releasesUrl: "https://github.com/schumaz/schumaz.gg/releases/latest",
+      lastCheckEpochSecs: null,
+      checkCooldownSecs: 86400,
     };
 
     render(

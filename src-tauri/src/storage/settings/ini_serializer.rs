@@ -2,7 +2,7 @@ use crate::models::FlashKeyPreference;
 
 use super::{
     AppSettings, SEC_AUTOMATION, SEC_GENERAL, SEC_GRAPHICS, SEC_NAVIGATION, SEC_PROFILE_APPEARANCE,
-    SEC_WINDOW, clamp_profile_blur, fmt_bool, format_aram_mode,
+    SEC_UPDATER, SEC_WINDOW, clamp_profile_blur, fmt_bool, format_aram_mode,
 };
 
 pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
@@ -134,8 +134,14 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         s.navigation.ranked_champion_tier_filter
     ));
     match s.navigation.last_summoner_id {
-        Some(id) => out.push_str(&format!("LastSummonerId={id}\n")),
-        None => out.push_str("LastSummonerId=\n"),
+        Some(id) => out.push_str(&format!("LastSummonerId={id}\n\n")),
+        None => out.push_str("LastSummonerId=\n\n"),
+    }
+
+    out.push_str(&format!("[{SEC_UPDATER}]\n"));
+    match s.updater.last_check_epoch_secs {
+        Some(ts) if ts > 0 => out.push_str(&format!("LastUpdateCheckEpochSecs={ts}\n")),
+        _ => out.push_str("LastUpdateCheckEpochSecs=\n"),
     }
 
     out

@@ -1,7 +1,23 @@
+pub mod policy;
+pub mod release_probe;
+
+#[cfg(test)]
+mod portable_tests;
+
+pub use policy::{
+    AUTO_UPDATE_CHECK_COOLDOWN_SECS, extract_release_tag_from_location, is_remote_version_newer,
+    normalize_semver_tag, should_run_auto_check,
+};
+pub use release_probe::{
+    ReleaseProbeOutcome, build_no_redirect_client, probe_for_app_update, probe_latest_release_url,
+    record_update_check_completed,
+};
+
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 use crate::models::AppDistributionInfo;
+use crate::storage;
 
 pub const GITHUB_RELEASES_LATEST_URL: &str =
     "https://github.com/schumaz/schumaz.gg/releases/latest";
@@ -142,120 +158,7 @@ pub fn get_distribution_info(app: &tauri::AppHandle) -> AppDistributionInfo {
         is_portable: detect_is_portable(app),
         current_version: app.package_info().version.to_string(),
         releases_url: GITHUB_RELEASES_LATEST_URL.to_string(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_feature_portable_always_forces_portable_mode() {
-        let exe = Path::new(r"C:\Users\Alice\AppData\Local\schumazgg\schumazgg.exe");
-        let local = Path::new(r"C:\Users\Alice\AppData\Local");
-        let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg".to_string()),
-            uninstall_string: Some(
-                r"C:\Users\Alice\AppData\Local\schumazgg\uninstall.exe".to_string(),
-            ),
-        };
-
-        assert!(evaluate_portable_mode(
-            true,
-            true,
-            Some(exe),
-            Some(local),
-            Some(&entry)
-        ));
-    }
-
-    #[test]
-    fn test_installed_nsis_current_user_is_not_portable() {
-        let exe = Path::new(r"\\?\C:\Users\Alice\AppData\Local\schumazgg\schumazgg.exe");
-        let local = Path::new(r"C:\Users\Alice\AppData\Local");
-        let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg\".to_string()),
-            uninstall_string: Some(
-                r"C:\Users\Alice\AppData\Local\schumazgg\uninstall.exe".to_string(),
-            ),
-        };
-
-        assert!(!evaluate_portable_mode(
-            false,
-            true,
-            Some(exe),
-            Some(local),
-            Some(&entry)
-        ));
-    }
-
-    #[test]
-    fn test_installed_nsis_in_custom_install_location_is_not_portable() {
-        let exe = Path::new(r"D:\Apps\schumaz.gg\schumazgg.exe");
-        let local = Path::new(r"C:\Users\Alice\AppData\Local");
-        let entry = WindowsUninstallEntry {
-            install_location: Some(r#""D:\Apps\schumaz.gg""#.to_string()),
-            uninstall_string: Some(r#""D:\Apps\schumaz.gg\uninstall.exe""#.to_string()),
-        };
-
-        assert!(!evaluate_portable_mode(
-            false,
-            true,
-            Some(exe),
-            Some(local),
-            Some(&entry)
-        ));
-    }
-
-    #[test]
-    fn test_exe_outside_local_appdata_without_uninstall_entry_is_portable() {
-        let exe = Path::new(r"D:\Games\schumazgg-portable\schumazgg.exe");
-        let local = Path::new(r"C:\Users\Alice\AppData\Local");
-
-        assert!(evaluate_portable_mode(
-            false,
-            true,
-            Some(exe),
-            Some(local),
-            None
-        ));
-    }
-
-    #[test]
-    fn test_exe_outside_install_dir_even_with_registry_entry_is_portable() {
-        let exe = Path::new(r"C:\Users\Alice\Downloads\schumazgg.exe");
-        let local = Path::new(r"C:\Users\Alice\AppData\Local");
-        let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg".to_string()),
-            uninstall_string: Some(
-                r"C:\Users\Alice\AppData\Local\schumazgg\uninstall.exe".to_string(),
-            ),
-        };
-
-        assert!(evaluate_portable_mode(
-            false,
-            true,
-            Some(exe),
-            Some(local),
-            Some(&entry)
-        ));
-    }
-
-    #[test]
-    fn test_similar_sibling_folder_name_does_not_false_match_install_dir() {
-        let exe = Path::new(r"C:\Users\Alice\AppData\Local\schumazgg-portable\schumazgg.exe");
-        let local = Path::new(r"C:\Users\Alice\AppData\Local");
-        let entry = WindowsUninstallEntry {
-            install_location: Some(r"C:\Users\Alice\AppData\Local\schumazgg".to_string()),
-            uninstall_string: None,
-        };
-
-        assert!(evaluate_portable_mode(
-            false,
-            true,
-            Some(exe),
-            Some(local),
-            Some(&entry)
-        ));
+        last_check_epoch_secs: storage::get_last_update_check_epoch_secs(),
+        check_cooldown_secs: AUTO_UPDATE_CHECK_COOLDOWN_SECS,
     }
 }

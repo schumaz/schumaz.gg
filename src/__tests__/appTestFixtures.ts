@@ -46,6 +46,9 @@ export function makeDefaultMockAppSettings(): AppSettings {
       rankedChampionTierFilter: "all",
       lastSummonerId: null,
     },
+    updater: {
+      lastCheckEpochSecs: null,
+    },
   };
 }
 
@@ -71,6 +74,9 @@ export function resetMockAppSettings(overrides?: Partial<AppSettings>): void {
     }
     if (overrides.navigation) {
       activeMockAppSettings.navigation = { ...activeMockAppSettings.navigation, ...overrides.navigation };
+    }
+    if (overrides.updater) {
+      activeMockAppSettings.updater = { ...activeMockAppSettings.updater, ...overrides.updater };
     }
   }
 }

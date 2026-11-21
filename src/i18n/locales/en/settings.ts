@@ -109,7 +109,9 @@ export const enSettings: SettingsTranslations = {
     updatesVersionUnknown: "Version unavailable",
     updatesModeInstalled: "Installed · Auto-update",
     updatesModePortable: "Portable · Manual",
-    updatesStatusIdleInstalled: "Updates are checked automatically on startup.",
+    updatesStatusIdleInstalled: "Updates are checked automatically every 24h.",
+    updatesStatusIdleLastChecked:
+      "Checked automatically every 24h · Last checked: {date}",
     updatesStatusIdlePortable: "Portable build does not apply automatic updates.",
     updatesStatusChecking: "Checking for updates...",
     updatesStatusDownloading: "Downloading update v{version} in the background...",

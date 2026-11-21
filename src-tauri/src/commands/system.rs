@@ -3,6 +3,7 @@ use crate::lcu_injector;
 use crate::logging;
 use crate::models::{
     AppDistributionInfo, AppLocale, AutostartStatus, BootstrapStatus, FlashKeyPreference,
+    UpdateProbeResult,
 };
 use crate::storage::{
     self, AppSettings, CacheClearScope, GraphicsState, HardwareAccelerationStatus, LocalCacheInfo,
@@ -23,6 +24,21 @@ pub fn get_bootstrap_status(state: State<'_, BootstrapState>) -> BootstrapStatus
 #[specta::specta]
 pub fn get_app_distribution_info(app_handle: AppHandle) -> AppDistributionInfo {
     updater::get_distribution_info(&app_handle)
+}
+
+/// Evaluates the 24h cooldown and runs a lightweight `HEAD /releases/latest` probe
+/// so `latest.json` is only downloaded when a newer version actually exists.
+#[tauri::command]
+#[specta::specta]
+pub async fn probe_for_app_update(app_handle: AppHandle, manual: bool) -> UpdateProbeResult {
+    updater::probe_for_app_update(&app_handle, manual).await
+}
+
+/// Persists the current timestamp in `UserSettings.ini` after a full updater check completes.
+#[tauri::command]
+#[specta::specta]
+pub fn record_update_check_completed() -> Option<u64> {
+    updater::record_update_check_completed()
 }
 
 /// Returns the saved GPU hardware acceleration setting and whether it was active at startup.

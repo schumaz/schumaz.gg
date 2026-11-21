@@ -41,6 +41,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_arena_champion_build,
             commands::get_bootstrap_status,
             commands::get_app_distribution_info,
+            commands::probe_for_app_update,
+            commands::record_update_check_completed,
             commands::get_hardware_acceleration_status,
             commands::set_hardware_acceleration,
             commands::set_close_to_tray,

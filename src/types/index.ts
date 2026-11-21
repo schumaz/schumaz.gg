@@ -63,6 +63,7 @@ export type {
   SpellMetadata,
   SummonerInfo,
   UnifiedBuildOption,
+  UpdaterSettings,
   UserPreferences,
   WindowMinimizedChanged,
   WindowSettings,

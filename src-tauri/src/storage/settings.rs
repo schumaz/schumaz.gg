@@ -2,6 +2,9 @@ pub mod ini_parser;
 pub mod ini_serializer;
 pub mod store;
 
+#[cfg(test)]
+mod ini_parser_tests;
+
 pub use ini_parser::*;
 pub use ini_serializer::*;
 pub use store::*;
@@ -20,6 +23,7 @@ pub(super) const SEC_PROFILE_APPEARANCE: &str = "/Script/SchumazGG.ProfileAppear
 pub(super) const SEC_GRAPHICS: &str = "/Script/SchumazGG.GraphicsSettings";
 pub(super) const SEC_WINDOW: &str = "/Script/SchumazGG.WindowSettings";
 pub(super) const SEC_NAVIGATION: &str = "/Script/SchumazGG.NavigationState";
+pub(super) const SEC_UPDATER: &str = "/Script/SchumazGG.UpdaterSettings";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "camelCase")]
@@ -114,6 +118,13 @@ impl Default for NavigationState {
     }
 }
 
+/// Persisted auto-updater state stored in `UserSettings.ini`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdaterSettings {
+    pub last_check_epoch_secs: Option<u64>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -123,6 +134,8 @@ pub struct AppSettings {
     pub graphics: GraphicsSettings,
     pub window: WindowSettings,
     pub navigation: NavigationState,
+    #[serde(default)]
+    pub updater: UpdaterSettings,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]

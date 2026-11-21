@@ -8,5 +8,11 @@ export { lcuIpc, type UnlistenFn } from "./lcu.ipc";
 export { profileIpc } from "./profile.ipc";
 export { rankedIpc } from "./ranked.ipc";
 export { settingsIpc, type AutostartStatus } from "./settings.ipc";
-export { updaterIpc, type AppDistributionInfo, type UpdaterUpdateHandle } from "./updater.ipc";
+export {
+  updaterIpc,
+  type AppDistributionInfo,
+  type UpdateProbeResult,
+  type UpdateProbeStatus,
+  type UpdaterUpdateHandle,
+} from "./updater.ipc";
 export { windowIpc } from "./window.ipc";

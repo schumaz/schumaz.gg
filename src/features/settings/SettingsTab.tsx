@@ -52,6 +52,7 @@ interface SettingsTabProps {
   updateState?: AppUpdateState;
   distributionInfo?: AppDistributionInfo | null;
   lastUpdateCheckResult?: UpdateCheckResult;
+  lastUpdateCheckEpochSecs?: number | null;
   onCheckForUpdates?: () => void;
   onRestartToUpdate?: () => void;
   onOpenPortableRelease?: () => void;
@@ -91,6 +92,7 @@ export function SettingsTab({
   updateState,
   distributionInfo,
   lastUpdateCheckResult,
+  lastUpdateCheckEpochSecs,
   onCheckForUpdates,
   onRestartToUpdate,
   onOpenPortableRelease,
@@ -212,6 +214,7 @@ export function SettingsTab({
           updateState={updateState}
           distributionInfo={distributionInfo}
           lastUpdateCheckResult={lastUpdateCheckResult}
+          lastUpdateCheckEpochSecs={lastUpdateCheckEpochSecs}
           onCheckForUpdates={onCheckForUpdates}
           onRestartToUpdate={onRestartToUpdate}
           onOpenPortableRelease={onOpenPortableRelease}

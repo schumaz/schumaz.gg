@@ -33,6 +33,7 @@ export function useAppUpdater({
   const [updateState, setUpdateState] = useState<AppUpdateState>({ status: "idle" });
   const [distributionInfo, setDistributionInfo] = useState<AppDistributionInfo | null>(null);
   const [lastCheckResult, setLastCheckResult] = useState<UpdateCheckResult>("idle");
+  const [lastCheckEpochSecs, setLastCheckEpochSecs] = useState<number | null>(null);
   const isBlocked = isUpdateDownloadBlockedPhase(gameflowPhase, isInChampSelect);
 
   const activeUpdateRef = useRef<UpdaterUpdateHandle | null>(null);
@@ -73,6 +74,7 @@ export function useAppUpdater({
     setUpdateState,
     setDistributionInfo,
     setLastCheckResult,
+    setLastCheckEpochSecs,
   });
 
   const startBackgroundDownload = useCallback(
@@ -95,7 +97,9 @@ export function useAppUpdater({
       if (!isMountedRef.current || checkSeqRef.current !== seq) return;
 
       setLastCheckResult("idle");
-      setUpdateState({ status: "checking" });
+      if (manual) {
+        setUpdateState({ status: "checking" });
+      }
 
       try {
         await performUpdateCheck(manual, seq, getRefs(), getActions());
@@ -131,6 +135,9 @@ export function useAppUpdater({
         distributionInfoRef.current = info;
         isPortableRef.current = info.isPortable;
         setDistributionInfo(info);
+        if (typeof info.lastCheckEpochSecs === "number") {
+          setLastCheckEpochSecs(info.lastCheckEpochSecs);
+        }
       })
       .catch(() => {});
 
@@ -195,6 +202,7 @@ export function useAppUpdater({
     updateState,
     distributionInfo,
     lastCheckResult,
+    lastCheckEpochSecs,
     installAndRestart,
     openPortableRelease,
     dismissUpdate,

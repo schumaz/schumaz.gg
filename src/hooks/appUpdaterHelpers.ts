@@ -58,6 +58,7 @@ export interface UpdaterActions {
   setUpdateState: (state: AppUpdateState) => void;
   setDistributionInfo: (info: AppDistributionInfo) => void;
   setLastCheckResult: (result: UpdateCheckResult) => void;
+  setLastCheckEpochSecs: (epochSecs: number | null) => void;
 }
 
 export async function runBackgroundDownload(
@@ -126,38 +127,78 @@ export async function performUpdateCheck(
   refs.distributionInfoRef.current = distInfo;
   refs.isPortableRef.current = distInfo.isPortable;
   actions.setDistributionInfo(distInfo);
+  if (typeof distInfo.lastCheckEpochSecs === "number") {
+    actions.setLastCheckEpochSecs(distInfo.lastCheckEpochSecs);
+  }
 
+  const probe = await updaterIpc.probeForUpdate(manual);
+  if (!refs.isMountedRef.current || refs.checkSeqRef.current !== seq) return;
+
+  if (!probe) {
+    actions.setUpdateState({ status: "idle" });
+    actions.setLastCheckResult(manual ? "error" : "idle");
+    return;
+  }
+
+  if (typeof probe.lastCheckEpochSecs === "number") {
+    actions.setLastCheckEpochSecs(probe.lastCheckEpochSecs);
+  }
+
+  if (probe.status === "cooldown") {
+    actions.setUpdateState({ status: "idle" });
+    actions.setLastCheckResult("idle");
+    return;
+  }
+
+  if (probe.status === "up-to-date") {
+    actions.setUpdateState({ status: "idle" });
+    actions.setLastCheckResult("up-to-date");
+    return;
+  }
+
+  if (probe.status === "error") {
+    actions.setUpdateState({ status: "idle" });
+    actions.setLastCheckResult("error");
+    return;
+  }
+
+  const probedVersion = probe.latestVersion ?? "";
+  if (!manual && probedVersion && refs.dismissedVersionRef.current === probedVersion) {
+    actions.setUpdateState({ status: "idle" });
+    return;
+  }
+
+  const isPortable = probe.isPortable || distInfo.isPortable;
+  refs.isPortableRef.current = isPortable;
+  if (isPortable) {
+    actions.setUpdateState({
+      status: "portable-available",
+      version: probedVersion || distInfo.currentVersion,
+      releasesUrl: probe.releasesUrl || distInfo.releasesUrl,
+    });
+    return;
+  }
+
+  // Installed (NSIS) with a newer GitHub release confirmed: now fetch signed latest.json
   const update = await updaterIpc.checkForUpdate();
+  const recordedTs = await updaterIpc.recordUpdateCheckCompleted().catch(() => null);
+  if (!refs.isMountedRef.current || refs.checkSeqRef.current !== seq) {
+    if (update) await update.close().catch(() => {});
+    return;
+  }
+  if (typeof recordedTs === "number") {
+    actions.setLastCheckEpochSecs(recordedTs);
+  }
+
   if (!update) {
-    if (refs.isMountedRef.current && refs.checkSeqRef.current === seq) {
-      actions.setUpdateState({ status: "idle" });
-      actions.setLastCheckResult("up-to-date");
-    }
+    actions.setUpdateState({ status: "idle" });
+    actions.setLastCheckResult("up-to-date");
     return;
   }
 
-  if (
-    !refs.isMountedRef.current ||
-    refs.checkSeqRef.current !== seq ||
-    refs.dismissedVersionRef.current === update.version
-  ) {
+  if (refs.dismissedVersionRef.current === update.version) {
     await update.close().catch(() => {});
-    if (refs.isMountedRef.current && refs.checkSeqRef.current === seq) {
-      actions.setUpdateState({ status: "idle" });
-    }
-    return;
-  }
-
-  if (distInfo.isPortable) {
-    const version = update.version;
-    await update.close().catch(() => {});
-    if (refs.isMountedRef.current && refs.checkSeqRef.current === seq) {
-      actions.setUpdateState({
-        status: "portable-available",
-        version,
-        releasesUrl: distInfo.releasesUrl,
-      });
-    }
+    actions.setUpdateState({ status: "idle" });
     return;
   }
 

@@ -61,7 +61,14 @@ export const commands = {
 	/**  Returns the current backend startup/prewarm bootstrap status. */
 	getBootstrapStatus: () => __TAURI_INVOKE<BootstrapStatus>("get_bootstrap_status"),
 	/**  Returns the runtime distribution mode (`isPortable`), current app version, and GitHub Releases URL. */
-	getAppDistributionInfo: () => __TAURI_INVOKE<AppDistributionInfo>("get_app_distribution_info"),
+	getAppDistributionInfo: () => __TAURI_INVOKE<AppDistributionInfo_Serialize>("get_app_distribution_info"),
+	/**
+	 *  Evaluates the 24h cooldown and runs a lightweight `HEAD /releases/latest` probe
+	 *  so `latest.json` is only downloaded when a newer version actually exists.
+	 */
+	probeForAppUpdate: (manual: boolean) => __TAURI_INVOKE<UpdateProbeResult_Serialize>("probe_for_app_update", { manual }),
+	/**  Persists the current timestamp in `UserSettings.ini` after a full updater check completes. */
+	recordUpdateCheckCompleted: () => __TAURI_INVOKE<number | null>("record_update_check_completed"),
 	/**  Returns the saved GPU hardware acceleration setting and whether it was active at startup. */
 	getHardwareAccelerationStatus: () => __TAURI_INVOKE<HardwareAccelerationStatus>("get_hardware_acceleration_status"),
 	/**  Saves the GPU hardware acceleration preference to `UserSettings.ini` for the next startup. */
@@ -145,12 +152,35 @@ export type ActiveChampSelectSnapshot_Serialize = {
 
 /**
  *  Runtime distribution metadata used by the frontend updater to distinguish
- *  NSIS `currentUser` installations from standalone portable executables.
+ *  NSIS `currentUser` installations from standalone portable executables and
+ *  expose persisted auto-check cadence metadata.
  */
-export type AppDistributionInfo = {
+export type AppDistributionInfo = AppDistributionInfo_Serialize | AppDistributionInfo_Deserialize;
+
+/**
+ *  Runtime distribution metadata used by the frontend updater to distinguish
+ *  NSIS `currentUser` installations from standalone portable executables and
+ *  expose persisted auto-check cadence metadata.
+ */
+export type AppDistributionInfo_Deserialize = {
 	isPortable: boolean,
 	currentVersion: string,
 	releasesUrl: string,
+	lastCheckEpochSecs?: number | null,
+	checkCooldownSecs: number,
+};
+
+/**
+ *  Runtime distribution metadata used by the frontend updater to distinguish
+ *  NSIS `currentUser` installations from standalone portable executables and
+ *  expose persisted auto-check cadence metadata.
+ */
+export type AppDistributionInfo_Serialize = {
+	isPortable: boolean,
+	currentVersion: string,
+	releasesUrl: string,
+	lastCheckEpochSecs: number | null,
+	checkCooldownSecs: number,
 };
 
 /**  Supported application & data locales (`pt_BR` | `en_US`). */
@@ -165,6 +195,7 @@ export type AppSettings_Deserialize = {
 	graphics: GraphicsSettings,
 	window: WindowSettings_Deserialize,
 	navigation: NavigationState_Deserialize,
+	updater?: UpdaterSettings_Deserialize,
 };
 
 export type AppSettings_Serialize = {
@@ -174,6 +205,7 @@ export type AppSettings_Serialize = {
 	graphics: GraphicsSettings,
 	window: WindowSettings_Serialize,
 	navigation: NavigationState_Serialize,
+	updater: UpdaterSettings_Serialize,
 };
 
 export type AramAugmentEntry = AramAugmentEntry_Serialize | AramAugmentEntry_Deserialize;
@@ -960,6 +992,43 @@ export type UnifiedBuildOption_Serialize = {
 	play: number,
 	win: number,
 	pick_rate: number | null,
+};
+
+/**  Result returned to the frontend by `probe_for_app_update`. */
+export type UpdateProbeResult = UpdateProbeResult_Serialize | UpdateProbeResult_Deserialize;
+
+/**  Result returned to the frontend by `probe_for_app_update`. */
+export type UpdateProbeResult_Deserialize = {
+	status: UpdateProbeStatus,
+	latestVersion?: string | null,
+	releasesUrl: string,
+	isPortable: boolean,
+	lastCheckEpochSecs?: number | null,
+};
+
+/**  Result returned to the frontend by `probe_for_app_update`. */
+export type UpdateProbeResult_Serialize = {
+	status: UpdateProbeStatus,
+	latestVersion: string | null,
+	releasesUrl: string,
+	isPortable: boolean,
+	lastCheckEpochSecs: number | null,
+};
+
+/**  Outcome of the lightweight `HEAD /releases/latest` pre-check gate. */
+export type UpdateProbeStatus = "cooldown" | "up-to-date" | "update-available" | "error";
+
+/**  Persisted auto-updater state stored in `UserSettings.ini`. */
+export type UpdaterSettings = UpdaterSettings_Serialize | UpdaterSettings_Deserialize;
+
+/**  Persisted auto-updater state stored in `UserSettings.ini`. */
+export type UpdaterSettings_Deserialize = {
+	lastCheckEpochSecs?: number | null,
+};
+
+/**  Persisted auto-updater state stored in `UserSettings.ini`. */
+export type UpdaterSettings_Serialize = {
+	lastCheckEpochSecs: number | null,
 };
 
 /**  User preferences synchronized between frontend and backend. */

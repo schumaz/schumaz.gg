@@ -149,6 +149,7 @@ export function AppTabsViewport({
         updateState={updater.updateState}
         distributionInfo={updater.distributionInfo}
         lastUpdateCheckResult={updater.lastCheckResult}
+        lastUpdateCheckEpochSecs={updater.lastCheckEpochSecs}
         onCheckForUpdates={() => {
           void updater.checkForUpdates({ manual: true });
         }}

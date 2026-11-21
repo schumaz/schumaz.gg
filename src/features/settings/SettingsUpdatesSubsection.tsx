@@ -6,28 +6,49 @@ interface SettingsUpdatesSubsectionProps {
   updateState?: AppUpdateState;
   distributionInfo?: AppDistributionInfo | null;
   lastUpdateCheckResult?: UpdateCheckResult;
+  lastUpdateCheckEpochSecs?: number | null;
   onCheckForUpdates?: () => void;
   onRestartToUpdate?: () => void;
   onOpenPortableRelease?: () => void;
+}
+
+function formatLastCheckDate(epochSecs: number, locale: string): string {
+  const bcp47 = locale === "pt_BR" ? "pt-BR" : "en-US";
+  try {
+    return new Intl.DateTimeFormat(bcp47, {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(new Date(epochSecs * 1000));
+  } catch {
+    return new Date(epochSecs * 1000).toLocaleString(bcp47);
+  }
 }
 
 export function SettingsUpdatesSubsection({
   updateState = { status: "idle" },
   distributionInfo = null,
   lastUpdateCheckResult = "idle",
+  lastUpdateCheckEpochSecs = null,
   onCheckForUpdates,
   onRestartToUpdate,
   onOpenPortableRelease,
 }: SettingsUpdatesSubsectionProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
 
   const versionLabel = distributionInfo?.currentVersion
     ? t("settings.updatesVersionLabel", { version: distributionInfo.currentVersion })
     : t("settings.updatesVersionUnknown");
 
+  const effectiveLastCheck =
+    lastUpdateCheckEpochSecs ?? distributionInfo?.lastCheckEpochSecs ?? null;
+
   let statusText = distributionInfo?.isPortable
     ? t("settings.updatesStatusIdlePortable")
-    : t("settings.updatesStatusIdleInstalled");
+    : typeof effectiveLastCheck === "number" && effectiveLastCheck > 0
+      ? t("settings.updatesStatusIdleLastChecked", {
+          date: formatLastCheckDate(effectiveLastCheck, locale),
+        })
+      : t("settings.updatesStatusIdleInstalled");
   let statusTone: "neutral" | "success" | "ready" | "error" = "neutral";
 
   if (updateState.status === "checking") {

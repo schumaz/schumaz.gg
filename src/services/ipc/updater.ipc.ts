@@ -1,10 +1,15 @@
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { commands, type AppDistributionInfo } from "../../types/bindings";
+import {
+  commands,
+  type AppDistributionInfo,
+  type UpdateProbeResult,
+  type UpdateProbeStatus,
+} from "../../types/bindings";
 import { isTauriRuntime } from "./assets.ipc";
 
 export type InstallOptions = Parameters<Update["install"]>[0];
-export type { AppDistributionInfo, DownloadEvent };
+export type { AppDistributionInfo, DownloadEvent, UpdateProbeResult, UpdateProbeStatus };
 
 export interface UpdaterUpdateHandle {
   version: string;
@@ -18,7 +23,8 @@ export interface UpdaterUpdateHandle {
 
 /**
  * Typed IPC adapter for Tauri v2 background updates (`@tauri-apps/plugin-updater`),
- * portable runtime detection, and external release URL opening (`@tauri-apps/plugin-opener`).
+ * lightweight GitHub release redirect probing, portable runtime detection, and
+ * external release URL opening (`@tauri-apps/plugin-opener`).
  */
 export const updaterIpc = {
   async getDistributionInfo(): Promise<AppDistributionInfo | null> {
@@ -27,6 +33,28 @@ export const updaterIpc = {
     }
     try {
       return await commands.getAppDistributionInfo();
+    } catch {
+      return null;
+    }
+  },
+
+  async probeForUpdate(manual: boolean): Promise<UpdateProbeResult | null> {
+    if (!isTauriRuntime() || typeof commands?.probeForAppUpdate !== "function") {
+      return null;
+    }
+    try {
+      return await commands.probeForAppUpdate(manual);
+    } catch {
+      return null;
+    }
+  },
+
+  async recordUpdateCheckCompleted(): Promise<number | null> {
+    if (!isTauriRuntime() || typeof commands?.recordUpdateCheckCompleted !== "function") {
+      return null;
+    }
+    try {
+      return await commands.recordUpdateCheckCompleted();
     } catch {
       return null;
     }

@@ -110,7 +110,9 @@ export const ptSettings: SettingsTranslations = {
     updatesVersionUnknown: "Versão indisponível",
     updatesModeInstalled: "Instalado · Auto-update",
     updatesModePortable: "Portable · Manual",
-    updatesStatusIdleInstalled: "Atualizações verificadas automaticamente ao iniciar.",
+    updatesStatusIdleInstalled: "Atualizações verificadas automaticamente a cada 24h.",
+    updatesStatusIdleLastChecked:
+      "Verificação automática a cada 24h · Última verificação: {date}",
     updatesStatusIdlePortable: "Versão portable não aplica atualizações automáticas.",
     updatesStatusChecking: "Verificando atualizações...",
     updatesStatusDownloading: "Baixando atualização v{version} em segundo plano...",

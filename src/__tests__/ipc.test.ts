@@ -23,17 +23,11 @@ vi.mock("@tauri-apps/api/core", () => ({
       return Promise.resolve({ gameflow_phase: "Lobby", champ_selected: null, build: null });
     }
     if (cmd === "get_app_distribution_info") {
-      return Promise.resolve({ isPortable: false, currentVersion: "0.1.0", releasesUrl: "" });
+      return Promise.resolve({ isPortable: false, currentVersion: "0.1.0", releasesUrl: "", lastCheckEpochSecs: null, checkCooldownSecs: 86400 });
     }
-    if (cmd === "get_aram_tier_list" || cmd === "get_aram_mayhem_augments") {
-      return Promise.resolve([]);
-    }
-    if (cmd === "get_hardware_acceleration_status") {
-      return Promise.resolve({ enabled: true, active_at_startup: true });
-    }
-    if (cmd === "get_diagnostic_summary") {
-      return Promise.resolve({ appVersion: "0.4.0", formattedText: "ok" });
-    }
+    if (cmd === "get_aram_tier_list" || cmd === "get_aram_mayhem_augments") return Promise.resolve([]);
+    if (cmd === "get_hardware_acceleration_status") return Promise.resolve({ enabled: true, active_at_startup: true });
+    if (cmd === "get_diagnostic_summary") return Promise.resolve({ appVersion: "0.4.0", formattedText: "ok" });
     return Promise.resolve(null);
   }),
   convertFileSrc: vi.fn(
@@ -212,6 +206,8 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     expect(invoke).toHaveBeenCalledWith("restart_app");
 
     expect(await updaterIpc.getDistributionInfo()).toBeNull();
+    expect(await updaterIpc.probeForUpdate(false)).toBeNull();
+    expect(await updaterIpc.recordUpdateCheckCompleted()).toBeNull();
     expect(await updaterIpc.checkForUpdate()).toBeNull();
   });
 
@@ -227,7 +223,6 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     const unlisten = await lcuIpc.onLcuConnected((summoner) => {
       received.push(summoner);
     });
-
     expect(typeof unlisten).toBe("function");
     expect(capturedHandler).toBeDefined();
 
