@@ -9,6 +9,7 @@ export function makeDefaultMockAppSettings(): AppSettings {
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: true,
+      closeToTray: false,
     },
     automation: {
       autoInjectRunes: true,
@@ -105,6 +106,20 @@ export function defaultAppInvokeMock(cmd: string, args?: Record<string, unknown>
       activeMockAppSettings.automation.flashKey = args.flashKey as any;
     }
     return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "set_close_to_tray") {
+    activeMockAppSettings.general.closeToTray = Boolean(args?.enabled ?? false);
+    return Promise.resolve(activeMockAppSettings);
+  }
+  if (cmd === "get_autostart_status") {
+    return Promise.resolve({ enabled: false, supported: true, isPortable: false });
+  }
+  if (cmd === "set_autostart_enabled") {
+    return Promise.resolve({
+      enabled: Boolean(args?.enabled ?? false),
+      supported: true,
+      isPortable: false,
+    });
   }
   if (cmd === "update_profile_appearance") {
     activeMockAppSettings.profileAppearance.profileBlurPercent = Number(args?.blurPercent ?? 10);

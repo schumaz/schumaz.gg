@@ -19,6 +19,7 @@ function makeIniSettings(overrides: Partial<AppSettings["general"]> = {}): AppSe
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: false,
+      closeToTray: false,
       ...overrides,
     },
     automation: {
@@ -72,6 +73,7 @@ describe("First-Launch Flash Key Onboarding Screen", () => {
         language: null,
         languageOnboardingCompleted: false,
         flashOnboardingCompleted: false,
+        closeToTray: false,
       },
     });
 
@@ -120,6 +122,7 @@ describe("First-Launch Flash Key Onboarding Screen", () => {
         language: "pt_BR",
         languageOnboardingCompleted: true,
         flashOnboardingCompleted: false,
+        closeToTray: false,
       },
       automation: {
         language: "pt_BR",

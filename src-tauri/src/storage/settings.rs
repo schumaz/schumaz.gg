@@ -27,6 +27,7 @@ pub struct GeneralSettings {
     pub language: Option<AppLocale>,
     pub language_onboarding_completed: bool,
     pub flash_onboarding_completed: bool,
+    pub close_to_tray: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]

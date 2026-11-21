@@ -135,6 +135,8 @@ export function AppTabsViewport({
         onUpdatePreference={prefs.updatePreference}
         locale={locale}
         onChangeLanguage={prefs.changeLanguage}
+        closeToTray={prefs.closeToTray}
+        onCloseToTrayChange={prefs.updateCloseToTray}
         profileBlur={prefs.profileBlur}
         onProfileBlurChange={prefs.updateProfileBlur}
         wallpaperVisible={prefs.wallpaperVisible}

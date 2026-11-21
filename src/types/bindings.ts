@@ -66,6 +66,15 @@ export const commands = {
 	getHardwareAccelerationStatus: () => __TAURI_INVOKE<HardwareAccelerationStatus>("get_hardware_acceleration_status"),
 	/**  Saves the GPU hardware acceleration preference to `UserSettings.ini` for the next startup. */
 	setHardwareAcceleration: (enabled: boolean) => __TAURI_INVOKE<HardwareAccelerationStatus>("set_hardware_acceleration", { enabled }),
+	/**  Updates `[General]` (`bCloseToTray`) in `UserSettings.ini` without touching `[WindowSettings]`. */
+	setCloseToTray: (enabled: boolean) => __TAURI_INVOKE<AppSettings_Serialize>("set_close_to_tray", { enabled }),
+	/**  Returns the current OS startup launch state. Portable builds report `supported: false`. */
+	getAutostartStatus: () => __TAURI_INVOKE<AutostartStatus>("get_autostart_status"),
+	/**
+	 *  Enables or disables OS startup launch (`--autostart`) for installed builds.
+	 *  Rejected on portable builds so volatile paths (e.g. `Downloads`) are never registered.
+	 */
+	setAutostartEnabled: (enabled: boolean) => __TAURI_INVOKE<AutostartStatus>("set_autostart_enabled", { enabled }),
 	/**  Returns the full unified `AppSettings` loaded from `%LOCALAPPDATA%\schumazgg\Config\UserSettings.ini`. */
 	getAppSettings: () => __TAURI_INVOKE<AppSettings_Serialize>("get_app_settings"),
 	/**  Updates `[ProfileAppearanceSettings]` (`ProfileBlurPercent`, `bWallpaperVisible`) in `UserSettings.ini`. */
@@ -336,6 +345,13 @@ export type ArenaTierListResponse_Serialize = {
 	champions: ArenaChampionEntry_Serialize[],
 };
 
+/**  OS autostart status returned to the Settings UI (disabled and blocked in portable builds). */
+export type AutostartStatus = {
+	enabled: boolean,
+	supported: boolean,
+	isPortable: boolean,
+};
+
 export type BootstrapProgress = BootstrapStatus;
 
 export type BootstrapStatus = {
@@ -516,12 +532,14 @@ export type GeneralSettings_Deserialize = {
 	language?: AppLocale | null,
 	languageOnboardingCompleted: boolean,
 	flashOnboardingCompleted: boolean,
+	closeToTray: boolean,
 };
 
 export type GeneralSettings_Serialize = {
 	language: AppLocale | null,
 	languageOnboardingCompleted: boolean,
 	flashOnboardingCompleted: boolean,
+	closeToTray: boolean,
 };
 
 export type GraphicsSettings = {

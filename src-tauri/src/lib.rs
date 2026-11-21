@@ -42,6 +42,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_app_distribution_info,
             commands::get_hardware_acceleration_status,
             commands::set_hardware_acceleration,
+            commands::set_close_to_tray,
+            commands::get_autostart_status,
+            commands::set_autostart_enabled,
             commands::get_app_settings,
             commands::update_profile_appearance,
             commands::update_navigation_state,
@@ -88,12 +91,16 @@ pub fn run() {
 
     let tauri_builder = tauri::Builder::default();
     #[cfg(desktop)]
-    let tauri_builder =
-        tauri_builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    let tauri_builder = tauri_builder
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             app_bootstrap::focus_main_window(app);
-        }));
+        }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![app_bootstrap::AUTOSTART_LAUNCH_ARG]),
+        ));
 
-    tauri_builder
+    let app = tauri_builder
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol("schumaz-asset", |_ctx, request, responder| {
             let uri_path = request.uri().path().to_string();
@@ -117,6 +124,15 @@ pub fn run() {
                 app_bootstrap::setup_app(app, &window_state)
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { api, code, .. } = event
+            && code.is_none()
+            && !app_bootstrap::should_allow_exit(app_handle)
+        {
+            api.prevent_exit();
+        }
+    });
 }

@@ -93,7 +93,7 @@ describe("SettingsTab", () => {
     expect(handleUpdate).toHaveBeenCalledWith("patch48hProtection", true);
   });
 
-  it("renders 10% default blur slider, clickable/editable percentage number, wallpaper toggle, Runas island, and Diversos island", () => {
+  it("organizes settings into 4 semantic groups with expected subsections and profile blur controls", () => {
     const handleBlurChange = vi.fn();
     const handleWallpaperToggle = vi.fn();
 
@@ -133,29 +133,48 @@ describe("SettingsTab", () => {
     fireEvent.click(wpToggle);
     expect(handleWallpaperToggle).toHaveBeenCalledWith(false);
 
-    const groups = Array.from(container.querySelectorAll(".settings-section-group"));
-    expect(groups).toHaveLength(3);
-    expect(groups[0]).toHaveAttribute("data-testid", "settings-group-profile");
-    expect(groups[1]).toHaveAttribute("data-testid", "settings-group-runes");
-    expect(groups[2]).toHaveAttribute("data-testid", "settings-group-misc");
+    const groups = Array.from(container.querySelectorAll(".settings-section-group")).map((el) =>
+      el.getAttribute("data-testid")
+    );
+    expect(groups).toEqual([
+      "settings-group-general",
+      "settings-group-automation",
+      "settings-group-appearance",
+      "settings-group-system",
+    ]);
 
     const cards = Array.from(container.querySelectorAll(".settings-group-card")).map((el) =>
       el.getAttribute("data-testid")
     );
     expect(cards).toEqual([
+      "settings-subgroup-general",
+      "settings-subgroup-automation",
       "settings-subgroup-appearance",
-      "settings-subgroup-runes",
-      "settings-subgroup-misc",
+      "settings-subgroup-system",
     ]);
 
-    const runesCard = screen.getByTestId("settings-subgroup-runes");
-    const runeSubsections = Array.from(
-      runesCard.querySelectorAll(".settings-subsection")
-    ).map((el) => el.getAttribute("data-testid"));
-    expect(runeSubsections).toEqual([
+    const subsectionsOf = (cardTestId: string) =>
+      Array.from(screen.getByTestId(cardTestId).querySelectorAll(".settings-subsection")).map((el) =>
+        el.getAttribute("data-testid")
+      );
+
+    expect(subsectionsOf("settings-subgroup-general")).toEqual([
+      "settings-subgroup-language",
+      "settings-subgroup-startup-tray",
+    ]);
+    expect(subsectionsOf("settings-subgroup-automation")).toEqual([
       "settings-subgroup-flash",
       "settings-subgroup-auto-inject",
       "settings-subgroup-patch-protection",
+      "settings-subgroup-daily-missions",
+    ]);
+    expect(subsectionsOf("settings-subgroup-appearance")).toEqual([
+      "settings-subgroup-profile-appearance",
+      "settings-subgroup-graphics",
+    ]);
+    expect(subsectionsOf("settings-subgroup-system")).toEqual([
+      "settings-subgroup-cache",
+      "settings-subgroup-updates",
     ]);
   });
 

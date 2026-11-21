@@ -16,6 +16,7 @@ export type {
   ArenaSynergyEntry,
   ArenaTierListResponse,
   ArenaTierListResponse_Serialize,
+  AutostartStatus,
   BootstrapProgress,
   BootstrapStatus,
   BuildInjected,

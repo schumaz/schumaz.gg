@@ -7,6 +7,7 @@ export interface HydratedIniSettings {
   resolvedLocale: AppLocale;
   needsOnboarding: boolean;
   needsFlashOnboarding: boolean;
+  closeToTray: boolean;
   preferences: UserPreferences;
   blur: number;
   wallpaperVisible: boolean;
@@ -25,6 +26,7 @@ export function extractHydratedIniSettings(settings: AppSettings): HydratedIniSe
     resolvedLocale,
     needsOnboarding: !settings.general.languageOnboardingCompleted,
     needsFlashOnboarding: !settings.general.flashOnboardingCompleted,
+    closeToTray: Boolean(settings.general.closeToTray),
     preferences: {
       ...settings.automation,
       language: resolvedLocale,

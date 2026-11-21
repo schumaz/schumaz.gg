@@ -58,7 +58,11 @@ export function useAppBootstrap({
   // 1. Subscribe to backend bootstrap progress & fetch current snapshot
   useEffect(() => {
     if (!enabled) return;
-    return subscribeToBackendBootstrap((next) => {
+    return subscribeToBackendBootstrap((next, isInitialSnapshot) => {
+      // Fast-path for warm WebView2 reopens from the system tray: skip splash minimum duration
+      if (isInitialSnapshot && next.diskReady) {
+        setMinDurationElapsed(true);
+      }
       setBackendStatus((prev) => ({
         stage: next.progress >= prev.progress ? next.stage : prev.stage,
         progress: Math.max(prev.progress, Math.min(100, next.progress)),
@@ -221,16 +225,9 @@ export function useAppBootstrap({
 
     return () => {
       window.clearTimeout(beatTimer);
-      if (unmountTimer !== undefined) {
-        window.clearTimeout(unmountTimer);
-      }
+      if (unmountTimer !== undefined) window.clearTimeout(unmountTimer);
     };
   }, [enabled, allReady, reducedMotion]);
 
-  return {
-    isBooting,
-    isExiting,
-    progress: allReady ? 100 : maxProgress,
-    stageKey,
-  };
+  return { isBooting, isExiting, progress: allReady ? 100 : maxProgress, stageKey };
 }

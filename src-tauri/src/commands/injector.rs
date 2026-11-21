@@ -1,4 +1,4 @@
-use crate::{lcu_injector, models};
+use crate::{app_bootstrap, lcu_injector, models};
 
 /// Tauri command to immediately inject a specific chosen rune page into the LoL client.
 #[tauri::command]
@@ -61,6 +61,7 @@ pub async fn sync_user_preferences(preferences: models::UserPreferences) {
 /// Tauri command to update the active backend locale (`pt_BR` | `en_US`), persist to `UserSettings.ini`, and pre-warm DataDragon cache.
 #[tauri::command]
 #[specta::specta]
-pub async fn set_locale(locale: models::AppLocale) {
+pub async fn set_locale(app_handle: tauri::AppHandle, locale: models::AppLocale) {
     lcu_injector::set_locale_service(locale);
+    app_bootstrap::refresh_tray_locale(&app_handle, locale);
 }

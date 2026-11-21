@@ -19,8 +19,12 @@ pub fn serialize_user_settings_ini(s: &AppSettings) -> String {
         fmt_bool(s.general.language_onboarding_completed)
     ));
     out.push_str(&format!(
-        "bFlashOnboardingCompleted={}\n\n",
+        "bFlashOnboardingCompleted={}\n",
         fmt_bool(s.general.flash_onboarding_completed)
+    ));
+    out.push_str(&format!(
+        "bCloseToTray={}\n\n",
+        fmt_bool(s.general.close_to_tray)
     ));
 
     out.push_str(&format!("[{SEC_AUTOMATION}]\n"));

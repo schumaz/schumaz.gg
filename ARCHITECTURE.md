@@ -38,9 +38,10 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 │   │   ├── champ-select/          # Sessão LCU, IdleState e auto-injeção
 │   │   ├── profile/               # Perfil do invocador, elos, maestrias e histórico
 │   │   ├── ranked/                # Tier list Solo/Duo e explorador de builds
+│   │   ├── arena/                 # Arena 3x6 (tier list, augments, sinergias e itens prismáticos)
 │   │   ├── aram/                  # ARAM Clássico e ARAM Desordem (Mayhem Augments)
-│   │   └── settings/              # Preferências, aparência, GPU, atualizações, onboarding e persistência INI
-│   ├── i18n/                      # Contexto de tradução e dicionários fatiados (pt/en core & tabs)
+│   │   └── settings/              # Configurações (Geral, Automação & Cliente, Aparência & Desempenho, Sistema & Armazenamento), autostart, bandeja e INI
+│   ├── i18n/                      # Contexto de tradução e dicionários fatiados (pt/en core, build, settings & tabs)
 │   ├── styles/                    # Tokens, layout shell e estilos compartilhados
 │   ├── types/
 │   │   ├── bindings.ts            # Gerado automaticamente pelo tauri-specta (uso restrito a src/services/ipc/)
@@ -50,8 +51,8 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 └── src-tauri/
     ├── capabilities/default.json  # Permissões Tauri v2 aprovadas (inclui opener:default e updater:default)
     └── src/                       # Padrão Rust 2018+ (modulo.rs + modulo/, sem mod.rs)
-        ├── lib.rs                 # Setup Tauri (single-instance, opener, updater) e registro tauri-specta
-        ├── app_bootstrap.rs + app_bootstrap/ # Setup de inicialização, protocolo schumaz-asset://, pre-warming e window_events.rs
+        ├── lib.rs                 # Setup Tauri (single-instance, autostart, opener, updater), RunEvent::ExitRequested e registro tauri-specta
+        ├── app_bootstrap.rs + app_bootstrap/ # Inicialização, protocolo schumaz-asset://, tray.rs, window_factory.rs, prewarm.rs e window_events.rs
         ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta])
         ├── models.rs + models/            # Structs serde/specta e Events IPC
         ├── updater.rs                     # Detecção de modo Portable (feature + Registro HKCU/path) e info de distribuição
@@ -69,9 +70,10 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 | **LCU REST & Auth** | `src-tauri/src/lcu_connector.rs` (`lcu_connector/`) | `docs/lcu-api.md` |
 | **LCU WebSocket / Draft** | `src-tauri/src/ws_listener/` (`extract.rs`, `subscription.rs`, `polling.rs`, `reconcile.rs`) | `docs/lcu-api.md` |
 | **LCU Injeção (Runas/Spells/Itens)** | `src-tauri/src/lcu_injector/` (`payloads.rs`, `injection.rs`, `spell_rules.rs`) | `docs/lcu-api.md` |
-| **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `positions.rs`, `rest_parser.rs`, `mcp_parser.rs`, `ranked.rs`, `aram.rs`) | `docs/opgg-api.md` |
+| **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `positions.rs`, `rest_parser.rs`, `mcp_parser.rs`, `ranked.rs`, `arena/`, `aram.rs`) | `docs/opgg-api.md` |
 | **DataDragon Cache & Assets** | `src-tauri/src/build_provider/ddragon.rs` (`ddragon/`) | — |
 | **Lógica de Itens (5 blocos / builds)** | `src-tauri/src/build_provider/items/` (`blocks.rs`, `options.rs`, `classification.rs`, `affinity.rs`) | — |
+| **System Tray, Autostart & WebView Sob Demanda** | `src-tauri/src/app_bootstrap/` (`tray.rs`, `window_factory.rs`, `prewarm.rs`, `window_events.rs`), `src-tauri/src/lib.rs`, `src-tauri/src/commands/system.rs` | `docs/tauri-v2-capabilities.md` |
 | **Persistência & Preferências** | `src/features/settings/` + `src-tauri/src/storage/settings/` + `lcu_injector/` | — |
 | **Auto-Update & Portable (NSIS)** | `src-tauri/src/updater.rs`, `models/updater.rs`, `src/services/ipc/updater.ipc.ts`, `src/hooks/useAppUpdater.ts`, `src/components/ui/StatusDock.tsx` | `docs/tauri-v2-capabilities.md` |
 | **Contrato IPC (Backend -> Frontend)** | `src-tauri/src/{commands,models}/` → `src/types/bindings.ts` → `src/services/ipc/` | — |

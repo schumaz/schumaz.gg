@@ -5,6 +5,34 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-21
+
+### English
+
+Native desktop companion experience introducing a reactive **System Tray**, **on-demand WebView2 unloading** for near-zero background RAM/VRAM usage during matches, optional **Start with Windows**, and a reorganized 4-section **Settings** page.
+
+#### Added
+- **Reactive System Tray (`app_bootstrap/tray.rs`)**: Added a native Tauri v2 tray icon with localized context menu (**Open schumaz.gg**, read-only **LCU status** indicator, and **Quit**). Left-clicking the tray icon restores or recreates the main window; the LCU status updates reactively via `lcu_connector::subscribe_lcu_connection()` (zero polling timers) and menu labels synchronize immediately on language changes.
+- **Close to System Tray with Full WebView2 Unload (`bCloseToTray=False` default)**: Added the **Close to system tray** toggle under **General** settings (`UserSettings.ini` `[General]`). When enabled, clicking `X` saves window bounds and destroys the `"main"` WebView2 window while keeping the lightweight Rust LCU/WebSocket/auto-injection engine alive in the tray via `RunEvent::ExitRequested` (`prevent_exit()`), freeing 100% of WebView2 RAM/VRAM while playing League of Legends.
+- **Start with Windows (`tauri-plugin-autostart`)**: Added backend-orchestrated Windows startup launch passing `--autostart` (`get_autostart_status` / `set_autostart_enabled`), disabled by default on NSIS installations and safely blocked with an explanation on **Portable** builds to prevent broken entries in volatile folders (such as `Downloads`). The NSIS uninstaller now removes the `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` registry entry cleanly on uninstall.
+- **Silent `--autostart` Boot & Warm Tray Reopen Fast-Path**: Launching via `--autostart` skips creating the `"main"` WebView2 window and defers heavy UI prewarming until the first window open (prewarming only DataDragon from disk once LCU connects). Reopening the window from the tray skips `MIN_SPLASH_DURATION_MS` whenever disk caches are already ready.
+
+#### Changed
+- **Industry-Standard Settings Reorganization (`src/features/settings/`)**: Preserved the existing visual aesthetic (`SettingsTab.css`) while replacing the generic *Miscellaneous* group with 4 semantic sections: **General** (Language, Start with Windows, Close to System Tray), **Automation & Client** (Flash key, Auto-Inject, 48h Patch Protection, Auto-mark daily missions read), **Appearance & Performance** (Profile blur/wallpaper, GPU Hardware Acceleration), and **System & Storage** (Local Cache, Updates & Version).
+
+### Português (BR)
+
+Experiência nativa de companion desktop trazendo **Bandeja do Sistema (*System Tray*)** reativa, **descarga completa do WebView2 sob demanda** para consumo mínimo de RAM/VRAM durante as partidas, opção **Iniciar com o Windows** e aba de **Configurações** reorganizada em 4 seções semânticas.
+
+#### Adicionado
+- **Bandeja do Sistema Reativa (`app_bootstrap/tray.rs`)**: Adicionado ícone nativo na bandeja do Windows com menu localizado (**Abrir schumaz.gg**, indicador de status do **LCU** somente leitura e **Encerrar**). Um clique esquerdo restaura ou recria a janela principal; o status do LCU atualiza reativamente via `lcu_connector::subscribe_lcu_connection()` (zero polling extra) e os textos sincronizam imediatamente ao trocar o idioma.
+- **Fechar para a Bandeja com Descarga Completa do WebView2 (`bCloseToTray=False` por padrão)**: Nova opção **Fechar para a bandeja do sistema** em **Geral** (`UserSettings.ini` `[General]`). Quando ativada, clicar no `X` salva os bounds da janela e destrói o WebView2 (`"main"`) mantendo o motor Rust de monitoramento LCU e injeção automática ativo perto do relógio via `RunEvent::ExitRequested` (`prevent_exit()`), liberando 100% da RAM/VRAM do WebView2 durante as partidas.
+- **Iniciar com o Windows (`tauri-plugin-autostart`)**: Inicialização automática orquestrada 100% no backend passando `--autostart` (`get_autostart_status` / `set_autostart_enabled`), desligada por padrão em instalações NSIS e bloqueada com explicação no modo **Portable** para evitar registros quebrados em pastas temporárias (como `Downloads`). O desinstalador NSIS limpa automaticamente a chave em `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+- **Boot Silencioso via `--autostart` e Reabertura Rápida da Bandeja**: Ao iniciar pelo `--autostart`, o app não cria a janela WebView2 e adia o prewarm pesado da interface até a primeira abertura (aquecendo apenas DataDragon sob demanda quando o LCU conectar). Ao reabrir a janela pela bandeja, o splash pula `MIN_SPLASH_DURATION_MS` quando o cache em disco já está pronto.
+
+#### Alterado
+- **Reorganização das Configurações em 4 Seções Semânticas (`src/features/settings/`)**: Mantendo intacta a estética visual atual (`SettingsTab.css`), o grupo genérico *Diversos* foi substituído por 4 seções organizadas: **Geral** (Idioma, Iniciar com o Windows, Fechar para a bandeja do sistema), **Automação e Cliente** (Tecla do Flash, Injeção Automática, Proteção de Patch 48h, Marcar missões diárias como lidas), **Aparência e Desempenho** (Perfil com desfoque/fundo e Aceleração de Hardware GPU) e **Sistema e Armazenamento** (Cache Local e Atualizações e Versão).
+
 ## [0.3.3] - 2026-11-20
 
 ### English

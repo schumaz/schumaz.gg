@@ -20,7 +20,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockImplementation(() => Promise.resolve(() => {})),
 }));
 
-describe("useAppBootstrap — Timeouts & Offline Grace", () => {
+describe("useAppBootstrap — Timeouts, Warm Reopen Fast-Path & Offline Grace", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -30,6 +30,46 @@ describe("useAppBootstrap — Timeouts & Offline Grace", () => {
   afterEach(() => {
     vi.useRealTimers();
     delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it("skips MIN_SPLASH_DURATION_MS fast-path when backend already reports diskReady on warm reopen", async () => {
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_bootstrap_status") {
+        return Promise.resolve({
+          stage: "ready",
+          progress: 100,
+          diskReady: true,
+          networkReady: true,
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    const { result } = renderHook(() =>
+      useAppBootstrap({
+        enabled: true,
+        preferencesReady: true,
+        lcuInitialChecked: true,
+        profileInitialReady: true,
+        criticalImageUrls: [],
+        reducedMotion: true,
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Already ready without waiting MIN_SPLASH_DURATION_MS (650ms)
+    expect(result.current.progress).toBe(100);
+    expect(result.current.stageKey).toBe("ready");
+
+    // Advances only EXIT_COMPLETE_BEAT_MS (150ms < MIN_SPLASH_DURATION_MS)
+    await act(async () => {
+      vi.advanceTimersByTime(EXIT_COMPLETE_BEAT_MS + 10);
+    });
+    expect(result.current.isBooting).toBe(false);
   });
 
   it("does not hang offline when backend disk is ready but network prewarm is slow", async () => {

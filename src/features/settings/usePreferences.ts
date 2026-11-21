@@ -27,6 +27,7 @@ export function usePreferences(
   const [locale, setLocale] = useState<AppLocale>(DEFAULT_ONBOARDING_LOCALE);
   const [needsLanguageOnboarding, setNeedsLanguageOnboarding] = useState<boolean>(false);
   const [needsFlashOnboarding, setNeedsFlashOnboarding] = useState<boolean>(false);
+  const [closeToTray, setCloseToTray] = useState<boolean>(false);
   const [preferences, setPreferences] = useState<UserPreferences>(() => ({
     ...DEFAULT_PREFERENCES,
     language: DEFAULT_ONBOARDING_LOCALE,
@@ -56,6 +57,7 @@ export function usePreferences(
           setLocale(hydrated.resolvedLocale);
           setNeedsLanguageOnboarding(hydrated.needsOnboarding);
           setNeedsFlashOnboarding(hydrated.needsFlashOnboarding);
+          setCloseToTray(hydrated.closeToTray);
           setPreferences(hydrated.preferences);
           profileBlurRef.current = hydrated.blur;
           setProfileBlur(hydrated.blur);
@@ -76,9 +78,7 @@ export function usePreferences(
           // Ignore in non-Tauri environments
         }
       } finally {
-        if (active) {
-          setPreferencesReady(true);
-        }
+        if (active) setPreferencesReady(true);
       }
     };
 
@@ -171,6 +171,16 @@ export function usePreferences(
     settingsIpc.updateProfileAppearance(profileBlurRef.current, visible).catch(() => {});
   }, []);
 
+  const updateCloseToTray = useCallback((enabled: boolean) => {
+    setCloseToTray(enabled);
+    settingsIpc
+      .setCloseToTray(enabled)
+      .then((updated) => {
+        if (isValidAppSettings(updated)) setCloseToTray(Boolean(updated.general.closeToTray));
+      })
+      .catch(() => {});
+  }, []);
+
   const updateNavigationState = useCallback((patch: NavigationStatePatch) => {
     setNavigationState((prev) => mergeNavigationState(prev, patch));
     settingsIpc
@@ -209,6 +219,8 @@ export function usePreferences(
     previewOnboardingFlashKey,
     confirmFlashOnboarding,
     changeLanguage,
+    closeToTray,
+    updateCloseToTray,
     preferences,
     updatePreference,
     profileBlur,

@@ -28,6 +28,11 @@ pub fn should_pause_window_animations(
     is_minimized || !is_visible || !is_focused
 }
 
+/// Returns true when closing the main window should terminate the application process.
+pub fn should_allow_exit_on_window_close(close_to_tray: bool) -> bool {
+    !close_to_tray
+}
+
 /// Flashes the Windows taskbar icon continuously until the user clicks/focuses the window.
 pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
     if let Some(window) = app_handle.get_webview_window("main") {
@@ -35,15 +40,9 @@ pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
     }
 }
 
-/// Restores (if minimized), shows, and focuses the existing `"main"` window on second-instance launch.
+/// Shows/focuses (or lazily recreates) the `"main"` window on second-instance launch or tray open.
 pub fn focus_main_window(app_handle: &tauri::AppHandle) {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        if window.is_minimized().unwrap_or(false) {
-            let _ = window.unminimize();
-        }
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    let _ = super::window_factory::show_or_create_main_window(app_handle);
 }
 
 fn apply_captured_window_metrics(
@@ -134,7 +133,7 @@ fn capture_window_settings(
     Some(guard.clone())
 }
 
-/// Handles window focus, pause-animation tracking, and debounced bounds/monitor persistence.
+/// Handles window focus, pause-animation tracking, debounced bounds persistence, and close-to-tray lifecycle.
 pub fn handle_window_event(
     window: &tauri::Window,
     event: &tauri::WindowEvent,
@@ -196,6 +195,10 @@ pub fn handle_window_event(
                     s.window = snapshot;
                 });
             }
+            let close_to_tray = storage::get_global_settings().general.close_to_tray;
+            if should_allow_exit_on_window_close(close_to_tray) {
+                super::window_factory::allow_app_exit(window.app_handle());
+            }
         }
         _ => {}
     }
@@ -212,6 +215,12 @@ mod tests {
         assert!(should_pause_window_animations(false, false, true));
         assert!(should_pause_window_animations(false, true, false));
         assert!(should_pause_window_animations(true, false, false));
+    }
+
+    #[test]
+    fn test_should_allow_exit_on_window_close_respects_close_to_tray() {
+        assert!(should_allow_exit_on_window_close(false));
+        assert!(!should_allow_exit_on_window_close(true));
     }
 
     #[test]

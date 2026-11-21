@@ -69,24 +69,24 @@ export function preloadImage(url: string): Promise<void> {
 }
 
 export function subscribeToBackendBootstrap(
-  onUpdate: (next: BootstrapStatus) => void
+  onUpdate: (next: BootstrapStatus, isInitialSnapshot: boolean) => void
 ): () => void {
   if (!isTauriWindowAvailable()) {
-    onUpdate({ stage: "ready", progress: 100, diskReady: true, networkReady: true });
+    onUpdate({ stage: "ready", progress: 100, diskReady: true, networkReady: true }, true);
     return () => {};
   }
 
   let active = true;
   let unlisten: (() => void) | undefined;
 
-  const apply = (next: BootstrapStatus) => {
-    if (active) onUpdate(next);
+  const apply = (next: BootstrapStatus, isInitialSnapshot: boolean) => {
+    if (active) onUpdate(next, isInitialSnapshot);
   };
 
   void windowIpc
     .onBootstrapProgress((status) => {
       if (isValidBootstrapStatus(status)) {
-        apply(status);
+        apply(status, false);
       }
     })
     .then((fn) => {
@@ -101,14 +101,14 @@ export function subscribeToBackendBootstrap(
     .getBootstrapStatus()
     .then((status) => {
       if (isValidBootstrapStatus(status)) {
-        apply(status);
+        apply(status, true);
       } else {
         // Graceful fallback if command returns null/unmocked payload
-        apply({ stage: "ready", progress: 100, diskReady: true, networkReady: true });
+        apply({ stage: "ready", progress: 100, diskReady: true, networkReady: true }, true);
       }
     })
     .catch(() => {
-      apply({ stage: "ready", progress: 100, diskReady: true, networkReady: true });
+      apply({ stage: "ready", progress: 100, diskReady: true, networkReady: true }, true);
     });
 
   return () => {

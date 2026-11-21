@@ -22,6 +22,7 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: true,
+      closeToTray: false,
     },
     automation: {
       autoInjectRunes: true,

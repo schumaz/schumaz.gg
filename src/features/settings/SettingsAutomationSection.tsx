@@ -1,9 +1,10 @@
 import { UserPreferences } from "../../types";
 import { useTranslation } from "../../i18n";
 
-interface SettingsRunesSectionProps {
+interface SettingsAutomationSectionProps {
   preferences: UserPreferences;
   patch48hProtection: boolean;
+  autoMarkDailyMissionsRead: boolean;
   onUpdatePreference: <K extends keyof UserPreferences>(
     key: K,
     value: UserPreferences[K]
@@ -11,21 +12,22 @@ interface SettingsRunesSectionProps {
   onRequestDisablePatchProtection: () => void;
 }
 
-export function SettingsRunesSection({
+export function SettingsAutomationSection({
   preferences,
   patch48hProtection,
+  autoMarkDailyMissionsRead,
   onUpdatePreference,
   onRequestDisablePatchProtection,
-}: SettingsRunesSectionProps) {
+}: SettingsAutomationSectionProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="settings-section-group" data-testid="settings-group-runes">
-      <h2 className="settings-section-title">{t("settings.runesGroupTitle")}</h2>
+    <div className="settings-section-group" data-testid="settings-group-automation">
+      <h2 className="settings-section-title">{t("settings.automationGroupTitle")}</h2>
 
       <section
         className="card settings-group-card settings-runes-card"
-        data-testid="settings-subgroup-runes"
+        data-testid="settings-subgroup-automation"
       >
         <div className="settings-subsection" data-testid="settings-subgroup-flash">
           <div className="settings-group-header">
@@ -145,6 +147,34 @@ export function SettingsRunesSection({
                   }
                   onUpdatePreference("patch48hProtection", e.target.checked);
                 }}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="settings-card-divider" />
+
+        <div className="settings-subsection" data-testid="settings-subgroup-daily-missions">
+          <div className="settings-group-header">
+            <h3>{t("settings.missionsTitle")}</h3>
+            <p className="card-desc">{t("settings.missionsDesc")}</p>
+          </div>
+
+          <div className="settings-list">
+            <label className="settings-item">
+              <div className="settings-item-text">
+                <span className="settings-item-title">{t("settings.missionsToggleTitle")}</span>
+                <span className="settings-item-desc">{t("settings.missionsToggleDesc")}</span>
+              </div>
+              <input
+                type="checkbox"
+                className="toggle-switch"
+                aria-label={t("settings.missionsToggleTitle")}
+                data-testid="auto-mark-daily-missions-toggle"
+                checked={autoMarkDailyMissionsRead}
+                onChange={(e) =>
+                  onUpdatePreference("autoMarkDailyMissionsRead", e.target.checked)
+                }
               />
             </label>
           </div>

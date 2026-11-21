@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
-import { AppLocale, CacheClearScope, LocalCacheInfo, UserPreferences } from "../../types";
+import {
+  AppLocale,
+  AutostartStatus,
+  CacheClearScope,
+  LocalCacheInfo,
+  UserPreferences,
+} from "../../types";
 import type { AppUpdateState, UpdateCheckResult } from "../../hooks/useAppUpdater";
 import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
-import { SettingsProfileSection, isBlurSliderDisabled } from "./SettingsProfileSection";
-import { SettingsRunesSection } from "./SettingsRunesSection";
-import { SettingsMiscSection } from "./SettingsMiscSection";
+import { SettingsGeneralSection } from "./SettingsGeneralSection";
+import { SettingsAutomationSection } from "./SettingsAutomationSection";
+import { SettingsAppearanceSection, isBlurSliderDisabled } from "./SettingsAppearanceSection";
+import { SettingsSystemSection } from "./SettingsSystemSection";
 import { PatchProtectionModal } from "./PatchProtectionModal";
 import { useLocalCache, type LocalCacheStatus } from "./useLocalCache";
+import { useAutostart } from "./useAutostart";
 
 export { isBlurSliderDisabled };
 
@@ -19,6 +27,13 @@ interface SettingsTabProps {
   ) => void;
   locale?: AppLocale;
   onChangeLanguage?: (locale: AppLocale) => void;
+  closeToTray?: boolean;
+  onCloseToTrayChange?: (enabled: boolean) => void;
+  autostartStatus?: AutostartStatus | null;
+  autostartLoading?: boolean;
+  autostartUpdating?: boolean;
+  autostartError?: boolean;
+  onAutostartChange?: (enabled: boolean) => void;
   profileBlur?: number;
   onProfileBlurChange?: (blurPercent: number) => void;
   wallpaperVisible?: boolean;
@@ -46,6 +61,13 @@ export function SettingsTab({
   onUpdatePreference,
   locale: propLocale,
   onChangeLanguage,
+  closeToTray = false,
+  onCloseToTrayChange,
+  autostartStatus: propAutostartStatus,
+  autostartLoading: propAutostartLoading,
+  autostartUpdating: propAutostartUpdating,
+  autostartError: propAutostartError,
+  onAutostartChange: propOnAutostartChange,
   profileBlur = 10,
   onProfileBlurChange,
   wallpaperVisible = true,
@@ -69,6 +91,18 @@ export function SettingsTab({
 }: SettingsTabProps) {
   const { locale: contextLocale, setLocale } = useTranslation();
   const activeLocale = propLocale ?? preferences.language ?? contextLocale;
+
+  const autostart = useAutostart(isActive && propAutostartStatus === undefined);
+  const autostartStatus =
+    propAutostartStatus !== undefined ? propAutostartStatus : autostart.status;
+  const autostartLoading = propAutostartLoading ?? autostart.loading;
+  const autostartUpdating = propAutostartUpdating ?? autostart.updating;
+  const autostartError = propAutostartError ?? autostart.error;
+  const onAutostartChange =
+    propOnAutostartChange ??
+    ((enabled: boolean) => {
+      void autostart.setAutostartEnabled(enabled);
+    });
 
   const localCache = useLocalCache(isActive && propCacheInfo === undefined);
   const cacheInfo = propCacheInfo !== undefined ? propCacheInfo : localCache.cacheInfo;
@@ -118,29 +152,39 @@ export function SettingsTab({
       aria-hidden={!isActive}
     >
       <div className="settings-container">
-        <SettingsProfileSection
-          profileBlur={profileBlur}
-          onProfileBlurChange={onProfileBlurChange}
-          wallpaperVisible={wallpaperVisible}
-          onWallpaperVisibleChange={onWallpaperVisibleChange}
+        <SettingsGeneralSection
+          activeLocale={activeLocale}
+          onSelectLanguage={handleSelectLanguage}
+          autostartStatus={autostartStatus}
+          autostartLoading={autostartLoading}
+          autostartUpdating={autostartUpdating}
+          autostartError={autostartError}
+          onAutostartChange={onAutostartChange}
+          distributionInfo={distributionInfo}
+          closeToTray={closeToTray}
+          onCloseToTrayChange={onCloseToTrayChange}
         />
 
-        <SettingsRunesSection
+        <SettingsAutomationSection
           preferences={preferences}
           patch48hProtection={patch48hProtection}
+          autoMarkDailyMissionsRead={autoMarkDailyMissionsRead}
           onUpdatePreference={onUpdatePreference}
           onRequestDisablePatchProtection={() => setShowDisablePatchProtectionModal(true)}
         />
 
-        <SettingsMiscSection
-          activeLocale={activeLocale}
-          onSelectLanguage={handleSelectLanguage}
+        <SettingsAppearanceSection
+          profileBlur={profileBlur}
+          onProfileBlurChange={onProfileBlurChange}
+          wallpaperVisible={wallpaperVisible}
+          onWallpaperVisibleChange={onWallpaperVisibleChange}
           hardwareAcceleration={hardwareAcceleration}
           onHardwareAccelerationChange={onHardwareAccelerationChange}
           gpuRestartRequired={gpuRestartRequired}
           onRestartApp={onRestartApp}
-          autoMarkDailyMissionsRead={autoMarkDailyMissionsRead}
-          onUpdatePreference={onUpdatePreference}
+        />
+
+        <SettingsSystemSection
           cacheInfo={cacheInfo}
           cacheLoading={cacheLoading}
           cacheClearing={cacheClearing}

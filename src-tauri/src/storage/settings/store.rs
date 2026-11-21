@@ -121,6 +121,13 @@ where
     Ok(updated)
 }
 
+/// Updates `bCloseToTray` in `[GeneralSettings]` and persists to `UserSettings.ini`.
+pub fn update_close_to_tray_setting(enabled: bool) -> Result<AppSettings, String> {
+    update_global_settings(|s| {
+        s.general.close_to_tray = enabled;
+    })
+}
+
 /// Updates `[ProfileAppearanceSettings]` in global settings and `UserSettings.ini`.
 pub fn update_profile_appearance_settings(
     blur_percent: u32,

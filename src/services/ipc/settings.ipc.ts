@@ -2,6 +2,7 @@ import {
   commands,
   type AppLocale,
   type AppSettings,
+  type AutostartStatus,
   type CacheClearScope,
   type FlashKeyPreference,
   type HardwareAccelerationStatus,
@@ -10,8 +11,10 @@ import {
   type UserPreferences,
 } from "../../types/bindings";
 
+export type { AutostartStatus };
+
 /**
- * Typed IPC adapter for unified `UserSettings.ini`, preferences, locale, navigation state, cache, and GPU settings.
+ * Typed IPC adapter for unified `UserSettings.ini`, preferences, locale, tray/autostart, cache, and GPU settings.
  */
 export const settingsIpc = {
   async getAppSettings(): Promise<AppSettings> {
@@ -51,6 +54,18 @@ export const settingsIpc = {
 
   async setHardwareAcceleration(enabled: boolean): Promise<HardwareAccelerationStatus> {
     return commands.setHardwareAcceleration(enabled);
+  },
+
+  async setCloseToTray(enabled: boolean): Promise<AppSettings> {
+    return commands.setCloseToTray(enabled);
+  },
+
+  async getAutostartStatus(): Promise<AutostartStatus> {
+    return commands.getAutostartStatus();
+  },
+
+  async setAutostartEnabled(enabled: boolean): Promise<AutostartStatus> {
+    return commands.setAutostartEnabled(enabled);
   },
 
   async getLocalCacheInfo(): Promise<LocalCacheInfo> {

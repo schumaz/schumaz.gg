@@ -24,6 +24,7 @@ function makeIniSettings(overrides: Partial<AppSettings> = {}): AppSettings {
       language: "pt_BR",
       languageOnboardingCompleted: true,
       flashOnboardingCompleted: true,
+      closeToTray: false,
     },
     automation: {
       autoInjectRunes: true,
@@ -123,14 +124,18 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
 
       expect(invoke).toHaveBeenCalledWith("get_app_settings");
       expect(result.current.profileBlur).toBe(42);
+      expect(result.current.closeToTray).toBe(false);
       expect(result.current.preferences.flashKey).toBe("F");
       expect(result.current.navigationState?.rankedFilterRegion).toBe("kr");
 
       act(() => {
         result.current.updateProfileBlur(75);
+        result.current.updateCloseToTray(true);
         result.current.updateNavigationState({ rankedChampionTierFilter: "1" });
       });
 
+      expect(result.current.closeToTray).toBe(true);
+      expect(invoke).toHaveBeenCalledWith("set_close_to_tray", { enabled: true });
       expect(invoke).toHaveBeenCalledWith("update_profile_appearance", {
         blurPercent: 75,
         wallpaperVisible: true,

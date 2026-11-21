@@ -42,6 +42,11 @@ pub fn parse_user_settings_ini(raw: &str) -> AppSettings {
                         settings.general.flash_onboarding_completed = b;
                     }
                 }
+                "bCloseToTray" => {
+                    if let Some(b) = parse_bool(val) {
+                        settings.general.close_to_tray = b;
+                    }
+                }
                 _ => {}
             },
             SEC_AUTOMATION => match key {
@@ -212,9 +217,11 @@ mod tests {
     #[test]
     fn test_ini_roundtrip_and_tolerant_manual_edit_fallback() {
         let mut s = AppSettings::default();
+        assert!(!s.general.close_to_tray);
         s.general.language = Some(AppLocale::PtBr);
         s.general.language_onboarding_completed = true;
         s.general.flash_onboarding_completed = true;
+        s.general.close_to_tray = true;
         s.automation.auto_inject_runes = false;
         s.automation.flash_key = FlashKeyPreference::F;
         s.automation.auto_mark_daily_missions_read = true;
@@ -244,11 +251,12 @@ mod tests {
 
         let ini = serialize_user_settings_ini(&s);
         assert!(!ini.contains("AramMayhemRarityFilter"));
+        assert!(ini.contains("bCloseToTray=True"));
         assert!(ini.contains(r"WindowMonitor=\\.\DISPLAY2"));
         let parsed = parse_user_settings_ini(&ini);
         assert_eq!(parsed, s);
 
-        // Existing INI with unknown/removed keys ignores them gracefully
+        // Existing INI without bCloseToTray defaults cleanly to false
         let legacy_ini = "
 [/Script/SchumazGG.GeneralSettings]
 Language=pt_BR
@@ -261,6 +269,7 @@ AramMayhemLastChampion=Ahri
         let parsed_legacy = parse_user_settings_ini(legacy_ini);
         assert!(parsed_legacy.general.language_onboarding_completed);
         assert!(!parsed_legacy.general.flash_onboarding_completed);
+        assert!(!parsed_legacy.general.close_to_tray);
         assert_eq!(
             parsed_legacy
                 .navigation
