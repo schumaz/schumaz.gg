@@ -1,8 +1,9 @@
 use super::augments::fetch_aram_mayhem_augments_internal;
 use super::cache::{
-    ARAM_CACHE_TTL, ARAM_MAYHEM_CACHE_TTL, CachedAramEntry, aram_augments_file_path,
-    aram_disk_ttl_secs, aram_ram_ttl, aram_tier_file_path, get_augments_cache, get_tier_cache,
-    is_aram_patch_compatible, prewarm_aram_tier_lists_from_dir_at,
+    ARAM_CACHE_TTL, ARAM_MAYHEM_CACHE_TTL, CachedAramEntry, aram_augments_cache_key,
+    aram_augments_file_path, aram_disk_ttl_secs, aram_ram_ttl, aram_tier_cache_key,
+    aram_tier_file_path, get_augments_cache, get_tier_cache, is_aram_patch_compatible,
+    prewarm_aram_tier_lists_from_dir_at,
 };
 use super::{OPGG_ARAM_MAYHEM_WEB_URL, OPGG_ARAM_REST_URL, fetch_aram_tier_list_internal};
 use crate::build_provider::models::DataDragonCache;
@@ -95,11 +96,17 @@ fn test_prewarm_aram_respects_72h_mayhem_ttl_48h_classic_ttl_and_patch_invalidat
     crate::storage::write_lz4_envelope_at(&classic_path, "16.25", &sample_rank(), age_60h).unwrap();
     crate::storage::write_lz4_envelope_at(&mayhem_path, "16.25", &sample_rank(), age_60h).unwrap();
 
-    let classic_key = format!("aram:{}:{}", AppLocale::PtBr.as_str(), OPGG_ARAM_REST_URL);
-    let mayhem_key = format!(
-        "mayhem:{}:{}",
-        AppLocale::PtBr.as_str(),
-        OPGG_ARAM_MAYHEM_WEB_URL
+    let classic_key = aram_tier_cache_key(
+        AramMode::Aram,
+        AppLocale::PtBr,
+        OPGG_ARAM_REST_URL,
+        OPGG_ARAM_MAYHEM_WEB_URL,
+    );
+    let mayhem_key = aram_tier_cache_key(
+        AramMode::AramMayhem,
+        AppLocale::PtBr,
+        OPGG_ARAM_REST_URL,
+        OPGG_ARAM_MAYHEM_WEB_URL,
     );
     if let Ok(mut g) = get_tier_cache().write() {
         g.remove(&classic_key);
@@ -136,50 +143,53 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     crate::storage::write_lz4_envelope_at(&mayhem_path, "16.25", &sample_rank(), age_60h).unwrap();
 
     let mock_server = MockServer::start().await;
-    let inner_tier = r#"1a:["$","$L32",null,{"champions":[{"key":"twisted_fate","name":"Twisted Fate","image_url":"","champion_id":4,"id":4,"tier":1,"rank":1}]}]"#;
-    let html_tier = format!(
-        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-        serde_json::to_string(inner_tier).unwrap()
-    );
+    let rest_tier = serde_json::json!({
+        "data": [
+            { "id": 4, "average_stats": { "win_rate": 0.542, "pick_rate": 0.061, "tier": 0, "rank": 1 } }
+        ]
+    });
     Mock::given(method("GET"))
-        .and(path("/mayhem_ttl_tier"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_tier))
+        .and(path("/mayhem_ttl_rest"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(rest_tier))
         .expect(1)
         .mount(&mock_server)
         .await;
 
-    let tier_url = format!("{}/mayhem_ttl_tier", mock_server.uri());
+    let rest_url = format!("{}/mayhem_ttl_rest", mock_server.uri());
+    let unused_html_url = format!("{}/unused_mayhem_html", mock_server.uri());
     let disk_hit = fetch_aram_tier_list_internal(
         &client,
         AramMode::AramMayhem,
         &dd,
-        "http://127.0.0.1:9/unused",
-        &tier_url,
+        &rest_url,
+        &unused_html_url,
         AppLocale::PtBr,
         Some(&dir),
         Some("16.25"),
+        true,
     )
     .await
     .unwrap();
     assert_eq!(disk_hit[0].id, 4);
 
-    // Same URL with patch bumped to 16.26 -> invalidates BOTH RAM (60 min) and disk (72h), triggers network (.expect(1))
+    // Patch bumped to 16.26 -> invalidates BOTH RAM (60 min) and disk (72h), triggers REST (.expect(1))
     let refreshed = fetch_aram_tier_list_internal(
         &client,
         AramMode::AramMayhem,
         &dd,
-        "http://127.0.0.1:9/unused",
-        &tier_url,
+        &rest_url,
+        &unused_html_url,
         AppLocale::PtBr,
         Some(&dir),
         Some("16.26"),
+        true,
     )
     .await
     .unwrap();
     assert_eq!(refreshed[0].id, 4);
 
     // 2. Mayhem augments aged 60h on disk (same patch 16.25) -> disk hit (0 network calls);
-    //    patch bump to 16.26 invalidates RAM + disk and fetches from network (.expect(1)).
+    //    patch bump to 16.26 invalidates RAM + disk and fetches from MCP (.expect(1)).
     let aug_path = aram_augments_file_path(&dir, AppLocale::PtBr, "twistedfate");
     let cached_augs = vec![AramAugmentEntry {
         id: 3075,
@@ -193,34 +203,42 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     }];
     crate::storage::write_lz4_envelope_at(&aug_path, "16.25", &cached_augs, age_60h).unwrap();
 
-    let inner_aug = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.6,"popular":3.8,"desc":"Dano extra."}]}]"#;
-    let html_aug = format!(
-        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-        serde_json::to_string(inner_aug).unwrap()
-    );
-    Mock::given(method("GET"))
-        .and(path("/mayhem_ttl_aug/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_aug))
+    let mcp_aug = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "content": [{
+                "type": "text",
+                "text": "class Augment: id,desc,tier,performance,popular\nLolListAramAugments(Data([Augment(3075,\"Dano extra.\",0,99.6,3.8)]))"
+            }]
+        }
+    });
+    Mock::given(method("POST"))
+        .and(path("/mayhem_ttl_mcp"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mcp_aug))
         .expect(1)
         .mount(&mock_server)
         .await;
 
+    let mcp_url = format!("{}/mayhem_ttl_mcp", mock_server.uri());
     let aug_base = format!("{}/mayhem_ttl_aug", mock_server.uri());
     let aug_disk_hit = fetch_aram_mayhem_augments_internal(
         &client,
         "Twisted Fate",
+        &mcp_url,
         &aug_base,
         AppLocale::PtBr,
         &dd,
         Some(&dir),
         Some("16.25"),
+        true,
     )
     .await
     .unwrap();
     assert_eq!(aug_disk_hit[0].id, 3075);
 
     // Verify 40-minute-old RAM entry is still valid within 60-min Mayhem RAM TTL
-    let ram_key = format!("{}:{}:twistedfate", AppLocale::PtBr.as_str(), aug_base);
+    let ram_key = aram_augments_cache_key(AppLocale::PtBr, &mcp_url, &aug_base, "twistedfate");
     if let Ok(mut g) = get_augments_cache().write() {
         g.insert(
             ram_key,
@@ -234,25 +252,29 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     let aug_ram_hit = fetch_aram_mayhem_augments_internal(
         &client,
         "Twisted Fate",
+        &mcp_url,
         &aug_base,
         AppLocale::PtBr,
         &dd,
         Some(&dir),
         Some("16.25"),
+        true,
     )
     .await
     .unwrap();
     assert_eq!(aug_ram_hit[0].id, 3075);
 
-    // Patch bump to 16.26 invalidates both RAM and disk -> hits mock server once
+    // Patch bump to 16.26 invalidates both RAM and disk -> hits MCP once
     let aug_refreshed = fetch_aram_mayhem_augments_internal(
         &client,
         "Twisted Fate",
+        &mcp_url,
         &aug_base,
         AppLocale::PtBr,
         &dd,
         Some(&dir),
         Some("16.26"),
+        true,
     )
     .await
     .unwrap();

@@ -2,7 +2,7 @@ use super::cache::{get_augments_cache, rehydrate_aram_augments, rehydrate_aram_n
 use super::*;
 use crate::models::{AramAugmentEntry, ArenaAugmentMetadata, ChampionMetadata};
 use std::collections::HashMap;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const CDRAGON_AUG_PREFIX: &str = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/";
@@ -18,56 +18,54 @@ fn aug_meta(id: i32, name: &str, desc: &str, icon: &str, rarity: i32) -> ArenaAu
     }
 }
 
-fn test_ddragon() -> DataDragonCache {
-    let mut champions = HashMap::new();
-    champions.insert(
-        4,
-        ChampionMetadata {
-            champion_id: 4,
-            key_name: "TwistedFate".to_string(),
-            display_name: "Twisted Fate".to_string(),
-            icon_url: "https://ddragon.example/TwistedFate.png".to_string(),
-        },
-    );
-    champions.insert(
-        50,
-        ChampionMetadata {
-            champion_id: 50,
-            key_name: "Swain".to_string(),
-            display_name: "Swain".to_string(),
-            icon_url: "https://ddragon.example/Swain.png".to_string(),
-        },
-    );
-    let mut arena_augments = HashMap::new();
-    arena_augments.insert(
-        1074,
-        aug_meta(1074, "Raio Encolhedor", "", "shrinkray_small.png", 4),
-    );
-    arena_augments.insert(
-        2062,
-        aug_meta(
-            2062,
-            "Conjuração Ecoante",
-            "Conjura duas vezes.",
-            "echo_small.png",
-            8,
-        ),
-    );
-    arena_augments.insert(3075, aug_meta(3075, "Coice", "", "recoil_small.png", 4));
-    DataDragonCache {
-        version: "16.22.1".to_string(),
-        champions,
-        runes: HashMap::new(),
-        spells: HashMap::new(),
-        arena_augments,
+fn champ_meta(id: i32, key: &str, name: &str) -> ChampionMetadata {
+    ChampionMetadata {
+        champion_id: id,
+        key_name: key.to_string(),
+        display_name: name.to_string(),
+        icon_url: format!("https://ddragon.example/{key}.png"),
     }
 }
 
-fn test_ddragon_en() -> DataDragonCache {
-    let mut dd = test_ddragon();
-    dd.arena_augments
-        .insert(3075, aug_meta(3075, "Recoil", "", "recoil_small.png", 4));
-    dd
+fn test_ddragon() -> DataDragonCache {
+    DataDragonCache {
+        version: "16.22.1".to_string(),
+        champions: HashMap::from([
+            (4, champ_meta(4, "TwistedFate", "Twisted Fate")),
+            (50, champ_meta(50, "Swain", "Swain")),
+            (103, champ_meta(103, "Ahri", "Ahri")),
+        ]),
+        arena_augments: HashMap::from([
+            (
+                1074,
+                aug_meta(1074, "Raio Encolhedor", "", "shrinkray_small.png", 4),
+            ),
+            (
+                2062,
+                aug_meta(
+                    2062,
+                    "Conjuração Ecoante",
+                    "Conjura duas vezes.",
+                    "echo_small.png",
+                    8,
+                ),
+            ),
+            (3075, aug_meta(3075, "Coice", "", "recoil_small.png", 4)),
+        ]),
+        ..Default::default()
+    }
+}
+
+fn mcp_single_augment_response(id: i32, tier: i32, desc: &str) -> serde_json::Value {
+    let text = format!(
+        "class Augment: id,desc,tier,performance,popular\nLolListAramAugments(Data([Augment({id},{}, {tier},99.62,3.8)])))",
+        serde_json::to_string(desc).unwrap()
+    );
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": { "content": [{ "type": "text", "text": text }] }
+    })
 }
 
 #[test]
@@ -90,39 +88,32 @@ fn test_parse_classic_aram_champions_sorts_by_rank_and_normalizes_rates() {
             { "id": 50, "average_stats": { "win_rate": 0.633, "pick_rate": 0.091, "tier": 0, "rank": 1 } }
         ]
     });
-
     let list = parse_classic_aram_champions(&json, &test_ddragon()).unwrap();
     assert_eq!(list.len(), 2);
-    assert_eq!(list[0].id, 50);
+    assert_eq!((list[0].id, list[0].rank, list[0].tier), (50, 1, 0));
     assert_eq!(list[0].name, "Swain");
-    assert_eq!(list[0].rank, 1);
-    assert_eq!(list[0].tier, 0);
     assert_eq!(list[0].win_rate, Some(63.3));
-    assert_eq!(list[1].id, 4);
-    assert_eq!(list[1].key, "twistedfate");
+    assert_eq!((list[1].id, list[1].key.as_str()), (4, "twistedfate"));
 }
 
 #[test]
 fn test_parse_aram_mayhem_champions_from_next_f_html_normalizes_tiers() {
     let inner = r#"1a:["$","$L32",null,{"champions":[{"key":"ahri","name":"Ahri","image_url":"https://img/Ahri.png","champion_id":103,"id":103,"tier":2,"rank":14},{"key":"twisted_fate_opgg","name":"Twisted Fate OPGG","image_url":"https://img/TF.png","champion_id":4,"id":4,"tier":1,"rank":1},{"key":"ashe","name":"Ashe","image_url":"https://img/Ashe.png","champion_id":22,"id":22,"tier":5,"rank":173}]}]"#;
-    let escaped = serde_json::to_string(inner).unwrap();
-    let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
+    let html = format!(
+        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+        serde_json::to_string(inner).unwrap()
+    );
 
     let list = parse_aram_mayhem_champions_html(&html, &test_ddragon()).unwrap();
     assert_eq!(list.len(), 3);
-    assert_eq!(list[0].id, 4);
+    assert_eq!((list[0].id, list[0].rank, list[0].tier), (4, 1, 0));
     assert_eq!(list[0].key, "twistedfate");
     assert_eq!(list[0].name, "Twisted Fate");
     assert_eq!(list[0].icon_url, "https://ddragon.example/TwistedFate.png");
-    assert_eq!(list[0].rank, 1);
-    assert_eq!(list[0].tier, 0);
-    assert_eq!(list[1].id, 103);
-    assert_eq!(list[1].icon_url, "");
-    assert_eq!(list[1].rank, 14);
-    assert_eq!(list[1].tier, 1);
-    assert_eq!(list[2].id, 22);
+    assert_eq!((list[1].id, list[1].rank, list[1].tier), (103, 14, 1));
+    assert_eq!(list[1].icon_url, "https://ddragon.example/Ahri.png");
+    assert_eq!((list[2].id, list[2].tier), (22, 4));
     assert_eq!(list[2].icon_url, "");
-    assert_eq!(list[2].tier, 4);
 }
 
 #[test]
@@ -169,8 +160,7 @@ fn test_rehydrate_aram_names_and_augments_preserve_desc_and_clean_icons() {
         desc: "Descrição preservada.".to_string(),
     }];
     rehydrate_aram_augments(&mut augs, &dd);
-    assert_eq!(augs[0].name, "Coice");
-    assert_eq!(augs[0].rarity, Some(4));
+    assert_eq!((augs[0].name.as_str(), augs[0].rarity), ("Coice", Some(4)));
     assert!(
         augs[0]
             .icon_url
@@ -182,81 +172,28 @@ fn test_rehydrate_aram_names_and_augments_preserve_desc_and_clean_icons() {
 #[test]
 fn test_parse_aram_mayhem_augments_hydrates_assets_from_cdragon_and_falls_back_desc() {
     let inner = r#"6c:["$","$L6d",null,{"data":[{"id":1032,"tier":5,"performance":97.14,"popular":0},{"id":1033,"name":"Uncatalogued","tier":5,"performance":50.0,"popular":0,"smallIcon":"https://legacy-cdn.example/x.png","desc":"ignored"},{"id":1074,"tier":3,"performance":76.82,"popular":0.23,"name":"OPGG Wrong","smallIcon":"https://legacy-cdn.example/shrink.png","rarity":1,"desc":"<OnHit>Ao contato</OnHit><br />Reduz dano."},{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"OPGG Recoil","smallIcon":"https://legacy-cdn.example/recoil.png","rarity":1,"desc":"<font color='#F0C200'>?</font> causa dano."},{"id":2062,"tier":0,"performance":114.24,"popular":3.2,"name":"OPGG Echo","smallIcon":"https://legacy-cdn.example/echo.png","rarity":1,"desc":"OPGG Echo Desc"}]}]"#;
-    let escaped = serde_json::to_string(inner).unwrap();
-    let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
+    let html = format!(
+        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+        serde_json::to_string(inner).unwrap()
+    );
 
     let augments =
         parse_aram_mayhem_augments_html_for_locale(&html, &test_ddragon(), AppLocale::PtBr)
             .unwrap();
     assert_eq!(augments.len(), 3);
-    assert_eq!(augments[0].id, 3075);
+    assert_eq!((augments[0].id, augments[0].rarity), (3075, Some(4)));
     assert_eq!(augments[0].name, "Coice");
-    assert_eq!(augments[0].rarity, Some(4));
     assert_eq!(augments[0].desc, "Uma habilidade causa dano.");
     assert!(
         augments[0]
             .icon_url
             .starts_with("https://raw.communitydragon.org/")
     );
-    assert_eq!(augments[1].id, 2062);
+    assert_eq!((augments[1].id, augments[1].rarity), (2062, Some(8)));
     assert_eq!(augments[1].name, "Conjuração Ecoante");
-    assert_eq!(augments[1].rarity, Some(8));
     assert_eq!(augments[1].desc, "Conjura duas vezes.");
     assert_eq!(augments[2].id, 1074);
-    assert_eq!(augments[2].name, "Raio Encolhedor");
     assert_eq!(augments[2].desc, "Ao contato Reduz dano.");
-}
-
-#[tokio::test]
-async fn test_fetch_aram_mayhem_augments_with_mock_server_and_locale_cache_isolation() {
-    let mock_server = MockServer::start().await;
-    let html_for = |desc: &str| {
-        let inner = format!(
-            r#"6c:["$","$L6d",null,{{"data":[{{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"desc":"{desc}"}}]}}]"#
-        );
-        format!(
-            r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-            serde_json::to_string(&inner).unwrap()
-        )
-    };
-
-    Mock::given(method("GET"))
-        .and(path("/pt/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_for("Dano extra.")))
-        .expect(1)
-        .mount(&mock_server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/en/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_for("Extra damage.")))
-        .expect(1)
-        .mount(&mock_server)
-        .await;
-
-    let client = reqwest::Client::new();
-    let pt_augments = fetch_aram_mayhem_augments_with_base_and_locale(
-        &client,
-        "Twisted Fate",
-        &format!("{}/pt", mock_server.uri()),
-        AppLocale::PtBr,
-        &test_ddragon(),
-    )
-    .await
-    .unwrap();
-    let en_augments = fetch_aram_mayhem_augments_with_base_and_locale(
-        &client,
-        "Twisted Fate",
-        &format!("{}/en", mock_server.uri()),
-        AppLocale::EnUs,
-        &test_ddragon_en(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(pt_augments[0].name, "Coice");
-    assert_eq!(pt_augments[0].desc, "Dano extra.");
-    assert_eq!(en_augments[0].name, "Recoil");
-    assert_eq!(en_augments[0].desc, "Extra damage.");
 }
 
 #[tokio::test]
@@ -269,14 +206,16 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     std::fs::create_dir_all(&dir).unwrap();
 
     let mock_server = MockServer::start().await;
-    let inner_pt = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"desc":"Dano extra."}]}]"#;
-    let html_pt = format!(
-        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-        serde_json::to_string(inner_pt).unwrap()
-    );
-    Mock::given(method("GET"))
-        .and(path("/pt/ahri/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html_pt))
+    Mock::given(method("POST"))
+        .and(path("/mcp"))
+        .and(body_string_contains("\"champion_id\":103"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(mcp_single_augment_response(
+                3075,
+                0,
+                "Dano extra.",
+            )),
+        )
         .expect(1)
         .mount(&mock_server)
         .await;
@@ -284,7 +223,6 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     let client = reqwest::Client::new();
     let dd = test_ddragon();
     let file_path = aram_augments_file_path(&dir, AppLocale::PtBr, "ahri");
-
     let blank_cache = vec![AramAugmentEntry {
         id: 3075,
         name: "Coice".to_string(),
@@ -297,9 +235,10 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     }];
     crate::storage::write_lz4_envelope(&file_path, "", &blank_cache).unwrap();
 
-    let res1 = fetch_aram_mayhem_augments_with_base_locale_and_dir(
+    let res1 = fetch_aram_mayhem_augments_with_endpoints_locale_and_dir(
         &client,
         "Ahri",
+        &format!("{}/mcp", mock_server.uri()),
         &format!("{}/pt", mock_server.uri()),
         AppLocale::PtBr,
         &dd,
@@ -318,15 +257,17 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     crate::storage::write_lz4_envelope_at(&file_path, "16.25", &legacy, 1).unwrap();
 
     let offline = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/pt/ahri/augments"))
+    Mock::given(method("POST"))
+        .and(path("/mcp"))
         .respond_with(ResponseTemplate::new(503))
+        .expect(1)
         .mount(&offline)
         .await;
 
-    let rescued = fetch_aram_mayhem_augments_with_base_locale_and_dir(
+    let rescued = fetch_aram_mayhem_augments_with_endpoints_locale_and_dir(
         &client,
         "Ahri",
+        &format!("{}/mcp", offline.uri()),
         &format!("{}/pt", offline.uri()),
         AppLocale::PtBr,
         &dd,
@@ -341,6 +282,5 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
             .icon_url
             .starts_with("https://raw.communitydragon.org/")
     );
-
     let _ = std::fs::remove_dir_all(&dir);
 }

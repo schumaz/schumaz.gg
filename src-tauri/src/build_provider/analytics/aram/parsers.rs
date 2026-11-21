@@ -5,6 +5,7 @@ use super::html_extract::{
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank};
 use serde::Deserialize;
+use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
 struct RestAramChampionResponse {
@@ -43,17 +44,90 @@ struct WebMayhemChampionItem {
     rank: i32,
 }
 
-#[derive(Debug, Deserialize)]
-struct WebMayhemAugmentItem {
-    id: i32,
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct RawMayhemAugmentStat {
+    pub id: i32,
     #[serde(default)]
-    tier: i32,
+    pub tier: i32,
     #[serde(default)]
-    performance: f64,
+    pub performance: f64,
     #[serde(default)]
-    popular: f64,
+    pub popular: f64,
     #[serde(default)]
-    desc: Option<String>,
+    pub desc: Option<String>,
+}
+
+pub(crate) fn sort_mayhem_augments(augments: &mut [AramAugmentEntry]) {
+    augments.sort_by(|a, b| {
+        a.tier
+            .cmp(&b.tier)
+            .then_with(|| b.popular.total_cmp(&a.popular))
+            .then_with(|| b.performance.total_cmp(&a.performance))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+}
+
+/// Hydrates raw OP.GG augment statistical indicators (`id`, `tier`, `performance`, `popular`)
+/// strictly against the local CommunityDragon catalog (`DataDragonCache.arena_augments`) for
+/// `name`, `rarity`, `icon_url`, and primary localized description.
+pub(crate) fn hydrate_mayhem_augments(
+    raw_items: Vec<RawMayhemAugmentStat>,
+    ddragon: &DataDragonCache,
+    locale: AppLocale,
+) -> Vec<AramAugmentEntry> {
+    let mut augments: Vec<AramAugmentEntry> = raw_items
+        .into_iter()
+        .filter_map(|item| {
+            let meta = ddragon.arena_augments.get(&item.id)?;
+            let name = meta.name.trim();
+            if name.is_empty() || is_internal_augment_key(name) {
+                return None;
+            }
+            let desc = if !meta.desc.trim().is_empty() {
+                meta.desc.clone()
+            } else {
+                clean_augment_description_with_context(
+                    item.desc.as_deref().unwrap_or(""),
+                    locale,
+                    meta.ability_slot.as_deref(),
+                )
+            };
+
+            Some(AramAugmentEntry {
+                id: item.id,
+                name: name.to_string(),
+                tier: item.tier,
+                rarity: (meta.rarity > 0).then_some(meta.rarity),
+                performance: (item.performance * 100.0).round() / 100.0,
+                popular: (item.popular * 100.0).round() / 100.0,
+                icon_url: meta.icon_url.clone(),
+                desc,
+            })
+        })
+        .collect();
+
+    sort_mayhem_augments(&mut augments);
+    augments
+}
+
+/// Merges official MCP augments (`tier >= 3`) with top-tier (`tier < 3`, i.e. S/A/B) entries
+/// supplemented from the isolated HTML extractor, preserving MCP entries as authoritative for
+/// all overlapping IDs and sorting canonically.
+pub(crate) fn merge_mcp_with_top_tier_supplement(
+    mcp_entries: Vec<AramAugmentEntry>,
+    html_entries: Vec<AramAugmentEntry>,
+) -> Vec<AramAugmentEntry> {
+    let mut seen_ids: HashSet<i32> = mcp_entries.iter().map(|entry| entry.id).collect();
+    let mut merged = mcp_entries;
+
+    for entry in html_entries {
+        if entry.tier < 3 && seen_ids.insert(entry.id) {
+            merged.push(entry);
+        }
+    }
+
+    sort_mayhem_augments(&mut merged);
+    merged
 }
 
 pub fn parse_classic_aram_champions(
@@ -196,49 +270,10 @@ pub fn parse_aram_mayhem_augments_html_for_locale(
     let array_json = matched_array
         .ok_or_else(|| "ARAM Mayhem augments payload not found in HTML".to_string())?;
 
-    let raw_items: Vec<WebMayhemAugmentItem> = serde_json::from_str(array_json)
+    let raw_items: Vec<RawMayhemAugmentStat> = serde_json::from_str(array_json)
         .map_err(|e| format!("Failed to deserialize ARAM Mayhem augments: {}", e))?;
 
-    let mut augments: Vec<AramAugmentEntry> = raw_items
-        .into_iter()
-        .filter_map(|item| {
-            let meta = ddragon.arena_augments.get(&item.id)?;
-            let name = meta.name.trim();
-            if name.is_empty() || is_internal_augment_key(name) {
-                return None;
-            }
-            let desc = if !meta.desc.trim().is_empty() {
-                meta.desc.clone()
-            } else {
-                clean_augment_description_with_context(
-                    item.desc.as_deref().unwrap_or(""),
-                    locale,
-                    meta.ability_slot.as_deref(),
-                )
-            };
-
-            Some(AramAugmentEntry {
-                id: item.id,
-                name: name.to_string(),
-                tier: item.tier,
-                rarity: (meta.rarity > 0).then_some(meta.rarity),
-                performance: (item.performance * 100.0).round() / 100.0,
-                popular: (item.popular * 100.0).round() / 100.0,
-                icon_url: meta.icon_url.clone(),
-                desc,
-            })
-        })
-        .collect();
-
-    augments.sort_by(|a, b| {
-        a.tier
-            .cmp(&b.tier)
-            .then_with(|| b.popular.total_cmp(&a.popular))
-            .then_with(|| b.performance.total_cmp(&a.performance))
-            .then_with(|| a.name.cmp(&b.name))
-    });
-
-    Ok(augments)
+    Ok(hydrate_mayhem_augments(raw_items, ddragon, locale))
 }
 
 pub fn parse_aram_mayhem_augments_html(

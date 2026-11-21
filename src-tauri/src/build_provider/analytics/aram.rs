@@ -1,11 +1,13 @@
 pub mod augments;
 mod cache;
 pub mod html_extract;
+pub mod mcp_augments;
 mod parsers;
 
 pub use augments::*;
 pub use cache::*;
 pub use html_extract::*;
+pub use mcp_augments::*;
 pub use parsers::*;
 
 use super::client::peek_latest_cached_opgg_version;
@@ -19,7 +21,79 @@ pub const OPGG_ARAM_REST_URL: &str = "https://lol-api-champion.op.gg/api/global/
 pub const OPGG_ARAM_MAYHEM_WEB_URL: &str = "https://op.gg/lol/modes/aram-mayhem";
 pub const OPGG_ARAM_MAYHEM_AUGMENTS_WEB_BASE: &str = "https://op.gg/pt/lol/modes/aram-mayhem";
 
+/// Single switch controlling the isolated HTML extractor for ARAM Mayhem (used strictly as
+/// last-resort fallback when MCP/JSON fails with no `.lz4` cache, and best-effort top-tier
+/// `tier < 3` supplement for `lol_list_aram_augments`). Flipping to `false` disables all HTML
+/// requests cleanly without affecting Classic ARAM or Champ Select.
+pub const ARAM_MAYHEM_HTML_FALLBACK_ENABLED: bool = true;
+
 pub(crate) const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+
+async fn fetch_aram_rest_champions(
+    client: &reqwest::Client,
+    aram_rest_url: &str,
+    ddragon: &DataDragonCache,
+    label: &str,
+) -> Result<Vec<AramChampionRank>, String> {
+    let res = send_analytics_request(aram_rest_url, client.get(aram_rest_url), label).await?;
+    let json: serde_json::Value = res
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse ARAM tier list JSON: {}", e))?;
+    let list = parsers::parse_classic_aram_champions(&json, ddragon)?;
+    if list.is_empty() {
+        return Err("ARAM REST tier list returned no champions".to_string());
+    }
+    Ok(list)
+}
+
+async fn fetch_mayhem_champions_html_fallback(
+    client: &reqwest::Client,
+    mayhem_web_url: &str,
+    ddragon: &DataDragonCache,
+) -> Result<Vec<AramChampionRank>, String> {
+    let res = send_analytics_request(
+        mayhem_web_url,
+        client
+            .get(mayhem_web_url)
+            .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT),
+        "ARAM Mayhem tier list (HTML fallback)",
+    )
+    .await?;
+    let html = res
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read ARAM Mayhem HTML: {}", e))?;
+    parsers::parse_aram_mayhem_champions_html(&html, ddragon)
+}
+
+fn persist_aram_tier_list(
+    list: &[AramChampionRank],
+    mode: AramMode,
+    locale: AppLocale,
+    aram_dir: Option<&Path>,
+    known_latest: Option<&str>,
+    cache_key: String,
+) {
+    if list.is_empty() {
+        return;
+    }
+    let patch = known_latest.unwrap_or("");
+    if let Some(dir) = aram_dir {
+        let path = cache::aram_tier_file_path(dir, mode, locale);
+        let _ = crate::storage::write_lz4_envelope(&path, patch, &list);
+    }
+    if let Ok(mut guard) = cache::get_tier_cache().write() {
+        guard.insert(
+            cache_key,
+            cache::CachedAramEntry {
+                cached_at: Instant::now(),
+                patch: patch.to_string(),
+                payload: list.to_vec(),
+            },
+        );
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn fetch_aram_tier_list_internal(
@@ -31,16 +105,14 @@ pub(crate) async fn fetch_aram_tier_list_internal(
     locale: AppLocale,
     aram_dir: Option<&Path>,
     known_latest: Option<&str>,
+    html_fallback_enabled: bool,
 ) -> Result<Vec<AramChampionRank>, String> {
     let started = Instant::now();
     let kind = match mode {
         AramMode::Aram => "aram_tier_list",
         AramMode::AramMayhem => "aram_mayhem_tier_list",
     };
-    let cache_key = match mode {
-        AramMode::Aram => format!("aram:{}:{}", locale.as_str(), aram_rest_url),
-        AramMode::AramMayhem => format!("mayhem:{}:{}", locale.as_str(), mayhem_web_url),
-    };
+    let cache_key = cache::aram_tier_cache_key(mode, locale, aram_rest_url, mayhem_web_url);
     let ram_ttl = cache::aram_ram_ttl(mode);
     let disk_ttl_secs = cache::aram_disk_ttl_secs(mode);
 
@@ -85,47 +157,19 @@ pub(crate) async fn fetch_aram_tier_list_internal(
         return Ok(list);
     }
 
-    let fetch_res: Result<Vec<AramChampionRank>, String> = match mode {
-        AramMode::Aram => {
-            async {
-                let res = send_analytics_request(
-                    aram_rest_url,
-                    client.get(aram_rest_url),
-                    "ARAM tier list",
-                )
-                .await?;
-                let json: serde_json::Value = res
-                    .json()
-                    .await
-                    .map_err(|e| format!("Failed to parse ARAM tier list JSON: {}", e))?;
-                parsers::parse_classic_aram_champions(&json, ddragon)
-            }
-            .await
-        }
-        AramMode::AramMayhem => {
-            async {
-                let res = send_analytics_request(
-                    mayhem_web_url,
-                    client
-                        .get(mayhem_web_url)
-                        .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT),
-                    "ARAM Mayhem tier list",
-                )
-                .await?;
-                let html = res
-                    .text()
-                    .await
-                    .map_err(|e| format!("Failed to read ARAM Mayhem HTML: {}", e))?;
-                parsers::parse_aram_mayhem_champions_html(&html, ddragon)
-            }
-            .await
-        }
+    // Both Classic ARAM and ARAM Mayhem use the structured JSON REST endpoint + DataDragon
+    // as their primary source (zero HTML scraping on normal tab opening).
+    let primary_label = match mode {
+        AramMode::Aram => "ARAM tier list",
+        AramMode::AramMayhem => "ARAM Mayhem champion list",
     };
+    let primary_res =
+        fetch_aram_rest_champions(client, aram_rest_url, ddragon, primary_label).await;
 
-    let list = match fetch_res {
-        Ok(list) => list,
-        Err(err) => {
-            // Stale-While-Error offline fallback
+    let (list, source_detail) = match primary_res {
+        Ok(list) => (list, "source=rest"),
+        Err(primary_err) => {
+            // Stale-While-Error offline fallback BEFORE touching any HTML fallback.
             if let Some(env) = disk_env
                 && !env.payload.is_empty()
             {
@@ -139,29 +183,25 @@ pub(crate) async fn fetch_aram_tier_list_internal(
                 );
                 return Ok(rescued);
             }
-            return Err(err);
+
+            if mode == AramMode::AramMayhem && html_fallback_enabled {
+                match fetch_mayhem_champions_html_fallback(client, mayhem_web_url, ddragon).await {
+                    Ok(list) => (list, "source=html_fallback"),
+                    Err(_) => return Err(primary_err),
+                }
+            } else {
+                return Err(primary_err);
+            }
         }
     };
 
-    if !list.is_empty() {
-        let patch = known_latest.unwrap_or("");
-        if let Some(dir) = aram_dir {
-            let path = cache::aram_tier_file_path(dir, mode, locale);
-            let _ = crate::storage::write_lz4_envelope(&path, patch, &list);
-        }
-        if let Ok(mut guard) = cache::get_tier_cache().write() {
-            guard.insert(
-                cache_key,
-                cache::CachedAramEntry {
-                    cached_at: Instant::now(),
-                    patch: patch.to_string(),
-                    payload: list.clone(),
-                },
-            );
-        }
-    }
-
-    crate::logging::record_data_resolution(kind, "network", started.elapsed().as_millis(), "");
+    persist_aram_tier_list(&list, mode, locale, aram_dir, known_latest, cache_key);
+    crate::logging::record_data_resolution(
+        kind,
+        "network",
+        started.elapsed().as_millis(),
+        source_detail,
+    );
     Ok(list)
 }
 
@@ -184,6 +224,7 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
         locale,
         aram_dir,
         known_latest.as_deref(),
+        ARAM_MAYHEM_HTML_FALLBACK_ENABLED,
     )
     .await
 }
@@ -235,3 +276,7 @@ mod tests;
 #[cfg(test)]
 #[path = "aram/cache_tests.rs"]
 mod cache_tests;
+
+#[cfg(test)]
+#[path = "aram/fallback_tests.rs"]
+mod fallback_tests;

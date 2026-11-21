@@ -3,8 +3,9 @@
 ## Endpoints
 - **MCP (`POST https://mcp-api.op.gg/mcp`, `method: "tools/call"`):**
   - `lol_get_champion_analysis` — Parâmetros: `{ game_mode, champion, position, desired_output_fields }`
-  - `lol_list_aram_augments` — Parâmetros: `{ champion_id, lang }` *(rankings de augments do ARAM Mayhem; fonte primária alvo na Frente 4 do `P12.2`, hidratada com metadados/ícones via `DataDragonCache.arena_augments` / CommunityDragon)*
+  - `lol_list_aram_augments` — Parâmetros: `{ champion_id, lang, desired_output_fields: ["data.augments[].{id,desc,tier,performance,popular}"] }` *(fonte primária oficial de augments do ARAM Mayhem em `analytics/aram/mcp_augments.rs`, hidratada 100% com metadados/ícones via `DataDragonCache.arena_augments` / CommunityDragon; o MCP retorna oficialmente `tier >= 3`, então tiers superiores `tier < 3` são complementados em best-effort pelo fallback HTML isolado quando `ARAM_MAYHEM_HTML_FALLBACK_ENABLED = true`)*
 - **REST Versions:** `GET https://lol-api-champion.op.gg/api/{region}/champions/ranked/versions`
+- **REST ARAM Tier List:** `GET https://lol-api-champion.op.gg/api/global/champions/aram` *(fonte primária JSON para ARAM Clássico e lista de campeões do ARAM Mayhem em `analytics/aram.rs`, zero scraping no fluxo normal)*
 - **REST Analysis / Positions:** `https://lol-api-champion.op.gg/api/{region}/champions/{mode}/{champion}/{position}` (ver `build_provider/analytics/`)
 
 ## Recorte Real (REST JSON)
@@ -25,5 +26,5 @@
   }
 }
 ```
-> Também suporta wrapper MCP em `/result/content/0/text` (markdown/texto estruturado parseado por `analytics/{mcp_parser,mcp_extractors,mcp_stats}.rs`).
+> Também suporta wrapper MCP em `/result/content/0/text` (DSL estruturada parseada por `analytics/{mcp_parser,mcp_extractors,mcp_stats}.rs` e `analytics/aram/mcp_augments.rs`).
 > Normalização: `win_rate`/`pick_rate` ≤ `1.0` são multiplicados por `100` com 1 casa decimal.

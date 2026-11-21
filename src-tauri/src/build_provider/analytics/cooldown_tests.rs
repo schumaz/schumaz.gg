@@ -1,8 +1,8 @@
 use super::*;
-use crate::build_provider::analytics::aram::fetch_aram_mayhem_augments_with_base_locale_and_dir;
+use crate::build_provider::analytics::aram::fetch_aram_mayhem_augments_with_endpoints_locale_and_dir;
 use crate::build_provider::analytics::client::fetch_opgg_rest_champion_analysis_from_base;
 use crate::build_provider::models::DataDragonCache;
-use crate::models::{AppLocale, AramAugmentEntry, ArenaAugmentMetadata};
+use crate::models::{AppLocale, AramAugmentEntry, ArenaAugmentMetadata, ChampionMetadata};
 use std::collections::HashMap;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -106,10 +106,10 @@ async fn test_analytics_cooldown_prevents_burst_retries_on_429_and_allows_stale_
         "second immediate call should short-circuit via cooldown"
     );
 
-    // 2. ARAM Mayhem augments returning 503 with stale `.lz4`: two rapid calls hit network ONCE
-    //    and both gracefully serve Stale-While-Error from disk.
-    Mock::given(method("GET"))
-        .and(path("/cooldown_mayhem/pt/ahri/augments"))
+    // 2. ARAM Mayhem MCP returning 503 with stale `.lz4`: two rapid calls hit MCP ONCE
+    //    and both gracefully serve Stale-While-Error from disk (0 HTML calls).
+    Mock::given(method("POST"))
+        .and(path("/cooldown_mcp"))
         .respond_with(ResponseTemplate::new(503))
         .expect(1)
         .mount(&mock_server)
@@ -119,6 +119,16 @@ async fn test_analytics_cooldown_prevents_burst_retries_on_429_and_allows_stale_
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
+    let champions = HashMap::from([(
+        103,
+        ChampionMetadata {
+            champion_id: 103,
+            key_name: "Ahri".to_string(),
+            display_name: "Ahri".to_string(),
+            icon_url: "https://ddragon.leagueoflegends.com/cdn/16.25.1/img/champion/Ahri.png"
+                .to_string(),
+        },
+    )]);
     let mut arena_augments = HashMap::new();
     arena_augments.insert(
         3075,
@@ -133,6 +143,7 @@ async fn test_analytics_cooldown_prevents_burst_retries_on_429_and_allows_stale_
     );
     let dd = DataDragonCache {
         version: "16.25.1".to_string(),
+        champions,
         arena_augments,
         ..Default::default()
     };
@@ -154,10 +165,12 @@ async fn test_analytics_cooldown_prevents_burst_retries_on_429_and_allows_stale_
     }];
     crate::storage::write_lz4_envelope_at(&aug_path, "16.25", &stale_payload, 1).unwrap();
 
+    let mcp_url = format!("{}/cooldown_mcp", mock_server.uri());
     let web_base = format!("{}/cooldown_mayhem/pt", mock_server.uri());
-    let r1 = fetch_aram_mayhem_augments_with_base_locale_and_dir(
+    let r1 = fetch_aram_mayhem_augments_with_endpoints_locale_and_dir(
         &client,
         "Ahri",
+        &mcp_url,
         &web_base,
         AppLocale::PtBr,
         &dd,
@@ -165,9 +178,10 @@ async fn test_analytics_cooldown_prevents_burst_retries_on_429_and_allows_stale_
     )
     .await
     .unwrap();
-    let r2 = fetch_aram_mayhem_augments_with_base_locale_and_dir(
+    let r2 = fetch_aram_mayhem_augments_with_endpoints_locale_and_dir(
         &client,
         "Ahri",
+        &mcp_url,
         &web_base,
         AppLocale::PtBr,
         &dd,

@@ -35,6 +35,66 @@ pub(crate) fn get_augments_cache() -> &'static RwLock<AugmentsCacheMap> {
     ARAM_AUGMENTS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
+pub(crate) fn aram_tier_cache_key(
+    mode: AramMode,
+    locale: AppLocale,
+    aram_rest_url: &str,
+    mayhem_web_url: &str,
+) -> String {
+    match mode {
+        AramMode::Aram => format!("aram:{}:{}", locale.as_str(), aram_rest_url),
+        AramMode::AramMayhem => format!(
+            "mayhem:{}:{}:{}",
+            locale.as_str(),
+            aram_rest_url,
+            mayhem_web_url
+        ),
+    }
+}
+
+pub(crate) fn aram_augments_cache_key(
+    locale: AppLocale,
+    mcp_endpoint: &str,
+    web_base: &str,
+    normalized_champ: &str,
+) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        locale.as_str(),
+        mcp_endpoint,
+        web_base,
+        normalized_champ
+    )
+}
+
+pub(crate) fn persist_aram_augments(
+    augments: &[AramAugmentEntry],
+    locale: AppLocale,
+    normalized: &str,
+    aram_dir: Option<&Path>,
+    known_latest: Option<&str>,
+    cache_key: String,
+) {
+    if augments.is_empty() {
+        return;
+    }
+    let patch = known_latest.unwrap_or("");
+    if let Some(dir) = aram_dir {
+        let path = aram_augments_file_path(dir, locale, normalized);
+        let _ = crate::storage::write_lz4_envelope(&path, patch, &augments);
+    }
+    if let Ok(mut guard) = get_augments_cache().write() {
+        guard.insert(
+            cache_key,
+            CachedAramEntry {
+                cached_at: Instant::now(),
+                patch: patch.to_string(),
+                payload: augments.to_vec(),
+            },
+        );
+    }
+}
+
 pub(crate) fn aram_ram_ttl(mode: AramMode) -> Duration {
     match mode {
         AramMode::Aram => ARAM_CACHE_TTL,
@@ -165,16 +225,9 @@ pub(crate) fn prewarm_aram_tier_lists_from_dir_at(
 ) -> usize {
     let mut warmed = 0;
 
-    for (mode, url_key_prefix) in [
-        (
-            AramMode::Aram,
-            format!("aram:{}:{}", locale.as_str(), OPGG_ARAM_REST_URL),
-        ),
-        (
-            AramMode::AramMayhem,
-            format!("mayhem:{}:{}", locale.as_str(), OPGG_ARAM_MAYHEM_WEB_URL),
-        ),
-    ] {
+    for mode in [AramMode::Aram, AramMode::AramMayhem] {
+        let url_key =
+            aram_tier_cache_key(mode, locale, OPGG_ARAM_REST_URL, OPGG_ARAM_MAYHEM_WEB_URL);
         let path = aram_tier_file_path(dir, mode, locale);
         let Some(mut env) = crate::storage::read_lz4_envelope::<Vec<AramChampionRank>>(&path)
         else {
@@ -193,7 +246,7 @@ pub(crate) fn prewarm_aram_tier_lists_from_dir_at(
         rehydrate_aram_names(&mut env.payload, ddragon);
         if let Ok(mut guard) = get_tier_cache().write() {
             guard.insert(
-                url_key_prefix,
+                url_key,
                 CachedAramEntry {
                     cached_at: Instant::now(),
                     patch: env.patch,
