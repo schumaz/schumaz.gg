@@ -29,7 +29,7 @@ fn test_asset_segment_roundtrip_and_allowlist() {
     assert!(is_allowed_asset_url(
         "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/images/emerald.png"
     ));
-    assert!(is_allowed_asset_url(
+    assert!(!is_allowed_asset_url(
         "https://opgg-static.akamaized.net/meta/images/lol/latest/perk/8112.png"
     ));
     assert!(!is_allowed_asset_url(

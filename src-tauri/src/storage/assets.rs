@@ -11,10 +11,9 @@ pub use self::singleflight::AssetSingleflight;
 use self::singleflight::{AssetSharedResult, FlightStep, global_singleflight};
 use super::{AppPaths, atomic_write, fnv1a_128_hex, touch_mtime};
 
-const ALLOWED_ASSET_PREFIXES: [&str; 3] = [
+const ALLOWED_ASSET_PREFIXES: [&str; 2] = [
     "https://ddragon.leagueoflegends.com/",
     "https://raw.communitydragon.org/",
-    "https://opgg-static.akamaized.net/",
 ];
 
 const B64_URL_ALPHABET: &[u8; 64] =

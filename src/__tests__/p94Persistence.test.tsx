@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { usePreferences } from "../features/settings/usePreferences";
 import { useAram } from "../features/aram/useAram";
 import { useRanked } from "../features/ranked/useRanked";
-import { buildAssetSegment, resolveCachedAssetUrl } from "../utils/assets";
+import { buildAssetSegment, isAllowedAssetUrl, resolveCachedAssetUrl } from "../utils/assets";
 import type { AppSettings } from "../types";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -91,15 +91,18 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
       const opggUrl = "https://opgg-static.akamaized.net/meta/images/lol/16.22.1/perk/8112.png";
       const untrustedUrl = "https://evil.example.com/payload.png";
 
+      expect(isAllowedAssetUrl(ddUrl)).toBe(true);
+      expect(isAllowedAssetUrl(cdUrl)).toBe(true);
+      expect(isAllowedAssetUrl(opggUrl)).toBe(false);
+      expect(isAllowedAssetUrl(untrustedUrl)).toBe(false);
+
       expect(resolveCachedAssetUrl(ddUrl)).toBe(
         `schumaz-asset://localhost/${buildAssetSegment(ddUrl)}`
       );
       expect(resolveCachedAssetUrl(cdUrl)).toBe(
         `schumaz-asset://localhost/${buildAssetSegment(cdUrl)}`
       );
-      expect(resolveCachedAssetUrl(opggUrl)).toBe(
-        `schumaz-asset://localhost/${buildAssetSegment(opggUrl)}`
-      );
+      expect(resolveCachedAssetUrl(opggUrl)).toBe(opggUrl);
       expect(resolveCachedAssetUrl(untrustedUrl)).toBe(untrustedUrl);
       expect(buildAssetSegment(ddUrl)).toMatch(/^v1_[A-Za-z0-9_-]+\.jpg$/);
     });

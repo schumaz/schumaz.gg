@@ -9,7 +9,6 @@ export { SCHUMAZ_ASSET_PROTOCOL, isTauriRuntime };
 const ALLOWED_ASSET_PREFIXES = [
   "https://ddragon.leagueoflegends.com/",
   "https://raw.communitydragon.org/",
-  "https://opgg-static.akamaized.net/",
 ] as const;
 
 const VALID_ASSET_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg", "gif"]);
@@ -47,7 +46,7 @@ export function buildAssetSegment(url: string): string {
 }
 
 /**
- * Resolves a remote Riot / CommunityDragon / OP.GG asset URL into the local
+ * Resolves a remote Riot / CommunityDragon asset URL into the local
  * `schumaz-asset` URI scheme when running inside Tauri so it is cached on disk
  * (`%LOCALAPPDATA%\schumazgg\Cache\assets\`). Outside Tauri (jsdom/Vitest),
  * returns the remote URL verbatim.
