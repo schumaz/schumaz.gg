@@ -166,12 +166,13 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     {
         Some(p.to_lowercase())
     } else {
+        let initial_patch_opt = (!initial_patch.is_empty()).then_some(initial_patch.as_str());
         let resolved = resolve_champion_most_played_lane(
             client,
             champion_id,
             target_region,
             target_tier,
-            Some(&initial_patch),
+            initial_patch_opt,
         )
         .await
         .unwrap_or_else(|_| champion_default_lane(champ_name).to_string());

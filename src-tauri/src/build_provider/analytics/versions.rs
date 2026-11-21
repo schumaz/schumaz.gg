@@ -18,6 +18,25 @@ pub fn opgg_versions_file_path(dir: &Path, region: &str) -> PathBuf {
     dir.join(format!("versions_{reg}.lz4"))
 }
 
+/// Derives a canonical `major.minor` patch string from a DataDragon version (e.g. `"16.24.1"` -> `Some("16.24")`).
+pub(crate) fn derive_patch_major_minor(ddragon_version: &str) -> Option<String> {
+    let mut parts = ddragon_version.trim().split('.');
+    let major = parts.next()?.trim();
+    let minor = parts.next()?.trim();
+    if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok() {
+        Some(format!("{major}.{minor}"))
+    } else {
+        None
+    }
+}
+
+fn emergency_versions_from_ddragon(ddragon_version: Option<&str>) -> Vec<String> {
+    ddragon_version
+        .and_then(derive_patch_major_minor)
+        .map(|patch| vec![patch])
+        .unwrap_or_default()
+}
+
 /// Non-blocking peek at the latest known OP.GG patch for `region` from RAM or disk `.lz4`.
 pub fn peek_latest_cached_opgg_version(region: &str) -> Option<String> {
     let cache_key = format!("{}:{}", OPGG_REST_API_BASE, region);
@@ -36,13 +55,12 @@ pub fn peek_latest_cached_opgg_version(region: &str) -> Option<String> {
     None
 }
 
-/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (48h TTL)
-/// and Stale-While-Error offline fallback.
-pub async fn fetch_opgg_versions_with_cache_dir(
+async fn fetch_opgg_versions_internal(
     client: &reqwest::Client,
     rest_base: &str,
     region: &str,
     versions_dir: Option<&Path>,
+    ddragon_version_override: Option<&str>,
 ) -> Vec<String> {
     let cache_key = format!("{}:{}", rest_base, region);
     if let Ok(guard) = get_versions_cache().read()
@@ -103,7 +121,25 @@ pub async fn fetch_opgg_versions_with_cache_dir(
         return env.payload;
     }
 
-    vec!["16.22".to_string(), "16.21".to_string()]
+    // Dynamic emergency fallback: derive `major.minor` from cached DataDragon version (no hardcoded patches)
+    if let Some(explicit) = ddragon_version_override {
+        return emergency_versions_from_ddragon(Some(explicit));
+    }
+    let dd_version = crate::build_provider::ddragon::peek_cached_ddragon_version(
+        crate::lcu_injector::get_active_locale(),
+    );
+    emergency_versions_from_ddragon(dd_version.as_deref())
+}
+
+/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (48h TTL)
+/// and Stale-While-Error offline fallback.
+pub async fn fetch_opgg_versions_with_cache_dir(
+    client: &reqwest::Client,
+    rest_base: &str,
+    region: &str,
+    versions_dir: Option<&Path>,
+) -> Vec<String> {
+    fetch_opgg_versions_internal(client, rest_base, region, versions_dir, None).await
 }
 
 /// Fetches available patch versions from the OP.GG REST API with in-memory TTL + disk caching.
