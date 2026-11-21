@@ -1,8 +1,180 @@
+use crate::models::AppLocale;
+
+const ABILITY_SLOT_MARKER: &str = "__ABILITY_SLOT__";
+
 pub fn normalize_opgg_champion_key(raw: &str) -> String {
     raw.chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .flat_map(|c| c.to_lowercase())
         .collect()
+}
+
+/// Returns `true` when an augment title looks like an untranslated Riot internal key
+/// (e.g. `GoH_PentakillAug_Generic`, `ARAM_BreadAndCheese`) with underscores and no spaces.
+pub fn is_internal_augment_key(name: &str) -> bool {
+    let trimmed = name.trim();
+    trimmed.contains('_') && !trimmed.contains(' ')
+}
+
+/// Returns `true` if `desc` contains a standalone unresolved Riot/OP.GG `?` placeholder
+/// (such as `"with ?,"`, `"Empower ?!"`, `"Gain ? Attack Range"`, `"every ?s."`),
+/// while ignoring legitimate sentence-ending question marks and `"???"`.
+pub fn has_unresolved_augment_placeholder(desc: &str) -> bool {
+    let bytes = desc.as_bytes();
+    for (i, &b) in bytes.iter().enumerate() {
+        if b != b'?' {
+            continue;
+        }
+        let prev_is_q = i > 0 && bytes[i - 1] == b'?';
+        let next_is_q = i + 1 < bytes.len() && bytes[i + 1] == b'?';
+        if prev_is_q || next_is_q {
+            continue;
+        }
+        let prev_boundary =
+            i == 0 || bytes[i - 1].is_ascii_whitespace() || matches!(bytes[i - 1], b'(' | b'>');
+        let next_boundary = i + 1 == bytes.len()
+            || bytes[i + 1].is_ascii_whitespace()
+            || matches!(
+                bytes[i + 1],
+                b',' | b'.' | b'!' | b':' | b';' | b')' | b'%' | b'<'
+            )
+            || (bytes[i + 1] == b's'
+                && (i + 2 == bytes.len() || !bytes[i + 2].is_ascii_alphabetic()));
+        if prev_boundary && next_boundary {
+            return true;
+        }
+    }
+    false
+}
+
+/// Replaces OP.GG ability-slot tags (`<font color='#F0C200'>?</font>`) before HTML stripping.
+fn replace_ability_slot_font_tags(raw: &str, ability_slot: Option<&str>) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    let replacement = ability_slot
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(ABILITY_SLOT_MARKER);
+
+    while let Some(font_pos) = rest.find("<font") {
+        let after_font = &rest[font_pos..];
+        let Some(gt_rel) = after_font.find('>') else {
+            break;
+        };
+        let after_gt = &after_font[gt_rel + 1..];
+        if let Some(close_rel) = after_gt.find("</font>") {
+            let inner = after_gt[..close_rel].trim();
+            if inner == "?" {
+                out.push_str(&rest[..font_pos]);
+                out.push_str(replacement);
+                rest = &after_gt[close_rel + "</font>".len()..];
+                continue;
+            }
+        }
+        out.push_str(&rest[..font_pos + gt_rel + 1]);
+        rest = after_gt;
+    }
+
+    out.push_str(rest);
+    out
+}
+
+fn resolve_ability_slot_markers(text: &str, locale: AppLocale) -> String {
+    if !text.contains(ABILITY_SLOT_MARKER) {
+        return text.to_string();
+    }
+
+    let mut s = match locale {
+        AppLocale::EnUs => text
+            .replace(&format!("Your {ABILITY_SLOT_MARKER}"), "Your Ability")
+            .replace(&format!("your {ABILITY_SLOT_MARKER}"), "your Ability")
+            .replace(
+                &format!("Empowered {ABILITY_SLOT_MARKER}"),
+                "Empowered Ability",
+            )
+            .replace(
+                &format!("empowered {ABILITY_SLOT_MARKER}"),
+                "empowered Ability",
+            )
+            .replace(&format!(". {ABILITY_SLOT_MARKER}"), ". An Ability")
+            .replace(&format!("! {ABILITY_SLOT_MARKER}"), "! An Ability"),
+        AppLocale::PtBr => text
+            .replace(&format!(". {ABILITY_SLOT_MARKER}"), ". Uma habilidade")
+            .replace(&format!("! {ABILITY_SLOT_MARKER}"), "! Uma habilidade"),
+    };
+
+    if s.starts_with(ABILITY_SLOT_MARKER) {
+        let start_phrase = match locale {
+            AppLocale::EnUs => "An Ability",
+            AppLocale::PtBr => "Uma habilidade",
+        };
+        s = format!("{start_phrase}{}", &s[ABILITY_SLOT_MARKER.len()..]);
+    }
+
+    let fallback_phrase = match locale {
+        AppLocale::EnUs => "an Ability",
+        AppLocale::PtBr => "uma habilidade",
+    };
+    s.replace(ABILITY_SLOT_MARKER, fallback_phrase)
+}
+
+/// Cleans unresolved numeric or residual `?` placeholders in plain text without inventing numbers.
+pub fn sanitize_augment_placeholders(text: &str, locale: AppLocale) -> String {
+    if !has_unresolved_augment_placeholder(text) {
+        return text.to_string();
+    }
+
+    let mut s = match locale {
+        AppLocale::EnUs => text
+            .replace("every ?s", "periodically")
+            .replace("for ?s", "briefly")
+            .replace("Gain ? ", "Gain bonus ")
+            .replace("gain ? ", "gain bonus ")
+            .replace("and ? ", "and bonus ")
+            .replace("Deal an extra ? ", "Deal bonus ")
+            .replace("an extra ? ", "bonus ")
+            .replace("dealing ? ", "dealing ")
+            .replace("Score ? ", "Score ")
+            .replace(" by ?%", ""),
+        AppLocale::PtBr => text
+            .replace("a cada ?s", "periodicamente")
+            .replace("por ?s", "brevemente")
+            .replace("Recebe ? de ", "Recebe bônus de ")
+            .replace("recebe ? de ", "recebe bônus de ")
+            .replace("e ? de ", "e bônus de ")
+            .replace("Causa ? de dano adicional", "Causa dano adicional")
+            .replace("causando ? de ", "causando ")
+            .replace("consiga ? ", "consiga ")
+            .replace(" em ?%", "")
+            .replace(" ? de ", " "),
+    };
+
+    // Generic cleanup for any remaining mid-sentence standalone `?` placeholder.
+    s = s
+        .replace(" ?% ", " ")
+        .replace(" ?%", "")
+        .replace(" ?s.", ".")
+        .replace(" ?s,", ",")
+        .replace(" ?s ", " ")
+        .replace(" ? ", " ")
+        .replace(" ?,", ",")
+        .replace(" ?.", ".")
+        .replace(" ?!", "!")
+        .replace(" ?:", ":")
+        .replace(". ? ", ". ")
+        .replace("! ? ", "! ");
+
+    if let Some(stripped) = s.strip_prefix("? ") {
+        s = stripped.to_string();
+    }
+
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" ,", ",")
+        .replace(" .", ".")
+        .replace(" !", "!")
+        .replace(" :", ":")
 }
 
 pub fn clean_augment_description(raw: &str) -> String {
@@ -26,6 +198,19 @@ pub fn clean_augment_description(raw: &str) -> String {
     }
 
     out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Cleans HTML augment descriptions while resolving `<font color='#F0C200'>?</font>` ability-slot
+/// tokens (using `ability_slot` when known or a localized term) and residual `?` placeholders.
+pub fn clean_augment_description_with_context(
+    raw: &str,
+    locale: AppLocale,
+    ability_slot: Option<&str>,
+) -> String {
+    let pre = replace_ability_slot_font_tags(raw, ability_slot);
+    let stripped = clean_augment_description(&pre);
+    let with_slots = resolve_ability_slot_markers(&stripped, locale);
+    sanitize_augment_placeholders(&with_slots, locale)
 }
 
 pub(crate) fn round_pct(val: f64) -> f64 {
@@ -112,3 +297,7 @@ pub(crate) fn extract_balanced_json_array(source: &str, array_start_idx: usize) 
 
     None
 }
+
+#[cfg(test)]
+#[path = "sanitize_tests.rs"]
+mod sanitize_tests;

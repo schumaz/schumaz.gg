@@ -39,6 +39,7 @@ fn make_arena_ddragon() -> DataDragonCache {
             desc: "Recebe +25% de Cura e Escudo.".to_string(),
             icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/firstaidkit_small.png".to_string(),
             rarity: 1,
+            ability_slot: None,
         },
     );
     arena_augments.insert(
@@ -49,6 +50,7 @@ fn make_arena_ddragon() -> DataDragonCache {
             desc: String::new(),
             icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/proteinshake_small.png".to_string(),
             rarity: 8,
+            ability_slot: None,
         },
     );
 

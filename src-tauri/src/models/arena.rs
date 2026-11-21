@@ -13,6 +13,10 @@ pub struct ArenaAugmentMetadata {
     /// Canonical rarity matching OP.GG (`1` = Silver, `4` = Gold, `8` = Prismatic).
     #[serde(default)]
     pub rarity: i32,
+    /// Optional fixed ability slot (`"Q"`, `"W"`, `"E"`, `"R"`) derived from Riot's
+    /// `augmentNameId` or `@spellNKeyBind@` tokens when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ability_slot: Option<String>,
 }
 
 /// Ranked champion entry in the Arena (`CHERRY` / 3x6) tier list.

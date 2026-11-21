@@ -1,4 +1,7 @@
 use super::super::client::peek_latest_cached_opgg_version;
+use super::html_extract::{
+    has_unresolved_augment_placeholder, is_internal_augment_key, sanitize_augment_placeholders,
+};
 use super::{OPGG_ARAM_MAYHEM_WEB_URL, OPGG_ARAM_REST_URL};
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank, AramMode};
@@ -53,16 +56,43 @@ pub(crate) fn has_any_augment_description(list: &[AramAugmentEntry]) -> bool {
     list.iter().any(|entry| !entry.desc.trim().is_empty())
 }
 
+/// Returns `true` when cached ARAM augments have populated, clean descriptions
+/// (no blank-desc cache, no unresolved `?` placeholders, and no raw internal keys).
+pub(crate) fn has_valid_augment_descriptions(list: &[AramAugmentEntry]) -> bool {
+    has_any_augment_description(list)
+        && !list.iter().any(|entry| {
+            has_unresolved_augment_placeholder(&entry.desc) || is_internal_augment_key(&entry.name)
+        })
+}
+
+/// Best-effort sanitization for offline `stale_fallback` entries so raw `?` placeholders
+/// and internal Riot keys are cleaned even when network refresh is unavailable.
+pub(crate) fn sanitize_stale_augment_entries(list: &mut Vec<AramAugmentEntry>, locale: AppLocale) {
+    list.retain_mut(|entry| {
+        if is_internal_augment_key(&entry.name) {
+            return false;
+        }
+        if has_unresolved_augment_placeholder(&entry.desc) {
+            entry.desc = sanitize_augment_placeholders(&entry.desc, locale);
+        }
+        true
+    });
+}
+
 pub(crate) fn rehydrate_aram_augments(list: &mut Vec<AramAugmentEntry>, ddragon: &DataDragonCache) {
     if ddragon.arena_augments.is_empty() {
-        for entry in list.iter_mut() {
+        list.retain_mut(|entry| {
+            if is_internal_augment_key(&entry.name) {
+                return false;
+            }
             let trimmed = entry.icon_url.trim();
             let is_official = trimmed.starts_with("https://raw.communitydragon.org/")
                 || trimmed.starts_with("https://ddragon.leagueoflegends.com/");
             if !is_official {
                 entry.icon_url.clear();
             }
-        }
+            true
+        });
         return;
     }
 
@@ -71,7 +101,7 @@ pub(crate) fn rehydrate_aram_augments(list: &mut Vec<AramAugmentEntry>, ddragon:
             return false;
         };
         let name = meta.name.trim();
-        if name.is_empty() {
+        if name.is_empty() || is_internal_augment_key(name) {
             return false;
         }
         entry.name = name.to_string();

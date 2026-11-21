@@ -1,9 +1,9 @@
 use super::html_extract::{
-    clean_augment_description, decode_next_f_stream, extract_balanced_json_array,
-    normalize_opgg_champion_key, round_pct,
+    clean_augment_description_with_context, decode_next_f_stream, extract_balanced_json_array,
+    is_internal_augment_key, normalize_opgg_champion_key, round_pct,
 };
 use crate::build_provider::models::DataDragonCache;
-use crate::models::{AramAugmentEntry, AramChampionRank};
+use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -169,9 +169,10 @@ pub fn parse_aram_mayhem_champions_html(
     Ok(champions)
 }
 
-pub fn parse_aram_mayhem_augments_html(
+pub fn parse_aram_mayhem_augments_html_for_locale(
     html: &str,
     ddragon: &DataDragonCache,
+    locale: AppLocale,
 ) -> Result<Vec<AramAugmentEntry>, String> {
     let rsc = decode_next_f_stream(html);
     let source = if rsc.is_empty() { html } else { &rsc };
@@ -203,13 +204,17 @@ pub fn parse_aram_mayhem_augments_html(
         .filter_map(|item| {
             let meta = ddragon.arena_augments.get(&item.id)?;
             let name = meta.name.trim();
-            if name.is_empty() {
+            if name.is_empty() || is_internal_augment_key(name) {
                 return None;
             }
             let desc = if !meta.desc.trim().is_empty() {
                 meta.desc.clone()
             } else {
-                clean_augment_description(item.desc.as_deref().unwrap_or(""))
+                clean_augment_description_with_context(
+                    item.desc.as_deref().unwrap_or(""),
+                    locale,
+                    meta.ability_slot.as_deref(),
+                )
             };
 
             Some(AramAugmentEntry {
@@ -234,4 +239,11 @@ pub fn parse_aram_mayhem_augments_html(
     });
 
     Ok(augments)
+}
+
+pub fn parse_aram_mayhem_augments_html(
+    html: &str,
+    ddragon: &DataDragonCache,
+) -> Result<Vec<AramAugmentEntry>, String> {
+    parse_aram_mayhem_augments_html_for_locale(html, ddragon, AppLocale::EnUs)
 }

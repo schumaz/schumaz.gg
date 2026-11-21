@@ -1,4 +1,8 @@
-use crate::build_provider::analytics::aram::clean_augment_description;
+use super::augment_interpolate::{
+    infer_ability_slot_from_desc, infer_ability_slot_from_name_id, interpolate_arena_desc,
+    normalize_augment_lookup_name,
+};
+use crate::build_provider::analytics::aram::{clean_augment_description, is_internal_augment_key};
 use crate::models::{AppLocale, ArenaAugmentMetadata};
 use std::collections::HashMap;
 
@@ -28,9 +32,7 @@ pub fn cdragon_arena_desc_url_for_locale(locale: AppLocale) -> String {
     format!("{}/cdragon/arena/{}.json", CDRAGON_BASE_URL, cd_locale)
 }
 
-/// Converts a Riot `cherry-augments.json` asset path (e.g.
-/// `/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/FirstAidKit_small.png`)
-/// into a cached-protocol-compatible CommunityDragon HTTPS URL.
+/// Converts a Riot `cherry-augments.json` asset path into a cached-protocol-compatible CDragon URL.
 pub fn resolve_arena_augment_icon_url(raw_path: &str) -> String {
     let trimmed = raw_path.trim();
     if trimmed.is_empty() {
@@ -90,18 +92,18 @@ pub fn parse_cdragon_cherry_augments(
         let Some(id) = entry.get("id").and_then(|v| v.as_i64()).map(|n| n as i32) else {
             continue;
         };
+        let name_id = entry
+            .get("augmentNameId")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
         let name = entry
             .get("nameTRA")
             .or_else(|| entry.get("name"))
             .and_then(|v| v.as_str())
             .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                entry
-                    .get("augmentNameId")
-                    .and_then(|v| v.as_str())
-                    .map(str::trim)
-            })
+            .filter(|s| !s.is_empty() && !is_internal_augment_key(s))
+            .or_else(|| name_id.filter(|s| !is_internal_augment_key(s)))
             .unwrap_or("")
             .to_string();
         if name.is_empty() {
@@ -133,67 +135,12 @@ pub fn parse_cdragon_cherry_augments(
                 desc: clean_augment_description(raw_desc),
                 icon_url: resolve_arena_augment_icon_url(icon_raw),
                 rarity: parse_cherry_rarity(entry.get("rarity")),
+                ability_slot: name_id.and_then(infer_ability_slot_from_name_id),
             },
         );
     }
 
     map
-}
-
-fn format_data_value(val: f64) -> String {
-    let rounded = (val * 10.0).round() / 10.0;
-    if (rounded.fract()).abs() < 1e-6 {
-        format!("{}", rounded as i64)
-    } else {
-        format!("{:.1}", rounded)
-    }
-}
-
-fn interpolate_arena_desc(
-    raw: &str,
-    data_values: Option<&serde_json::Map<String, serde_json::Value>>,
-) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut rest = raw;
-    while let Some(start) = rest.find('@') {
-        out.push_str(&rest[..start]);
-        let after = &rest[start + 1..];
-        let Some(end) = after.find('@') else {
-            out.push_str(&rest[start..]);
-            rest = "";
-            break;
-        };
-        let token = &after[..end];
-        rest = &after[end + 1..];
-
-        let (key, mult) = if let Some((k, m)) = token.split_once('*') {
-            (k.trim(), m.trim().parse::<f64>().unwrap_or(1.0))
-        } else {
-            (token.trim(), 1.0)
-        };
-
-        let resolved = data_values.and_then(|dv| {
-            let val = dv.get(key)?;
-            val.as_f64().or_else(|| {
-                val.as_array()
-                    .and_then(|a| a.first())
-                    .and_then(|x| x.as_f64())
-            })
-        });
-
-        if let Some(num) = resolved {
-            out.push_str(&format_data_value(num * mult));
-        }
-    }
-    out.push_str(rest);
-    clean_augment_description(&out)
-}
-
-fn normalize_augment_lookup_name(raw: &str) -> String {
-    raw.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
 }
 
 /// Supplements empty descriptions (and missing legacy entries) in `augments` using
@@ -207,7 +154,7 @@ pub fn supplement_arena_augment_descriptions(
         return;
     };
 
-    let mut desc_by_name: HashMap<String, String> = HashMap::with_capacity(arr.len());
+    let mut by_name: HashMap<String, (String, Option<String>)> = HashMap::with_capacity(arr.len());
 
     for entry in arr {
         let Some(id) = entry.get("id").and_then(|v| v.as_i64()).map(|n| n as i32) else {
@@ -220,24 +167,30 @@ pub fn supplement_arena_augment_descriptions(
             .unwrap_or("");
         let data_values = entry.get("dataValues").and_then(|v| v.as_object());
         let cleaned = interpolate_arena_desc(raw_desc, data_values);
+        let inferred_slot = infer_ability_slot_from_desc(raw_desc);
         let entry_name = entry
             .get("name")
             .and_then(|v| v.as_str())
             .map(str::trim)
-            .filter(|s| !s.is_empty());
+            .filter(|s| !s.is_empty() && !is_internal_augment_key(s));
 
-        if !cleaned.is_empty()
+        if (!cleaned.is_empty() || inferred_slot.is_some())
             && let Some(name) = entry_name
         {
             let norm = normalize_augment_lookup_name(name);
             if !norm.is_empty() {
-                desc_by_name.entry(norm).or_insert_with(|| cleaned.clone());
+                by_name
+                    .entry(norm)
+                    .or_insert_with(|| (cleaned.clone(), inferred_slot.clone()));
             }
         }
 
         if let Some(existing) = augments.get_mut(&id) {
             if existing.desc.is_empty() && !cleaned.is_empty() {
                 existing.desc = cleaned;
+            }
+            if existing.ability_slot.is_none() && inferred_slot.is_some() {
+                existing.ability_slot = inferred_slot;
             }
             if existing.icon_url.is_empty()
                 && let Some(icon) = entry.get("iconSmall").and_then(|v| v.as_str())
@@ -258,17 +211,21 @@ pub fn supplement_arena_augment_descriptions(
                     desc: cleaned,
                     icon_url: resolve_arena_augment_icon_url(icon),
                     rarity: parse_cherry_rarity(entry.get("rarity")),
+                    ability_slot: inferred_slot,
                 },
             );
         }
     }
 
-    if !desc_by_name.is_empty() {
+    if !by_name.is_empty() {
         for existing in augments.values_mut() {
-            if existing.desc.is_empty() {
-                let norm = normalize_augment_lookup_name(&existing.name);
-                if let Some(desc) = desc_by_name.get(&norm) {
+            let norm = normalize_augment_lookup_name(&existing.name);
+            if let Some((desc, slot)) = by_name.get(&norm) {
+                if existing.desc.is_empty() && !desc.is_empty() {
                     existing.desc = desc.clone();
+                }
+                if existing.ability_slot.is_none() && slot.is_some() {
+                    existing.ability_slot = slot.clone();
                 }
             }
         }
@@ -276,8 +233,6 @@ pub fn supplement_arena_augment_descriptions(
 }
 
 /// Best-effort fetch of localized Arena augments metadata (`cherry-augments.json` + optional descriptions).
-/// When `base_url` is a custom mock server (tests), queries `{base_url}/cherry-augments.json` only
-/// and never touches external hosts.
 pub(super) async fn fetch_arena_augments_catalog(
     client: &reqwest::Client,
     base_url: &str,

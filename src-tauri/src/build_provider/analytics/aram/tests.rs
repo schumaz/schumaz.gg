@@ -14,6 +14,7 @@ fn aug_meta(id: i32, name: &str, desc: &str, icon: &str, rarity: i32) -> ArenaAu
         desc: desc.to_string(),
         icon_url: format!("{CDRAGON_AUG_PREFIX}{icon}"),
         rarity,
+        ability_slot: None,
     }
 }
 
@@ -37,7 +38,6 @@ fn test_ddragon() -> DataDragonCache {
             icon_url: "https://ddragon.example/Swain.png".to_string(),
         },
     );
-
     let mut arena_augments = HashMap::new();
     arena_augments.insert(
         1074,
@@ -54,7 +54,6 @@ fn test_ddragon() -> DataDragonCache {
         ),
     );
     arena_augments.insert(3075, aug_meta(3075, "Coice", "", "recoil_small.png", 4));
-
     DataDragonCache {
         version: "16.22.1".to_string(),
         champions,
@@ -186,24 +185,23 @@ fn test_parse_aram_mayhem_augments_hydrates_assets_from_cdragon_and_falls_back_d
     let escaped = serde_json::to_string(inner).unwrap();
     let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
 
-    let augments = parse_aram_mayhem_augments_html(&html, &test_ddragon()).unwrap();
+    let augments =
+        parse_aram_mayhem_augments_html_for_locale(&html, &test_ddragon(), AppLocale::PtBr)
+            .unwrap();
     assert_eq!(augments.len(), 3);
-    // meta.desc empty -> falls back to sanitized item.desc, while icon/name/rarity come from CDragon
     assert_eq!(augments[0].id, 3075);
     assert_eq!(augments[0].name, "Coice");
     assert_eq!(augments[0].rarity, Some(4));
-    assert_eq!(augments[0].desc, "? causa dano.");
+    assert_eq!(augments[0].desc, "Uma habilidade causa dano.");
     assert!(
         augments[0]
             .icon_url
             .starts_with("https://raw.communitydragon.org/")
     );
-    // meta.desc non-empty -> prefers CDragon meta.desc over item.desc
     assert_eq!(augments[1].id, 2062);
     assert_eq!(augments[1].name, "Conjuração Ecoante");
     assert_eq!(augments[1].rarity, Some(8));
     assert_eq!(augments[1].desc, "Conjura duas vezes.");
-    // meta.desc empty -> sanitized HTML tags stripped cleanly
     assert_eq!(augments[2].id, 1074);
     assert_eq!(augments[2].name, "Raio Encolhedor");
     assert_eq!(augments[2].desc, "Ao contato Reduz dano.");
@@ -287,7 +285,6 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     let dd = test_ddragon();
     let file_path = aram_augments_file_path(&dir, AppLocale::PtBr, "ahri");
 
-    // Seed a fresh .lz4 file with empty descriptions -> must auto-refresh from network to backfill
     let blank_cache = vec![AramAugmentEntry {
         id: 3075,
         name: "Coice".to_string(),
@@ -313,7 +310,6 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     assert_eq!(res1[0].name, "Coice");
     assert_eq!(res1[0].desc, "Dano extra.");
 
-    // Clear RAM, expire disk envelope with legacy icon -> Stale-While-Error rescues & rehydrates icon
     if let Ok(mut g) = get_augments_cache().write() {
         g.clear();
     }

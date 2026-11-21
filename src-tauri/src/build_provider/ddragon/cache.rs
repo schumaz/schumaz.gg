@@ -1,6 +1,7 @@
 use super::super::items::{get_dynamic_item_classifications, set_dynamic_item_classifications};
 use super::super::models::{DataDragonCache, ItemClassificationCache};
 use super::fetch::{fetch_ddragon_versions, load_ddragon_bundle_for_version};
+use crate::build_provider::analytics::aram::is_internal_augment_key;
 use crate::models::AppLocale;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -97,7 +98,7 @@ pub async fn load_ddragon_cache_from_base_url(
 }
 
 /// Checks `/api/versions.json` and refreshes both RAM and `metadata_{locale}.lz4` if a newer version exists
-/// or if Arena metadata (`arena_augments` / `map30_items`) is absent in an older cached bundle.
+/// or if Arena metadata (`arena_augments` / `map30_items` / `ability_slot`) needs backfilling.
 /// Falls back to the existing RAM/disk cache on network errors (*Stale-While-Error*).
 pub async fn refresh_ddragon_if_outdated_with_base(
     client: &reqwest::Client,
@@ -132,6 +133,10 @@ pub async fn refresh_ddragon_if_outdated_with_base(
     let needs_arena_backfill = base_url == DDRAGON_BASE_URL
         && existing.as_ref().is_some_and(|c| {
             c.arena_augments.is_empty()
+                || c.arena_augments
+                    .values()
+                    .any(|a| is_internal_augment_key(&a.name))
+                || !c.arena_augments.values().any(|a| a.ability_slot.is_some())
                 || get_dynamic_item_classifications().is_some_and(|cls| cls.map30_items.is_empty())
         });
 

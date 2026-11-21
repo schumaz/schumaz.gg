@@ -49,24 +49,15 @@ fn test_parse_ddragon_item_classifications_handles_map30_prismatics_447111_and_2
 
     let cache = parse_ddragon_item_classifications(&item_json);
 
-    // 443090 (2750g) is a real Prismatic and NOT a purchasable completed legendary
     assert!(cache.arena_prismatics.contains(&443090));
     assert!(!cache.completed.contains(&443090));
-
-    // 447111 (2500g Overlord's Bloodmail) is a purchasable legendary, NOT a Prismatic
     assert!(!cache.arena_prismatics.contains(&447111));
     assert!(cache.completed.contains(&447111));
     assert!(cache.map30_items.contains(&447111));
-
-    // 220007 (Prismatic Anvil) is a consumable and NOT a completed legendary
     assert!(cache.arena_consumables.contains(&220007));
     assert!(!cache.completed.contains(&220007));
-
-    // 4-digit Arena exclusive 4017 is preserved as Map 30 completed legendary
     assert!(cache.map30_items.contains(&4017));
     assert!(cache.completed.contains(&4017));
-
-    // Riot bug protection: 223121 (Arena Fimbulwinter) maps to Map 30 223119, NEVER SR 3119
     assert_eq!(cache.evolved_fallbacks.get(&223121), Some(&223119));
 }
 
@@ -88,23 +79,57 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
             "summaryDescription": ""
         },
         {
-            "id": 1324,
-            "nameTRA": "Shake de Proteína",
+            "id": 1151,
+            "nameTRA": "Bread and Cheese",
+            "augmentNameId": "ARAM_BreadAndCheese",
+            "rarity": "kGold",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/BreadAndCheese_small.png",
+            "summaryDescription": ""
+        },
+        {
+            "id": 1115,
+            "nameTRA": "Scopiest Weapons",
+            "augmentNameId": "ARAM_ScopiestWeapons",
             "rarity": "kPrismatic",
-            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/ProteinShake_small.png",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/ScopiestWeapons_small.png",
+            "summaryDescription": ""
+        },
+        {
+            "id": 3172,
+            "nameTRA": "THRASH",
+            "augmentNameId": "GoH_PentakillAug_E",
+            "rarity": "kGold",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/Thrash_small.png",
+            "summaryDescription": ""
+        },
+        {
+            "id": 3176,
+            "nameTRA": " ",
+            "augmentNameId": "GoH_PentakillAug_Generic",
+            "rarity": "kGold",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/Generic_small.png",
+            "summaryDescription": ""
+        },
+        {
+            "id": 1424,
+            "nameTRA": "???",
+            "augmentNameId": "ARAM_MissingPing",
+            "rarity": "kPrismatic",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/MissingPing_small.png",
             "summaryDescription": ""
         }
     ]);
 
     let mut map = parse_cdragon_cherry_augments(&cherry_json);
-    assert_eq!(map.len(), 3);
-    assert_eq!(map[&48].name, "Primeiros Socorros");
+    // Internal template 3176 (GoH_PentakillAug_Generic with blank nameTRA) is skipped; "???" is kept
+    assert!(!map.contains_key(&3176));
+    assert_eq!(map[&1424].name, "???");
+    assert_eq!(map[&3172].ability_slot.as_deref(), Some("E"));
     assert_eq!(map[&48].rarity, 1);
     assert_eq!(
         map[&48].icon_url,
         "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/firstaidkit_small.png"
     );
-    assert_eq!(map[&1324].rarity, 8);
 
     let desc_json = json!({
         "augments": [
@@ -113,12 +138,28 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
                 "name": "Primeiros Socorros",
                 "desc": "Recebe <healing>@HealShieldPower*100@%</healing> de Cura e Escudo.",
                 "dataValues": { "HealShieldPower": 0.25 }
+            },
+            {
+                "id": 151,
+                "name": "Bread And Cheese",
+                "desc": "Your @spell3KeyBind@ gains @EAbilityHaste@ Ability Haste.",
+                "dataValues": { "EAbilityHaste": [100.0, 200.0] }
+            },
+            {
+                "id": 115,
+                "name": "Scopiest Weapons",
+                "desc": "Gain @RangeIncrease@ Attack Range.",
+                "dataValues": { "MeleeRangeIncrease": [150.0], "RangedRangeIncrease": [90.0] }
             }
         ]
     });
 
     supplement_arena_augment_descriptions(&mut map, &desc_json);
     assert_eq!(map[&48].desc, "Recebe 25% de Cura e Escudo.");
-    // Shared Arena <-> ARAM Mayhem augment (id 1037) inherits interpolated desc by normalized name
     assert_eq!(map[&1037].desc, "Recebe 25% de Cura e Escudo.");
+    // @spell3KeyBind@ -> E, propagated to ARAM Mayhem counterpart 1151 along with ability_slot
+    assert_eq!(map[&1151].desc, "Your E gains 100 Ability Haste.");
+    assert_eq!(map[&1151].ability_slot.as_deref(), Some("E"));
+    // @RangeIncrease@ -> Melee/Ranged pair 150/90
+    assert_eq!(map[&1115].desc, "Gain 150/90 Attack Range.");
 }
