@@ -30,6 +30,7 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 
 ```text
 ├── docs/                          # Referências curtas (LCU, OP.GG, Tauri v2, UI)
+├── scripts/                       # Automação de release, gatekeeper de linhas e higiene do target Cargo (run-tauri, sweep-cargo-target)
 ├── src/
 │   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, @tauri-apps/api, plugin-updater, plugin-opener)
 │   ├── components/ui/             # Componentes visuais puros (FiltersHeader, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, ItemBlocks, Docks)
@@ -79,3 +80,11 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 | **Contrato IPC (Backend -> Frontend)** | `src-tauri/src/{commands,models}/` → `src/types/bindings.ts` → `src/services/ipc/` | — |
 | **Capabilities, CSP & Janela Tauri v2** | `src-tauri/capabilities/default.json`, `src-tauri/tauri.conf.json` | `docs/tauri-v2-capabilities.md` |
 | **Diretrizes Visuais Desktop** | `src/styles/`, `src/features/*/*.css`, `src/components/ui/` | `docs/ui-guidelines.md` |
+
+## 5. Otimização de Build Dev & Higiene do `src-tauri/target`
+Para manter `npm run tauri dev` ágil sem inflar o SSD com dezenas de GB de artefatos órfãos:
+- **Alvo Desktop puro (`src-tauri/Cargo.toml`):** `[lib]` usa apenas `crate-type = ["rlib"]` (sem `staticlib`/`cdylib`, usados só em mobile).
+- **Perfil `[profile.dev]` enxuto:** mantém `incremental = true` com `debug = "line-tables-only"` no crate principal e `debug = false` em `package."*"` e `build-override` (sem alterar `[profile.release]`).
+- **Limpeza automática via `cargo-sweep` (`scripts/sweep-cargo-target.mjs` e `scripts/run-tauri.mjs`):**
+  - Ao rodar `npm run tauri dev`, o wrapper verifica o tamanho de `src-tauri/target` antes de iniciar o Cargo; se passar de **6 GiB**, executa automaticamente `cargo sweep --maxsize 4GB src-tauri` (pula silenciosamente se abaixo de 6 GiB ou se `cargo-sweep` não estiver instalado; pode ser ignorado com `SCHUMAZ_SKIP_CARGO_SWEEP=1`).
+  - Scripts disponíveis: `npm run tauri:sweep` (limpeza direta até 4 GB) e `npm run tauri:sweep:auto` (acionado no gatekeeper final e após bumps de versão conforme `.antigravityrules`).

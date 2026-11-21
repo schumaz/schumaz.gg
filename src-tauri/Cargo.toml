@@ -14,7 +14,7 @@ default-run = "schumazgg"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "schumazgg_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [features]
 default = []
@@ -61,6 +61,13 @@ panic = "abort"
 
 [profile.dev]
 incremental = true
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.dev.build-override]
+debug = false
 
 [dev-dependencies]
 wiremock = "0.6.5"

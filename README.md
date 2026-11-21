@@ -159,8 +159,14 @@ C++ build tools and WebView2):
 # Install frontend dependencies
 npm install
 
-# Run in development mode
+# (Optional) Install cargo-sweep for automatic cleanup of old src-tauri\target artifacts
+cargo install cargo-sweep --locked
+
+# Run in development mode (auto-sweeps src-tauri\target if it exceeds 6 GiB)
 npm run tauri dev
+
+# Manually trim old Rust artifacts without recompiling active dependencies
+npm run tauri:sweep
 
 # Build Windows NSIS installer + Portable executable into dist-release\
 npm run build:desktop -- --no-sign

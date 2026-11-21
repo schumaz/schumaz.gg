@@ -166,8 +166,14 @@ Pré-requisitos: Node.js (LTS), Rust (toolchain MSVC no Windows) e os pré-requi
 # Instalar dependências do frontend
 npm install
 
-# Executar em modo de desenvolvimento
+# (Opcional) Instalar cargo-sweep para limpeza automática de artefatos antigos em src-tauri\target
+cargo install cargo-sweep --locked
+
+# Executar em modo de desenvolvimento (limpa automaticamente src-tauri\target se passar de 6 GiB)
 npm run tauri dev
+
+# Limpar manualmente artefatos antigos sem recompilar dependências ativas
+npm run tauri:sweep
 
 # Gerar instalador NSIS + executável Portátil em dist-release\
 npm run build:desktop -- --no-sign
