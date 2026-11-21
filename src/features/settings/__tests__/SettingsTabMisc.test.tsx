@@ -178,10 +178,12 @@ describe("SettingsTab — General, Automation & Appearance sections", () => {
     expect(autostartToggle).toBeEnabled();
     expect(autostartToggle).not.toBeChecked();
     expect(screen.queryByTestId("autostart-portable-badge")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("autostart-locked-pill")).not.toBeInTheDocument();
     fireEvent.click(autostartToggle);
     expect(handleAutostart).toHaveBeenCalledWith(true);
 
-    // Portable mode disables toggle and explains why
+    // Portable mode explicitly locks row & toggle and prevents enabling
+    handleAutostart.mockClear();
     rerender(
       <SettingsTab
         preferences={DEFAULT_PREFERENCES}
@@ -194,7 +196,11 @@ describe("SettingsTab — General, Automation & Appearance sections", () => {
     );
 
     expect(screen.getByTestId("close-to-tray-toggle")).toBeChecked();
+    expect(screen.getByTestId("autostart-row")).toHaveClass("is-disabled", "is-locked");
+    expect(screen.getByTestId("autostart-locked-pill")).toHaveTextContent("Bloqueado");
     expect(screen.getByTestId("autostart-toggle")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("autostart-toggle"));
+    expect(handleAutostart).not.toHaveBeenCalled();
     expect(screen.getByTestId("autostart-portable-badge")).toHaveTextContent("Somente Instalado");
     expect(screen.getByTestId("autostart-desc")).toHaveTextContent(/Portable/i);
   });

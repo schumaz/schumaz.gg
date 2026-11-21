@@ -12,6 +12,7 @@ export interface SettingsTranslations {
     autostartDesc: string;
     autostartPortableDesc: string;
     autostartPortableBadge: string;
+    autostartBlockedPill: string;
     autostartError: string;
     closeToTrayTitle: string;
     closeToTrayDesc: string;

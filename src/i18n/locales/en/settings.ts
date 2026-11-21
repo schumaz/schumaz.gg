@@ -17,6 +17,7 @@ export const enSettings: SettingsTranslations = {
     autostartPortableDesc:
       "Unavailable in Portable mode to avoid volatile paths (such as the Downloads folder). Use the official installer to enable.",
     autostartPortableBadge: "Installed Only",
+    autostartBlockedPill: "Blocked",
     autostartError: "Could not update Windows startup launch setting.",
     closeToTrayTitle: "Close to system tray",
     closeToTrayDesc:

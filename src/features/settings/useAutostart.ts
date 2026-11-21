@@ -57,7 +57,7 @@ export function useAutostart(enabled: boolean) {
 
   const setAutostartEnabled = useCallback(
     async (nextEnabled: boolean) => {
-      if (updating) return;
+      if (updating || status?.isPortable || status?.supported === false) return;
       setUpdating(true);
       setError(false);
       try {
@@ -76,7 +76,7 @@ export function useAutostart(enabled: boolean) {
         }
       }
     },
-    [updating]
+    [updating, status?.isPortable, status?.supported]
   );
 
   return {

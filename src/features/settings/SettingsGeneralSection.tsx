@@ -3,6 +3,24 @@ import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
 import { LanguageFlag } from "../../components/ui/LanguageFlag";
 
+function LockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
 interface SettingsGeneralSectionProps {
   activeLocale: AppLocale;
   onSelectLanguage: (locale: AppLocale) => void;
@@ -32,8 +50,9 @@ export function SettingsGeneralSection({
 
   const isPortable = Boolean(autostartStatus?.isPortable || distributionInfo?.isPortable);
   const autostartSupported = autostartStatus ? autostartStatus.supported : !isPortable;
-  const autostartDisabled = isPortable || !autostartSupported || autostartLoading || autostartUpdating;
-  const autostartChecked = !isPortable && Boolean(autostartStatus?.enabled);
+  const autostartBlocked = isPortable || !autostartSupported;
+  const autostartDisabled = autostartBlocked || autostartLoading || autostartUpdating;
+  const autostartChecked = !autostartBlocked && Boolean(autostartStatus?.enabled);
 
   return (
     <div className="settings-section-group" data-testid="settings-group-general">
@@ -89,8 +108,12 @@ export function SettingsGeneralSection({
 
           <div className="settings-list">
             <label
-              className={`settings-item ${isPortable || !autostartSupported ? "is-disabled" : ""}`}
+              className={`settings-item ${
+                autostartBlocked ? "is-disabled is-locked" : autostartDisabled ? "is-disabled" : ""
+              }`}
+              data-testid="autostart-row"
               aria-disabled={autostartDisabled}
+              title={autostartBlocked ? t("settings.autostartPortableDesc") : undefined}
             >
               <div className="settings-item-text">
                 <div className="settings-updates-version-row">
@@ -105,6 +128,7 @@ export function SettingsGeneralSection({
                   )}
                 </div>
                 <span
+                  id="autostart-desc"
                   className={`settings-item-desc ${autostartError ? "settings-updates-status is-error" : ""}`}
                   data-testid="autostart-desc"
                 >
@@ -115,18 +139,35 @@ export function SettingsGeneralSection({
                     : t("settings.autostartDesc")}
                 </span>
               </div>
-              <input
-                type="checkbox"
-                className="toggle-switch"
-                aria-label={t("settings.autostartTitle")}
-                data-testid="autostart-toggle"
-                checked={autostartChecked}
-                disabled={autostartDisabled}
-                onChange={(e) => {
-                  if (autostartDisabled) return;
-                  onAutostartChange?.(e.target.checked);
-                }}
-              />
+
+              <div className={`settings-toggle-control ${autostartBlocked ? "is-locked" : ""}`}>
+                {autostartBlocked && (
+                  <span className="settings-locked-pill" data-testid="autostart-locked-pill">
+                    <LockIcon className="settings-lock-icon-xs" />
+                    <span>{t("settings.autostartBlockedPill")}</span>
+                  </span>
+                )}
+                <span className={`toggle-switch-wrap ${autostartBlocked ? "is-locked" : ""}`}>
+                  <input
+                    type="checkbox"
+                    className={`toggle-switch ${autostartBlocked ? "is-locked" : ""}`}
+                    aria-label={t("settings.autostartTitle")}
+                    aria-describedby="autostart-desc"
+                    data-testid="autostart-toggle"
+                    checked={autostartChecked}
+                    disabled={autostartDisabled}
+                    onChange={(e) => {
+                      if (autostartDisabled) return;
+                      onAutostartChange?.(e.target.checked);
+                    }}
+                  />
+                  {autostartBlocked && (
+                    <span className="toggle-switch-lock-overlay" aria-hidden="true">
+                      <LockIcon className="toggle-switch-lock-svg" />
+                    </span>
+                  )}
+                </span>
+              </div>
             </label>
 
             <label className="settings-item">

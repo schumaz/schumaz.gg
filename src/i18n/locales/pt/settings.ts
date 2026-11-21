@@ -17,6 +17,7 @@ export const ptSettings: SettingsTranslations = {
     autostartPortableDesc:
       "Indisponível no modo Portable para evitar caminhos temporários (como a pasta Downloads). Use o instalador oficial para habilitar.",
     autostartPortableBadge: "Somente Instalado",
+    autostartBlockedPill: "Bloqueado",
     autostartError: "Não foi possível atualizar a inicialização automática com o Windows.",
     closeToTrayTitle: "Fechar para a bandeja do sistema",
     closeToTrayDesc:
