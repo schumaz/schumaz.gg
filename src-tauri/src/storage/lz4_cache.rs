@@ -7,6 +7,11 @@ use super::paths::{atomic_write, now_unix_secs, touch_mtime};
 
 pub const CACHE_SCHEMA_VERSION: u32 = 4;
 pub const OPGG_CACHE_TTL_SECS: u64 = 48 * 3600;
+/// Shorter disk TTL (3h) for patch-version lists (`versions_{region}.lz4` and `arena/versions.lz4`)
+/// so app restarts detect new patches quickly (< 500 bytes) and invalidate stale builds immediately.
+pub const VERSIONS_DISK_TTL_SECS: u64 = 3 * 3600;
+/// Extended disk TTL (72h) for ARAM Mayhem tier list and augments (invalidated immediately on patch change).
+pub const ARAM_MAYHEM_DISK_TTL_SECS: u64 = 72 * 3600;
 pub const PROFILE_CACHE_TTL_SECS: u64 = 48 * 3600;
 pub const PROFILE_SWR_SECS: u64 = 5 * 60;
 

@@ -1,4 +1,5 @@
 use super::super::client::{OPGG_REST_API_BASE, peek_latest_cached_opgg_version};
+use super::super::cooldown::send_analytics_request;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, RankedTierListResponse};
 use std::collections::HashMap;
@@ -35,25 +36,7 @@ pub(super) async fn fetch_ranked_json(
         url.push_str(&format!("&version={}", v.trim()));
     }
 
-    let started = Instant::now();
-    let res = client.get(&url).send().await.map_err(|e| {
-        crate::logging::record_http_network_error_log(
-            "analytics",
-            started.elapsed().as_millis(),
-            &e.to_string(),
-        );
-        format!("Failed to fetch ranked tier list: {}", e)
-    })?;
-
-    crate::logging::record_http_status_log(
-        "analytics",
-        res.status().as_u16(),
-        started.elapsed().as_millis(),
-    );
-    if !res.status().is_success() {
-        return Err(format!("Ranked tier list HTTP error: {}", res.status()));
-    }
-
+    let res = send_analytics_request(&url, client.get(&url), "Ranked tier list").await?;
     res.json::<serde_json::Value>()
         .await
         .map_err(|e| format!("Failed to parse ranked tier list JSON: {}", e))

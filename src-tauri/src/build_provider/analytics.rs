@@ -1,6 +1,7 @@
 pub mod aram;
 pub mod arena;
 pub mod client;
+pub mod cooldown;
 pub mod mcp_extractors;
 pub mod mcp_parser;
 pub mod mcp_stats;

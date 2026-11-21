@@ -1,4 +1,5 @@
 use super::client::OPGG_REST_API_BASE;
+use super::cooldown::send_analytics_request;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
@@ -79,7 +80,7 @@ async fn fetch_opgg_versions_internal(
         && !env.payload.is_empty()
         && crate::storage::is_envelope_fresh(
             env.created_at_unix,
-            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::VERSIONS_DISK_TTL_SECS,
             crate::storage::now_unix_secs(),
         )
     {
@@ -90,7 +91,7 @@ async fn fetch_opgg_versions_internal(
     }
 
     let url = format!("{}/{}/champions/ranked/versions", rest_base, region);
-    if let Ok(res) = client.get(&url).send().await
+    if let Ok(res) = send_analytics_request(&url, client.get(&url), "OP.GG versions").await
         && let Ok(json) = res.json::<serde_json::Value>().await
         && let Some(arr) = json.get("data").and_then(|d| d.as_array())
     {
@@ -131,7 +132,7 @@ async fn fetch_opgg_versions_internal(
     emergency_versions_from_ddragon(dd_version.as_deref())
 }
 
-/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (48h TTL)
+/// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (3h TTL)
 /// and Stale-While-Error offline fallback.
 pub async fn fetch_opgg_versions_with_cache_dir(
     client: &reqwest::Client,

@@ -4,6 +4,7 @@ use super::super::fallback::{
 };
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::super::spells::ddragon_mode_for_queue;
+use super::cooldown::send_analytics_request;
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
 use super::rest_parser::parse_opgg_analysis_payload_for_mode;
 pub use super::versions::{
@@ -12,7 +13,7 @@ pub use super::versions::{
 };
 use crate::models::{queue_supports_runes, queue_supports_spells};
 use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
 pub const OPGG_REST_API_BASE: &str = "https://lol-api-champion.op.gg/api";
@@ -69,29 +70,13 @@ pub async fn fetch_opgg_champion_analysis(
         }
     });
 
-    let started = Instant::now();
-    let res = client
-        .post(endpoint_url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|err| {
-            crate::logging::record_http_network_error_log(
-                "analytics",
-                started.elapsed().as_millis(),
-                &err.to_string(),
-            );
-            format!("HTTP request to OP.GG failed: {}", err)
-        })?;
-
-    crate::logging::record_http_status_log(
-        "analytics",
-        res.status().as_u16(),
-        started.elapsed().as_millis(),
-    );
-    if !res.status().is_success() {
-        return Err(format!("OP.GG responded with HTTP error: {}", res.status()));
-    }
+    let cooldown_key = format!("mcp:{endpoint_url}:analysis:{formatted_champ}:{queue_name}");
+    let res = send_analytics_request(
+        &cooldown_key,
+        client.post(endpoint_url).json(&payload),
+        "OP.GG MCP analysis",
+    )
+    .await?;
 
     let json_body: serde_json::Value = res
         .json()
@@ -211,27 +196,7 @@ pub async fn fetch_opgg_rest_champion_analysis_from_base(
         url.push_str(&format!("&version={}", v.trim()));
     }
 
-    let started = Instant::now();
-    let res = client.get(&url).send().await.map_err(|e| {
-        crate::logging::record_http_network_error_log(
-            "analytics",
-            started.elapsed().as_millis(),
-            &e.to_string(),
-        );
-        format!("REST request to OP.GG failed: {}", e)
-    })?;
-
-    crate::logging::record_http_status_log(
-        "analytics",
-        res.status().as_u16(),
-        started.elapsed().as_millis(),
-    );
-    if !res.status().is_success() {
-        return Err(format!(
-            "OP.GG REST responded with HTTP error: {}",
-            res.status()
-        ));
-    }
+    let res = send_analytics_request(&url, client.get(&url), "OP.GG REST analysis").await?;
 
     let json_body: serde_json::Value = res
         .json()
@@ -282,29 +247,14 @@ pub async fn fetch_opgg_mcp_depth_items(
         }
     });
 
-    let started = Instant::now();
-    let res = client
-        .post(endpoint_url)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|err| {
-            crate::logging::record_http_network_error_log(
-                "analytics",
-                started.elapsed().as_millis(),
-                &err.to_string(),
-            );
-            format!("MCP depth items request failed: {}", err)
-        })?;
-
-    crate::logging::record_http_status_log(
-        "analytics",
-        res.status().as_u16(),
-        started.elapsed().as_millis(),
-    );
-    if !res.status().is_success() {
-        return Err(format!("MCP depth items HTTP error: {}", res.status()));
-    }
+    let cooldown_key =
+        format!("mcp:{endpoint_url}:depth:{formatted_champ}:{game_mode}:{mcp_position}:{tier}");
+    let res = send_analytics_request(
+        &cooldown_key,
+        client.post(endpoint_url).json(&payload),
+        "MCP depth items",
+    )
+    .await?;
 
     let json_body: serde_json::Value = res
         .json()

@@ -1,5 +1,6 @@
 use super::{
-    fetch_arena_champion_build_with_base_and_dir, fetch_arena_tier_list_with_base_and_dir,
+    arena_versions_file_path, fetch_arena_champion_build_with_base_and_dir,
+    fetch_arena_tier_list_with_base_and_dir, fetch_arena_versions_with_cache_dir,
 };
 use crate::build_provider::models::{ChampionMetadata, DataDragonCache, ItemBlockKind};
 use crate::build_provider::service::get_recommended_build_with_filters_and_endpoints_with_dir;
@@ -164,6 +165,59 @@ async fn test_arena_tier_list_fetches_caches_lz4_and_falls_back_stale_while_erro
 
     assert_eq!(stale_resp.champions.len(), 1);
     assert_eq!(stale_resp.champions[0].name, "Yuumi");
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
+#[tokio::test]
+async fn test_arena_versions_uses_3h_disk_ttl() {
+    let tmp_dir = make_temp_dir("versions_3h");
+    let ver_file = arena_versions_file_path(&tmp_dir);
+    let now = crate::storage::now_unix_secs();
+    let client = reqwest::Client::new();
+
+    // 1h-old envelope (< 3h) -> hits disk with 0 network requests
+    crate::storage::write_lz4_envelope_at(
+        &ver_file,
+        "16.22",
+        &vec!["16.22".to_string(), "16.21".to_string()],
+        now.saturating_sub(3600),
+    )
+    .unwrap();
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/arena_v_fresh/global/champions/arena/versions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": ["16.23"] })))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let fresh_base = format!("{}/arena_v_fresh", server.uri());
+    let cached = fetch_arena_versions_with_cache_dir(&client, &fresh_base, Some(&tmp_dir)).await;
+    assert_eq!(cached, vec!["16.22", "16.21"]);
+
+    // 4h-old envelope (> 3h, < 48h) -> expires and refreshes from network
+    crate::storage::write_lz4_envelope_at(
+        &ver_file,
+        "16.22",
+        &vec!["16.22".to_string(), "16.21".to_string()],
+        now.saturating_sub(4 * 3600),
+    )
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/arena_v_stale/global/champions/arena/versions"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "data": ["16.23", "16.22"] })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let stale_base = format!("{}/arena_v_stale", server.uri());
+    let refreshed = fetch_arena_versions_with_cache_dir(&client, &stale_base, Some(&tmp_dir)).await;
+    assert_eq!(refreshed, vec!["16.23", "16.22"]);
+
     let _ = std::fs::remove_dir_all(&tmp_dir);
 }
 

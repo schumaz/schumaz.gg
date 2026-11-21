@@ -12,6 +12,7 @@ pub use items::*;
 pub use tier_parser::*;
 
 use super::client::{OPGG_REST_API_BASE, fetch_opgg_versions_from_base};
+use super::cooldown::send_analytics_request;
 use crate::build_provider::models::DataDragonCache;
 use crate::build_provider::patch::resolve_effective_patch;
 use crate::models::{AppLocale, ArenaTierListResponse};
@@ -25,25 +26,7 @@ pub(crate) async fn fetch_arena_json(
     url: &str,
     label: &str,
 ) -> Result<serde_json::Value, String> {
-    let started = Instant::now();
-    let res = client.get(url).send().await.map_err(|e| {
-        crate::logging::record_http_network_error_log(
-            "analytics",
-            started.elapsed().as_millis(),
-            &e.to_string(),
-        );
-        format!("Failed to fetch {}: {}", label, e)
-    })?;
-
-    crate::logging::record_http_status_log(
-        "analytics",
-        res.status().as_u16(),
-        started.elapsed().as_millis(),
-    );
-    if !res.status().is_success() {
-        return Err(format!("{} HTTP error: {}", label, res.status()));
-    }
-
+    let res = send_analytics_request(url, client.get(url), label).await?;
     res.json::<serde_json::Value>()
         .await
         .map_err(|e| format!("Failed to parse {} JSON: {}", label, e))
@@ -65,7 +48,7 @@ pub(crate) fn build_arena_url(
     url
 }
 
-/// Fetches available Arena patch versions from OP.GG with L1 RAM + L2 `.lz4` disk cache
+/// Fetches available Arena patch versions from OP.GG with L1 RAM + L2 `.lz4` disk cache (3h TTL)
 /// and Stale-While-Error fallback.
 pub async fn fetch_arena_versions_with_cache_dir(
     client: &reqwest::Client,
@@ -89,7 +72,7 @@ pub async fn fetch_arena_versions_with_cache_dir(
         && !env.payload.is_empty()
         && crate::storage::is_envelope_fresh(
             env.created_at_unix,
-            crate::storage::OPGG_CACHE_TTL_SECS,
+            crate::storage::VERSIONS_DISK_TTL_SECS,
             crate::storage::now_unix_secs(),
         )
     {

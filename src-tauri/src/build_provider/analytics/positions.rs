@@ -1,4 +1,5 @@
 use super::client::OPGG_REST_API_BASE;
+use super::cooldown::send_analytics_request;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -158,24 +159,11 @@ pub async fn resolve_champion_most_played_lane_with_base_and_dir(
     }
 
     let fetch_res = async {
-        let res = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to request champions/ranked from OP.GG: {}", e))?;
-
-        if !res.status().is_success() {
-            return Err(format!(
-                "OP.GG champions/ranked returned status: {}",
-                res.status()
-            ));
-        }
-
+        let res = send_analytics_request(&url, client.get(&url), "OP.GG champions/ranked").await?;
         let json_body: serde_json::Value = res
             .json()
             .await
             .map_err(|e| format!("Failed to parse OP.GG champions/ranked JSON: {}", e))?;
-
         Ok::<serde_json::Value, String>(json_body)
     }
     .await;

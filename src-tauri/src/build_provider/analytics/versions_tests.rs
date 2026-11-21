@@ -76,6 +76,68 @@ async fn test_fetch_opgg_versions_disk_cache_and_stale_while_error() {
 }
 
 #[tokio::test]
+async fn test_fetch_opgg_versions_uses_3h_disk_ttl() {
+    assert_eq!(crate::storage::VERSIONS_DISK_TTL_SECS, 3 * 3600);
+
+    let dir = std::env::temp_dir().join(format!("schumazgg_versions_3h_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let disk_file = opgg_versions_file_path(&dir, "global");
+    let now = crate::storage::now_unix_secs();
+
+    // 1. 1h-old envelope (< 3h) -> disk hit, 0 network requests
+    crate::storage::write_lz4_envelope_at(
+        &disk_file,
+        "16.25",
+        &vec!["16.25".to_string(), "16.24".to_string()],
+        now.saturating_sub(3600),
+    )
+    .unwrap();
+
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/versions_ttl_fresh/global/champions/ranked/versions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": ["16.26", "16.25"]
+        })))
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+
+    let client = reqwest::Client::new();
+    let fresh_base = format!("{}/versions_ttl_fresh", mock_server.uri());
+    let cached =
+        fetch_opgg_versions_with_cache_dir(&client, &fresh_base, "global", Some(&dir)).await;
+    assert_eq!(cached, vec!["16.25", "16.24"]);
+
+    // 2. 4h-old envelope (> 3h, < 48h) -> must expire and refresh from network
+    crate::storage::write_lz4_envelope_at(
+        &disk_file,
+        "16.25",
+        &vec!["16.25".to_string(), "16.24".to_string()],
+        now.saturating_sub(4 * 3600),
+    )
+    .unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/versions_ttl_stale/global/champions/ranked/versions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": ["16.26", "16.25"]
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let stale_base = format!("{}/versions_ttl_stale", mock_server.uri());
+    let refreshed =
+        fetch_opgg_versions_with_cache_dir(&client, &stale_base, "global", Some(&dir)).await;
+    assert_eq!(refreshed, vec!["16.26", "16.25"]);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn test_fetch_opgg_versions_emergency_fallback_derives_from_ddragon_without_hardcode() {
     let offline_server = MockServer::start().await;
     Mock::given(method("GET"))
