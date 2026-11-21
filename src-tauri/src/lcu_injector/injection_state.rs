@@ -2,7 +2,48 @@ use super::preferences::{FlashKeyPreference, UserPreferences};
 use super::selections::get_champion_selections;
 use super::spell_rules::{SPELL_FLASH_ID, SPELL_SMITE_ID, apply_jungle_smite_and_flash_preference};
 use crate::build_provider::ChampionBuild;
+use crate::logging;
 pub use crate::models::InjectionReport;
+
+fn injection_outcome_tag(res: Option<&Result<(), String>>) -> &'static str {
+    match res {
+        Some(Ok(())) => "ok",
+        Some(Err(_)) => "err",
+        None => "skip",
+    }
+}
+
+pub(crate) fn log_injection_outcome(
+    champ_id: i32,
+    queue_id: i32,
+    runes_res: Option<&Result<(), String>>,
+    spells_res: Option<&Result<(), String>>,
+    items_res: Option<&Result<(), String>>,
+) {
+    let runes = injection_outcome_tag(runes_res);
+    let spells = injection_outcome_tag(spells_res);
+    let items = injection_outcome_tag(items_res);
+    let first_err = [runes_res, spells_res, items_res]
+        .into_iter()
+        .flatten()
+        .find_map(|res| res.as_ref().err());
+
+    if let Some(err) = first_err {
+        logging::log_warn(
+            "lcu.injector",
+            format!(
+                "event=inject_result champ_id={champ_id} queue_id={queue_id} runes={runes} spells={spells} items={items} err={err}"
+            ),
+        );
+    } else {
+        logging::log_info(
+            "lcu.injector",
+            format!(
+                "event=inject_result champ_id={champ_id} queue_id={queue_id} runes={runes} spells={spells} items={items}"
+            ),
+        );
+    }
+}
 
 /// Resolved injection targets for a build according to game mode support and user preferences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

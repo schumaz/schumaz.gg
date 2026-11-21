@@ -3,7 +3,9 @@ import type { AppUpdateState, UpdateCheckResult } from "../../hooks/useAppUpdate
 import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
 import { SettingsCacheSubsection } from "./SettingsCacheSubsection";
+import { SettingsDiagnosticsSubsection } from "./SettingsDiagnosticsSubsection";
 import { SettingsUpdatesSubsection } from "./SettingsUpdatesSubsection";
+import type { DiagnosticsFeedbackStatus } from "./useDiagnostics";
 import type { LocalCacheStatus } from "./useLocalCache";
 
 interface SettingsSystemSectionProps {
@@ -18,6 +20,11 @@ interface SettingsSystemSectionProps {
   onCheckForUpdates?: () => void;
   onRestartToUpdate?: () => void;
   onOpenPortableRelease?: () => void;
+  diagnosticsCopying?: boolean;
+  diagnosticsOpeningLogs?: boolean;
+  diagnosticsStatus?: DiagnosticsFeedbackStatus;
+  onCopyDiagnosticSummary?: () => void;
+  onOpenLogsFolder?: () => void;
 }
 
 export function SettingsSystemSection({
@@ -32,6 +39,11 @@ export function SettingsSystemSection({
   onCheckForUpdates,
   onRestartToUpdate,
   onOpenPortableRelease,
+  diagnosticsCopying = false,
+  diagnosticsOpeningLogs = false,
+  diagnosticsStatus = "idle",
+  onCopyDiagnosticSummary,
+  onOpenLogsFolder,
 }: SettingsSystemSectionProps) {
   const { t } = useTranslation();
 
@@ -57,6 +69,16 @@ export function SettingsSystemSection({
           onCheckForUpdates={onCheckForUpdates}
           onRestartToUpdate={onRestartToUpdate}
           onOpenPortableRelease={onOpenPortableRelease}
+        />
+
+        <div className="settings-card-divider" />
+
+        <SettingsDiagnosticsSubsection
+          copying={diagnosticsCopying}
+          openingFolder={diagnosticsOpeningLogs}
+          status={diagnosticsStatus}
+          onCopySummary={onCopyDiagnosticSummary}
+          onOpenLogsFolder={onOpenLogsFolder}
         />
       </section>
     </div>

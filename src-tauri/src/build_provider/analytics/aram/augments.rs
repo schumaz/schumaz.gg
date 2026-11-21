@@ -16,6 +16,7 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
     locale: AppLocale,
     aram_dir: Option<&Path>,
 ) -> Result<Vec<AramAugmentEntry>, String> {
+    let started = Instant::now();
     let normalized = normalize_opgg_champion_key(champion_key);
     if normalized.is_empty() {
         return Err("Champion key cannot be empty".to_string());
@@ -26,6 +27,12 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
         && let Some((ts, cached)) = guard.get(&cache_key)
         && ts.elapsed() < ARAM_CACHE_TTL
     {
+        crate::logging::record_data_resolution(
+            "aram_augments",
+            "ram_hit",
+            started.elapsed().as_millis(),
+            "",
+        );
         return Ok(cached.clone());
     }
 
@@ -51,19 +58,38 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
             if let Ok(mut guard) = get_augments_cache().write() {
                 guard.insert(cache_key.clone(), (Instant::now(), env.payload.clone()));
             }
+            crate::logging::record_data_resolution(
+                "aram_augments",
+                "disk_hit",
+                started.elapsed().as_millis(),
+                "",
+            );
             return Ok(env.payload.clone());
         }
     }
 
     let url = format!("{}/{}/augments", web_base.trim_end_matches('/'), normalized);
     let fetch_res: Result<Vec<AramAugmentEntry>, String> = async {
+        let t0 = Instant::now();
         let res = client
             .get(&url)
             .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT)
             .send()
             .await
-            .map_err(|e| format!("Failed to fetch ARAM Mayhem augments: {}", e))?;
+            .map_err(|e| {
+                crate::logging::record_http_network_error_log(
+                    "analytics",
+                    t0.elapsed().as_millis(),
+                    &e.to_string(),
+                );
+                format!("Failed to fetch ARAM Mayhem augments: {}", e)
+            })?;
 
+        crate::logging::record_http_status_log(
+            "analytics",
+            res.status().as_u16(),
+            t0.elapsed().as_millis(),
+        );
         if !res.status().is_success() {
             return Err(format!("ARAM Mayhem augments HTTP error: {}", res.status()));
         }
@@ -83,6 +109,12 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
             if let Some(env) = disk_env
                 && !env.payload.is_empty()
             {
+                crate::logging::record_data_resolution(
+                    "aram_augments",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    "",
+                );
                 return Ok(env.payload);
             }
             return Err(err);
@@ -100,6 +132,12 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
         }
     }
 
+    crate::logging::record_data_resolution(
+        "aram_augments",
+        "network",
+        started.elapsed().as_millis(),
+        "",
+    );
     Ok(augments)
 }
 

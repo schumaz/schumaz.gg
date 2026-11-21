@@ -25,12 +25,21 @@ pub(crate) async fn fetch_arena_json(
     url: &str,
     label: &str,
 ) -> Result<serde_json::Value, String> {
-    let res = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch {}: {}", label, e))?;
+    let started = Instant::now();
+    let res = client.get(url).send().await.map_err(|e| {
+        crate::logging::record_http_network_error_log(
+            "analytics",
+            started.elapsed().as_millis(),
+            &e.to_string(),
+        );
+        format!("Failed to fetch {}: {}", label, e)
+    })?;
 
+    crate::logging::record_http_status_log(
+        "analytics",
+        res.status().as_u16(),
+        started.elapsed().as_millis(),
+    );
     if !res.status().is_success() {
         return Err(format!("{} HTTP error: {}", label, res.status()));
     }
@@ -138,6 +147,7 @@ pub async fn fetch_arena_tier_list_with_base_and_dir(
     locale: AppLocale,
     arena_dir: Option<&Path>,
 ) -> Result<ArenaTierListResponse, String> {
+    let started = Instant::now();
     let manual_patch = patch.map(str::trim).filter(|s| !s.is_empty());
     let cache_key = format!(
         "{}:{}:{}:{}",
@@ -153,6 +163,12 @@ pub async fn fetch_arena_tier_list_with_base_and_dir(
     {
         let mut resp = cached.clone();
         cache::rehydrate_arena_tier_list_names(&mut resp, ddragon);
+        crate::logging::record_data_resolution(
+            "arena_tier_list",
+            "ram_hit",
+            started.elapsed().as_millis(),
+            "",
+        );
         return Ok(resp);
     }
 
@@ -182,6 +198,12 @@ pub async fn fetch_arena_tier_list_with_base_and_dir(
             if let Ok(mut guard) = cache::get_arena_tier_cache().write() {
                 guard.insert(cache_key, (Instant::now(), resp.clone()));
             }
+            crate::logging::record_data_resolution(
+                "arena_tier_list",
+                "disk_hit",
+                started.elapsed().as_millis(),
+                "",
+            );
             return Ok(resp);
         }
     }
@@ -241,6 +263,12 @@ pub async fn fetch_arena_tier_list_with_base_and_dir(
             {
                 let mut resp = env.payload;
                 cache::rehydrate_arena_tier_list_names(&mut resp, ddragon);
+                crate::logging::record_data_resolution(
+                    "arena_tier_list",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    "",
+                );
                 return Ok(resp);
             }
             return Err(err);
@@ -267,6 +295,12 @@ pub async fn fetch_arena_tier_list_with_base_and_dir(
         }
     }
 
+    crate::logging::record_data_resolution(
+        "arena_tier_list",
+        "network",
+        started.elapsed().as_millis(),
+        "",
+    );
     Ok(response)
 }
 

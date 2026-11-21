@@ -16,6 +16,49 @@ pub(crate) fn get_ranked_cache() -> &'static RwLock<RankedCacheMap> {
     RANKED_TIER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
+pub(super) async fn fetch_ranked_json(
+    client: &reqwest::Client,
+    rest_base: &str,
+    region: &str,
+    tier: &str,
+    version: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let mut url = format!(
+        "{}/{}/champions/ranked?tier={}",
+        rest_base.trim_end_matches('/'),
+        region,
+        tier
+    );
+    if let Some(v) = version
+        && !v.trim().is_empty()
+    {
+        url.push_str(&format!("&version={}", v.trim()));
+    }
+
+    let started = Instant::now();
+    let res = client.get(&url).send().await.map_err(|e| {
+        crate::logging::record_http_network_error_log(
+            "analytics",
+            started.elapsed().as_millis(),
+            &e.to_string(),
+        );
+        format!("Failed to fetch ranked tier list: {}", e)
+    })?;
+
+    crate::logging::record_http_status_log(
+        "analytics",
+        res.status().as_u16(),
+        started.elapsed().as_millis(),
+    );
+    if !res.status().is_success() {
+        return Err(format!("Ranked tier list HTTP error: {}", res.status()));
+    }
+
+    res.json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Failed to parse ranked tier list JSON: {}", e))
+}
+
 pub fn ranked_tier_list_file_path(
     dir: &Path,
     region: &str,

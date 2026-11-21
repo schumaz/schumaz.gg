@@ -14,6 +14,7 @@ pub struct AppPaths {
     pub root: PathBuf,
     pub config_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub logs_dir: PathBuf,
     pub webview_dir: PathBuf,
     pub ddragon_dir: PathBuf,
     pub opgg_dir: PathBuf,
@@ -31,6 +32,7 @@ impl AppPaths {
     pub fn from_root(root: PathBuf) -> Self {
         let config_dir = root.join("Config");
         let cache_dir = root.join("Cache");
+        let logs_dir = root.join("Logs");
         let webview_dir = root.join("WebView");
         let ddragon_dir = cache_dir.join("ddragon");
         let opgg_dir = cache_dir.join("opgg");
@@ -47,6 +49,7 @@ impl AppPaths {
             root,
             config_dir,
             cache_dir,
+            logs_dir,
             webview_dir,
             ddragon_dir,
             opgg_dir,
@@ -76,6 +79,7 @@ impl AppPaths {
             &self.root,
             &self.config_dir,
             &self.cache_dir,
+            &self.logs_dir,
             &self.webview_dir,
             &self.ddragon_dir,
             &self.opgg_dir,
@@ -96,6 +100,10 @@ impl AppPaths {
 
     pub fn user_settings_ini_path(&self) -> PathBuf {
         self.config_dir.join("UserSettings.ini")
+    }
+
+    pub fn log_file_path(&self) -> PathBuf {
+        self.logs_dir.join("schumazgg.log")
     }
 }
 
@@ -206,7 +214,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_app_paths_centralizes_config_cache_and_webview_under_root() {
+    fn test_app_paths_centralizes_config_cache_logs_and_webview_under_root() {
         let root = std::env::temp_dir().join(format!(
             "schumazgg_paths_test_{}_{}",
             std::process::id(),
@@ -218,6 +226,7 @@ mod tests {
         assert_eq!(paths.root, root);
         assert_eq!(paths.config_dir, root.join("Config"));
         assert_eq!(paths.cache_dir, root.join("Cache"));
+        assert_eq!(paths.logs_dir, root.join("Logs"));
         assert_eq!(paths.webview_dir, root.join("WebView"));
         assert_eq!(paths.ddragon_dir, root.join("Cache").join("ddragon"));
         assert_eq!(paths.opgg_dir, root.join("Cache").join("opgg"));
@@ -231,10 +240,16 @@ mod tests {
             paths.user_settings_ini_path(),
             root.join("Config").join("UserSettings.ini")
         );
+        assert_eq!(
+            paths.log_file_path(),
+            root.join("Logs").join("schumazgg.log")
+        );
+        assert!(!paths.logs_dir.starts_with(&paths.cache_dir));
 
         paths.ensure_dirs().unwrap();
         assert!(paths.config_dir.is_dir());
         assert!(paths.cache_dir.is_dir());
+        assert!(paths.logs_dir.is_dir());
         assert!(paths.webview_dir.is_dir());
         assert!(paths.ddragon_dir.is_dir());
         assert!(paths.opgg_dir.is_dir());

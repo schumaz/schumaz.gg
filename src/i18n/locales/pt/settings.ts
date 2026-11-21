@@ -125,6 +125,19 @@ export const ptSettings: SettingsTranslations = {
     updatesRestartBtn: "Reiniciar para atualizar",
     updatesRestartingBtn: "Reiniciando...",
     updatesGithubBtn: "Baixar no GitHub",
+    diagnosticsTitle: "Suporte e Diagnóstico",
+    diagnosticsDesc:
+      "Exporte um resumo sanitizado do ambiente ou acesse os arquivos de log locais para depuração.",
+    diagnosticsRowTitle: "Logs locais e diagnóstico",
+    diagnosticsStatusIdle:
+      "Os logs ficam apenas no seu dispositivo e removem credenciais, caminhos e dados de conta.",
+    diagnosticsStatusCopied: "Resumo copiado!",
+    diagnosticsStatusCopyError: "Não foi possível copiar o resumo de diagnóstico.",
+    diagnosticsStatusFolderError: "Não foi possível abrir a pasta de logs.",
+    diagnosticsCopyBtn: "Copiar resumo de diagnóstico",
+    diagnosticsCopyingBtn: "Copiando...",
+    diagnosticsOpenLogsBtn: "Abrir pasta de logs",
+    diagnosticsOpeningLogsBtn: "Abrindo...",
     patchModalTitle: "Desativar Proteção de 48h?",
     patchModalStrong: "NÃO é recomendado",
     patchModalBody:

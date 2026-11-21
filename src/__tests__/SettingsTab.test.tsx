@@ -175,6 +175,7 @@ describe("SettingsTab", () => {
     expect(subsectionsOf("settings-subgroup-system")).toEqual([
       "settings-subgroup-cache",
       "settings-subgroup-updates",
+      "settings-subgroup-diagnostics",
     ]);
   });
 

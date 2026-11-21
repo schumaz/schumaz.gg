@@ -124,6 +124,19 @@ export const enSettings: SettingsTranslations = {
     updatesRestartBtn: "Restart to update",
     updatesRestartingBtn: "Restarting...",
     updatesGithubBtn: "Download on GitHub",
+    diagnosticsTitle: "Support & Diagnostics",
+    diagnosticsDesc:
+      "Export a sanitized environment summary or access local log files for troubleshooting.",
+    diagnosticsRowTitle: "Local logs & diagnostics",
+    diagnosticsStatusIdle:
+      "Logs stay strictly on this device with credentials, user paths, and account data redacted.",
+    diagnosticsStatusCopied: "Summary copied!",
+    diagnosticsStatusCopyError: "Could not copy the diagnostic summary.",
+    diagnosticsStatusFolderError: "Could not open the logs folder.",
+    diagnosticsCopyBtn: "Copy diagnostic summary",
+    diagnosticsCopyingBtn: "Copying...",
+    diagnosticsOpenLogsBtn: "Open logs folder",
+    diagnosticsOpeningLogsBtn: "Opening...",
     patchModalTitle: "Disable 48h Protection?",
     patchModalStrong: "It is NOT recommended",
     patchModalBody:

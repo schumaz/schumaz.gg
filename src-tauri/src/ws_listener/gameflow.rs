@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri_specta::Event as SpectaEvent;
 
+use crate::logging;
 use crate::models;
 
 /// Returns true when the LCU gameflow phase indicates the match has started or is active.
@@ -31,6 +32,26 @@ pub fn should_request_profile_refresh(prev_phase: &str, next_phase: &str) -> boo
     was_in_game && now_post_game
 }
 
+pub(crate) fn log_champ_select_change(
+    prev: Option<&crate::models::ChampSelectedPayload>,
+    next: &crate::models::ChampSelectedPayload,
+) {
+    let event = match prev {
+        None => "champ_select_started",
+        Some(p) if p.champion_id != next.champion_id => "champion_changed",
+        Some(p) if p.queue_id != next.queue_id => "queue_changed",
+        Some(p) if !p.locked_in && next.locked_in => "champion_locked",
+        _ => "champ_select_updated",
+    };
+    logging::log_info(
+        "ws.champ_select",
+        format!(
+            "event={event} champ_id={} queue_id={} locked_in={}",
+            next.champion_id, next.queue_id, next.locked_in
+        ),
+    );
+}
+
 pub(crate) async fn process_gameflow_phase_update(
     handle: &tauri::AppHandle,
     phase_state: &Arc<tokio::sync::Mutex<String>>,
@@ -41,19 +62,29 @@ pub(crate) async fn process_gameflow_phase_update(
         return;
     }
 
-    let (changed, emit_match_ended, should_refresh) = {
+    let (changed, prev_phase, emit_match_ended, should_refresh) = {
         let mut guard = phase_state.lock().await;
         if *guard == next_phase {
-            (false, false, false)
+            (false, String::new(), false, false)
         } else {
+            let prev = guard.clone();
             let match_ended = should_emit_match_ended(&guard, &next_phase);
             let refresh = should_request_profile_refresh(&guard, &next_phase);
             *guard = next_phase.clone();
-            (true, match_ended, refresh)
+            (true, prev, match_ended, refresh)
         }
     };
 
     if changed {
+        let from_label = if prev_phase.is_empty() {
+            "None"
+        } else {
+            prev_phase.as_str()
+        };
+        logging::log_info(
+            "ws.gameflow",
+            format!("event=phase_changed from={from_label} to={next_phase}"),
+        );
         let _ = models::GameflowPhaseChanged(next_phase).emit(handle);
     }
 

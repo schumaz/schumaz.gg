@@ -1,15 +1,17 @@
 use super::analytics::{
-    OPGG_REST_API_BASE, fetch_arena_champion_build_with_base_and_dir, fetch_opgg_mcp_depth_items,
-    fetch_opgg_versions_from_base, parse_opgg_analysis_payload_for_mode,
-    resolve_champion_most_played_lane,
+    fetch_opgg_mcp_depth_items, fetch_opgg_versions_from_base,
+    parse_opgg_analysis_payload_for_mode, resolve_champion_most_played_lane,
 };
 use super::cache::{
     load_disk_build_envelope, make_build_cache_key, store_disk_build, store_ram_cached_build,
     try_get_fresh_disk_build, try_get_ram_cached_build,
 };
 use super::ddragon::enrich_build_with_ddragon_for_queue;
-use super::fallback::{build_fallback_champion_build, champion_default_lane};
+use super::fallback::champion_default_lane;
 use super::models::{ChampionBuild, DataDragonCache};
+use super::service_entry_points::resolve_arena_build_or_fallback;
+#[cfg(test)]
+use super::service_entry_points::*;
 pub use super::service_helpers::FastSpellRecommendation;
 use super::service_helpers::{
     FallbackBuild, MCP_DEPTH_TIMEOUT, extract_fast_spells_from_rest,
@@ -19,9 +21,7 @@ use super::service_helpers::{
 use super::spells::ddragon_mode_for_queue;
 use crate::models::{is_arena_queue, queue_supports_runes, queue_supports_spells};
 use std::path::Path;
-
-#[cfg(test)]
-use super::service_entry_points::*;
+use std::time::Instant;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
@@ -39,6 +39,8 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     patch_48h_protection: bool,
     builds_dir: Option<&Path>,
 ) -> Result<ChampionBuild, String> {
+    let started = Instant::now();
+    let detail = format!("champ_id={champion_id} queue_id={queue_id}");
     let champ_name = ddragon_cache
         .champions
         .get(&champion_id)
@@ -49,34 +51,21 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
 
     if is_arena_queue(queue_id) {
         let _ = fast_spells_tx.take();
-        let arena_dir = if rest_base == OPGG_REST_API_BASE {
-            crate::storage::global_paths()
-                .map(|p| p.opgg_arena_dir.as_path())
-                .or(builds_dir)
-        } else {
-            builds_dir
-        };
-        let now_unix = crate::storage::now_unix_secs();
-        match fetch_arena_champion_build_with_base_and_dir(
+        return Ok(resolve_arena_build_or_fallback(
             client,
             rest_base,
             champion_id,
+            champ_name,
+            queue_id,
             patch,
             ddragon_cache,
             patch_48h_protection,
-            now_unix,
             active_locale,
-            arena_dir,
+            builds_dir,
+            started,
+            &detail,
         )
-        .await
-        {
-            Ok(build) => return Ok(build),
-            Err(_) => {
-                let mut fallback = build_fallback_champion_build(champion_id, champ_name, queue_id);
-                enrich_build_with_ddragon_for_queue(&mut fallback, ddragon_cache, queue_id);
-                return Ok(fallback);
-            }
-        }
+        .await);
     }
 
     let is_aram = queue_id == crate::ws_listener::QUEUE_ARAM
@@ -119,6 +108,12 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         active_locale,
     ) {
         send_build_fast_spells(&mut fast_spells_tx, champion_id, &build);
+        crate::logging::record_data_resolution(
+            "build",
+            "ram_hit",
+            started.elapsed().as_millis(),
+            &detail,
+        );
         return Ok(build);
     }
 
@@ -147,6 +142,12 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     {
         send_build_fast_spells(&mut fast_spells_tx, champion_id, &build);
         store_ram_cached_build(build_cache_key, &build);
+        crate::logging::record_data_resolution(
+            "build",
+            "disk_hit",
+            started.elapsed().as_millis(),
+            &detail,
+        );
         return Ok(build);
     }
 
@@ -266,7 +267,15 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         )
         .await
         {
-            FallbackBuild::Stale(stale) => return Ok(stale),
+            FallbackBuild::Stale(stale) => {
+                crate::logging::record_data_resolution(
+                    "build",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    &detail,
+                );
+                return Ok(stale);
+            }
             FallbackBuild::Mcp(mcp_fallback) => mcp_fallback,
         }
     };
@@ -307,6 +316,12 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         );
     }
     store_ram_cached_build(build_cache_key, &build);
+    let source = if fetched_ok {
+        "network"
+    } else {
+        "stale_fallback"
+    };
+    crate::logging::record_data_resolution("build", source, started.elapsed().as_millis(), &detail);
     Ok(build)
 }
 

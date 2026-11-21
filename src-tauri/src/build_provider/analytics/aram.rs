@@ -29,6 +29,11 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
     locale: AppLocale,
     aram_dir: Option<&Path>,
 ) -> Result<Vec<AramChampionRank>, String> {
+    let started = Instant::now();
+    let kind = match mode {
+        AramMode::Aram => "aram_tier_list",
+        AramMode::AramMayhem => "aram_mayhem_tier_list",
+    };
     let cache_key = match mode {
         AramMode::Aram => format!("aram:{}:{}", locale.as_str(), aram_rest_url),
         AramMode::AramMayhem => format!("mayhem:{}:{}", locale.as_str(), mayhem_web_url),
@@ -40,6 +45,7 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
     {
         let mut list = cached.clone();
         cache::rehydrate_aram_names(&mut list, ddragon);
+        crate::logging::record_data_resolution(kind, "ram_hit", started.elapsed().as_millis(), "");
         return Ok(list);
     }
 
@@ -67,6 +73,12 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
             if let Ok(mut guard) = cache::get_tier_cache().write() {
                 guard.insert(cache_key.clone(), (Instant::now(), list.clone()));
             }
+            crate::logging::record_data_resolution(
+                kind,
+                "disk_hit",
+                started.elapsed().as_millis(),
+                "",
+            );
             return Ok(list);
         }
     }
@@ -74,11 +86,20 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
     let fetch_res: Result<Vec<AramChampionRank>, String> = match mode {
         AramMode::Aram => {
             async {
-                let res = client
-                    .get(aram_rest_url)
-                    .send()
-                    .await
-                    .map_err(|e| format!("Failed to fetch ARAM tier list: {}", e))?;
+                let t0 = Instant::now();
+                let res = client.get(aram_rest_url).send().await.map_err(|e| {
+                    crate::logging::record_http_network_error_log(
+                        "analytics",
+                        t0.elapsed().as_millis(),
+                        &e.to_string(),
+                    );
+                    format!("Failed to fetch ARAM tier list: {}", e)
+                })?;
+                crate::logging::record_http_status_log(
+                    "analytics",
+                    res.status().as_u16(),
+                    t0.elapsed().as_millis(),
+                );
                 if !res.status().is_success() {
                     return Err(format!("ARAM tier list HTTP error: {}", res.status()));
                 }
@@ -92,12 +113,25 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
         }
         AramMode::AramMayhem => {
             async {
+                let t0 = Instant::now();
                 let res = client
                     .get(mayhem_web_url)
                     .header(reqwest::header::USER_AGENT, BROWSER_USER_AGENT)
                     .send()
                     .await
-                    .map_err(|e| format!("Failed to fetch ARAM Mayhem tier list: {}", e))?;
+                    .map_err(|e| {
+                        crate::logging::record_http_network_error_log(
+                            "analytics",
+                            t0.elapsed().as_millis(),
+                            &e.to_string(),
+                        );
+                        format!("Failed to fetch ARAM Mayhem tier list: {}", e)
+                    })?;
+                crate::logging::record_http_status_log(
+                    "analytics",
+                    res.status().as_u16(),
+                    t0.elapsed().as_millis(),
+                );
                 if !res.status().is_success() {
                     return Err(format!(
                         "ARAM Mayhem tier list HTTP error: {}",
@@ -123,6 +157,12 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
             {
                 let mut rescued = env.payload;
                 cache::rehydrate_aram_names(&mut rescued, ddragon);
+                crate::logging::record_data_resolution(
+                    kind,
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    "",
+                );
                 return Ok(rescued);
             }
             return Err(err);
@@ -140,6 +180,7 @@ pub async fn fetch_aram_tier_list_with_urls_and_dir(
         }
     }
 
+    crate::logging::record_data_resolution(kind, "network", started.elapsed().as_millis(), "");
     Ok(list)
 }
 

@@ -104,6 +104,17 @@ export interface SettingsTranslations {
     updatesRestartBtn: string;
     updatesRestartingBtn: string;
     updatesGithubBtn: string;
+    diagnosticsTitle: string;
+    diagnosticsDesc: string;
+    diagnosticsRowTitle: string;
+    diagnosticsStatusIdle: string;
+    diagnosticsStatusCopied: string;
+    diagnosticsStatusCopyError: string;
+    diagnosticsStatusFolderError: string;
+    diagnosticsCopyBtn: string;
+    diagnosticsCopyingBtn: string;
+    diagnosticsOpenLogsBtn: string;
+    diagnosticsOpeningLogsBtn: string;
     patchModalTitle: string;
     patchModalStrong: string;
     patchModalBody: string;

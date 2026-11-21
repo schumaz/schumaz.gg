@@ -30,6 +30,8 @@ export type {
   ChampionBuild,
   ChampionBuild_Serialize,
   ChampionMasteryInfo,
+  DiagnosticSummary,
+  DiagnosticSummary_Serialize,
   FlashKeyPreference,
   GameflowPhaseChanged,
   GeneralSettings,

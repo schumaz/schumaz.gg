@@ -1,15 +1,12 @@
 use super::super::items::{get_dynamic_item_classifications, set_dynamic_item_classifications};
 use super::super::models::{DataDragonCache, ItemClassificationCache};
-use super::augments::fetch_arena_augments_catalog;
-use super::parsers::{
-    parse_all_ddragon_champions, parse_ddragon_item_classifications, parse_ddragon_runes,
-    parse_ddragon_summoners, parse_latest_ddragon_version,
-};
+use super::fetch::{fetch_ddragon_versions, load_ddragon_bundle_for_version};
 use crate::models::AppLocale;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock};
+use std::time::Instant;
 
 pub const DDRAGON_BASE_URL: &str = "https://ddragon.leagueoflegends.com";
 
@@ -72,114 +69,12 @@ pub fn prewarm_ddragon_from_disk(locale: AppLocale) -> Option<Arc<DataDragonCach
     hydrate_ddragon_from_dir(&paths.ddragon_dir, locale)
 }
 
-async fn load_ddragon_bundle_for_version(
-    client: &reqwest::Client,
-    base_url: &str,
-    version: &str,
-    locale: AppLocale,
-) -> Result<DataDragonDiskBundle, String> {
-    let dd_locale = locale.ddragon_code();
-
-    let champions_url = format!(
-        "{}/cdn/{}/data/{}/champion.json",
-        base_url, version, dd_locale
-    );
-    let runes_url = format!(
-        "{}/cdn/{}/data/{}/runesReforged.json",
-        base_url, version, dd_locale
-    );
-    let items_url = format!("{}/cdn/{}/data/{}/item.json", base_url, version, dd_locale);
-    let summoners_url = format!(
-        "{}/cdn/{}/data/{}/summoner.json",
-        base_url, version, dd_locale
-    );
-
-    let champions_fut = async {
-        client
-            .get(&champions_url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch champion.json: {}", e))?
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|e| format!("Failed to parse champion.json: {}", e))
-    };
-
-    let runes_fut = async {
-        client
-            .get(&runes_url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch runesReforged.json: {}", e))?
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|e| format!("Failed to parse runesReforged.json: {}", e))
-    };
-
-    let items_fut = async {
-        if let Ok(res) = client.get(&items_url).send().await
-            && res.status().is_success()
-            && let Ok(items_res) = res.json::<serde_json::Value>().await
-        {
-            let classification = parse_ddragon_item_classifications(&items_res);
-            set_dynamic_item_classifications(classification.clone());
-            return Some(classification);
-        }
-        None
-    };
-
-    let summoners_fut = async {
-        if let Ok(res) = client.get(&summoners_url).send().await
-            && res.status().is_success()
-            && let Ok(summoners_res) = res.json::<serde_json::Value>().await
-            && let Ok(parsed_spells) = parse_ddragon_summoners(&summoners_res, version)
-        {
-            return parsed_spells;
-        }
-        HashMap::new()
-    };
-
-    let arena_augments_fut = fetch_arena_augments_catalog(client, base_url, locale);
-
-    let (champions_res, runes_res, item_classifications, spells, arena_augments) = tokio::join!(
-        champions_fut,
-        runes_fut,
-        items_fut,
-        summoners_fut,
-        arena_augments_fut
-    );
-
-    let champions = parse_all_ddragon_champions(&champions_res?, version)?;
-    let runes = parse_ddragon_runes(&runes_res?)?;
-
-    Ok(DataDragonDiskBundle {
-        ddragon: DataDragonCache {
-            version: version.to_string(),
-            champions,
-            runes,
-            spells,
-            arena_augments,
-        },
-        item_classifications,
-    })
-}
-
 pub async fn load_ddragon_bundle_from_base_url_for_locale(
     client: &reqwest::Client,
     base_url: &str,
     locale: AppLocale,
 ) -> Result<DataDragonDiskBundle, String> {
-    let versions_url = format!("{}/api/versions.json", base_url);
-    let versions_res: serde_json::Value = client
-        .get(&versions_url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch versions.json: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse versions.json: {}", e))?;
-
-    let version = parse_latest_ddragon_version(&versions_res)?;
+    let version = fetch_ddragon_versions(client, base_url).await?;
     load_ddragon_bundle_for_version(client, base_url, &version, locale).await
 }
 
@@ -210,25 +105,24 @@ pub async fn refresh_ddragon_if_outdated_with_base(
     disk_dir: Option<&Path>,
     locale: AppLocale,
 ) -> Result<Arc<DataDragonCache>, String> {
+    let started = Instant::now();
+    let detail = format!("locale={}", locale.as_str());
     let existing = get_ddragon_cache_store()
         .read()
         .ok()
         .and_then(|g| g.get(&locale).cloned())
         .or_else(|| disk_dir.and_then(|d| hydrate_ddragon_from_dir(d, locale)));
 
-    let versions_url = format!("{}/api/versions.json", base_url);
-    let latest_version = match client.get(&versions_url).send().await {
-        Ok(res) => match res.json::<serde_json::Value>().await {
-            Ok(json) => parse_latest_ddragon_version(&json),
-            Err(e) => Err(format!("Failed to parse versions.json: {e}")),
-        },
-        Err(e) => Err(format!("Failed to fetch versions.json: {e}")),
-    };
-
-    let version = match latest_version {
+    let version = match fetch_ddragon_versions(client, base_url).await {
         Ok(v) => v,
         Err(err) => {
             if let Some(cached) = existing {
+                crate::logging::record_data_resolution(
+                    "ddragon",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    &detail,
+                );
                 return Ok(cached);
             }
             return Err(err);
@@ -257,10 +151,22 @@ pub async fn refresh_ddragon_if_outdated_with_base(
             if let Ok(mut guard) = get_ddragon_cache_store().write() {
                 guard.insert(locale, Arc::clone(&arc));
             }
+            crate::logging::record_data_resolution(
+                "ddragon",
+                "network",
+                started.elapsed().as_millis(),
+                &format!("{detail} version={version}"),
+            );
             Ok(arc)
         }
         Err(err) => {
             if let Some(cached) = existing {
+                crate::logging::record_data_resolution(
+                    "ddragon",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    &detail,
+                );
                 Ok(cached)
             } else {
                 Err(err)
@@ -283,9 +189,12 @@ pub async fn get_or_init_ddragon_cache_for_locale(
     client: &reqwest::Client,
     locale: AppLocale,
 ) -> Result<Arc<DataDragonCache>, String> {
+    let started = Instant::now();
+    let detail = format!("locale={}", locale.as_str());
     if let Ok(guard) = get_ddragon_cache_store().read()
         && let Some(cached) = guard.get(&locale)
     {
+        crate::logging::metrics::record_cache_ram_hit();
         return Ok(Arc::clone(cached));
     }
 
@@ -293,6 +202,7 @@ pub async fn get_or_init_ddragon_cache_for_locale(
     if let Ok(guard) = get_ddragon_cache_store().read()
         && let Some(cached) = guard.get(&locale)
     {
+        crate::logging::metrics::record_cache_ram_hit();
         return Ok(Arc::clone(cached));
     }
 
@@ -307,6 +217,12 @@ pub async fn get_or_init_ddragon_cache_for_locale(
                 let _ = refresh_ddragon_if_outdated(&bg_client, locale).await;
             });
         }
+        crate::logging::record_data_resolution(
+            "ddragon",
+            "disk_hit",
+            started.elapsed().as_millis(),
+            &detail,
+        );
         return Ok(disk_cached);
     }
 
@@ -315,10 +231,17 @@ pub async fn get_or_init_ddragon_cache_for_locale(
     if let Some(paths) = crate::storage::global_paths() {
         let _ = save_ddragon_bundle_to_dir(&paths.ddragon_dir, locale, &bundle);
     }
+    let version = bundle.ddragon.version.clone();
     let loaded = Arc::new(bundle.ddragon);
     if let Ok(mut guard) = get_ddragon_cache_store().write() {
         guard.insert(locale, Arc::clone(&loaded));
     }
+    crate::logging::record_data_resolution(
+        "ddragon",
+        "network",
+        started.elapsed().as_millis(),
+        &format!("{detail} version={version}"),
+    );
     Ok(loaded)
 }
 

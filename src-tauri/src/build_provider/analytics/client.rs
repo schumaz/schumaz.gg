@@ -12,7 +12,7 @@ pub use super::versions::{
 };
 use crate::models::{queue_supports_runes, queue_supports_spells};
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
 pub const OPGG_REST_API_BASE: &str = "https://lol-api-champion.op.gg/api";
@@ -69,13 +69,26 @@ pub async fn fetch_opgg_champion_analysis(
         }
     });
 
+    let started = Instant::now();
     let res = client
         .post(endpoint_url)
         .json(&payload)
         .send()
         .await
-        .map_err(|err| format!("HTTP request to OP.GG failed: {}", err))?;
+        .map_err(|err| {
+            crate::logging::record_http_network_error_log(
+                "analytics",
+                started.elapsed().as_millis(),
+                &err.to_string(),
+            );
+            format!("HTTP request to OP.GG failed: {}", err)
+        })?;
 
+    crate::logging::record_http_status_log(
+        "analytics",
+        res.status().as_u16(),
+        started.elapsed().as_millis(),
+    );
     if !res.status().is_success() {
         return Err(format!("OP.GG responded with HTTP error: {}", res.status()));
     }
@@ -198,12 +211,21 @@ pub async fn fetch_opgg_rest_champion_analysis_from_base(
         url.push_str(&format!("&version={}", v.trim()));
     }
 
-    let res = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("REST request to OP.GG failed: {}", e))?;
+    let started = Instant::now();
+    let res = client.get(&url).send().await.map_err(|e| {
+        crate::logging::record_http_network_error_log(
+            "analytics",
+            started.elapsed().as_millis(),
+            &e.to_string(),
+        );
+        format!("REST request to OP.GG failed: {}", e)
+    })?;
 
+    crate::logging::record_http_status_log(
+        "analytics",
+        res.status().as_u16(),
+        started.elapsed().as_millis(),
+    );
     if !res.status().is_success() {
         return Err(format!(
             "OP.GG REST responded with HTTP error: {}",
@@ -260,13 +282,26 @@ pub async fn fetch_opgg_mcp_depth_items(
         }
     });
 
+    let started = Instant::now();
     let res = client
         .post(endpoint_url)
         .json(&payload)
         .send()
         .await
-        .map_err(|err| format!("MCP depth items request failed: {}", err))?;
+        .map_err(|err| {
+            crate::logging::record_http_network_error_log(
+                "analytics",
+                started.elapsed().as_millis(),
+                &err.to_string(),
+            );
+            format!("MCP depth items request failed: {}", err)
+        })?;
 
+    crate::logging::record_http_status_log(
+        "analytics",
+        res.status().as_u16(),
+        started.elapsed().as_millis(),
+    );
     if !res.status().is_success() {
         return Err(format!("MCP depth items HTTP error: {}", res.status()));
     }

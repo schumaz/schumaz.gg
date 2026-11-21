@@ -8,6 +8,7 @@ use irelia::rest::LcuClient;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 use crate::lcu_connector::client::{ConnectedLcuClient, DefaultRequestClient};
+use crate::logging;
 
 #[cfg(target_os = "windows")]
 const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
@@ -19,8 +20,7 @@ const GAME_PROCESS_NAME: &str = "League of Legends.exe";
 #[cfg(not(target_os = "windows"))]
 const GAME_PROCESS_NAME: &str = "League of Legends";
 
-const BASE64_TABLE: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 #[derive(Clone, Debug)]
 struct CachedLcuCredentials {
@@ -32,6 +32,7 @@ static SHARED_REQUEST_CLIENT: OnceLock<DefaultRequestClient> = OnceLock::new();
 static CACHED_CREDENTIALS: OnceLock<RwLock<Option<CachedLcuCredentials>>> = OnceLock::new();
 static LAST_LOCKFILE_PATH: OnceLock<RwLock<Option<PathBuf>>> = OnceLock::new();
 static PROCESS_SYSTEM: OnceLock<Mutex<System>> = OnceLock::new();
+static LAST_DISCOVERY_ERROR: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
 fn credentials_cache() -> &'static RwLock<Option<CachedLcuCredentials>> {
     CACHED_CREDENTIALS.get_or_init(|| RwLock::new(None))
@@ -43,6 +44,21 @@ fn lockfile_path_cache() -> &'static RwLock<Option<PathBuf>> {
 
 fn process_system() -> &'static Mutex<System> {
     PROCESS_SYSTEM.get_or_init(|| Mutex::new(System::new()))
+}
+
+fn set_discovery_error_state(reason: Option<&str>) {
+    let lock = LAST_DISCOVERY_ERROR.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = lock.lock()
+        && guard.as_deref() != reason
+    {
+        *guard = reason.map(str::to_string);
+        if let Some(msg) = reason {
+            logging::log_debug(
+                "lcu.discovery",
+                format!("event=discovery_failed reason={msg}"),
+            );
+        }
+    }
 }
 
 /// Returns the process-wide HTTP/TLS client shared across all LCU REST requests.
@@ -57,8 +73,10 @@ pub fn shared_request_client() -> &'static DefaultRequestClient {
 
 /// Clears cached LCU port and auth header so the next connection re-discovers credentials.
 pub fn invalidate_lcu_credentials() {
-    if let Ok(mut guard) = credentials_cache().write() {
-        *guard = None;
+    if let Ok(mut guard) = credentials_cache().write()
+        && guard.take().is_some()
+    {
+        logging::log_info("lcu.discovery", "event=credentials_invalidated");
     }
 }
 
@@ -89,7 +107,16 @@ pub(super) fn connect_lcu_client() -> Result<ConnectedLcuClient, String> {
         ));
     }
 
-    let discovered = discover_lcu_credentials()?;
+    let discovered = match discover_lcu_credentials() {
+        Ok(creds) => {
+            set_discovery_error_state(None);
+            creds
+        }
+        Err(err) => {
+            set_discovery_error_state(Some(&err));
+            return Err(err);
+        }
+    };
     if let Ok(mut guard) = credentials_cache().write() {
         *guard = Some(discovered.clone());
     }
@@ -224,12 +251,10 @@ fn discover_lcu_credentials() -> Result<CachedLcuCredentials, String> {
         .lock()
         .map_err(|_| "LCU discovery lock poisoned".to_string())?;
 
-    // Fast path: reuse remembered lockfile path if its PID is still alive.
     if let Some(creds) = try_discover_from_cached_lockfile(&mut system) {
         return Ok(creds);
     }
 
-    // Stage 1: Lightweight process name/PID enumeration (no OpenProcess, no exe, no cmd/PEB reads).
     system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
 
     let matched = system.processes().iter().find_map(|(pid, proc)| {
@@ -240,7 +265,6 @@ fn discover_lcu_credentials() -> Result<CachedLcuCredentials, String> {
         return Err("LCU process is not running".to_string());
     };
 
-    // Stage 2: Inspect exe + cmd ONLY for the single matched League PID.
     let detail_kind = ProcessRefreshKind::nothing()
         .with_exe(UpdateKind::Always)
         .with_cmd(UpdateKind::Always);
@@ -292,7 +316,10 @@ mod tests {
             parse_lockfile_contents("LeagueClient:12345:54321:superSecretToken:https"),
             Some((12345, 54321, "superSecretToken".to_string()))
         );
-        assert_eq!(parse_lockfile_contents("LeagueClient:bad:54321:tok:https"), None);
+        assert_eq!(
+            parse_lockfile_contents("LeagueClient:bad:54321:tok:https"),
+            None
+        );
         assert_eq!(parse_lockfile_contents("LeagueClient:1:54321::https"), None);
     }
 

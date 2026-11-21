@@ -3,6 +3,7 @@ pub mod build_provider;
 pub mod commands;
 pub mod lcu_connector;
 pub mod lcu_injector;
+pub mod logging;
 pub mod models;
 pub mod profile_provider;
 pub mod storage;
@@ -52,6 +53,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::complete_flash_onboarding,
             commands::get_local_cache_info,
             commands::clear_local_cache,
+            commands::get_diagnostic_summary,
+            commands::open_logs_folder,
             commands::restart_app
         ])
         .events(collect_events![
@@ -127,12 +130,16 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle, event| {
-        if let tauri::RunEvent::ExitRequested { api, code, .. } = event
-            && code.is_none()
-            && !app_bootstrap::should_allow_exit(app_handle)
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::ExitRequested { api, code, .. }
+            if code.is_none() && !app_bootstrap::should_allow_exit(app_handle) =>
         {
             api.prevent_exit();
         }
+        tauri::RunEvent::Exit => {
+            logging::log_info("app.lifecycle", "event=exit");
+            logging::shutdown_logging();
+        }
+        _ => {}
     });
 }

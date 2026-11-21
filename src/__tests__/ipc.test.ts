@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   lcuIpc,
   buildIpc,
+  diagnosticsIpc,
   injectorIpc,
   profileIpc,
   rankedIpc,
@@ -17,7 +18,6 @@ import {
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockImplementation((cmd: string) => {
-    if (cmd === "get_summoner_status") return Promise.resolve(null);
     if (cmd === "get_gameflow_phase") return Promise.resolve("Lobby");
     if (cmd === "get_active_champ_select_snapshot") {
       return Promise.resolve({ gameflow_phase: "Lobby", champ_selected: null, build: null });
@@ -25,20 +25,15 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_app_distribution_info") {
       return Promise.resolve({ isPortable: false, currentVersion: "0.1.0", releasesUrl: "" });
     }
-    if (cmd === "get_recommended_build_for_champion") return Promise.resolve(null);
-    if (cmd === "get_player_profile") return Promise.resolve(null);
-    if (cmd === "get_cached_player_profile") return Promise.resolve(null);
-    if (cmd === "get_ranked_tier_list") return Promise.resolve(null);
-    if (cmd === "get_ranked_champion_build") return Promise.resolve(null);
-    if (cmd === "get_arena_tier_list") return Promise.resolve(null);
-    if (cmd === "get_arena_champion_build") return Promise.resolve(null);
-    if (cmd === "get_aram_tier_list") return Promise.resolve([]);
-    if (cmd === "get_aram_mayhem_augments") return Promise.resolve([]);
-    if (cmd === "get_app_settings") return Promise.resolve(null);
+    if (cmd === "get_aram_tier_list" || cmd === "get_aram_mayhem_augments") {
+      return Promise.resolve([]);
+    }
     if (cmd === "get_hardware_acceleration_status") {
       return Promise.resolve({ enabled: true, active_at_startup: true });
     }
-    if (cmd === "get_bootstrap_status") return Promise.resolve(null);
+    if (cmd === "get_diagnostic_summary") {
+      return Promise.resolve({ appVersion: "0.4.0", formattedText: "ok" });
+    }
     return Promise.resolve(null);
   }),
   convertFileSrc: vi.fn(
@@ -55,7 +50,7 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     vi.clearAllMocks();
   });
 
-  it("delegates lcu, build, injector, profile, ranked, arena, aram, settings, and window commands", async () => {
+  it("delegates lcu, build, diagnostics, injector, profile, ranked, arena, aram, settings, and window commands", async () => {
     await lcuIpc.getSummonerStatus();
     expect(invoke).toHaveBeenCalledWith("get_summoner_status");
 
@@ -202,6 +197,13 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
 
     await settingsIpc.clearLocalCache("builds");
     expect(invoke).toHaveBeenCalledWith("clear_local_cache", { scope: "builds" });
+
+    const diag = await diagnosticsIpc.getDiagnosticSummary();
+    expect(invoke).toHaveBeenCalledWith("get_diagnostic_summary");
+    expect(diag).toEqual({ appVersion: "0.4.0", formattedText: "ok" });
+
+    await diagnosticsIpc.openLogsFolder();
+    expect(invoke).toHaveBeenCalledWith("open_logs_folder");
 
     await windowIpc.getBootstrapStatus();
     expect(invoke).toHaveBeenCalledWith("get_bootstrap_status");

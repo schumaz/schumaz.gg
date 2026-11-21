@@ -16,40 +16,6 @@ use std::time::Instant;
 
 const TREND_PROBE_CHAMPION_ID: i32 = 103; // Ahri (high play-rate reference for patch release timestamp)
 
-async fn fetch_ranked_json(
-    client: &reqwest::Client,
-    rest_base: &str,
-    region: &str,
-    tier: &str,
-    version: Option<&str>,
-) -> Result<serde_json::Value, String> {
-    let mut url = format!(
-        "{}/{}/champions/ranked?tier={}",
-        rest_base.trim_end_matches('/'),
-        region,
-        tier
-    );
-    if let Some(v) = version
-        && !v.trim().is_empty()
-    {
-        url.push_str(&format!("&version={}", v.trim()));
-    }
-
-    let res = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch ranked tier list: {}", e))?;
-
-    if !res.status().is_success() {
-        return Err(format!("Ranked tier list HTTP error: {}", res.status()));
-    }
-
-    res.json::<serde_json::Value>()
-        .await
-        .map_err(|e| format!("Failed to parse ranked tier list JSON: {}", e))
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn fetch_ranked_tier_list_with_base_and_dir(
     client: &reqwest::Client,
@@ -63,6 +29,7 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
     locale: AppLocale,
     ranked_dir: Option<&Path>,
 ) -> Result<RankedTierListResponse, String> {
+    let started = Instant::now();
     let target_region = region
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -89,6 +56,12 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
     {
         let mut resp = cached.clone();
         cache::rehydrate_ranked_names(&mut resp, ddragon);
+        crate::logging::record_data_resolution(
+            "ranked_tier_list",
+            "ram_hit",
+            started.elapsed().as_millis(),
+            "",
+        );
         return Ok(resp);
     }
 
@@ -124,6 +97,12 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
             if let Ok(mut guard) = cache::get_ranked_cache().write() {
                 guard.insert(cache_key.clone(), (Instant::now(), resp.clone()));
             }
+            crate::logging::record_data_resolution(
+                "ranked_tier_list",
+                "disk_hit",
+                started.elapsed().as_millis(),
+                "",
+            );
             return Ok(resp);
         }
     }
@@ -139,7 +118,7 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
     let fetch_res: Result<serde_json::Value, String> = async {
         if let Some(user_patch) = manual_patch {
             effective_patch = user_patch.to_string();
-            fetch_ranked_json(
+            cache::fetch_ranked_json(
                 client,
                 rest_base,
                 target_region,
@@ -149,9 +128,14 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
             .await
         } else {
             let probe_version = (!effective_patch.is_empty()).then_some(effective_patch.as_str());
-            let probe_json =
-                fetch_ranked_json(client, rest_base, target_region, target_tier, probe_version)
-                    .await?;
+            let probe_json = cache::fetch_ranked_json(
+                client,
+                rest_base,
+                target_region,
+                target_tier,
+                probe_version,
+            )
+            .await?;
 
             let (meta_version, match_count) = parser::extract_ranked_meta_info(&probe_json);
             if effective_patch.is_empty()
@@ -199,7 +183,7 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
                     patch_protection_remaining_hours = selection.remaining_hours;
 
                     if patch_fallback_applied {
-                        fetch_ranked_json(
+                        cache::fetch_ranked_json(
                             client,
                             rest_base,
                             target_region,
@@ -229,6 +213,12 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
             {
                 let mut resp = env.payload;
                 cache::rehydrate_ranked_names(&mut resp, ddragon);
+                crate::logging::record_data_resolution(
+                    "ranked_tier_list",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    "",
+                );
                 return Ok(resp);
             }
             return Err(err);
@@ -263,6 +253,12 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
         }
     }
 
+    crate::logging::record_data_resolution(
+        "ranked_tier_list",
+        "network",
+        started.elapsed().as_millis(),
+        "",
+    );
     Ok(response)
 }
 

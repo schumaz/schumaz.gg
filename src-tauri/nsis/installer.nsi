@@ -937,6 +937,7 @@ Section Uninstall
     SetShellVarContext current
     RmDir /r "$LOCALAPPDATA\schumazgg\Config"
     RmDir /r "$LOCALAPPDATA\schumazgg\Cache"
+    RmDir /r "$LOCALAPPDATA\schumazgg\Logs"
     RmDir /r "$LOCALAPPDATA\schumazgg\WebView"
     RMDir "$LOCALAPPDATA\schumazgg"
     RMDir "$INSTDIR"

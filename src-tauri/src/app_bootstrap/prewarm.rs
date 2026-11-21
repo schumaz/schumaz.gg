@@ -1,6 +1,7 @@
+use std::time::Instant;
 use tauri::Manager;
 
-use crate::{build_provider, lcu_connector, models, profile_provider, storage};
+use crate::{build_provider, lcu_connector, logging, models, profile_provider, storage};
 
 use super::BootstrapState;
 use super::window_factory::AppLifecycleState;
@@ -13,6 +14,7 @@ fn spawn_prewarm_task(
     active_locale: models::AppLocale,
 ) {
     tauri::async_runtime::spawn(async move {
+        let started_at = Instant::now();
         let ddragon_opt = build_provider::ddragon::prewarm_ddragon_from_disk(active_locale);
         bootstrap_state.update(&app_handle, "ddragon_disk", 40, false, false);
 
@@ -45,12 +47,33 @@ fn spawn_prewarm_task(
         bootstrap_state.update(&app_handle, "tier_lists_disk", 80, true, false);
 
         let client = build_provider::shared_http_client();
-        let (_, opgg_versions) = tokio::join!(
+        let (ddragon_refresh_res, opgg_versions) = tokio::join!(
             build_provider::refresh_ddragon_if_outdated(client, active_locale),
             build_provider::fetch_opgg_versions(client, "global"),
         );
 
-        storage::run_garbage_collector(&paths, &opgg_versions, storage::now_unix_secs());
+        let gc_stats =
+            storage::run_garbage_collector(&paths, &opgg_versions, storage::now_unix_secs());
+        let ddragon_ver = ddragon_refresh_res
+            .as_ref()
+            .map(|d| d.version.as_str())
+            .or_else(|_| ddragon_opt.as_ref().map(|d| d.version.as_str()).ok_or(()))
+            .unwrap_or("none");
+        let active_patch = opgg_versions.first().map(String::as_str).unwrap_or("none");
+        logging::log_info(
+            "app.prewarm",
+            format!(
+                "event=prewarm_done elapsed_ms={} ddragon={} patch={} gc_tmp={} gc_stale_patch={} gc_inactive={} gc_corrupt={} gc_over_quota={}",
+                started_at.elapsed().as_millis(),
+                ddragon_ver,
+                active_patch,
+                gc_stats.removed_tmp_files,
+                gc_stats.removed_stale_patch_files,
+                gc_stats.removed_inactive_files,
+                gc_stats.removed_corrupt_files,
+                gc_stats.removed_over_quota_files,
+            ),
+        );
         bootstrap_state.update(&app_handle, "ready", 100, true, true);
     });
 }
@@ -97,10 +120,22 @@ pub fn spawn_headless_lcu_ddragon_prewarm(app_handle: tauri::AppHandle) {
                         .general
                         .language
                         .unwrap_or_default();
-                    let _ = tokio::task::spawn_blocking(move || {
-                        let _ = build_provider::ddragon::prewarm_ddragon_from_disk(locale);
+                    let started_at = Instant::now();
+                    let warmed = tokio::task::spawn_blocking(move || {
+                        build_provider::ddragon::prewarm_ddragon_from_disk(locale)
+                            .map(|d| d.version.clone())
                     })
-                    .await;
+                    .await
+                    .ok()
+                    .flatten();
+                    logging::log_info(
+                        "app.prewarm",
+                        format!(
+                            "event=headless_ddragon_prewarm elapsed_ms={} ddragon={}",
+                            started_at.elapsed().as_millis(),
+                            warmed.as_deref().unwrap_or("miss"),
+                        ),
+                    );
                 }
                 break;
             }

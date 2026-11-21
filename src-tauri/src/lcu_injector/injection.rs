@@ -1,5 +1,5 @@
 use super::injection_state::{
-    AppliedInjectionState, SafetyInjectionSink, plan_safety_injection,
+    AppliedInjectionState, SafetyInjectionSink, log_injection_outcome, plan_safety_injection,
     resolve_injection_spell_pair_from_raw,
 };
 use super::payloads::{
@@ -10,6 +10,7 @@ use super::preferences::{FlashKeyPreference, UserPreferences, get_user_preferenc
 use super::selections::set_selected_rune_page;
 use crate::build_provider::ChampionBuild;
 use crate::models::{AppLocale, InjectionReport};
+use std::sync::atomic::Ordering;
 
 pub const PERKS_CURRENT_PAGE_ENDPOINT: &str = "/lol-perks/v1/currentpage";
 pub const PERKS_PAGES_ENDPOINT: &str = "/lol-perks/v1/pages";
@@ -85,24 +86,19 @@ pub async fn inject_rune_payload(
     conn: &crate::lcu_connector::LcuConnection,
     payload: &serde_json::Value,
 ) -> Result<(), String> {
-    // 1. Check all rune pages to see if a schumaz.gg page already exists
     if let Ok(pages) = conn.get_all_rune_pages().await {
         if let Some(existing_page_id) = find_schumaz_page_id(&pages) {
-            // Overwrite the existing page in-place via PUT
             if conn.put_rune_page(existing_page_id, payload).await.is_ok() {
                 return Ok(());
             }
-            // If PUT fails, delete the existing schumaz page and recreate
             let _ = conn.delete_rune_page(existing_page_id).await;
             conn.create_rune_page(payload).await?;
             return Ok(());
         }
 
-        // 2. No schumaz.gg page exists yet. Try creating a new one.
         match conn.create_rune_page(payload).await {
             Ok(_) => return Ok(()),
             Err(_) => {
-                // If creation failed (e.g. max page limit reached), overwrite or delete the first custom page
                 if let Some(deletable_id) = find_first_deletable_page_id(&pages) {
                     if conn.put_rune_page(deletable_id, payload).await.is_ok() {
                         return Ok(());
@@ -114,7 +110,6 @@ pub async fn inject_rune_payload(
             }
         }
     } else {
-        // Fallback: direct create if pages endpoint query failed
         conn.create_rune_page(payload).await?;
     }
 
@@ -242,6 +237,14 @@ pub async fn inject_champion_build_with_sink(
     };
 
     let (runes_res, spells_res, items_res) = tokio::join!(runes_fut, spells_fut, items_fut);
+    let active_queue_id = crate::ws_listener::shared_active_queue_id().load(Ordering::Relaxed);
+    log_injection_outcome(
+        build.champion_id,
+        active_queue_id,
+        runes_res.as_ref(),
+        spells_res.as_ref(),
+        items_res.as_ref(),
+    );
 
     let runes_ok = runes_res.as_ref().is_some_and(|r| r.is_ok());
     let spells_ok = spells_res.as_ref().is_some_and(|r| r.is_ok());

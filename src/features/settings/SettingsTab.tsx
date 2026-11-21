@@ -14,6 +14,7 @@ import { SettingsAutomationSection } from "./SettingsAutomationSection";
 import { SettingsAppearanceSection, isBlurSliderDisabled } from "./SettingsAppearanceSection";
 import { SettingsSystemSection } from "./SettingsSystemSection";
 import { PatchProtectionModal } from "./PatchProtectionModal";
+import { useDiagnostics, type DiagnosticsFeedbackStatus } from "./useDiagnostics";
 import { useLocalCache, type LocalCacheStatus } from "./useLocalCache";
 import { useAutostart } from "./useAutostart";
 
@@ -54,6 +55,11 @@ interface SettingsTabProps {
   onCheckForUpdates?: () => void;
   onRestartToUpdate?: () => void;
   onOpenPortableRelease?: () => void;
+  diagnosticsCopying?: boolean;
+  diagnosticsOpeningLogs?: boolean;
+  diagnosticsStatus?: DiagnosticsFeedbackStatus;
+  onCopyDiagnosticSummary?: () => void;
+  onOpenLogsFolder?: () => void;
 }
 
 export function SettingsTab({
@@ -88,6 +94,11 @@ export function SettingsTab({
   onCheckForUpdates,
   onRestartToUpdate,
   onOpenPortableRelease,
+  diagnosticsCopying: propDiagnosticsCopying,
+  diagnosticsOpeningLogs: propDiagnosticsOpeningLogs,
+  diagnosticsStatus: propDiagnosticsStatus,
+  onCopyDiagnosticSummary: propOnCopyDiagnosticSummary,
+  onOpenLogsFolder: propOnOpenLogsFolder,
 }: SettingsTabProps) {
   const { locale: contextLocale, setLocale } = useTranslation();
   const activeLocale = propLocale ?? preferences.language ?? contextLocale;
@@ -114,6 +125,14 @@ export function SettingsTab({
     ((scope: CacheClearScope) => {
       void localCache.clearCache(scope);
     });
+
+  const diagnostics = useDiagnostics(isActive);
+  const diagnosticsCopying = propDiagnosticsCopying ?? diagnostics.copying;
+  const diagnosticsOpeningLogs = propDiagnosticsOpeningLogs ?? diagnostics.openingFolder;
+  const diagnosticsStatus = propDiagnosticsStatus ?? diagnostics.status;
+  const onCopyDiagnosticSummary =
+    propOnCopyDiagnosticSummary ?? (() => void diagnostics.copySummary());
+  const onOpenLogsFolder = propOnOpenLogsFolder ?? (() => void diagnostics.openLogsFolder());
 
   const [showDisablePatchProtectionModal, setShowDisablePatchProtectionModal] = useState(false);
   const patch48hProtection = preferences.patch48hProtection ?? true;
@@ -196,6 +215,11 @@ export function SettingsTab({
           onCheckForUpdates={onCheckForUpdates}
           onRestartToUpdate={onRestartToUpdate}
           onOpenPortableRelease={onOpenPortableRelease}
+          diagnosticsCopying={diagnosticsCopying}
+          diagnosticsOpeningLogs={diagnosticsOpeningLogs}
+          diagnosticsStatus={diagnosticsStatus}
+          onCopyDiagnosticSummary={onCopyDiagnosticSummary}
+          onOpenLogsFolder={onOpenLogsFolder}
         />
       </div>
 

@@ -1,16 +1,70 @@
 use super::analytics::{
     OPGG_MCP_ENDPOINT, OPGG_REST_API_BASE, fetch_aram_mayhem_augments_for_locale,
-    fetch_aram_tier_list, fetch_arena_champion_build, fetch_arena_tier_list,
-    fetch_ranked_tier_list, shared_http_client,
+    fetch_aram_tier_list, fetch_arena_champion_build, fetch_arena_champion_build_with_base_and_dir,
+    fetch_arena_tier_list, fetch_ranked_tier_list, shared_http_client,
 };
-use super::ddragon::get_or_init_ddragon_cache;
+use super::ddragon::{enrich_build_with_ddragon_for_queue, get_or_init_ddragon_cache};
+use super::fallback::build_fallback_champion_build;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::service::get_recommended_build_with_filters_and_endpoints_with_dir;
 use super::service_helpers::FastSpellRecommendation;
 use crate::models::{
-    AramAugmentEntry, AramChampionRank, AramMode, ArenaTierListResponse, QUEUE_SOLO_DUO,
+    AppLocale, AramAugmentEntry, AramChampionRank, AramMode, ArenaTierListResponse, QUEUE_SOLO_DUO,
     RankedTierListResponse,
 };
+use std::path::Path;
+use std::time::Instant;
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn resolve_arena_build_or_fallback(
+    client: &reqwest::Client,
+    rest_base: &str,
+    champion_id: i32,
+    champ_name: &str,
+    queue_id: i32,
+    patch: Option<&str>,
+    ddragon_cache: &DataDragonCache,
+    patch_48h_protection: bool,
+    active_locale: AppLocale,
+    builds_dir: Option<&Path>,
+    started: Instant,
+    detail: &str,
+) -> ChampionBuild {
+    let arena_dir = if rest_base == OPGG_REST_API_BASE {
+        crate::storage::global_paths()
+            .map(|p| p.opgg_arena_dir.as_path())
+            .or(builds_dir)
+    } else {
+        builds_dir
+    };
+    let now_unix = crate::storage::now_unix_secs();
+    match fetch_arena_champion_build_with_base_and_dir(
+        client,
+        rest_base,
+        champion_id,
+        patch,
+        ddragon_cache,
+        patch_48h_protection,
+        now_unix,
+        active_locale,
+        arena_dir,
+    )
+    .await
+    {
+        Ok(build) => build,
+        Err(_) => {
+            let mut fallback = build_fallback_champion_build(champion_id, champ_name, queue_id);
+            enrich_build_with_ddragon_for_queue(&mut fallback, ddragon_cache, queue_id);
+            crate::logging::record_data_resolution(
+                "arena_build",
+                "stale_fallback",
+                started.elapsed().as_millis(),
+                detail,
+            );
+            fallback
+        }
+    }
+}
 
 pub async fn get_recommended_build_with_filters(
     client: &reqwest::Client,

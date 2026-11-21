@@ -1,5 +1,6 @@
 use crate::app_bootstrap::{self, BootstrapState};
 use crate::lcu_injector;
+use crate::logging;
 use crate::models::{
     AppDistributionInfo, AppLocale, AutostartStatus, BootstrapStatus, FlashKeyPreference,
 };
@@ -194,6 +195,8 @@ pub async fn clear_local_cache(scope: CacheClearScope) -> Result<LocalCacheInfo,
 #[tauri::command]
 #[specta::specta]
 pub fn restart_app(app_handle: AppHandle) {
+    logging::log_info("app.lifecycle", "event=restart_requested");
+    logging::flush_logs();
     app_bootstrap::allow_app_exit(&app_handle);
     app_handle.restart();
 }

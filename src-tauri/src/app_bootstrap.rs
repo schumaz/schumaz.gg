@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri_specta::Event;
 
-use crate::{build_provider, lcu_connector, lcu_injector, models, storage, ws_listener};
+use crate::{build_provider, lcu_connector, lcu_injector, logging, models, storage, ws_listener};
 
 #[derive(Clone, Default)]
 pub struct BootstrapState {
@@ -101,9 +101,10 @@ pub fn setup_app(
     app.manage(AppLifecycleState::default());
     app.manage(window_state.clone());
 
-    // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/, Cache/, & WebView/ subfolders
+    // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/, Cache/, Logs/, & WebView/ subfolders
     let paths = storage::AppPaths::resolve_from_app(&app_handle).map_err(std::io::Error::other)?;
     paths.ensure_dirs().map_err(std::io::Error::other)?;
+    let _ = logging::init_logging(&paths.logs_dir);
     let ini_path = paths.user_settings_ini_path();
     storage::set_global_paths(paths);
 
@@ -129,6 +130,22 @@ pub fn setup_app(
 
     // 4. Lazy WebView2 lifecycle: defer window creation and heavy UI prewarm on `--autostart`
     let started_in_tray = is_autostart_launch_args(std::env::args());
+    let boot_mode = if started_in_tray {
+        "autostart"
+    } else {
+        "interactive"
+    };
+    logging::log_info(
+        "app.bootstrap",
+        format!(
+            "event=startup version={} mode={} locale={} gpu_active={} close_to_tray={}",
+            app_handle.package_info().version,
+            boot_mode,
+            active_locale.as_str(),
+            settings.graphics.hardware_acceleration,
+            settings.general.close_to_tray
+        ),
+    );
     if started_in_tray {
         prewarm::spawn_headless_lcu_ddragon_prewarm(app_handle.clone());
     } else {

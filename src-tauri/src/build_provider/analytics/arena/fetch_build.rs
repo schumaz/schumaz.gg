@@ -23,6 +23,8 @@ pub async fn fetch_arena_champion_build_with_base_and_dir(
     locale: AppLocale,
     arena_dir: Option<&Path>,
 ) -> Result<ChampionBuild, String> {
+    let started = Instant::now();
+    let detail = format!("champ_id={champion_id}");
     let manual_patch = patch.map(str::trim).filter(|s| !s.is_empty());
     let cache_key = format!(
         "{}:{}:{}:{}:{}",
@@ -44,6 +46,12 @@ pub async fn fetch_arena_champion_build_with_base_and_dir(
             FlashKeyPreference::D,
             locale,
             Some(QUEUE_ARENA),
+        );
+        crate::logging::record_data_resolution(
+            "arena_build",
+            "ram_hit",
+            started.elapsed().as_millis(),
+            &detail,
         );
         return Ok(build);
     }
@@ -85,6 +93,12 @@ pub async fn fetch_arena_champion_build_with_base_and_dir(
             if let Ok(mut guard) = cache::get_arena_build_cache().write() {
                 guard.insert(cache_key, (Instant::now(), build.clone()));
             }
+            crate::logging::record_data_resolution(
+                "arena_build",
+                "disk_hit",
+                started.elapsed().as_millis(),
+                &detail,
+            );
             return Ok(build);
         }
     }
@@ -144,6 +158,12 @@ pub async fn fetch_arena_champion_build_with_base_and_dir(
                     locale,
                     Some(QUEUE_ARENA),
                 );
+                crate::logging::record_data_resolution(
+                    "arena_build",
+                    "stale_fallback",
+                    started.elapsed().as_millis(),
+                    &detail,
+                );
                 return Ok(stale);
             }
             return Err(err);
@@ -177,6 +197,12 @@ pub async fn fetch_arena_champion_build_with_base_and_dir(
         guard.insert(cache_key, (Instant::now(), build.clone()));
     }
 
+    crate::logging::record_data_resolution(
+        "arena_build",
+        "network",
+        started.elapsed().as_millis(),
+        &detail,
+    );
     Ok(build)
 }
 

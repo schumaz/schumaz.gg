@@ -8,6 +8,7 @@ use crate::lcu_connector::client::LcuConnection;
 use crate::lcu_connector::discovery::invalidate_lcu_credentials;
 use crate::lcu_connector::missions_runner::spawn_auto_mark_daily_missions_if_enabled;
 use crate::lcu_connector::missions_tracker::reset_auto_mark_session_state;
+use crate::logging;
 use crate::models::LcuStatus;
 
 struct LcuConnectionSignal {
@@ -71,6 +72,11 @@ pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
                     let new_status = LcuStatus::Connected(summoner.clone());
                     set_lcu_connected(true);
                     if should_emit_status_change(&current_status, &new_status) {
+                        if matches!(current_status, LcuStatus::Disconnected) {
+                            logging::log_info("lcu.monitor", "event=connected");
+                        } else {
+                            logging::log_info("lcu.monitor", "event=session_updated");
+                        }
                         let _ = crate::models::LcuConnected(summoner.clone()).emit(&app_handle);
                         current_status = new_status;
                         reset_auto_mark_session_state();
@@ -86,6 +92,10 @@ pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
                     invalidate_lcu_credentials();
                     let new_status = LcuStatus::Disconnected;
                     if should_emit_status_change(&current_status, &new_status) {
+                        logging::log_info(
+                            "lcu.monitor",
+                            "event=disconnected reason=summoner_unavailable",
+                        );
                         let _ = crate::models::LcuDisconnected.emit(&app_handle);
                         current_status = new_status;
                         reset_auto_mark_session_state();
@@ -100,6 +110,10 @@ pub async fn start_lcu_monitor(app_handle: tauri::AppHandle) {
                 invalidate_lcu_credentials();
                 let new_status = LcuStatus::Disconnected;
                 if should_emit_status_change(&current_status, &new_status) {
+                    logging::log_info(
+                        "lcu.monitor",
+                        "event=disconnected reason=client_unavailable",
+                    );
                     let _ = crate::models::LcuDisconnected.emit(&app_handle);
                     current_status = new_status;
                     reset_auto_mark_session_state();

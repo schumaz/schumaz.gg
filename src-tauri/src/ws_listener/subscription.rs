@@ -16,7 +16,7 @@ use super::reconcile_state::{
 use super::session_handler::{
     handle_session_transition, process_session_timer, should_defer_initial_inject_to_finalization,
 };
-use crate::models;
+use crate::{logging, models};
 
 /// Spawns an async task from synchronous WebSocket callback threads (e.g. `irelia` WS thread)
 /// onto the captured Tokio runtime, falling back to `tauri::async_runtime` if needed.
@@ -40,13 +40,19 @@ struct MonitorAwareErrorHandler;
 impl irelia::ws::ErrorHandler for MonitorAwareErrorHandler {
     fn on_error(
         &mut self,
-        _error: irelia::ws::WebSocketError,
+        error: irelia::ws::WebSocketError,
     ) -> std::ops::ControlFlow<(), irelia::ws::Flow> {
         if !crate::lcu_connector::is_lcu_connected() {
+            logging::log_info("ws.listener", "event=ws_stopped reason=lcu_disconnected");
             return std::ops::ControlFlow::Break(());
         }
+        logging::log_warn(
+            "ws.listener",
+            format!("event=ws_reconnect_scheduled err={error:?}"),
+        );
         std::thread::sleep(Duration::from_millis(1500));
         if !crate::lcu_connector::is_lcu_connected() {
+            logging::log_info("ws.listener", "event=ws_stopped reason=lcu_disconnected");
             return std::ops::ControlFlow::Break(());
         }
         std::ops::ControlFlow::Continue(irelia::ws::Flow::TryReconnect)
@@ -91,6 +97,7 @@ pub(super) async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) 
     };
     ctx.active_queue_id.store(0, Ordering::Relaxed);
     if emit_ended && had_session {
+        logging::log_info("ws.champ_select", "event=champ_select_ended");
         sync_gameflow_phase_before_champ_select_end(&ctx.app_handle, &ctx.last_gameflow_phase)
             .await;
         let _ = models::ChampSelectEnded.emit(&ctx.app_handle);
@@ -100,6 +107,7 @@ pub(super) async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) 
 pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
     let rt_handle = tokio::runtime::Handle::try_current().ok();
     let mut ws = LcuWebSocket::new_with_error_handler(MonitorAwareErrorHandler);
+    logging::log_info("ws.listener", "event=ws_subscribed");
 
     let ws_ctx = ctx.clone();
     let session_rt = rt_handle.clone();

@@ -89,6 +89,13 @@ export const commands = {
 	getLocalCacheInfo: () => __TAURI_INVOKE<LocalCacheInfo>("get_local_cache_info"),
 	/**  Deletes cached files under `Cache/` matching `scope` and returns refreshed usage statistics. */
 	clearLocalCache: (scope: CacheClearScope) => __TAURI_INVOKE<LocalCacheInfo>("clear_local_cache", { scope }),
+	/**  Builds a sanitized local diagnostic summary without exposing credentials, paths, or PII. */
+	getDiagnosticSummary: () => __TAURI_INVOKE<DiagnosticSummary_Serialize>("get_diagnostic_summary"),
+	/**
+	 *  Ensures `%LOCALAPPDATA%\schumazgg\Logs\` exists, flushes buffered logs, and opens it in Explorer
+	 *  directly from the Rust backend without expanding frontend Tauri capabilities.
+	 */
+	openLogsFolder: () => __TAURI_INVOKE<null>("open_logs_folder"),
 	/**  Restarts the Tauri application so updated WebView2 GPU flags take effect. */
 	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
@@ -519,6 +526,45 @@ export type ChampionMasteryInfo = {
 	champion_icon_url: string,
 	champion_level: number,
 	champion_points: number,
+};
+
+/**  Sanitized local diagnostic snapshot exported for troubleshooting without external telemetry. */
+export type DiagnosticSummary = DiagnosticSummary_Serialize | DiagnosticSummary_Deserialize;
+
+/**  Sanitized local diagnostic snapshot exported for troubleshooting without external telemetry. */
+export type DiagnosticSummary_Deserialize = {
+	appVersion: string,
+	distributionMode: string,
+	osVersion: string,
+	architecture: string,
+	locale: string,
+	gpuSaved: boolean,
+	gpuActive: boolean,
+	closeToTray: boolean,
+	lcuConnected: boolean,
+	gameflowPhase: string,
+	ddragonVersion?: string | null,
+	activePatch?: string | null,
+	recentIssues: string[],
+	formattedText: string,
+};
+
+/**  Sanitized local diagnostic snapshot exported for troubleshooting without external telemetry. */
+export type DiagnosticSummary_Serialize = {
+	appVersion: string,
+	distributionMode: string,
+	osVersion: string,
+	architecture: string,
+	locale: string,
+	gpuSaved: boolean,
+	gpuActive: boolean,
+	closeToTray: boolean,
+	lcuConnected: boolean,
+	gameflowPhase: string,
+	ddragonVersion: string | null,
+	activePatch: string | null,
+	recentIssues: string[],
+	formattedText: string,
 };
 
 /**  User's preferred key for Flash (D vs F). */

@@ -9,14 +9,14 @@ use super::extract::{
     evaluate_finalization_window, extract_champ_select_timer, is_arena_queue,
     queue_supports_spells, should_emit_champ_select, should_request_lock_in_attention,
 };
-use super::gameflow::sync_gameflow_phase_before_champ_select_end;
+use super::gameflow::{log_champ_select_change, sync_gameflow_phase_before_champ_select_end};
 use super::reconcile::{LiveLcuReconcileGateway, TauriReconcileEmitter, reconcile_final_session};
 use super::reconcile_state::{
     ChampSelectSessionState, record_filter_updated_build, resolve_effective_build_position,
     resolve_effective_build_queue_id,
 };
 use crate::lcu_injector::AppliedInjectionState;
-use crate::models;
+use crate::{logging, models};
 
 /// Returns `true` when `handle_session_transition` should skip spawning
 /// `run_champ_select_build_and_inject` because `process_session_timer` will
@@ -232,6 +232,7 @@ pub(crate) async fn handle_session_transition(
                 let mut state_guard = state_ref.lock().await;
                 let current_opt = Some(payload.clone());
                 if should_emit_champ_select(&state_guard.last_payload, &current_opt) {
+                    log_champ_select_change(state_guard.last_payload.as_ref(), &payload);
                     let notify_lock = should_request_lock_in_attention(
                         state_guard.last_payload.as_ref(),
                         &payload,
@@ -287,6 +288,7 @@ pub(crate) async fn handle_session_transition(
             };
             q_ref.store(0, Ordering::Relaxed);
             if had_session {
+                logging::log_info("ws.champ_select", "event=champ_select_ended");
                 sync_gameflow_phase_before_champ_select_end(handle, phase_state).await;
                 let _ = models::ChampSelectEnded.emit(handle);
             }

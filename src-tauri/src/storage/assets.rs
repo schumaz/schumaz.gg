@@ -3,6 +3,7 @@ mod singleflight;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use bytes::Bytes;
 
@@ -186,18 +187,45 @@ async fn fetch_and_cache_asset(
     cache_path: &Path,
     ext: &str,
 ) -> AssetSharedResult {
-    let res = client.get(url).send().await.map_err(|_| 502u16)?;
+    crate::logging::metrics::record_cache_miss();
+    let started = Instant::now();
+    let res = client.get(url).send().await.map_err(|err| {
+        crate::logging::record_http_network_error_log(
+            "cdn",
+            started.elapsed().as_millis(),
+            &err.to_string(),
+        );
+        502u16
+    })?;
     let status = res.status();
+    let code = status.as_u16();
+    crate::logging::metrics::record_http_status(code);
     if !status.is_success() {
-        return Err(status.as_u16());
+        crate::logging::log_warn(
+            "storage.assets",
+            format!(
+                "event=asset_http_error target=cdn status={code} elapsed_ms={}",
+                started.elapsed().as_millis()
+            ),
+        );
+        return Err(code);
     }
 
-    let bytes = res.bytes().await.map_err(|_| 502u16)?;
+    let bytes = res.bytes().await.map_err(|err| {
+        crate::logging::record_http_network_error_log(
+            "cdn",
+            started.elapsed().as_millis(),
+            &err.to_string(),
+        );
+        502u16
+    })?;
     if bytes.is_empty() {
         return Err(404);
     }
 
-    let _ = atomic_write(cache_path, &bytes);
+    if let Err(err) = atomic_write(cache_path, &bytes) {
+        crate::logging::log_warn("storage.assets", format!("event=asset_io_error err={err}"));
+    }
     let mime = mime_type_for_ext_or_bytes(ext, &bytes);
     Ok((bytes, mime))
 }
@@ -259,6 +287,7 @@ async fn serve_cached_or_fetch_asset_internal(
     let cache_path = asset_cache_path(paths, url);
 
     if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+        crate::logging::metrics::record_cache_disk_hit();
         touch_mtime(&cache_path);
         return Ok((bytes, mime));
     }
@@ -271,7 +300,10 @@ async fn serve_cached_or_fetch_asset_internal(
                 loop {
                     if let Some(result) = rx.borrow_and_update().clone() {
                         return match result {
-                            Ok((bytes, mime)) => Ok((bytes.to_vec(), mime)),
+                            Ok((bytes, mime)) => {
+                                crate::logging::metrics::record_cache_ram_hit();
+                                Ok((bytes.to_vec(), mime))
+                            }
                             Err(status) => Err(status),
                         };
                     }
@@ -280,12 +312,14 @@ async fn serve_cached_or_fetch_asset_internal(
                     }
                 }
                 if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+                    crate::logging::metrics::record_cache_disk_hit();
                     touch_mtime(&cache_path);
                     return Ok((bytes, mime));
                 }
             }
             FlightStep::Lead(guard) => {
                 if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+                    crate::logging::metrics::record_cache_disk_hit();
                     touch_mtime(&cache_path);
                     guard.complete(Ok((Bytes::from(bytes.clone()), mime)));
                     return Ok((bytes, mime));
