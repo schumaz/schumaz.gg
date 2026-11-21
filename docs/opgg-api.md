@@ -1,8 +1,9 @@
 # Referência Rápida: OP.GG API
 
 ## Endpoints
-- **MCP:** `POST https://mcp-api.op.gg/mcp` (`method: "tools/call"`, `name: "lol_get_champion_analysis"`)
-  - Parâmetros: `{ game_mode, champion, position, desired_output_fields }`
+- **MCP (`POST https://mcp-api.op.gg/mcp`, `method: "tools/call"`):**
+  - `lol_get_champion_analysis` — Parâmetros: `{ game_mode, champion, position, desired_output_fields }`
+  - `lol_list_aram_augments` — Parâmetros: `{ champion_id, lang }` *(rankings de augments do ARAM Mayhem; fonte primária alvo na Frente 4 do `P12.2`, hidratada com metadados/ícones via `DataDragonCache.arena_augments` / CommunityDragon)*
 - **REST Versions:** `GET https://lol-api-champion.op.gg/api/{region}/champions/ranked/versions`
 - **REST Analysis / Positions:** `https://lol-api-champion.op.gg/api/{region}/champions/{mode}/{champion}/{position}` (ver `build_provider/analytics/`)
 
@@ -24,5 +25,5 @@
   }
 }
 ```
-> Também suporta wrapper MCP em `/result/content/0/text` (markdown/texto estruturado parseado por `analytics/mcp/`).
+> Também suporta wrapper MCP em `/result/content/0/text` (markdown/texto estruturado parseado por `analytics/{mcp_parser,mcp_extractors,mcp_stats}.rs`).
 > Normalização: `win_rate`/`pick_rate` ≤ `1.0` são multiplicados por `100` com 1 casa decimal.

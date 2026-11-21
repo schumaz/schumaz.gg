@@ -61,6 +61,10 @@ partida, demora para aplicar as runas no Champ Select e alto consumo de memória
 plano. Ao construir o schumaz.gg com **Rust** e **Tauri v2** (usando o WebView2 nativo do Windows em vez de embutir
 outra instância inteira do Chromium), o aplicativo permanece rápido, leve e fora do caminho enquanto você joga.
 
+O schumaz.gg é um projeto **open-source, gratuito e estritamente não-comercial**, criado para **estudo, experimentação
+técnica e uso pessoal**. Suas **releases públicas** são disponibilizadas sem custos, sem anúncios, sem paywall e sem
+telemetria.
+
 ## Funcionalidades
 
 - **Automação instantânea no Champ Select**: detecta quando você passa o mouse (*hover*) ou confirma (*lock-in*) um
@@ -135,15 +139,16 @@ Baixe uma das duas opções na página de [Releases](https://github.com/schumaz/
 ## FAQ
 
 **Posso tomar ban? É seguro com o Riot Vanguard?**  
-O schumaz.gg se comunica exclusivamente com o cliente do League of Legends através da API local oficial do próprio
-cliente (REST e WebSocket). Ele nunca lê nem escreve na memória do processo do jogo, nunca injeta DLLs, nunca altera
-arquivos do jogo e não realiza nenhuma automação dentro da partida. Ainda assim, como qualquer ferramenta de terceiros,
-o uso é por sua conta e risco.
+O schumaz.gg se comunica exclusivamente através da API local do cliente do League of Legends (LCU — REST e WebSocket).
+Ele nunca lê nem escreve na memória do processo do jogo, nunca injeta DLLs, nunca altera arquivos do jogo e não realiza
+nenhuma automação dentro da partida. Ainda assim, como qualquer ferramenta de terceiros, o uso é por sua conta e risco.
 
 **De onde vêm as builds e os dados?**  
-Estatísticas de builds, tier lists e aprimoramentos do ARAM Desordem vêm do OP.GG, enquanto os ativos e nomes localizados
-de campeões, runas, feitiços e itens vêm do DataDragon da Riot (além do CommunityDragon para ativos visuais como brasões
-de elo).
+Estatísticas de builds, tier lists e rankings de aprimoramentos do ARAM Desordem vêm do OP.GG e do servidor oficial
+OP.GG MCP, enquanto todos os metadados localizados e ativos visuais (campeões, runas, feitiços, itens, aprimoramentos e
+brasões de elo) vêm do DataDragon da Riot e do CommunityDragon. Os dados são normalizados localmente e mantidos em um
+**cache persistente em disco validado por patch/versão** para minimizar o tráfego externo e manter o aplicativo
+resiliente mesmo diante de instabilidades temporárias nos serviços externos.
 
 **O que ele grava no meu PC e onde?**  
 Todas as configurações, caches e logs locais ficam centralizados em `%LOCALAPPDATA%\schumazgg\`:
@@ -187,11 +192,24 @@ Documentação útil: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Licença e Avisos Legais
 
-Licenciado sob **GPL-3.0-only** ([LICENSE](LICENSE)).
+Licenciado sob **GPL-3.0-only** ([LICENSE](LICENSE)). Conforme os termos da licença, este software é distribuído
+**"COMO ESTÁ" (*"AS IS"*)**, sem garantias de qualquer natureza e sem compromisso de disponibilidade contínua ou
+compatibilidade caso APIs ou serviços de terceiros sejam alterados ou descontinuados.
 
 schumaz.gg isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially
 involved in producing or managing Riot Games properties. Riot Games, League of Legends, and all associated properties
 are trademarks or registered trademarks of Riot Games, Inc.
+
+- **Não-afiliação e marcas de terceiros:** o schumaz.gg é um projeto independente e não é afiliado, endossado nem
+  patrocinado pelo **OP.GG** ou pelo **CommunityDragon**. Todos os nomes, logotipos e marcas de terceiros pertencem aos
+  seus respectivos titulares.
+- **Execução 100% local:** o schumaz.gg roda integralmente no seu computador, consultando as fontes de dados
+  diretamente a partir da máquina do usuário. Não existe nenhum servidor intermediário operado por este projeto
+  redistribuindo, hospedando ou comercializando dados de terceiros.
+- **Contato de boa-fé (*good-faith takedown/contact*):** caso você seja titular de direitos ou provedor de dados e
+  tenha qualquer solicitação relacionada à forma como o schumaz.gg acessa, armazena em cache ou exibe seus dados ou
+  ativos, entre em contato diretamente pelo e-mail **`schumaz.business@gmail.com`** (ou abra uma
+  [GitHub Issue](https://github.com/schumaz/schumaz.gg/issues/new)) para atendimento imediato.
 
 ### Forks
 

@@ -58,6 +58,10 @@ in-game, slow rune injection in Champion Select, and high RAM usage just sitting
 schumaz.gg with **Rust** and **Tauri v2** (using the native Windows WebView2 runtime instead of bundling another
 Chromium instance), the app stays fast, lightweight, and out of your way while you play.
 
+schumaz.gg is an **open-source, free, and strictly non-commercial** project created for **study, technical
+experimentation, and personal use**. Its **public releases** are provided at no cost, with no ads, no paywalls, and no
+telemetry.
+
 ## Features
 
 - **Instant Champion Select automation**: detects champion hover and lock-in in the League client, plus a final safety
@@ -128,13 +132,15 @@ Download one of the two builds from [Releases](https://github.com/schumaz/schuma
 ## FAQ
 
 **Can I get banned? Is it safe with Riot Vanguard?**  
-schumaz.gg only communicates with the League of Legends client through its official local client API (REST & WebSocket).
-It never reads or writes game process memory, never injects DLLs, never modifies game files, and performs zero in-game
-automation. Even so, as with any third-party companion tool, you use it at your own discretion.
+schumaz.gg only communicates through the local League Client API (LCU — REST & WebSocket). It never reads or writes game
+process memory, never injects DLLs, never modifies game files, and performs zero in-game automation. Even so, as with
+any third-party companion tool, you use it at your own discretion.
 
 **Where does it get builds and game data from?**  
-Build statistics, tier lists, and ARAM Mayhem augments come from OP.GG, while champion, rune, spell, and item assets
-and localized names come from Riot's DataDragon (plus CommunityDragon for visual assets such as rank crests).
+Build statistics, tier lists, and ARAM Mayhem augment rankings come from OP.GG and the official OP.GG MCP server, while
+all localized metadata and visual assets (champions, runes, spells, items, augments, and rank crests) come from Riot's
+DataDragon and CommunityDragon. Data is normalized locally and stored in a **persistent on-disk cache validated by
+patch/version** to minimize external traffic and keep the app responsive even during temporary upstream hiccups.
 
 **What does it write, and where?**  
 All settings, local caches, and diagnostic logs are stored in `%LOCALAPPDATA%\schumazgg\`:
@@ -178,11 +184,24 @@ Useful documentation: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Licence & Legal
 
-Licensed under **GPL-3.0-only** ([LICENSE](LICENSE)).
+Licensed under **GPL-3.0-only** ([LICENSE](LICENSE)). In accordance with the licence, this software is provided **"AS
+IS"**, without warranty of any kind and with no guarantee of continuous availability or compatibility if third-party
+APIs or services change or become unavailable.
 
 schumaz.gg isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially
 involved in producing or managing Riot Games properties. Riot Games, League of Legends, and all associated properties
 are trademarks or registered trademarks of Riot Games, Inc.
+
+- **Third-party non-affiliation & trademarks:** schumaz.gg is an independent project and is not affiliated with,
+  endorsed by, or sponsored by **OP.GG** or **CommunityDragon**. All third-party names, logos, and trademarks remain
+  the property of their respective owners.
+- **100% local execution:** schumaz.gg runs entirely on your computer and queries public data sources directly from
+  your client. There is no intermediary backend server operated by this project redistributing, hosting, or reselling
+  third-party data.
+- **Good-faith contact & takedown:** If you are a rights holder or data provider and have any concern regarding how
+  schumaz.gg accesses, caches, or displays your data or assets, please reach out directly at
+  **`schumaz.business@gmail.com`** (or open a [GitHub Issue](https://github.com/schumaz/schumaz.gg/issues/new)) for
+  prompt review and action.
 
 ### Forks
 

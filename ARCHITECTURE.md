@@ -18,6 +18,29 @@ Camada IPC Frontend (src/services/ipc/)
 Frontend React (src/features/<dominio>/ → src/components/ui/)
 ```
 
+### Cadeia de Resolução e Resiliência de Builds (`build_provider`)
+```text
+Cache RAM (BUILD_CACHE) + reidratação DataDragon
+   │ miss / expirado
+   ▼
+Cache em disco (.lz4 + MessagePack, validado por schema_version, TTL e patch) + reidratação DataDragon
+   │ miss / stale
+   ▼
+Rede: API REST OP.GG + OP.GG MCP (tools/call) [com proteção de novo patch 48h]
+   │ erro / indisponibilidade
+   ▼
+Stale-While-Error em disco (envelope expirado reidratado via DataDragon)
+   │ sem cache em disco
+   ▼
+Fallbacks (MCP completo → build_fallback_champion_build)
+   │
+   ▼
+Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item sets) & IPC tipado (UI)
+```
+
+- **Reidratação de metadados e ativos:** nomes localizados, ícones e catálogos (campeões, runas, feitiços, itens e augments) são reidratados localmente via `DataDragonCache` (DataDragon + CommunityDragon) antes de entregar o `ChampionBuild` ao `lcu_injector` ou à UI.
+- **Conformidade (*Riot Game Integrity*):** o app opera 100% localmente via LCU, sem leitura de memória nem automação em partida. Caso o projeto venha a ser registrado futuramente no *Riot Developer Portal*, revisar a conformidade com políticas específicas por modo (ex.: restrições de visibilidade de *win rates* no modo Arena).
+
 ## 2. Regras de Modularização e Limites
 - **Teto de linhas por arquivo:**
   - **Rust (`src-tauri/src/`):** máximo de **350 linhas** por arquivo (extraindo `*_tests.rs` ou submódulos coesos).
