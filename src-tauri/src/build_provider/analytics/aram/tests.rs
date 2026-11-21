@@ -1,4 +1,4 @@
-use super::cache::get_augments_cache;
+use super::cache::{get_augments_cache, rehydrate_aram_names};
 use super::*;
 use crate::models::ChampionMetadata;
 use std::collections::HashMap;
@@ -68,7 +68,7 @@ fn test_parse_classic_aram_champions_sorts_by_rank_and_normalizes_rates() {
 
 #[test]
 fn test_parse_aram_mayhem_champions_from_next_f_html_normalizes_tiers() {
-    let inner = r#"1a:["$","$L32",null,{"champions":[{"key":"ahri","name":"Ahri","image_url":"https://img/Ahri.png","champion_id":103,"id":103,"tier":2,"rank":14},{"key":"twistedfate","name":"Twisted Fate","image_url":"https://img/TF.png","champion_id":4,"id":4,"tier":1,"rank":1},{"key":"ashe","name":"Ashe","image_url":"https://img/Ashe.png","champion_id":22,"id":22,"tier":5,"rank":173}]}]"#;
+    let inner = r#"1a:["$","$L32",null,{"champions":[{"key":"ahri","name":"Ahri","image_url":"https://img/Ahri.png","champion_id":103,"id":103,"tier":2,"rank":14},{"key":"twisted_fate_opgg","name":"Twisted Fate OPGG","image_url":"https://img/TF.png","champion_id":4,"id":4,"tier":1,"rank":1},{"key":"ashe","name":"Ashe","image_url":"https://img/Ashe.png","champion_id":22,"id":22,"tier":5,"rank":173}]}]"#;
     let escaped = serde_json::to_string(inner).unwrap();
     let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
 
@@ -76,13 +76,50 @@ fn test_parse_aram_mayhem_champions_from_next_f_html_normalizes_tiers() {
     assert_eq!(list.len(), 3);
     assert_eq!(list[0].id, 4);
     assert_eq!(list[0].key, "twistedfate");
+    assert_eq!(list[0].name, "Twisted Fate");
+    assert_eq!(list[0].icon_url, "https://ddragon.example/TwistedFate.png");
     assert_eq!(list[0].rank, 1);
     assert_eq!(list[0].tier, 0);
+    // Champions absent from DataDragon must never inherit OP.GG image_url
     assert_eq!(list[1].id, 103);
+    assert_eq!(list[1].icon_url, "");
     assert_eq!(list[1].rank, 14);
     assert_eq!(list[1].tier, 1);
     assert_eq!(list[2].id, 22);
+    assert_eq!(list[2].icon_url, "");
     assert_eq!(list[2].tier, 4);
+}
+
+#[test]
+fn test_rehydrate_aram_names_overwrites_and_clears_non_ddragon_icons() {
+    let mut list = vec![
+        AramChampionRank {
+            id: 4,
+            key: "twistedfate".to_string(),
+            name: "Legacy Name".to_string(),
+            icon_url: "https://legacy-cdn.example/champion/TwistedFate.png".to_string(),
+            tier: 0,
+            rank: 1,
+            win_rate: None,
+            pick_rate: None,
+        },
+        AramChampionRank {
+            id: 999,
+            key: "unknown".to_string(),
+            name: "Unknown".to_string(),
+            icon_url: "https://legacy-cdn.example/champion/Unknown.png".to_string(),
+            tier: 3,
+            rank: 99,
+            win_rate: None,
+            pick_rate: None,
+        },
+    ];
+
+    rehydrate_aram_names(&mut list, &test_ddragon());
+
+    assert_eq!(list[0].name, "Twisted Fate");
+    assert_eq!(list[0].icon_url, "https://ddragon.example/TwistedFate.png");
+    assert_eq!(list[1].icon_url, "");
 }
 
 #[test]

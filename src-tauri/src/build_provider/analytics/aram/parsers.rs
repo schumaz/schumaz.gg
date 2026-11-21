@@ -33,9 +33,10 @@ struct RestAramAverageStats {
 #[derive(Debug, Deserialize)]
 struct WebMayhemChampionItem {
     id: i32,
+    #[serde(default)]
     key: String,
+    #[serde(default)]
     name: String,
-    image_url: String,
     #[serde(default)]
     tier: i32,
     #[serde(default)]
@@ -132,11 +133,7 @@ pub fn parse_aram_mayhem_champions_html(
         .into_iter()
         .map(|item| {
             let dd_meta = ddragon.champions.get(&item.id);
-            let icon_url = if !item.image_url.is_empty() {
-                item.image_url
-            } else {
-                dd_meta.map(|m| m.icon_url.clone()).unwrap_or_default()
-            };
+            let icon_url = dd_meta.map(|m| m.icon_url.clone()).unwrap_or_default();
             let name = dd_meta
                 .map(|m| m.display_name.clone())
                 .filter(|n| !n.is_empty())
@@ -147,10 +144,14 @@ pub fn parse_aram_mayhem_champions_html(
                         format!("Champion {}", item.id)
                     }
                 });
+            let key = dd_meta
+                .map(|m| normalize_opgg_champion_key(&m.key_name))
+                .filter(|k| !k.is_empty())
+                .unwrap_or_else(|| normalize_opgg_champion_key(&item.key));
 
             AramChampionRank {
                 id: item.id,
-                key: normalize_opgg_champion_key(&item.key),
+                key,
                 name,
                 icon_url,
                 // OP.GG Mayhem tier starts at 1 (1 = OP, 2 = Tier 1, 3 = Tier 2, ...).

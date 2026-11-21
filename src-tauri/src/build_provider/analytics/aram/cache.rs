@@ -39,10 +39,12 @@ pub fn aram_augments_file_path(dir: &Path, locale: AppLocale, champ_key: &str) -
 pub(crate) fn rehydrate_aram_names(list: &mut [AramChampionRank], ddragon: &DataDragonCache) {
     for entry in list {
         if let Some(meta) = ddragon.champions.get(&entry.id) {
-            entry.name = meta.display_name.clone();
-            if !meta.icon_url.is_empty() {
-                entry.icon_url = meta.icon_url.clone();
+            if !meta.display_name.is_empty() {
+                entry.name = meta.display_name.clone();
             }
+            entry.icon_url = meta.icon_url.clone();
+        } else {
+            entry.icon_url.clear();
         }
     }
 }
