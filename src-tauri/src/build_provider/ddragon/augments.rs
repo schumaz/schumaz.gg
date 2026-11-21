@@ -189,8 +189,16 @@ fn interpolate_arena_desc(
     clean_augment_description(&out)
 }
 
+fn normalize_augment_lookup_name(raw: &str) -> String {
+    raw.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 /// Supplements empty descriptions (and missing legacy entries) in `augments` using
-/// CommunityDragon's `cdragon/arena/{locale}.json`.
+/// CommunityDragon's `cdragon/arena/{locale}.json`, including normalized name fallback
+/// for shared Arena <-> ARAM Mayhem (`id >= 1000`) augments.
 pub fn supplement_arena_augment_descriptions(
     augments: &mut HashMap<i32, ArenaAugmentMetadata>,
     arena_json: &serde_json::Value,
@@ -198,6 +206,8 @@ pub fn supplement_arena_augment_descriptions(
     let Some(arr) = arena_json.get("augments").and_then(|v| v.as_array()) else {
         return;
     };
+
+    let mut desc_by_name: HashMap<String, String> = HashMap::with_capacity(arr.len());
 
     for entry in arr {
         let Some(id) = entry.get("id").and_then(|v| v.as_i64()).map(|n| n as i32) else {
@@ -210,6 +220,20 @@ pub fn supplement_arena_augment_descriptions(
             .unwrap_or("");
         let data_values = entry.get("dataValues").and_then(|v| v.as_object());
         let cleaned = interpolate_arena_desc(raw_desc, data_values);
+        let entry_name = entry
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        if !cleaned.is_empty()
+            && let Some(name) = entry_name
+        {
+            let norm = normalize_augment_lookup_name(name);
+            if !norm.is_empty() {
+                desc_by_name.entry(norm).or_insert_with(|| cleaned.clone());
+            }
+        }
 
         if let Some(existing) = augments.get_mut(&id) {
             if existing.desc.is_empty() && !cleaned.is_empty() {
@@ -220,12 +244,7 @@ pub fn supplement_arena_augment_descriptions(
             {
                 existing.icon_url = resolve_arena_augment_icon_url(icon);
             }
-        } else if let Some(name) = entry
-            .get("name")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
+        } else if let Some(name) = entry_name {
             let icon = entry
                 .get("iconSmall")
                 .or_else(|| entry.get("iconLarge"))
@@ -241,6 +260,17 @@ pub fn supplement_arena_augment_descriptions(
                     rarity: parse_cherry_rarity(entry.get("rarity")),
                 },
             );
+        }
+    }
+
+    if !desc_by_name.is_empty() {
+        for existing in augments.values_mut() {
+            if existing.desc.is_empty() {
+                let norm = normalize_augment_lookup_name(&existing.name);
+                if let Some(desc) = desc_by_name.get(&norm) {
+                    existing.desc = desc.clone();
+                }
+            }
         }
     }
 }

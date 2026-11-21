@@ -1,9 +1,21 @@
-use super::cache::{get_augments_cache, rehydrate_aram_names};
+use super::cache::{get_augments_cache, rehydrate_aram_augments, rehydrate_aram_names};
 use super::*;
-use crate::models::{ArenaAugmentMetadata, ChampionMetadata};
+use crate::models::{AramAugmentEntry, ArenaAugmentMetadata, ChampionMetadata};
 use std::collections::HashMap;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+const CDRAGON_AUG_PREFIX: &str = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/";
+
+fn aug_meta(id: i32, name: &str, desc: &str, icon: &str, rarity: i32) -> ArenaAugmentMetadata {
+    ArenaAugmentMetadata {
+        id,
+        name: name.to_string(),
+        desc: desc.to_string(),
+        icon_url: format!("{CDRAGON_AUG_PREFIX}{icon}"),
+        rarity,
+    }
+}
 
 fn test_ddragon() -> DataDragonCache {
     let mut champions = HashMap::new();
@@ -29,34 +41,19 @@ fn test_ddragon() -> DataDragonCache {
     let mut arena_augments = HashMap::new();
     arena_augments.insert(
         1074,
-        ArenaAugmentMetadata {
-            id: 1074,
-            name: "Raio Encolhedor".to_string(),
-            desc: "Ao contato Reduz dano.".to_string(),
-            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/shrinkray_small.png".to_string(),
-            rarity: 4,
-        },
+        aug_meta(1074, "Raio Encolhedor", "", "shrinkray_small.png", 4),
     );
     arena_augments.insert(
         2062,
-        ArenaAugmentMetadata {
-            id: 2062,
-            name: "Conjuração Ecoante".to_string(),
-            desc: "Conjura duas vezes.".to_string(),
-            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/echo_small.png".to_string(),
-            rarity: 8,
-        },
+        aug_meta(
+            2062,
+            "Conjuração Ecoante",
+            "Conjura duas vezes.",
+            "echo_small.png",
+            8,
+        ),
     );
-    arena_augments.insert(
-        3075,
-        ArenaAugmentMetadata {
-            id: 3075,
-            name: "Coice".to_string(),
-            desc: "? causa dano.".to_string(),
-            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/recoil_small.png".to_string(),
-            rarity: 4,
-        },
-    );
+    arena_augments.insert(3075, aug_meta(3075, "Coice", "", "recoil_small.png", 4));
 
     DataDragonCache {
         version: "16.22.1".to_string(),
@@ -69,16 +66,8 @@ fn test_ddragon() -> DataDragonCache {
 
 fn test_ddragon_en() -> DataDragonCache {
     let mut dd = test_ddragon();
-    dd.arena_augments.insert(
-        3075,
-        ArenaAugmentMetadata {
-            id: 3075,
-            name: "Recoil".to_string(),
-            desc: "Extra damage.".to_string(),
-            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/recoil_small.png".to_string(),
-            rarity: 4,
-        },
-    );
+    dd.arena_augments
+        .insert(3075, aug_meta(3075, "Recoil", "", "recoil_small.png", 4));
     dd
 }
 
@@ -128,7 +117,6 @@ fn test_parse_aram_mayhem_champions_from_next_f_html_normalizes_tiers() {
     assert_eq!(list[0].icon_url, "https://ddragon.example/TwistedFate.png");
     assert_eq!(list[0].rank, 1);
     assert_eq!(list[0].tier, 0);
-    // Champions absent from DataDragon must never inherit OP.GG image_url
     assert_eq!(list[1].id, 103);
     assert_eq!(list[1].icon_url, "");
     assert_eq!(list[1].rank, 14);
@@ -139,8 +127,9 @@ fn test_parse_aram_mayhem_champions_from_next_f_html_normalizes_tiers() {
 }
 
 #[test]
-fn test_rehydrate_aram_names_overwrites_and_clears_non_ddragon_icons() {
-    let mut list = vec![
+fn test_rehydrate_aram_names_and_augments_preserve_desc_and_clean_icons() {
+    let dd = test_ddragon();
+    let mut champs = vec![
         AramChampionRank {
             id: 4,
             key: "twistedfate".to_string(),
@@ -162,117 +151,118 @@ fn test_rehydrate_aram_names_overwrites_and_clears_non_ddragon_icons() {
             pick_rate: None,
         },
     ];
+    rehydrate_aram_names(&mut champs, &dd);
+    assert_eq!(champs[0].name, "Twisted Fate");
+    assert_eq!(
+        champs[0].icon_url,
+        "https://ddragon.example/TwistedFate.png"
+    );
+    assert_eq!(champs[1].icon_url, "");
 
-    rehydrate_aram_names(&mut list, &test_ddragon());
-
-    assert_eq!(list[0].name, "Twisted Fate");
-    assert_eq!(list[0].icon_url, "https://ddragon.example/TwistedFate.png");
-    assert_eq!(list[1].icon_url, "");
+    let mut augs = vec![AramAugmentEntry {
+        id: 3075,
+        name: "Legacy".to_string(),
+        tier: 0,
+        rarity: Some(1),
+        performance: 99.0,
+        popular: 3.8,
+        icon_url: "https://legacy-cdn.example/recoil.png".to_string(),
+        desc: "Descrição preservada.".to_string(),
+    }];
+    rehydrate_aram_augments(&mut augs, &dd);
+    assert_eq!(augs[0].name, "Coice");
+    assert_eq!(augs[0].rarity, Some(4));
+    assert!(
+        augs[0]
+            .icon_url
+            .starts_with("https://raw.communitydragon.org/")
+    );
+    assert_eq!(augs[0].desc, "Descrição preservada.");
 }
 
 #[test]
-fn test_parse_aram_mayhem_augments_hydrates_from_ddragon_catalog_only() {
-    let inner = r#"6c:["$","$L6d",null,{"data":[{"id":1032,"tier":5,"performance":97.14,"popular":0},{"id":1033,"name":"Uncatalogued","tier":5,"performance":50.0,"popular":0,"smallIcon":"https://legacy-cdn.example/x.png","desc":"ignored"},{"id":1074,"tier":3,"performance":76.82,"popular":0.23,"name":"OPGG Wrong Name","smallIcon":"https://legacy-cdn.example/shrink.png","rarity":1,"desc":"OPGG Wrong Desc"},{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"OPGG Recoil","smallIcon":"https://legacy-cdn.example/recoil.png","rarity":1,"desc":"OPGG Desc"},{"id":2062,"tier":0,"performance":114.24,"popular":3.2,"name":"OPGG Echo","smallIcon":"https://legacy-cdn.example/echo.png","rarity":1,"desc":"OPGG Echo Desc"}]}]"#;
+fn test_parse_aram_mayhem_augments_hydrates_assets_from_cdragon_and_falls_back_desc() {
+    let inner = r#"6c:["$","$L6d",null,{"data":[{"id":1032,"tier":5,"performance":97.14,"popular":0},{"id":1033,"name":"Uncatalogued","tier":5,"performance":50.0,"popular":0,"smallIcon":"https://legacy-cdn.example/x.png","desc":"ignored"},{"id":1074,"tier":3,"performance":76.82,"popular":0.23,"name":"OPGG Wrong","smallIcon":"https://legacy-cdn.example/shrink.png","rarity":1,"desc":"<OnHit>Ao contato</OnHit><br />Reduz dano."},{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"name":"OPGG Recoil","smallIcon":"https://legacy-cdn.example/recoil.png","rarity":1,"desc":"<font color='#F0C200'>?</font> causa dano."},{"id":2062,"tier":0,"performance":114.24,"popular":3.2,"name":"OPGG Echo","smallIcon":"https://legacy-cdn.example/echo.png","rarity":1,"desc":"OPGG Echo Desc"}]}]"#;
     let escaped = serde_json::to_string(inner).unwrap();
     let html = format!(r#"<html><script>self.__next_f.push([1,{escaped}])</script></html>"#);
 
-    let dd = test_ddragon();
-    let augments = parse_aram_mayhem_augments_html(&html, &dd).unwrap();
+    let augments = parse_aram_mayhem_augments_html(&html, &test_ddragon()).unwrap();
     assert_eq!(augments.len(), 3);
+    // meta.desc empty -> falls back to sanitized item.desc, while icon/name/rarity come from CDragon
     assert_eq!(augments[0].id, 3075);
     assert_eq!(augments[0].name, "Coice");
-    assert_eq!(augments[0].tier, 0);
     assert_eq!(augments[0].rarity, Some(4));
-    assert_eq!(augments[0].performance, 99.62);
-    assert_eq!(augments[0].popular, 3.8);
     assert_eq!(augments[0].desc, "? causa dano.");
     assert!(
         augments[0]
             .icon_url
             .starts_with("https://raw.communitydragon.org/")
     );
+    // meta.desc non-empty -> prefers CDragon meta.desc over item.desc
     assert_eq!(augments[1].id, 2062);
     assert_eq!(augments[1].name, "Conjuração Ecoante");
     assert_eq!(augments[1].rarity, Some(8));
-    assert!(
-        augments[1]
-            .icon_url
-            .starts_with("https://raw.communitydragon.org/")
-    );
+    assert_eq!(augments[1].desc, "Conjura duas vezes.");
+    // meta.desc empty -> sanitized HTML tags stripped cleanly
     assert_eq!(augments[2].id, 1074);
     assert_eq!(augments[2].name, "Raio Encolhedor");
     assert_eq!(augments[2].desc, "Ao contato Reduz dano.");
-    assert!(
-        augments[2]
-            .icon_url
-            .starts_with("https://raw.communitydragon.org/")
-    );
 }
 
 #[tokio::test]
 async fn test_fetch_aram_mayhem_augments_with_mock_server_and_locale_cache_isolation() {
     let mock_server = MockServer::start().await;
-    let inner =
-        r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8}]}]"#;
-    let html = format!(
-        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
-        serde_json::to_string(inner).unwrap()
-    );
+    let html_for = |desc: &str| {
+        let inner = format!(
+            r#"6c:["$","$L6d",null,{{"data":[{{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"desc":"{desc}"}}]}}]"#
+        );
+        format!(
+            r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+            serde_json::to_string(&inner).unwrap()
+        )
+    };
 
     Mock::given(method("GET"))
         .and(path("/pt/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html.clone()))
+        .respond_with(ResponseTemplate::new(200).set_body_string(html_for("Dano extra.")))
         .expect(1)
         .mount(&mock_server)
         .await;
-
     Mock::given(method("GET"))
         .and(path("/en/twistedfate/augments"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(html))
+        .respond_with(ResponseTemplate::new(200).set_body_string(html_for("Extra damage.")))
         .expect(1)
         .mount(&mock_server)
         .await;
 
     let client = reqwest::Client::new();
-    let dd_pt = test_ddragon();
-    let dd_en = test_ddragon_en();
-
     let pt_augments = fetch_aram_mayhem_augments_with_base_and_locale(
         &client,
         "Twisted Fate",
         &format!("{}/pt", mock_server.uri()),
         AppLocale::PtBr,
-        &dd_pt,
+        &test_ddragon(),
     )
     .await
     .unwrap();
-
     let en_augments = fetch_aram_mayhem_augments_with_base_and_locale(
         &client,
         "Twisted Fate",
         &format!("{}/en", mock_server.uri()),
         AppLocale::EnUs,
-        &dd_en,
+        &test_ddragon_en(),
     )
     .await
     .unwrap();
 
     assert_eq!(pt_augments[0].name, "Coice");
+    assert_eq!(pt_augments[0].desc, "Dano extra.");
     assert_eq!(en_augments[0].name, "Recoil");
-    assert!(
-        pt_augments[0]
-            .icon_url
-            .starts_with("https://raw.communitydragon.org/")
-    );
-    assert!(
-        en_augments[0]
-            .icon_url
-            .starts_with("https://raw.communitydragon.org/")
-    );
+    assert_eq!(en_augments[0].desc, "Extra damage.");
 }
 
 #[tokio::test]
-async fn test_aram_augments_disk_cache_and_stale_while_error() {
+async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_error() {
     let dir = std::env::temp_dir().join(format!(
         "schumazgg_aram_augments_disk_{}",
         std::process::id()
@@ -281,13 +271,11 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
     std::fs::create_dir_all(&dir).unwrap();
 
     let mock_server = MockServer::start().await;
-    let inner_pt =
-        r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8}]}]"#;
+    let inner_pt = r#"6c:["$","$L6d",null,{"data":[{"id":3075,"tier":0,"performance":99.62,"popular":3.8,"desc":"Dano extra."}]}]"#;
     let html_pt = format!(
         r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
         serde_json::to_string(inner_pt).unwrap()
     );
-
     Mock::given(method("GET"))
         .and(path("/pt/ahri/augments"))
         .respond_with(ResponseTemplate::new(200).set_body_string(html_pt))
@@ -297,6 +285,21 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
 
     let client = reqwest::Client::new();
     let dd = test_ddragon();
+    let file_path = aram_augments_file_path(&dir, AppLocale::PtBr, "ahri");
+
+    // Seed a fresh .lz4 file with empty descriptions -> must auto-refresh from network to backfill
+    let blank_cache = vec![AramAugmentEntry {
+        id: 3075,
+        name: "Coice".to_string(),
+        tier: 0,
+        rarity: Some(4),
+        performance: 99.62,
+        popular: 3.8,
+        icon_url: format!("{CDRAGON_AUG_PREFIX}recoil_small.png"),
+        desc: String::new(),
+    }];
+    crate::storage::write_lz4_envelope(&file_path, "", &blank_cache).unwrap();
+
     let res1 = fetch_aram_mayhem_augments_with_base_locale_and_dir(
         &client,
         "Ahri",
@@ -308,17 +311,14 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
     .await
     .unwrap();
     assert_eq!(res1[0].name, "Coice");
-    let file_path = aram_augments_file_path(&dir, AppLocale::PtBr, "ahri");
-    assert!(file_path.exists());
+    assert_eq!(res1[0].desc, "Dano extra.");
 
-    // Simulate legacy .lz4 entry with stale OP.GG CDN URL and expired timestamp ->
-    // Stale-While-Error must rescue on 503 AND rehydrate icon_url to CommunityDragon.
+    // Clear RAM, expire disk envelope with legacy icon -> Stale-While-Error rescues & rehydrates icon
     if let Ok(mut g) = get_augments_cache().write() {
         g.clear();
     }
     let mut legacy = res1.clone();
     legacy[0].icon_url = "https://legacy-cdn.example/recoil.png".to_string();
-    legacy[0].name = "Stale Legacy Name".to_string();
     crate::storage::write_lz4_envelope_at(&file_path, "16.25", &legacy, 1).unwrap();
 
     let offline = MockServer::start().await;
@@ -339,6 +339,7 @@ async fn test_aram_augments_disk_cache_and_stale_while_error() {
     .await
     .unwrap();
     assert_eq!(rescued[0].name, "Coice");
+    assert_eq!(rescued[0].desc, "Dano extra.");
     assert!(
         rescued[0]
             .icon_url

@@ -49,6 +49,10 @@ pub(crate) fn rehydrate_aram_names(list: &mut [AramChampionRank], ddragon: &Data
     }
 }
 
+pub(crate) fn has_any_augment_description(list: &[AramAugmentEntry]) -> bool {
+    list.iter().any(|entry| !entry.desc.trim().is_empty())
+}
+
 pub(crate) fn rehydrate_aram_augments(list: &mut Vec<AramAugmentEntry>, ddragon: &DataDragonCache) {
     if ddragon.arena_augments.is_empty() {
         for entry in list.iter_mut() {
@@ -71,7 +75,9 @@ pub(crate) fn rehydrate_aram_augments(list: &mut Vec<AramAugmentEntry>, ddragon:
             return false;
         }
         entry.name = name.to_string();
-        entry.desc = meta.desc.clone();
+        if !meta.desc.trim().is_empty() {
+            entry.desc = meta.desc.clone();
+        }
         entry.icon_url = meta.icon_url.clone();
         entry.rarity = (meta.rarity > 0).then_some(meta.rarity);
         true

@@ -81,6 +81,13 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
             "summaryDescription": ""
         },
         {
+            "id": 1037,
+            "nameTRA": "Primeiros Socorros",
+            "rarity": "kSilver",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/FirstAidKit_small.png",
+            "summaryDescription": ""
+        },
+        {
             "id": 1324,
             "nameTRA": "Shake de Proteína",
             "rarity": "kPrismatic",
@@ -90,7 +97,7 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
     ]);
 
     let mut map = parse_cdragon_cherry_augments(&cherry_json);
-    assert_eq!(map.len(), 2);
+    assert_eq!(map.len(), 3);
     assert_eq!(map[&48].name, "Primeiros Socorros");
     assert_eq!(map[&48].rarity, 1);
     assert_eq!(
@@ -112,4 +119,6 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
 
     supplement_arena_augment_descriptions(&mut map, &desc_json);
     assert_eq!(map[&48].desc, "Recebe 25% de Cura e Escudo.");
+    // Shared Arena <-> ARAM Mayhem augment (id 1037) inherits interpolated desc by normalized name
+    assert_eq!(map[&1037].desc, "Recebe 25% de Cura e Escudo.");
 }

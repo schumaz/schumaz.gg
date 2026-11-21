@@ -1,5 +1,6 @@
 use super::html_extract::{
-    decode_next_f_stream, extract_balanced_json_array, normalize_opgg_champion_key, round_pct,
+    clean_augment_description, decode_next_f_stream, extract_balanced_json_array,
+    normalize_opgg_champion_key, round_pct,
 };
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AramAugmentEntry, AramChampionRank};
@@ -51,6 +52,8 @@ struct WebMayhemAugmentItem {
     performance: f64,
     #[serde(default)]
     popular: f64,
+    #[serde(default)]
+    desc: Option<String>,
 }
 
 pub fn parse_classic_aram_champions(
@@ -203,6 +206,11 @@ pub fn parse_aram_mayhem_augments_html(
             if name.is_empty() {
                 return None;
             }
+            let desc = if !meta.desc.trim().is_empty() {
+                meta.desc.clone()
+            } else {
+                clean_augment_description(item.desc.as_deref().unwrap_or(""))
+            };
 
             Some(AramAugmentEntry {
                 id: item.id,
@@ -212,7 +220,7 @@ pub fn parse_aram_mayhem_augments_html(
                 performance: (item.performance * 100.0).round() / 100.0,
                 popular: (item.popular * 100.0).round() / 100.0,
                 icon_url: meta.icon_url.clone(),
-                desc: meta.desc.clone(),
+                desc,
             })
         })
         .collect();

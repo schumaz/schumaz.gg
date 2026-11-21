@@ -2,7 +2,7 @@ use super::super::client::peek_latest_cached_opgg_version;
 use super::BROWSER_USER_AGENT;
 use super::cache::{
     ARAM_CACHE_TTL, aram_augments_file_path, aram_mayhem_augments_web_base, get_augments_cache,
-    rehydrate_aram_augments,
+    has_any_augment_description, rehydrate_aram_augments,
 };
 use super::html_extract::normalize_opgg_champion_key;
 use super::parsers::parse_aram_mayhem_augments_html;
@@ -32,7 +32,7 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
     {
         let mut list = cached.clone();
         rehydrate_aram_augments(&mut list, ddragon);
-        if !list.is_empty() {
+        if !list.is_empty() && has_any_augment_description(&list) {
             crate::logging::record_data_resolution(
                 "aram_augments",
                 "ram_hit",
@@ -64,7 +64,7 @@ pub async fn fetch_aram_mayhem_augments_with_base_locale_and_dir(
         if patch_ok {
             let mut list = env.payload.clone();
             rehydrate_aram_augments(&mut list, ddragon);
-            if !list.is_empty() {
+            if !list.is_empty() && has_any_augment_description(&list) {
                 if let Ok(mut guard) = get_augments_cache().write() {
                     guard.insert(cache_key.clone(), (Instant::now(), list.clone()));
                 }
