@@ -19,6 +19,9 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockImplementation((cmd: string) => {
     if (cmd === "get_summoner_status") return Promise.resolve(null);
     if (cmd === "get_gameflow_phase") return Promise.resolve("Lobby");
+    if (cmd === "get_active_champ_select_snapshot") {
+      return Promise.resolve({ gameflow_phase: "Lobby", champ_selected: null, build: null });
+    }
     if (cmd === "get_app_distribution_info") {
       return Promise.resolve({ isPortable: false, currentVersion: "0.1.0", releasesUrl: "" });
     }
@@ -58,6 +61,10 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
 
     await lcuIpc.getGameflowPhase();
     expect(invoke).toHaveBeenCalledWith("get_gameflow_phase");
+
+    const snap = await lcuIpc.getActiveChampSelectSnapshot();
+    expect(invoke).toHaveBeenCalledWith("get_active_champ_select_snapshot");
+    expect(snap).toEqual({ gameflow_phase: "Lobby", champ_selected: null, build: null });
 
     await lcuIpc.syncDisplayedChampion(103);
     expect(invoke).toHaveBeenCalledWith("sync_displayed_champion", { championId: 103 });

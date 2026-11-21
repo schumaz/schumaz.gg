@@ -1,6 +1,7 @@
 import {
   commands,
   events,
+  type ActiveChampSelectSnapshot,
   type ChampSelectedPayload,
   type ChampSelectReconciledPayload,
   type GameflowPhaseChanged,
@@ -23,6 +24,21 @@ export const lcuIpc = {
       return null;
     }
     return commands.getGameflowPhase();
+  },
+
+  async getActiveChampSelectSnapshot(): Promise<ActiveChampSelectSnapshot | null> {
+    if (typeof commands?.getActiveChampSelectSnapshot !== "function") {
+      return null;
+    }
+    const snapshot = await commands.getActiveChampSelectSnapshot();
+    if (!snapshot || typeof snapshot !== "object") {
+      return null;
+    }
+    return {
+      gameflow_phase: snapshot.gameflow_phase ?? null,
+      champ_selected: snapshot.champ_selected ?? null,
+      build: snapshot.build ?? null,
+    };
   },
 
   async syncDisplayedChampion(championId: number | null): Promise<void> {

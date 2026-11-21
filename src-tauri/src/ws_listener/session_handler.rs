@@ -18,6 +18,25 @@ use super::reconcile_state::{
 use crate::lcu_injector::AppliedInjectionState;
 use crate::models;
 
+/// Returns `true` when `handle_session_transition` should skip spawning
+/// `run_champ_select_build_and_inject` because `process_session_timer` will
+/// immediately trigger finalization reconciliation for the same locked-in session.
+pub fn should_defer_initial_inject_to_finalization(
+    payload: &ChampSelectedPayload,
+    session_json: &serde_json::Value,
+) -> bool {
+    let would_spawn = payload.locked_in || payload.queue_mode == QueueMode::PracticeTool;
+    if !would_spawn {
+        return false;
+    }
+    extract_champ_select_timer(session_json).is_some_and(|timer| {
+        matches!(
+            evaluate_finalization_window(&timer, FINALIZATION_SAFETY_WINDOW_MS),
+            FinalizationAction::TriggerNow
+        )
+    })
+}
+
 pub(crate) async fn trigger_live_reconciliation(
     handle: &tauri::AppHandle,
     state_ref: &Arc<tokio::sync::Mutex<ChampSelectSessionState>>,
@@ -56,8 +75,14 @@ pub(crate) async fn process_session_timer(
     match evaluate_finalization_window(&timer, FINALIZATION_SAFETY_WINDOW_MS) {
         FinalizationAction::TriggerNow => {
             coordinator.cancel_finalization_timer().await;
-            trigger_live_reconciliation(handle, state_ref, reconcile_lock, q_ref, coordinator)
-                .await;
+            let h = handle.clone();
+            let s_ref = Arc::clone(state_ref);
+            let r_lock = Arc::clone(reconcile_lock);
+            let q = Arc::clone(q_ref);
+            let coord = coordinator.clone();
+            tokio::spawn(async move {
+                trigger_live_reconciliation(&h, &s_ref, &r_lock, &q, &coord).await;
+            });
         }
         FinalizationAction::ScheduleAfter(delay) => {
             let h = handle.clone();
@@ -199,6 +224,7 @@ pub(crate) async fn handle_session_transition(
     q_ref: &Arc<AtomicI32>,
     coordinator: &ChampSelectCoordinator,
     phase_state: &Arc<tokio::sync::Mutex<String>>,
+    defer_initial_inject: bool,
 ) {
     match transition {
         WsSessionTransition::Active(payload) => {
@@ -221,7 +247,8 @@ pub(crate) async fn handle_session_transition(
                     let _ = models::ChampSelected(payload.clone()).emit(handle);
                     state_guard.record_processed(payload.clone());
                     (
-                        payload.locked_in || payload.queue_mode == QueueMode::PracticeTool,
+                        !defer_initial_inject
+                            && (payload.locked_in || payload.queue_mode == QueueMode::PracticeTool),
                         notify_lock,
                     )
                 } else {

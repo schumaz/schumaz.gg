@@ -13,6 +13,11 @@ export const commands = {
 	getSummonerStatus: () => __TAURI_INVOKE<SummonerInfo_Serialize | null>("get_summoner_status"),
 	/**  Tauri command to fetch the current LCU gameflow phase if the client is connected. */
 	getGameflowPhase: () => __TAURI_INVOKE<string | null>("get_gameflow_phase"),
+	/**
+	 *  Tauri command returning a consolidated bootstrap snapshot of the active LCU gameflow phase,
+	 *  Champ Select payload, and compatible cached build (probing LCU on demand if not yet polled).
+	 */
+	getActiveChampSelectSnapshot: () => __TAURI_INVOKE<ActiveChampSelectSnapshot_Serialize>("get_active_champ_select_snapshot"),
 	/**  Tauri command to return the cached profile for the last known summoner in 0ms (even before LCU connects). */
 	getCachedPlayerProfile: (summonerId: number | null) => __TAURI_INVOKE<CachedProfileResult_Serialize | null>("get_cached_player_profile", { summonerId }),
 	/**
@@ -96,6 +101,32 @@ export const events = {
 };
 
 /* Types */
+/**
+ *  Consolidated LCU bootstrap snapshot returned on frontend mount so an already-running
+ *  Champ Select session and its compatible cached build hydrate immediately without missing events.
+ */
+export type ActiveChampSelectSnapshot = ActiveChampSelectSnapshot_Serialize | ActiveChampSelectSnapshot_Deserialize;
+
+/**
+ *  Consolidated LCU bootstrap snapshot returned on frontend mount so an already-running
+ *  Champ Select session and its compatible cached build hydrate immediately without missing events.
+ */
+export type ActiveChampSelectSnapshot_Deserialize = {
+	gameflow_phase?: string | null,
+	champ_selected?: ChampSelectedPayload_Deserialize | null,
+	build?: ChampionBuild_Deserialize | null,
+};
+
+/**
+ *  Consolidated LCU bootstrap snapshot returned on frontend mount so an already-running
+ *  Champ Select session and its compatible cached build hydrate immediately without missing events.
+ */
+export type ActiveChampSelectSnapshot_Serialize = {
+	gameflow_phase: string | null,
+	champ_selected: ChampSelectedPayload_Serialize | null,
+	build: ChampionBuild_Serialize | null,
+};
+
 /**
  *  Runtime distribution metadata used by the frontend updater to distinguish
  *  NSIS `currentUser` installations from standalone portable executables.

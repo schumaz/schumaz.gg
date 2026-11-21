@@ -1,11 +1,13 @@
 import { Dispatch, MutableRefObject, SetStateAction } from "react";
 import {
+  ActiveChampSelectSnapshot,
   ChampionBuild,
   ChampSelectedPayload,
   SummonerInfo,
 } from "../../types";
 import { buildIpc, lcuIpc, type UnlistenFn } from "../../services/ipc";
 import { fetchRecommendedPayloadBuild } from "./lcuBuildActions";
+import { hydrateActiveChampSelectSnapshot } from "./lcuSnapshotHydration";
 
 export function isInGamePhase(phase: string): boolean {
   return phase === "GameStart" || phase === "InProgress" || phase === "Reconnect";
@@ -30,8 +32,27 @@ export interface LcuListenersContext {
   setErrorMsg: Dispatch<SetStateAction<string | null>>;
 }
 
-export function subscribeToLcuEvents(ctx: LcuListenersContext): () => void {
+export interface LcuEventSeqSnapshot {
+  sessionSeq: number;
+  phaseSeq: number;
+}
+
+export interface LcuSubscriptionHandle {
+  ready: Promise<void>;
+  captureEventSeq: () => LcuEventSeqSnapshot;
+  hydrateSnapshot: (
+    snapshot: ActiveChampSelectSnapshot | null,
+    before: LcuEventSeqSnapshot,
+    isActive: () => boolean
+  ) => Promise<void>;
+  unlisten: () => void;
+}
+
+export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionHandle {
   const unlisteners: Array<UnlistenFn | undefined> = [];
+  let disposed = false;
+  let liveSessionEventSeq = 0;
+  let livePhaseEventSeq = 0;
 
   const resetBuildSelections = () => {
     ctx.setSelectedSecondarySpellId(null);
@@ -77,116 +98,130 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): () => void {
     }
   };
 
-  const setup = async () => {
-    try {
-      unlisteners.push(
-        await lcuIpc.onLcuConnected((payload) => {
-          ctx.setSummoner(payload);
-          ctx.setErrorMsg(null);
-        })
-      );
-      unlisteners.push(
-        await lcuIpc.onLcuDisconnected(() => {
-          ctx.gameflowPhaseRef.current = "";
-          ctx.setGameflowPhase("");
-          ctx.setSummoner(null);
-          clearSessionState();
-        })
-      );
-      unlisteners.push(
-        await lcuIpc.onChampSelected(async (payload) => {
-          ctx.activeChampIdRef.current = payload.champion_id;
-          const fetchSeq = ++ctx.latestFetchSeqRef.current;
-          ctx.setChampSelect((prev) => {
-            if (prev?.champion_id !== payload.champion_id) {
-              ctx.setSpellsInverted(false);
-              resetBuildSelections();
-            }
-            return payload;
-          });
-          await fetchBuildForPayload(payload, fetchSeq);
-        })
-      );
-      unlisteners.push(
-        await lcuIpc.onChampSelectEnded(() => {
-          ctx.activeChampIdRef.current = null;
-          ctx.latestFetchSeqRef.current += 1;
-          if (!isInGamePhase(ctx.gameflowPhaseRef.current)) clearSessionState();
-        })
-      );
-      unlisteners.push(
-        await buildIpc.onRecommendedBuild((payload) => {
-          if (
-            ctx.activeChampIdRef.current !== null &&
-            ctx.activeChampIdRef.current !== payload.champion_id
-          ) {
-            return;
-          }
-          ctx.buildRef.current = payload;
-          ctx.setBuild((prev) => {
-            if (prev?.champion_id !== payload.champion_id) resetBuildSelections();
-            return payload;
-          });
+  const ready = Promise.all([
+    lcuIpc.onLcuConnected((payload) => {
+      ctx.setSummoner(payload);
+      ctx.setErrorMsg(null);
+    }),
+    lcuIpc.onLcuDisconnected(() => {
+      livePhaseEventSeq += 1;
+      liveSessionEventSeq += 1;
+      ctx.gameflowPhaseRef.current = "";
+      ctx.setGameflowPhase("");
+      ctx.setSummoner(null);
+      clearSessionState();
+    }),
+    lcuIpc.onChampSelected(async (payload) => {
+      liveSessionEventSeq += 1;
+      ctx.activeChampIdRef.current = payload.champion_id;
+      const fetchSeq = ++ctx.latestFetchSeqRef.current;
+      ctx.setChampSelect((prev) => {
+        if (prev?.champion_id !== payload.champion_id) {
+          ctx.setSpellsInverted(false);
+          resetBuildSelections();
+        }
+        return payload;
+      });
+      await fetchBuildForPayload(payload, fetchSeq);
+    }),
+    lcuIpc.onChampSelectEnded(() => {
+      liveSessionEventSeq += 1;
+      ctx.activeChampIdRef.current = null;
+      ctx.latestFetchSeqRef.current += 1;
+      if (!isInGamePhase(ctx.gameflowPhaseRef.current)) clearSessionState();
+    }),
+    buildIpc.onRecommendedBuild((payload) => {
+      if (
+        ctx.activeChampIdRef.current !== null &&
+        ctx.activeChampIdRef.current !== payload.champion_id
+      ) {
+        return;
+      }
+      ctx.latestFetchSeqRef.current += 1;
+      ctx.buildRef.current = payload;
+      ctx.setBuild((prev) => {
+        if (prev?.champion_id !== payload.champion_id) resetBuildSelections();
+        return payload;
+      });
+      notifyChampionPulledOnce();
+    }),
+    lcuIpc.onChampSelectReconciled(async (payload) => {
+      liveSessionEventSeq += 1;
+      const { champ_selected, build: reconciledBuild } = payload;
+      const currentDisplayedChampId =
+        ctx.activeChampIdRef.current ?? ctx.buildRef.current?.champion_id ?? null;
+      const champDiverged = currentDisplayedChampId !== champ_selected.champion_id;
+      ctx.activeChampIdRef.current = champ_selected.champion_id;
+
+      if (champDiverged) {
+        const fetchSeq = ++ctx.latestFetchSeqRef.current;
+        ctx.setSpellsInverted(false);
+        resetBuildSelections();
+        ctx.setChampSelect(champ_selected);
+        if (reconciledBuild && reconciledBuild.champion_id === champ_selected.champion_id) {
+          ctx.buildRef.current = reconciledBuild;
+          ctx.setBuild(reconciledBuild);
           notifyChampionPulledOnce();
-        })
-      );
-      unlisteners.push(
-        await lcuIpc.onChampSelectReconciled(async (payload) => {
-          const { champ_selected, build: reconciledBuild } = payload;
-          const currentDisplayedChampId =
-            ctx.activeChampIdRef.current ?? ctx.buildRef.current?.champion_id ?? null;
-          const champDiverged = currentDisplayedChampId !== champ_selected.champion_id;
-          ctx.activeChampIdRef.current = champ_selected.champion_id;
+        } else {
+          await fetchBuildForPayload(champ_selected, fetchSeq);
+        }
+        return;
+      }
 
-          if (champDiverged) {
-            const fetchSeq = ++ctx.latestFetchSeqRef.current;
-            ctx.setSpellsInverted(false);
-            resetBuildSelections();
-            ctx.setChampSelect(champ_selected);
-            if (reconciledBuild && reconciledBuild.champion_id === champ_selected.champion_id) {
-              ctx.buildRef.current = reconciledBuild;
-              ctx.setBuild(reconciledBuild);
-              notifyChampionPulledOnce();
-            } else {
-              await fetchBuildForPayload(champ_selected, fetchSeq);
-            }
-            return;
-          }
-
-          ctx.setChampSelect(champ_selected);
-          if (
-            reconciledBuild &&
-            reconciledBuild.champion_id === champ_selected.champion_id &&
-            (!ctx.buildRef.current || ctx.buildRef.current.champion_id !== champ_selected.champion_id)
-          ) {
-            ctx.buildRef.current = reconciledBuild;
-            ctx.setBuild(reconciledBuild);
-            notifyChampionPulledOnce();
-          }
-        })
-      );
-      unlisteners.push(
-        await lcuIpc.onGameflowPhaseChanged((phase) => {
-          ctx.gameflowPhaseRef.current = phase;
-          ctx.setGameflowPhase(phase);
-        })
-      );
-      unlisteners.push(
-        await lcuIpc.onMatchEnded(() => {
-          clearSessionState();
-          ctx.onMatchEndedRef.current?.();
-        })
-      );
-    } catch (e) {
+      ctx.setChampSelect(champ_selected);
+      if (
+        reconciledBuild &&
+        reconciledBuild.champion_id === champ_selected.champion_id &&
+        (!ctx.buildRef.current || ctx.buildRef.current.champion_id !== champ_selected.champion_id)
+      ) {
+        ctx.buildRef.current = reconciledBuild;
+        ctx.setBuild(reconciledBuild);
+        notifyChampionPulledOnce();
+      }
+    }),
+    lcuIpc.onGameflowPhaseChanged((phase) => {
+      livePhaseEventSeq += 1;
+      ctx.gameflowPhaseRef.current = phase;
+      ctx.setGameflowPhase(phase);
+    }),
+    lcuIpc.onMatchEnded(() => {
+      liveSessionEventSeq += 1;
+      clearSessionState();
+      ctx.onMatchEndedRef.current?.();
+    }),
+  ])
+    .then((fns) => {
+      if (disposed) {
+        for (const fn of fns) fn?.();
+        return;
+      }
+      unlisteners.push(...fns);
+    })
+    .catch((e) => {
       console.warn("Tauri event listener setup skipped or running in test mode:", e);
-    }
-  };
+    });
 
-  setup();
+  const captureEventSeq = (): LcuEventSeqSnapshot => ({
+    sessionSeq: liveSessionEventSeq,
+    phaseSeq: livePhaseEventSeq,
+  });
 
-  return () => {
-    for (const unlisten of unlisteners) {
-      unlisten?.();
-    }
+  return {
+    ready,
+    captureEventSeq,
+    hydrateSnapshot: (snapshot, before, isActive) =>
+      hydrateActiveChampSelectSnapshot(snapshot, {
+        ctx,
+        before,
+        getCurrentEventSeq: captureEventSeq,
+        isActive,
+        resetBuildSelections,
+        notifyChampionPulledOnce,
+        fetchBuildForPayload,
+      }),
+    unlisten: () => {
+      disposed = true;
+      for (const fn of unlisteners) fn?.();
+    },
   };
 }

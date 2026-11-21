@@ -131,6 +131,9 @@ export function defaultAppInvokeMock(cmd: string, args?: Record<string, unknown>
   ) {
     return Promise.resolve(null);
   }
+  if (cmd === "get_active_champ_select_snapshot") {
+    return Promise.resolve({ gameflow_phase: null, champ_selected: null, build: null });
+  }
   if (cmd === "get_recommended_build_for_champion") {
     if (args?.queueId === 2400) {
       return Promise.resolve({

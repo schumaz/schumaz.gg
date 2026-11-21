@@ -70,6 +70,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
     onChampionPulled: () => setActiveTab("runes"),
     onMatchEnded: () => setActiveTab("profile"),
     locale,
+    localeReady: prefs.preferencesReady,
   });
 
   const updater = useAppUpdater({

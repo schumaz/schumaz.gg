@@ -85,3 +85,15 @@ pub struct ChampSelectReconciledPayload {
     pub build: Option<crate::models::ChampionBuild>,
     pub champion_diverged: bool,
 }
+
+/// Consolidated LCU bootstrap snapshot returned on frontend mount so an already-running
+/// Champ Select session and its compatible cached build hydrate immediately without missing events.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Type)]
+pub struct ActiveChampSelectSnapshot {
+    #[serde(default)]
+    pub gameflow_phase: Option<String>,
+    #[serde(default)]
+    pub champ_selected: Option<ChampSelectedPayload>,
+    #[serde(default)]
+    pub build: Option<crate::models::ChampionBuild>,
+}

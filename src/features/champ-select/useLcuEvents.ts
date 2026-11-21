@@ -24,6 +24,7 @@ export interface UseLcuEventsOptions {
   onChampionPulled?: () => void;
   onMatchEnded?: () => void;
   locale?: AppLocale;
+  localeReady?: boolean;
 }
 
 export function useLcuEvents(
@@ -31,6 +32,7 @@ export function useLcuEvents(
   options?: UseLcuEventsOptions
 ) {
   const activeLocale: AppLocale = options?.locale ?? "pt_BR";
+  const localeReady = options?.localeReady ?? true;
   const [summoner, setSummoner] = useState<SummonerInfo | null>(null);
   const [lcuInitialChecked, setLcuInitialChecked] = useState<boolean>(false);
   const [champSelect, setChampSelect] = useState<ChampSelectedPayload | null>(null);
@@ -53,7 +55,7 @@ export function useLcuEvents(
   const onChampionPulledRef = useRef(options?.onChampionPulled);
   const onMatchEndedRef = useRef(options?.onMatchEnded);
   const activeLocaleRef = useRef<AppLocale>(activeLocale);
-  const prevLocaleRef = useRef<AppLocale>(activeLocale);
+  const prevLocaleRef = useRef<AppLocale | null>(localeReady ? activeLocale : null);
 
   useEffect(() => {
     onChampionPulledRef.current = options?.onChampionPulled;
@@ -115,6 +117,11 @@ export function useLcuEvents(
   };
 
   useEffect(() => {
+    if (!localeReady) return;
+    if (prevLocaleRef.current === null) {
+      prevLocaleRef.current = activeLocale;
+      return;
+    }
     if (prevLocaleRef.current === activeLocale) return;
     prevLocaleRef.current = activeLocale;
     const currentBuild = buildRef.current;
@@ -128,27 +135,11 @@ export function useLcuEvents(
         }
       })
       .catch(() => {});
-  }, [activeLocale]);
+  }, [activeLocale, localeReady]);
 
   useEffect(() => {
     let active = true;
-    lcuIpc
-      .getSummonerStatus()
-      .then(async (data) => {
-        if (!active || !data) return;
-        setSummoner(data);
-        const phase = await lcuIpc.getGameflowPhase?.().catch(() => null);
-        if (active && phase) {
-          gameflowPhaseRef.current = phase;
-          setGameflowPhase(phase);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLcuInitialChecked(true);
-      });
-
-    const unlisten = subscribeToLcuEvents({
+    const subscription = subscribeToLcuEvents({
       activeChampIdRef,
       buildRef,
       latestFetchSeqRef,
@@ -167,9 +158,31 @@ export function useLcuEvents(
       setErrorMsg,
     });
 
+    const bootstrapLcu = async () => {
+      try {
+        const summonerPromise = lcuIpc.getSummonerStatus().catch(() => null);
+        await subscription.ready;
+        if (!active) return;
+
+        const seqBeforeSnapshot = subscription.captureEventSeq();
+        const [summonerData, snapshot] = await Promise.all([
+          summonerPromise,
+          lcuIpc.getActiveChampSelectSnapshot().catch(() => null),
+        ]);
+        if (!active) return;
+
+        if (summonerData) setSummoner(summonerData);
+        await subscription.hydrateSnapshot(snapshot, seqBeforeSnapshot, () => active);
+      } finally {
+        if (active) setLcuInitialChecked(true);
+      }
+    };
+
+    void bootstrapLcu();
+
     return () => {
       active = false;
-      unlisten();
+      subscription.unlisten();
     };
   }, []);
 

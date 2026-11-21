@@ -9,8 +9,13 @@ use tauri_specta::Event as SpectaEvent;
 use super::coordinator::ChampSelectCoordinator;
 use super::extract::{WsSessionTransition, evaluate_ws_event};
 use super::gameflow::{process_gameflow_phase_update, sync_gameflow_phase_before_champ_select_end};
-use super::reconcile_state::ChampSelectSessionState;
-use super::session_handler::{handle_session_transition, process_session_timer};
+use super::reconcile_state::{
+    ChampSelectSessionState, shared_active_queue_id, shared_coordinator,
+    shared_last_gameflow_phase, shared_poll_lock, shared_reconcile_lock, shared_session_state,
+};
+use super::session_handler::{
+    handle_session_transition, process_session_timer, should_defer_initial_inject_to_finalization,
+};
 use crate::models;
 
 /// Spawns an async task from synchronous WebSocket callback threads (e.g. `irelia` WS thread)
@@ -49,13 +54,30 @@ impl irelia::ws::ErrorHandler for MonitorAwareErrorHandler {
 }
 
 #[derive(Clone)]
-pub(super) struct WsListenerCtx {
-    pub(super) app_handle: tauri::AppHandle,
-    pub(super) active_queue_id: Arc<AtomicI32>,
-    pub(super) session_state: Arc<tokio::sync::Mutex<ChampSelectSessionState>>,
-    pub(super) reconcile_lock: Arc<tokio::sync::Mutex<()>>,
-    pub(super) coordinator: ChampSelectCoordinator,
-    pub(super) last_gameflow_phase: Arc<tokio::sync::Mutex<String>>,
+pub(crate) struct WsListenerCtx {
+    pub(crate) app_handle: tauri::AppHandle,
+    pub(crate) active_queue_id: Arc<AtomicI32>,
+    pub(crate) session_state: Arc<tokio::sync::Mutex<ChampSelectSessionState>>,
+    pub(crate) reconcile_lock: Arc<tokio::sync::Mutex<()>>,
+    pub(crate) coordinator: ChampSelectCoordinator,
+    pub(crate) last_gameflow_phase: Arc<tokio::sync::Mutex<String>>,
+    pub(crate) poll_lock: Arc<tokio::sync::Mutex<()>>,
+}
+
+impl WsListenerCtx {
+    /// Builds a listener context backed by process-wide shared state so WS callbacks,
+    /// fallback polling, and on-demand IPC bootstrap snapshots stay synchronized.
+    pub(crate) fn for_app(app_handle: tauri::AppHandle) -> Self {
+        Self {
+            app_handle,
+            active_queue_id: shared_active_queue_id(),
+            session_state: shared_session_state(),
+            reconcile_lock: shared_reconcile_lock(),
+            coordinator: shared_coordinator(),
+            last_gameflow_phase: shared_last_gameflow_phase(),
+            poll_lock: shared_poll_lock(),
+        }
+    }
 }
 
 pub(super) async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) {
@@ -103,6 +125,21 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
 
                 let transition = evaluate_ws_event(&event_type, &data, current_q);
                 let is_active = matches!(transition, WsSessionTransition::Active(_));
+                if is_active && ctx.last_gameflow_phase.lock().await.is_empty() {
+                    process_gameflow_phase_update(
+                        &ctx.app_handle,
+                        &ctx.last_gameflow_phase,
+                        "ChampSelect".to_string(),
+                    )
+                    .await;
+                }
+
+                let defer_initial_inject = matches!(
+                    &transition,
+                    WsSessionTransition::Active(payload)
+                        if should_defer_initial_inject_to_finalization(payload, &data)
+                );
+
                 handle_session_transition(
                     &ctx.app_handle,
                     transition,
@@ -110,6 +147,7 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
                     &ctx.active_queue_id,
                     &ctx.coordinator,
                     &ctx.last_gameflow_phase,
+                    defer_initial_inject,
                 )
                 .await;
 

@@ -5,6 +5,26 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-11-20
+
+### English
+
+Critical LCU detection bugfix ensuring **schumaz.gg** immediately recognizes an already-running Champion Select session when launched mid-draft across Summoner's Rift, ARAM, ARAM Mayhem, and Arena.
+
+#### Fixed
+- **Immediate Mid-ChampSelect Recognition on Startup**: Eliminated the initial `4000ms` sleep on LCU connection (`needs_immediate_poll` + `poll_lcu_session_once`), querying `/lol-champ-select/v1/session` and `/lol-gameflow/v1/session` in parallel (`tokio::join!`) and syncing `last_gameflow_phase` to immediately activate the `1500ms` adaptive polling cadence.
+- **Consolidated LCU Bootstrap Snapshot (`get_active_champ_select_snapshot`)**: Added a typed `ActiveChampSelectSnapshot` IPC command returning `gameflow_phase`, `champ_selected`, and any compatible in-memory `build` in 0ms (or probing LCU on demand if not yet polled), eliminating lost `champ-selected` / `recommended-build` events emitted before frontend listeners mounted.
+- **Race-Free Frontend Hydration & `FINALIZATION` Coalescing**: Registered all LCU event listeners in parallel before fetching the initial snapshot alongside `getSummonerStatus`, hydrating state and auto-navigating once to the **Runes** tab without duplicate build fetches, and coalescing startup during the final seconds of `FINALIZATION` so `spawn_latest` and `trigger_live_reconciliation` never run concurrent build fetches or LCU injections.
+
+### Português (BR)
+
+Correção crítica na detecção do LCU garantindo que o **schumaz.gg** reconheça imediatamente uma Seleção de Campeões já em andamento ao ser aberto no meio do draft em Summoner's Rift, ARAM, ARAM Desordem e Arena.
+
+#### Corrigido
+- **Reconhecimento Imediato de Champ Select Já em Andamento ao Abrir o App**: Eliminou a espera inicial de `4000ms` ao conectar ao LCU (`needs_immediate_poll` + `poll_lcu_session_once`), consultando `/lol-champ-select/v1/session` e `/lol-gameflow/v1/session` em paralelo (`tokio::join!`) e sincronizando `last_gameflow_phase` para ativar imediatamente o intervalo adaptativo de `1500ms`.
+- **Snapshot IPC Consolidado de Bootstrap LCU (`get_active_champ_select_snapshot`)**: Adicionou comando tipado retornando `ActiveChampSelectSnapshot` (`gameflow_phase`, `champ_selected` e `build` compatível em 0ms quando já em memória, ou sondando o LCU sob demanda com disparo automático de injeção e timer de finalização), eliminando eventos `champ-selected` / `recommended-build` perdidos antes do mount do frontend.
+- **Hidratação Sem Duplo Fetch e Coalescência na `FINALIZATION`**: Passou a aguardar o registro paralelo de todos os listeners LCU antes do snapshot inicial em paralelo a `getSummonerStatus`, hidratando fase/campeão/build e auto-navegando uma única vez para a aba **Runas** sem fetch duplicado, e coalescendo aberturas nos segundos finais da `FINALIZATION` para evitar fetch/injeção concorrentes entre `spawn_latest` e `trigger_live_reconciliation`.
+
 ## [0.3.2] - 2026-11-20
 
 ### English

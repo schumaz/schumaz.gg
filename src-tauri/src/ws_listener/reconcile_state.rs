@@ -1,11 +1,14 @@
+use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, OnceLock};
 
+use super::coordinator::ChampSelectCoordinator;
 use super::extract::{
     ChampSelectedPayload, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_PRACTICE_TOOL, QUEUE_SOLO_DUO,
     is_arena_queue, queue_supports_runes, queue_supports_spells,
 };
 use crate::build_provider::ChampionBuild;
 use crate::lcu_injector::{AppliedInjectionState, UserPreferences};
+use crate::models::ActiveChampSelectSnapshot;
 
 /// Holds the backend's latest processed, built, injected, and UI-displayed state for Champ Select.
 #[derive(Debug, Clone, Default)]
@@ -51,6 +54,10 @@ impl ChampSelectSessionState {
 static SHARED_SESSION_STATE: OnceLock<Arc<tokio::sync::Mutex<ChampSelectSessionState>>> =
     OnceLock::new();
 static RECONCILE_SERIALIZE_LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
+static SHARED_ACTIVE_QUEUE_ID: OnceLock<Arc<AtomicI32>> = OnceLock::new();
+static SHARED_COORDINATOR: OnceLock<ChampSelectCoordinator> = OnceLock::new();
+static SHARED_LAST_GAMEFLOW_PHASE: OnceLock<Arc<tokio::sync::Mutex<String>>> = OnceLock::new();
+static SHARED_POLL_LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
 
 pub fn shared_session_state() -> Arc<tokio::sync::Mutex<ChampSelectSessionState>> {
     Arc::clone(
@@ -61,6 +68,62 @@ pub fn shared_session_state() -> Arc<tokio::sync::Mutex<ChampSelectSessionState>
 
 pub fn shared_reconcile_lock() -> Arc<tokio::sync::Mutex<()>> {
     Arc::clone(RECONCILE_SERIALIZE_LOCK.get_or_init(|| Arc::new(tokio::sync::Mutex::new(()))))
+}
+
+pub fn shared_active_queue_id() -> Arc<AtomicI32> {
+    Arc::clone(SHARED_ACTIVE_QUEUE_ID.get_or_init(|| Arc::new(AtomicI32::new(0))))
+}
+
+pub fn shared_coordinator() -> ChampSelectCoordinator {
+    SHARED_COORDINATOR
+        .get_or_init(ChampSelectCoordinator::default)
+        .clone()
+}
+
+pub fn shared_last_gameflow_phase() -> Arc<tokio::sync::Mutex<String>> {
+    Arc::clone(
+        SHARED_LAST_GAMEFLOW_PHASE.get_or_init(|| Arc::new(tokio::sync::Mutex::new(String::new()))),
+    )
+}
+
+pub fn shared_poll_lock() -> Arc<tokio::sync::Mutex<()>> {
+    Arc::clone(SHARED_POLL_LOCK.get_or_init(|| Arc::new(tokio::sync::Mutex::new(()))))
+}
+
+/// Returns `true` when an IPC bootstrap snapshot request should probe LCU on demand
+/// because no gameflow phase has been recorded yet or `ChampSelect` has no cached payload yet.
+pub fn should_probe_lcu_for_snapshot(phase: &str, state: &ChampSelectSessionState) -> bool {
+    let trimmed = phase.trim();
+    trimmed.is_empty() || (trimmed == "ChampSelect" && state.last_payload.is_none())
+}
+
+/// Builds an `ActiveChampSelectSnapshot` from in-memory session state and gameflow phase,
+/// including `last_build` only when compatible with `last_payload` via `build_matches_payload`.
+pub fn build_active_champ_select_snapshot(
+    phase: &str,
+    state: &ChampSelectSessionState,
+) -> ActiveChampSelectSnapshot {
+    let trimmed = phase.trim();
+    let gameflow_phase = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    };
+    let champ_selected = state.last_payload.clone();
+    let build = champ_selected.as_ref().and_then(|payload| {
+        let build_q_id = resolve_effective_build_queue_id(payload);
+        state
+            .last_build
+            .as_ref()
+            .filter(|b| build_matches_payload(b, payload, build_q_id))
+            .cloned()
+    });
+
+    ActiveChampSelectSnapshot {
+        gameflow_phase,
+        champ_selected,
+        build,
+    }
 }
 
 /// Updates the champion ID currently displayed in the frontend UI.

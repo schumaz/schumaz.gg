@@ -232,6 +232,8 @@ where
             gateway.clear_selections();
         }
         gateway.cancel_pending_tasks().await;
+    } else if need_build_fetch {
+        gateway.cancel_pending_tasks().await;
     }
 
     let build = if need_build_fetch {
@@ -265,6 +267,8 @@ where
 
     if champion_diverged {
         emitter.emit_champ_selected(actual.clone());
+        emitter.emit_recommended_build(build.clone());
+    } else if need_build_fetch {
         emitter.emit_recommended_build(build.clone());
     }
     if should_notify_lock {

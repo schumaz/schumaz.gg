@@ -92,7 +92,7 @@ Resumo cronológico das entregas concluídas e arquivadas do projeto.
 
 ---
 
-## 7. Correções de Builds/Feitiços, Modo Arena (`3x6`) & Polimento UX (`P11.4` – `P11.9` · `v0.2.1` – `v0.3.2`)
+## 7. Correções de Builds/Feitiços, Modo Arena (`3x6`), Polimento UX & Detecção LCU (`P11.4` – `P11.10` · `v0.2.1` – `v0.3.3`)
 
 - **[P11.4 - Bugfix Feitiços/ARAM Mayhem] Filtragem dinâmica de feitiços por modo (`v0.2.1`)** (`ddragon/parsers.rs`, `models/build.rs`, `spells/`, `service_helpers.rs`, `ddragon/enrichment.rs`, `lz4_cache.rs`)
   - Persistência do campo `modes: Vec<String>` em `SpellMetadata` (incrementando `CACHE_SCHEMA_VERSION = 2`) e filtragem dinâmica de combinações, `spell_choices`, feitiços REST e fallbacks conforme a fila ativa (`"KIWI"` para ARAM Mayhem `2400`, `"ARAM"` para ARAM Clássico `450` e `"CLASSIC"` para SR), bloqueando *Exaustão* (`3`) no ARAM Mayhem e *Teleporte* (`12`) no ARAM/Mayhem e priorizando *Marca/Bola de Neve* (`32`) nos fallbacks.
@@ -108,3 +108,6 @@ Resumo cronológico das entregas concluídas e arquivadas do projeto.
 - **[P11.9 - UX / Polimento] Janela padrão `1280×720` centralizada, persistência de monitor & reset do filtro de raridade no ARAM Mayhem (`v0.3.2`)** (`tauri.conf.json`, `storage/window_bounds.rs`, `storage/settings/`, `app_bootstrap.rs`, `app_bootstrap/window_events.rs`, `AppTabsViewport.tsx`, `AramTab.tsx`)
   - Remoção completa da persistência de `AramMayhemRarityFilter` / `aramMayhemRarityFilter` (em `UserSettings.ini`, contratos IPC/`bindings.ts` e frontend), mantendo o filtro de raridade das cartinhas do ARAM Mayhem como estado local efêmero sempre iniciado em **Todos (`All`)**.
   - Atualização da janela padrão para `1280×720` centralizada na primeira abertura e persistência de `WindowMonitor` (`window.current_monitor()`) com restauração física multi-monitor/DPI distinto (incluindo janela maximizada e fallback centralizado em `1280×720` com *clamping* seguro quando o monitor salvo está desconectado).
+- **[P11.10 - Bugfix Crítico LCU] Reconhecimento imediato de Champ Select já em andamento ao abrir o app (`v0.3.3`)** (`ws_listener/polling.rs`, `ws_listener/session_handler.rs`, `ws_listener/reconcile_state.rs`, `ws_listener/reconcile.rs`, `commands/lcu.rs`, `models/ws.rs`, `src/services/ipc/lcu.ipc.ts`, `src/features/champ-select/`)
+  - Sondagem imediata (`0ms` via `needs_immediate_poll` + `poll_lcu_session_once`) e paralela (`tokio::join!` para sessão + `queue_id`) ao conectar ao LCU, sincronizando `last_gameflow_phase` para ativar o intervalo adaptativo de `1500ms` e coalescendo a abertura nos segundos finais de `FINALIZATION` para evitar fetch/injeção concorrentes entre `spawn_latest` e `trigger_live_reconciliation`.
+  - Novo comando IPC tipado `get_active_champ_select_snapshot` (`ActiveChampSelectSnapshot`) com build em `0ms` quando já em memória ou sondagem sob demanda, acoplado ao registro paralelo de listeners antes do snapshot no frontend (`lcuEventListeners.ts`, `lcuSnapshotHydration.ts`, `useLcuEvents.ts`) sem fetch duplicado e com suíte de regressão Rust + Vitest (SR, ARAM, ARAM Mayhem, Arena e `FINALIZATION`).

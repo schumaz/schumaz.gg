@@ -1,6 +1,7 @@
 export type ActiveTab = "profile" | "runes" | "ranked" | "arena" | "aram" | "settings";
 
 export type {
+  ActiveChampSelectSnapshot,
   AppLocale,
   AppSettings,
   AramAugmentEntry,

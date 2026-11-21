@@ -23,6 +23,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::update_build_filters,
             commands::get_summoner_status,
             commands::get_gameflow_phase,
+            commands::get_active_champ_select_snapshot,
             commands::get_cached_player_profile,
             commands::get_player_profile,
             commands::sync_displayed_champion,

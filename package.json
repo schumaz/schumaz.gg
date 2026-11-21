@@ -1,7 +1,7 @@
 {
   "name": "schumazgg",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Automated League of Legends companion app for builds, runes, spells, item sets, and summoner stats.",
   "author": "schumaZ",
   "license": "GPL-3.0-only",

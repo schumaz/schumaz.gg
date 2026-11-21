@@ -14,6 +14,16 @@ pub async fn get_gameflow_phase() -> Option<String> {
     lcu_connector::fetch_current_gameflow_phase().await
 }
 
+/// Tauri command returning a consolidated bootstrap snapshot of the active LCU gameflow phase,
+/// Champ Select payload, and compatible cached build (probing LCU on demand if not yet polled).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_active_champ_select_snapshot(
+    app_handle: tauri::AppHandle,
+) -> models::ActiveChampSelectSnapshot {
+    ws_listener::get_active_champ_select_snapshot(&app_handle).await
+}
+
 /// Tauri command to return the cached profile for the last known summoner in 0ms (even before LCU connects).
 #[tauri::command]
 #[specta::specta]
