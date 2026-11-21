@@ -74,10 +74,11 @@ Chromium instance), the app stays fast, lightweight, and out of your way while y
   after a new patch drops to avoid noisy low-sample builds (can be overridden manually in the filter bar or disabled in
   Settings).
 - **Fast local cache & low footprint**: binary cache compressed with LZ4 + MessagePack, automatic cache cleanup,
-  adaptive idle polling, and an option to disable GPU effects.
-- **Quality of life**: optional automatic cleanup of unread mission/objective badges in the League client, bilingual UI
-  (**English** and **Português BR**), and silent background auto-updates that wait until your match ends before
-  downloading.
+  adaptive idle polling, System Tray with optional full WebView2 unloading during matches, and an option to disable GPU
+  effects.
+- **Quality of life**: optional Start with Windows, automatic cleanup of unread mission/objective badges in the League
+  client, bilingual UI (**English** and **Português BR**), local sanitized diagnostic logs with one-click summary copy,
+  and silent background auto-updates that wait until your match ends before downloading.
 
 ## Install
 
@@ -136,9 +137,10 @@ Build statistics, tier lists, and ARAM Mayhem augments come from OP.GG, while ch
 and localized names come from Riot's DataDragon (plus CommunityDragon for visual assets such as rank crests).
 
 **What does it write, and where?**  
-All settings and local caches are stored in `%LOCALAPPDATA%\schumazgg\`:
+All settings, local caches, and diagnostic logs are stored in `%LOCALAPPDATA%\schumazgg\`:
 - `Config\UserSettings.ini` — your preferences, window bounds, and saved filters
 - `Cache\` (`ddragon\`, `opgg\`, `profile\`, `assets\`) — compressed local caches with automatic cleanup for stale files
+- `Logs\` (`schumazgg.log`, `schumazgg.log.1`) — rotating local diagnostic logs (capped at 2 MiB, sanitized of credentials and user paths, never sent anywhere)
 - `WebView\` — WebView2 user data
 
 League of Legends installation files are never touched.
@@ -147,8 +149,8 @@ League of Legends installation files are never touched.
 No. Everything runs locally on your PC, with no login, no ads, and no telemetry.
 
 **Something broke or a build looks wrong.**  
-Please open an [issue](https://github.com/schumaz/schumaz.gg/issues/new) with details about the champion, queue, and app
-version.
+Open **Settings → System & Storage → Support & Diagnostics**, click **Copy diagnostic summary**, and paste it into a
+new [issue](https://github.com/schumaz/schumaz.gg/issues/new) along with details about the champion and queue.
 
 ## Build from source
 

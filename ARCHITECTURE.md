@@ -29,10 +29,10 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 ## 3. Estrutura Principal
 
 ```text
-├── docs/                          # Referências curtas (LCU, OP.GG, Tauri v2, UI)
+├── docs/                          # Referências curtas (LCU, OP.GG, Tauri v2, UI, histórico de entregas)
 ├── scripts/                       # Automação de release, gatekeeper de linhas e higiene do target Cargo (run-tauri, sweep-cargo-target)
 ├── src/
-│   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, @tauri-apps/api, plugin-updater, plugin-opener)
+│   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, diagnostics, @tauri-apps/api, plugin-updater, plugin-opener)
 │   ├── components/ui/             # Componentes visuais puros (FiltersHeader, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, ItemBlocks, Docks)
 │   ├── hooks/                     # Hooks transversais do shell (useAppBootstrap, useAppUpdater, useWindowMinimized)
 │   ├── features/                  # Domínios isolados (cada qual com componentes, hooks, helpers e CSS locais)
@@ -41,7 +41,7 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 │   │   ├── ranked/                # Tier list Solo/Duo e explorador de builds
 │   │   ├── arena/                 # Arena 3x6 (tier list, augments, sinergias e itens prismáticos)
 │   │   ├── aram/                  # ARAM Clássico e ARAM Desordem (Mayhem Augments)
-│   │   └── settings/              # Configurações (Geral, Automação & Cliente, Aparência & Desempenho, Sistema & Armazenamento), autostart, bandeja e INI
+│   │   └── settings/              # Configurações (Geral, Automação & Cliente, Aparência & Desempenho, Sistema & Armazenamento + Suporte e Diagnóstico)
 │   ├── i18n/                      # Contexto de tradução e dicionários fatiados (pt/en core, build, settings & tabs)
 │   ├── styles/                    # Tokens, layout shell e estilos compartilhados
 │   ├── types/
@@ -52,12 +52,13 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 └── src-tauri/
     ├── capabilities/default.json  # Permissões Tauri v2 aprovadas (inclui opener:default e updater:default)
     └── src/                       # Padrão Rust 2018+ (modulo.rs + modulo/, sem mod.rs)
-        ├── lib.rs                 # Setup Tauri (single-instance, autostart, opener, updater), RunEvent::ExitRequested e registro tauri-specta
+        ├── lib.rs                 # Setup Tauri (single-instance, autostart, opener, updater), RunEvent::ExitRequested/Exit e registro tauri-specta
         ├── app_bootstrap.rs + app_bootstrap/ # Inicialização, protocolo schumaz-asset://, tray.rs, window_factory.rs, prewarm.rs e window_events.rs
-        ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta])
-        ├── models.rs + models/            # Structs serde/specta e Events IPC
+        ├── logging.rs + logging/  # Logs rotativos locais (Logs/, logfmt 100% std, actor assíncrono, sanitizador, métricas lock-free, diagnóstico)
+        ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta], incluindo diagnostics.rs)
+        ├── models.rs + models/            # Structs serde/specta e Events IPC (incluindo diagnostics.rs)
         ├── updater.rs                     # Detecção de modo Portable (feature + Registro HKCU/path) e info de distribuição
-        ├── storage.rs + storage/          # Infraestrutura: paths, cache .lz4, GC, assets, graphics, window_bounds, settings/ (INI)
+        ├── storage.rs + storage/          # Infraestrutura: paths (Config/, Cache/, Logs/), cache .lz4, GC, assets, graphics, window_bounds, settings/ (INI)
         ├── lcu_connector.rs + lcu_connector/ # Cliente REST LCU, endpoints por domínio, motor de missões e monitor
         ├── profile_provider.rs + profile_provider/ # Cache de perfil/skins e parsers de ranked, maestrias e histórico
         ├── ws_listener.rs + ws_listener/  # WebSocket (subscription.rs) + fallback polling, extração de draft, coordinator e reconciliação
@@ -75,6 +76,7 @@ Frontend React (src/features/<dominio>/ → src/components/ui/)
 | **DataDragon Cache & Assets** | `src-tauri/src/build_provider/ddragon.rs` (`ddragon/`) | — |
 | **Lógica de Itens (5 blocos / builds)** | `src-tauri/src/build_provider/items/` (`blocks.rs`, `options.rs`, `classification.rs`, `affinity.rs`) | — |
 | **System Tray, Autostart & WebView Sob Demanda** | `src-tauri/src/app_bootstrap/` (`tray.rs`, `window_factory.rs`, `prewarm.rs`, `window_events.rs`), `src-tauri/src/lib.rs`, `src-tauri/src/commands/system.rs` | `docs/tauri-v2-capabilities.md` |
+| **Logs Rotativos & Diagnóstico Local** | `src-tauri/src/logging.rs` (`logging/{writer,sanitizer,metrics,diagnostics}.rs`), `commands/diagnostics.rs`, `models/diagnostics.rs`, `src/services/ipc/diagnostics.ipc.ts`, `src/features/settings/{useDiagnostics.ts,SettingsDiagnosticsSubsection.tsx}` | `docs/tauri-v2-capabilities.md` |
 | **Persistência & Preferências** | `src/features/settings/` + `src-tauri/src/storage/settings/` + `lcu_injector/` | — |
 | **Auto-Update & Portable (NSIS)** | `src-tauri/src/updater.rs`, `models/updater.rs`, `src/services/ipc/updater.ipc.ts`, `src/hooks/useAppUpdater.ts`, `src/components/ui/StatusDock.tsx` | `docs/tauri-v2-capabilities.md` |
 | **Contrato IPC (Backend -> Frontend)** | `src-tauri/src/{commands,models}/` → `src/types/bindings.ts` → `src/services/ipc/` | — |

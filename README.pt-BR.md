@@ -78,10 +78,12 @@ outra instância inteira do Chromium), o aplicativo permanece rápido, leve e fo
   48 horas após o lançamento de um novo patch para evitar builds com baixa amostragem (pode ser ignorada manualmente no
   seletor de patch ou desativada nas Configurações).
 - **Cache local rápido e baixo consumo**: cache binário comprimido com LZ4 + MessagePack, limpeza automática de arquivos
-  antigos, polling adaptativo em idle e opção para desativar efeitos de GPU.
-- **Qualidade de vida**: limpeza automática opcional das notificações de missões e objetivos não lidos no cliente do
-  LoL, interface bilíngue (**Português BR** e **English**) e atualizações silenciosas em segundo plano que aguardam sua
-  partida terminar antes de baixar.
+  antigos, polling adaptativo em idle, bandeja do sistema com descarga opcional do WebView2 durante partidas e opção para
+  desativar efeitos de GPU.
+- **Qualidade de vida**: opção de Iniciar com o Windows, limpeza automática opcional das notificações de missões e
+  objetivos não lidos no cliente do LoL, interface bilíngue (**Português BR** e **English**), logs locais sanitizados
+  com cópia rápida de diagnóstico e atualizações silenciosas em segundo plano que aguardam sua partida terminar antes
+  de baixar.
 
 ## Instalação
 
@@ -144,9 +146,10 @@ de campeões, runas, feitiços e itens vêm do DataDragon da Riot (além do Comm
 de elo).
 
 **O que ele grava no meu PC e onde?**  
-Todas as configurações e caches ficam centralizados em `%LOCALAPPDATA%\schumazgg\`:
+Todas as configurações, caches e logs locais ficam centralizados em `%LOCALAPPDATA%\schumazgg\`:
 - `Config\UserSettings.ini` — suas preferências, posição/tamanho da janela e filtros salvos
 - `Cache\` (`ddragon\`, `opgg\`, `profile\`, `assets\`) — caches locais comprimidos com limpeza automática para arquivos antigos
+- `Logs\` (`schumazgg.log`, `schumazgg.log.1`) — logs locais rotativos de diagnóstico (teto de 2 MiB, sanitizados sem credenciais nem caminhos de usuário, nunca enviados externamente)
 - `WebView\` — dados do runtime WebView2
 
 Os arquivos de instalação do League of Legends nunca são modificados.
@@ -155,7 +158,8 @@ Os arquivos de instalação do League of Legends nunca são modificados.
 Não. Tudo roda localmente no seu PC, sem login, sem anúncios e sem telemetria.
 
 **Algo quebrou ou uma build parece incorreta.**  
-Abra uma [issue](https://github.com/schumaz/schumaz.gg/issues/new) informando o campeão, a fila e a versão do app.
+Acesse **Configurações → Sistema e Armazenamento → Suporte e Diagnóstico**, clique em **Copiar resumo de diagnóstico** e
+cole o resultado ao abrir uma [issue](https://github.com/schumaz/schumaz.gg/issues/new) junto com o campeão e a fila.
 
 ## Compilar do zero (Build from source)
 
