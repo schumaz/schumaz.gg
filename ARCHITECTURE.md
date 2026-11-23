@@ -54,7 +54,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 ## 3. Estrutura Principal
 
 ```text
-├── docs/                          # Referências curtas (LCU, OP.GG, Tauri v2, UI, histórico de entregas)
+├── docs/                          # Referências curtas (LCU, OP.GG, Tauri v2, UI)
 ├── scripts/                       # Automação de release, gatekeeper de linhas e higiene do target Cargo (run-tauri, sweep-cargo-target)
 ├── src/
 │   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, diagnostics, @tauri-apps/api, plugin-updater, plugin-opener)
@@ -114,4 +114,4 @@ Para manter `npm run tauri dev` ágil sem inflar o SSD com dezenas de GB de arte
 - **Perfil `[profile.dev]` enxuto:** mantém `incremental = true` com `debug = "line-tables-only"` no crate principal e `debug = false` em `package."*"` e `build-override` (sem alterar `[profile.release]`).
 - **Limpeza automática via `cargo-sweep` (`scripts/sweep-cargo-target.mjs` e `scripts/run-tauri.mjs`):**
   - Ao rodar `npm run tauri dev`, o wrapper verifica o tamanho de `src-tauri/target` antes de iniciar o Cargo; se passar de **6 GiB**, executa automaticamente `cargo sweep --maxsize 4GB src-tauri` (pula silenciosamente se abaixo de 6 GiB ou se `cargo-sweep` não estiver instalado; pode ser ignorado com `SCHUMAZ_SKIP_CARGO_SWEEP=1`).
-  - Scripts disponíveis: `npm run tauri:sweep` (limpeza direta até 4 GB) e `npm run tauri:sweep:auto` (acionado no gatekeeper final e após bumps de versão conforme `.antigravityrules`).
+  - Scripts disponíveis: `npm run tauri:sweep` (limpeza direta até 4 GB) e `npm run tauri:sweep:auto` (acionado no gatekeeper final e após bumps de versão conforme `AGENTS.md`).

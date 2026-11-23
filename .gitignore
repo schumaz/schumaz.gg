@@ -36,8 +36,6 @@ Desktop.ini
 .DS_Store
 
 # Project specific docs/rules
-.antigravityrules
-.antigravityignore
 .geminiignore
 PLAN.md
 plan.md
