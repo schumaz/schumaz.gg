@@ -7,6 +7,8 @@ export * from "./StartupLoadingScreen";
 export * from "./StatusDock";
 export * from "./NavigationDock";
 export * from "./BuildSelector";
+export * from "./Tooltip";
+export * from "./BuildTooltips";
 export * from "./SpellsBar";
 export * from "./ItemBlocks";
 export * from "./RuneTree";

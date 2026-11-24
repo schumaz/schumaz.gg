@@ -1,5 +1,5 @@
 use super::super::analytics::aram::normalize_opgg_champion_key;
-use super::super::models::{ChampionBuild, DataDragonCache, ItemBlockKind};
+use super::super::models::{ChampionBuild, DataDragonCache, ItemBlockKind, ItemMetadata};
 use super::super::spells::{
     SPELL_CLARITY_ID, SPELL_MARK_ID, ddragon_mode_for_queue, sanitize_spell_choices_for_mode,
     sanitize_spell_pair_for_mode,
@@ -7,6 +7,7 @@ use super::super::spells::{
 use super::metadata::{resolve_rune_metadata_for_locale, resolve_spell_metadata_for_locale};
 use crate::lcu_injector::FlashKeyPreference;
 use crate::models::{AppLocale, is_arena_queue};
+use std::collections::HashMap;
 
 fn infer_mode_from_build(build: &ChampionBuild) -> Option<&'static str> {
     if !build.supports_spells {
@@ -149,6 +150,32 @@ fn item_icon_urls(version: &str, item_ids: &[i32]) -> Vec<String> {
         .collect()
 }
 
+fn collect_build_item_metadata(
+    build: &ChampionBuild,
+    items_catalog: &HashMap<i32, ItemMetadata>,
+) -> HashMap<i32, ItemMetadata> {
+    let mut resolved = HashMap::new();
+    let mut insert_ids = |ids: &[i32]| {
+        for &id in ids {
+            if id > 0
+                && !resolved.contains_key(&id)
+                && let Some(meta) = items_catalog.get(&id)
+            {
+                resolved.insert(id, meta.clone());
+            }
+        }
+    };
+    for block in &build.item_blocks {
+        insert_ids(&block.item_ids);
+    }
+    for opt in &build.build_options {
+        insert_ids(&opt.core_item_ids);
+        insert_ids(&opt.final_item_ids);
+        insert_ids(&opt.situational_item_ids);
+    }
+    resolved
+}
+
 /// Enriches a ChampionBuild with visual assets from DataDragon using explicit queue mode,
 /// `FlashKeyPreference`, and `AppLocale`.
 pub fn enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
@@ -213,6 +240,10 @@ pub fn enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
         opt.core_item_icon_urls = item_icon_urls(&cache.version, &opt.core_item_ids);
         opt.final_item_icon_urls = item_icon_urls(&cache.version, &opt.final_item_ids);
         opt.situational_item_icon_urls = item_icon_urls(&cache.version, &opt.situational_item_ids);
+    }
+
+    if !cache.items.is_empty() {
+        build.item_metadata = collect_build_item_metadata(build, &cache.items);
     }
 
     for aug in &mut build.arena_augments {

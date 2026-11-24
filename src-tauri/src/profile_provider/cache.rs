@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::build_provider;
-use crate::models::{AppLocale, CachedProfileResult, DataDragonCache, PlayerProfile};
+use crate::models::{
+    AppLocale, CachedProfileResult, DataDragonCache, ItemMetadata, PlayerProfile, RecentMatchInfo,
+};
 
 use super::queue_mapper::map_queue_mode_for_locale;
 use super::ranked_parser::translate_ranked_tier_for_locale;
@@ -50,8 +53,27 @@ pub fn load_profile_from_dir(
     })
 }
 
+/// Collects deduplicated DataDragon item metadata for all non-zero item IDs in `matches`.
+pub fn collect_matches_item_metadata(
+    matches: &[RecentMatchInfo],
+    items_catalog: &HashMap<i32, ItemMetadata>,
+) -> HashMap<i32, ItemMetadata> {
+    let mut resolved = HashMap::new();
+    for m in matches {
+        for &item_id in &m.item_ids {
+            if item_id > 0
+                && !resolved.contains_key(&item_id)
+                && let Some(meta) = items_catalog.get(&item_id)
+            {
+                resolved.insert(item_id, meta.clone());
+            }
+        }
+    }
+    resolved
+}
+
 /// Re-localizes cached ranked tier labels, queue mode labels, champion names,
-/// and cached skin name in-memory when switching UI language without waiting on LCU.
+/// item tooltip metadata, and cached skin name in-memory when switching UI language without waiting on LCU.
 pub fn relocalize_player_profile(
     profile: &mut PlayerProfile,
     locale: AppLocale,
@@ -76,6 +98,10 @@ pub fn relocalize_player_profile(
             if let Some(champ) = cache.champions.get(&mastery.champion_id) {
                 mastery.champion_name = champ.display_name.clone();
             }
+        }
+        if !cache.items.is_empty() {
+            profile.item_metadata =
+                collect_matches_item_metadata(&profile.recent_matches, &cache.items);
         }
     }
 

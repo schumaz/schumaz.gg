@@ -5,13 +5,37 @@ import { SpellMetadata } from "../types";
 
 describe("SpellsBar", () => {
   const mockSpells: SpellMetadata[] = [
-    { id: 4, name: "Flash", icon_url: "flash.png" },
-    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
+    {
+      id: 4,
+      name: "Flash",
+      icon_url: "flash.png",
+      description: "Teleporta seu Campeão por uma curta distância na direção do cursor.",
+      cooldown_secs: 300,
+    },
+    {
+      id: 14,
+      name: "Incendiar",
+      icon_url: "ignite.png",
+      description: "Incendeia o Campeão inimigo, causando Dano Verdadeiro ao longo de 5s.",
+      cooldown_secs: 180,
+    },
   ];
 
   const mockChoices: SpellMetadata[] = [
-    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
-    { id: 12, name: "Teleporte", icon_url: "teleport.png" },
+    {
+      id: 14,
+      name: "Incendiar",
+      icon_url: "ignite.png",
+      description: "Incendeia o Campeão inimigo, causando Dano Verdadeiro ao longo de 5s.",
+      cooldown_secs: 180,
+    },
+    {
+      id: 12,
+      name: "Teleporte",
+      icon_url: "teleport.png",
+      description: "Após canalizar brevemente, teleporta seu Campeão até uma estrutura ou tropa aliada.",
+      cooldown_secs: 300,
+    },
   ];
 
   it("renders ordered spells in D and F slots and triggers inversion", () => {
@@ -40,7 +64,7 @@ describe("SpellsBar", () => {
     expect(handleInvert).toHaveBeenCalledTimes(1);
   });
 
-  it("allows selecting an alternative secondary spell", () => {
+  it("allows selecting an alternative secondary spell and renders rich spell tooltips", () => {
     const handleInvert = vi.fn();
     const handleSelectSecondary = vi.fn();
 
@@ -54,9 +78,22 @@ describe("SpellsBar", () => {
       />
     );
 
-    const teleportBtn = screen.getByTestId("sec-spell-btn-12");
-    fireEvent.click(teleportBtn);
+    const flashTrigger = screen.getByLabelText("Flash");
+    fireEvent.mouseEnter(flashTrigger);
+    const flashTooltip = screen.getByRole("tooltip");
+    expect(flashTooltip).toHaveTextContent("Flash");
+    expect(flashTooltip).toHaveTextContent("300s");
+    expect(flashTooltip).toHaveTextContent(/Teleporta seu Campeão/);
+    fireEvent.mouseLeave(flashTrigger);
 
+    const teleportBtn = screen.getByTestId("sec-spell-btn-12");
+    fireEvent.focus(teleportBtn);
+    const tpTooltip = screen.getByRole("tooltip");
+    expect(tpTooltip).toHaveTextContent("Teleporte");
+    expect(tpTooltip).toHaveTextContent("Segundo Mais Usado");
+    expect(tpTooltip).toHaveTextContent("300s");
+
+    fireEvent.click(teleportBtn);
     expect(handleSelectSecondary).toHaveBeenCalledWith(12);
   });
 

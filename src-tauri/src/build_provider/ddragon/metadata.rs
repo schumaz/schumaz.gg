@@ -57,63 +57,82 @@ pub fn latest_cached_ddragon_version() -> Option<String> {
 
 /// Returns metadata for a known stat shard ID localized for `locale`.
 pub fn get_stat_shard_metadata_for_locale(id: i32, locale: AppLocale) -> Option<RuneMetadata> {
-    let (pt_name, en_name, icon) = match id {
+    let (pt_name, en_name, pt_desc, en_desc, icon) = match id {
         5008 => (
             "Força Adaptativa",
             "Adaptive Force",
+            "+9 de Força Adaptativa",
+            "+9 Adaptive Force",
             "perk-images/StatMods/StatModsAdaptiveForceIcon.png",
         ),
         5005 => (
             "Velocidade de Ataque",
             "Attack Speed",
+            "+10% de Velocidade de Ataque",
+            "+10% Attack Speed",
             "perk-images/StatMods/StatModsAttackSpeedIcon.png",
         ),
         5007 => (
             "Aceleração de Habilidade",
             "Ability Haste",
+            "+8 de Aceleração de Habilidade",
+            "+8 Ability Haste",
             "perk-images/StatMods/StatModsCDRScalingIcon.png",
         ),
         5002 => (
             "Armadura",
             "Armor",
+            "+6 de Armadura",
+            "+6 Armor",
             "perk-images/StatMods/StatModsArmorIcon.png",
         ),
         5003 => (
             "Resistência Mágica",
             "Magic Resist",
+            "+8 de Resistência Mágica",
+            "+8 Magic Resist",
             "perk-images/StatMods/StatModsMagicResIcon.png",
         ),
         5001 | 5013 => (
             "Vida Escalonável",
             "Health Scaling",
+            "+10–180 de Vida (com base no nível)",
+            "+10–180 Health (based on level)",
             "perk-images/StatMods/StatModsHealthScalingIcon.png",
         ),
         5010 => (
             "Velocidade de Movimento",
             "Move Speed",
+            "+2% de Velocidade de Movimento",
+            "+2% Move Speed",
             "perk-images/StatMods/StatModsMovementSpeedIcon.png",
         ),
         5011 => (
             "Vida",
             "Health",
+            "+65 de Vida",
+            "+65 Health",
             "perk-images/StatMods/StatModsHealthPlusIcon.png",
         ),
         5012 => (
             "Tenacidade",
             "Tenacity and Slow Resist",
+            "+10% de Tenacidade e Resistência a Lentidão",
+            "+10% Tenacity and Slow Resist",
             "perk-images/StatMods/StatModsTenacityIcon.png",
         ),
         _ => return None,
     };
-    let name = match locale {
-        AppLocale::PtBr => pt_name,
-        AppLocale::EnUs => en_name,
+    let (name, short_desc) = match locale {
+        AppLocale::PtBr => (pt_name, pt_desc),
+        AppLocale::EnUs => (en_name, en_desc),
     };
     Some(RuneMetadata {
         id,
         key: format!("StatShard_{}", id),
         name: name.to_string(),
         icon_url: format!("https://ddragon.leagueoflegends.com/cdn/img/{}", icon),
+        short_desc: short_desc.to_string(),
     })
 }
 
@@ -143,6 +162,7 @@ pub fn resolve_rune_metadata_for_locale(
         key: format!("perk_{}", perk_id),
         name: fallback_name,
         icon_url: String::new(),
+        short_desc: String::new(),
     }
 }
 
@@ -191,6 +211,8 @@ pub fn get_spell_metadata_for_locale(
         name: name.to_string(),
         icon_url,
         modes,
+        description: String::new(),
+        cooldown_secs: None,
     }
 }
 

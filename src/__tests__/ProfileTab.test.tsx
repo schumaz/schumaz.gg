@@ -136,13 +136,25 @@ describe("ProfileTab Component", () => {
     expect(screen.getByTestId("loss-count")).toHaveTextContent("2");
   });
 
-  it("supports expanding match details and displaying refresh cooldown timer without wallpaper button", () => {
+  it("supports expanding match details, rich final-item tooltips, and refresh cooldown without wallpaper button", () => {
     const onRefresh = vi.fn();
+    const profileWithItemMeta: PlayerProfile = {
+      ...mockProfile,
+      item_metadata: {
+        6655: {
+          id: 6655,
+          name: "Companheiro de Luden",
+          gold_total: 2750,
+          stats: ["100 de Poder de Habilidade", "600 de Mana"],
+          plaintext: "Dispara projéteis mágicos adicionais.",
+        },
+      },
+    };
 
     const { rerender } = render(
       <ProfileTab
         summoner={mockSummoner}
-        profile={mockProfile}
+        profile={profileWithItemMeta}
         loading={false}
         errorMsg={null}
         onRefresh={onRefresh}
@@ -152,7 +164,17 @@ describe("ProfileTab Component", () => {
 
     expect(screen.queryByTestId("wallpaper-mode-btn")).not.toBeInTheDocument();
     expect(screen.queryByTestId("match-details-1000")).not.toBeInTheDocument();
-    const firstMatchBtn = screen.getByTestId("match-item-1000").querySelector("button")!;
+
+    const firstMatchCard = screen.getByTestId("match-item-1000");
+    const firstItemImg = firstMatchCard.querySelector("img[alt='Companheiro de Luden']")!;
+    fireEvent.mouseEnter(firstItemImg.closest(".ui-tooltip-trigger")!);
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Companheiro de Luden");
+    expect(tooltip).toHaveTextContent(/2[.,]750 ouro/);
+    expect(tooltip).toHaveTextContent("100 de Poder de Habilidade");
+    fireEvent.mouseLeave(firstItemImg.closest(".ui-tooltip-trigger")!);
+
+    const firstMatchBtn = firstMatchCard.querySelector("button")!;
     fireEvent.click(firstMatchBtn);
     expect(screen.getByTestId("match-details-1000")).toBeInTheDocument();
     expect(screen.getByTestId("match-details-1000")).toHaveTextContent("29,8k");
@@ -165,7 +187,7 @@ describe("ProfileTab Component", () => {
     rerender(
       <ProfileTab
         summoner={mockSummoner}
-        profile={mockProfile}
+        profile={profileWithItemMeta}
         loading={false}
         errorMsg={null}
         onRefresh={onRefresh}

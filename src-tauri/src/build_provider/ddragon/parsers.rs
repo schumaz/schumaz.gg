@@ -1,6 +1,26 @@
 use super::super::models::{ChampionMetadata, RuneMetadata, SpellMetadata};
 pub use super::item_parser::{parse_ddragon_completed_items, parse_ddragon_item_classifications};
+use super::tooltip_parser::sanitize_ddragon_html;
 use std::collections::HashMap;
+
+fn parse_spell_cooldown_secs(spell_data: &serde_json::Value) -> Option<i32> {
+    let raw = spell_data
+        .get("cooldown")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|v| v.as_f64())
+        .or_else(|| {
+            spell_data
+                .get("cooldownBurn")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.trim().parse::<f64>().ok())
+        })?;
+    if raw >= 1.0 {
+        Some(raw.round() as i32)
+    } else {
+        None
+    }
+}
 
 /// Parses DataDragon `{locale}/summoner.json` into a lookup map keyed by numeric spell ID.
 pub fn parse_ddragon_summoners(
@@ -37,6 +57,12 @@ pub fn parse_ddragon_summoners(
                         .collect::<Vec<String>>()
                 })
                 .unwrap_or_default();
+            let description = spell_data
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(sanitize_ddragon_html)
+                .unwrap_or_default();
+            let cooldown_secs = parse_spell_cooldown_secs(spell_data);
 
             map.insert(
                 spell_id,
@@ -48,6 +74,8 @@ pub fn parse_ddragon_summoners(
                         version, image_full
                     ),
                     modes,
+                    description,
+                    cooldown_secs,
                 },
             );
         }
@@ -142,6 +170,7 @@ pub fn parse_ddragon_runes(
                     key,
                     name,
                     icon_url,
+                    short_desc: String::new(),
                 },
             );
         }
@@ -167,6 +196,11 @@ pub fn parse_ddragon_runes(
                             let icon = rune.get("icon").and_then(|v| v.as_str()).unwrap_or("");
                             let icon_url =
                                 format!("https://ddragon.leagueoflegends.com/cdn/img/{}", icon);
+                            let short_desc = rune
+                                .get("shortDesc")
+                                .and_then(|v| v.as_str())
+                                .map(sanitize_ddragon_html)
+                                .unwrap_or_default();
 
                             map.insert(
                                 rune_id,
@@ -175,6 +209,7 @@ pub fn parse_ddragon_runes(
                                     key,
                                     name,
                                     icon_url,
+                                    short_desc,
                                 },
                             );
                         }

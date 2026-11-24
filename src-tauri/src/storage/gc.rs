@@ -45,6 +45,43 @@ struct SurvivingAsset {
     modified: SystemTime,
 }
 
+fn patch_major_minor(version: &str) -> Option<(&str, &str)> {
+    let mut parts = version.trim().split('.');
+    let major = parts.next()?.trim();
+    let minor = parts.next()?.trim();
+    if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok() {
+        Some((major, minor))
+    } else {
+        None
+    }
+}
+
+/// Evaluates whether a DataDragon `.lz4` envelope matches the current live patch.
+/// Returns `None` when neither the live DataDragon version nor an active patch is known (offline).
+fn ddragon_patch_matches_current(
+    envelope_patch: &str,
+    current_ddragon_version: Option<&str>,
+    active_patches: &[String],
+) -> Option<bool> {
+    let env_patch = envelope_patch.trim();
+    if let Some(current_ver) = current_ddragon_version
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        return Some(!env_patch.is_empty() && env_patch == current_ver);
+    }
+    if let Some(current_patch) = active_patches
+        .first()
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
+        let cur_mm = patch_major_minor(current_patch)?;
+        return Some(patch_major_minor(env_patch) == Some(cur_mm));
+    }
+    None
+}
+
 fn collect_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -61,22 +98,32 @@ fn collect_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// Scans `Cache\` (and `Config\` for orphan `.tmp` files), removing:
 /// - Orphan `.tmp` files
+/// - `.lz4` files under `Cache\ddragon\` whose envelope `patch` does not match the current patch
+///   (never expired by 7-day inactivity while still on the current patch)
 /// - `.lz4` files under `Cache\opgg\` whose envelope `patch` is non-empty and not in `active_patches`
 /// - Corrupt or outdated-schema `.lz4` files
-/// - `.lz4` or cached asset files whose `mtime` has been inactive for > 7 days
+/// - Non-DataDragon `.lz4` or cached asset files whose `mtime` has been inactive for > 7 days
 /// - Oldest `Cache\assets\` files (LRU by `mtime`) when total asset cache size exceeds `ASSET_CACHE_MAX_BYTES`
 pub fn run_garbage_collector(
     paths: &AppPaths,
     active_patches: &[String],
+    current_ddragon_version: Option<&str>,
     now_unix: u64,
 ) -> GcStats {
-    run_garbage_collector_with_asset_quota(paths, active_patches, now_unix, ASSET_CACHE_MAX_BYTES)
+    run_garbage_collector_with_asset_quota(
+        paths,
+        active_patches,
+        current_ddragon_version,
+        now_unix,
+        ASSET_CACHE_MAX_BYTES,
+    )
 }
 
 /// Runs garbage collection using an explicit byte quota for `Cache\assets\`.
 pub fn run_garbage_collector_with_asset_quota(
     paths: &AppPaths,
     active_patches: &[String],
+    current_ddragon_version: Option<&str>,
     now_unix: u64,
     max_asset_bytes: u64,
 ) -> GcStats {
@@ -106,6 +153,7 @@ pub fn run_garbage_collector_with_asset_quota(
             .extension()
             .and_then(|e| e.to_str())
             .is_some_and(|e| e.eq_ignore_ascii_case("lz4"));
+        let is_ddragon = path.starts_with(&paths.ddragon_dir);
 
         if is_lz4 {
             match read_lz4_envelope_header(&path) {
@@ -114,6 +162,19 @@ pub fn run_garbage_collector_with_asset_quota(
                         if fs::remove_file(&path).is_ok() {
                             stats.removed_corrupt_files += 1;
                         }
+                        continue;
+                    }
+                    if is_ddragon {
+                        if ddragon_patch_matches_current(
+                            &header.patch,
+                            current_ddragon_version,
+                            active_patches,
+                        ) == Some(false)
+                            && fs::remove_file(&path).is_ok()
+                        {
+                            stats.removed_stale_patch_files += 1;
+                        }
+                        // DataDragon cache expires strictly on patch changes, not by 7-day inactivity.
                         continue;
                     }
                     if path.starts_with(&paths.opgg_dir)

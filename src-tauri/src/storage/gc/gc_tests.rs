@@ -56,7 +56,12 @@ fn test_garbage_collector_cleans_tmp_old_patches_corrupt_and_inactive_files() {
     set_mtime_secs_ago(&fresh_asset, 8 * 24 * 3600);
     touch_mtime(&fresh_asset);
 
-    let stats = run_garbage_collector(&paths, &["16.22".to_string(), "16.21".to_string()], now);
+    let stats = run_garbage_collector(
+        &paths,
+        &["16.22".to_string(), "16.21".to_string()],
+        Some("16.22.1"),
+        now,
+    );
 
     assert_eq!(stats.removed_tmp_files, 2);
     assert_eq!(stats.removed_stale_patch_files, 1);
@@ -70,6 +75,57 @@ fn test_garbage_collector_cleans_tmp_old_patches_corrupt_and_inactive_files() {
     assert!(!corrupt_file.exists());
     assert!(!old_asset.exists());
     assert!(fresh_asset.exists());
+
+    let _ = fs::remove_dir_all(&paths.root);
+}
+
+#[test]
+fn test_garbage_collector_expires_ddragon_cache_by_current_patch_not_inactivity() {
+    let paths = temp_test_paths("ddragon_patch_gc");
+    let now = now_unix_secs();
+
+    // Current-patch DataDragon cache untouched for 14 days must stay alive until the patch changes.
+    let current_meta = paths.ddragon_dir.join("metadata_pt_BR.lz4");
+    write_lz4_envelope_at(&current_meta, "16.22.1", &"pt_meta", now).unwrap();
+    set_mtime_secs_ago(&current_meta, 14 * 24 * 3600);
+
+    let current_skins = paths.ddragon_dir.join("skins_pt_BR.lz4");
+    write_lz4_envelope_at(&current_skins, "16.22.1", &"pt_skins", now).unwrap();
+    set_mtime_secs_ago(&current_skins, 14 * 24 * 3600);
+
+    // Previous-patch (or older micropatch) DataDragon caches expire immediately even if fresh.
+    let stale_meta = paths.ddragon_dir.join("metadata_en_US.lz4");
+    write_lz4_envelope_at(&stale_meta, "16.21.1", &"en_meta", now).unwrap();
+
+    let stale_micropatch = paths.ddragon_dir.join("skins_en_US.lz4");
+    write_lz4_envelope_at(&stale_micropatch, "16.22.0", &"en_skins", now).unwrap();
+
+    let stats = run_garbage_collector(
+        &paths,
+        &["16.22".to_string(), "16.21".to_string()],
+        Some("16.22.1"),
+        now,
+    );
+
+    assert_eq!(stats.removed_stale_patch_files, 2);
+    assert_eq!(stats.removed_inactive_files, 0);
+    assert!(current_meta.exists());
+    assert!(current_skins.exists());
+    assert!(!stale_meta.exists());
+    assert!(!stale_micropatch.exists());
+
+    // Fallback using active_patches major.minor when live DataDragon version is unavailable:
+    // keeps 16.22.1 while evicting 16.21.1, and keeps all files when offline (empty).
+    let old_fallback = paths.ddragon_dir.join("metadata_en_US.lz4");
+    write_lz4_envelope_at(&old_fallback, "16.21.1", &"old_en", now).unwrap();
+    let offline_stats = run_garbage_collector(&paths, &[], None, now);
+    assert_eq!(offline_stats.removed_stale_patch_files, 0);
+    assert!(old_fallback.exists());
+
+    let fallback_stats = run_garbage_collector(&paths, &["16.22".to_string()], None, now);
+    assert_eq!(fallback_stats.removed_stale_patch_files, 1);
+    assert!(current_meta.exists());
+    assert!(!old_fallback.exists());
 
     let _ = fs::remove_dir_all(&paths.root);
 }
@@ -92,7 +148,7 @@ fn test_garbage_collector_evicts_oldest_assets_lru_when_over_quota() {
     set_mtime_secs_ago(&newest, 100);
 
     // Total = 180 bytes; quota = 120 bytes -> must evict oldest (60 bytes), leaving middle + newest (120 bytes).
-    let stats = run_garbage_collector_with_asset_quota(&paths, &[], now, 120);
+    let stats = run_garbage_collector_with_asset_quota(&paths, &[], None, now, 120);
     assert_eq!(stats.removed_over_quota_files, 1);
     assert!(!oldest.exists());
     assert!(middle.exists());

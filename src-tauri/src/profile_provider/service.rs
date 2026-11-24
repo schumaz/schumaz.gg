@@ -3,7 +3,8 @@ use crate::lcu_connector::LcuConnection;
 use crate::models::{CachedProfileResult, DataDragonCache, PlayerProfile};
 
 use super::cache::{
-    get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
+    collect_matches_item_metadata, get_cached_profile_for_last_summoner,
+    get_cached_profile_for_summoner_id, save_profile_to_dir,
 };
 use super::masteries_parser::parse_top_masteries;
 use super::matches_parser::parse_recent_matches_for_locale;
@@ -94,6 +95,7 @@ pub async fn load_player_profile_with_cache(
         .as_ref()
         .map(|val| parse_recent_matches_for_locale(val, summoner.summoner_id, &cache, 10, locale))
         .unwrap_or_default();
+    let item_metadata = collect_matches_item_metadata(&recent_matches, &cache.items);
 
     let profile_icon_url = if !cache.version.is_empty() {
         format!(
@@ -114,6 +116,7 @@ pub async fn load_player_profile_with_cache(
         ranked_stats,
         top_masteries,
         recent_matches,
+        item_metadata,
     };
 
     if let Some(paths) = crate::storage::global_paths() {

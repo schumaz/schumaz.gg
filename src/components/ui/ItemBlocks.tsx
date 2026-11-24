@@ -3,7 +3,9 @@ import { ChampionBuild, ItemBlockKind } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 import { BuildSelector } from "./BuildSelector";
+import { ItemTooltipContent, lookupItemMetadata } from "./BuildTooltips";
 import { isArenaBuildContext } from "./queueContext";
+import { Tooltip } from "./Tooltip";
 
 interface ItemBlocksProps {
   build: ChampionBuild;
@@ -163,6 +165,8 @@ export function ItemBlocks({
               <div className={`block-items-row ${isCoreBlock ? "block-items-flow" : ""}`}>
                 {activeIds.map((itemId, iIndex) => {
                   const iconUrl = activeIcons?.[iIndex];
+                  const itemMeta = lookupItemMetadata(build.item_metadata, itemId);
+                  const itemAlt = itemMeta?.name || t("common.itemAlt", { id: itemId });
                   return (
                     <Fragment key={`${itemId}-${iIndex}`}>
                       {isCoreBlock && iIndex > 0 && (
@@ -170,20 +174,25 @@ export function ItemBlocks({
                           →
                         </span>
                       )}
-                      <div className="item-icon-box" title={localizedTitle}>
-                        {iconUrl ? (
-                          <img
-                            src={resolveCachedAssetUrl(iconUrl)}
-                            alt={t("common.itemAlt", { id: itemId })}
-                            className="shop-item-icon"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          <span className="item-id-fallback">{itemId}</span>
-                        )}
-                      </div>
+                      <Tooltip
+                        content={<ItemTooltipContent itemId={itemId} metadata={itemMeta} />}
+                        ariaLabel={itemAlt}
+                      >
+                        <div className="item-icon-box">
+                          {iconUrl ? (
+                            <img
+                              src={resolveCachedAssetUrl(iconUrl)}
+                              alt={itemAlt}
+                              className="shop-item-icon"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <span className="item-id-fallback">{itemId}</span>
+                          )}
+                        </div>
+                      </Tooltip>
                     </Fragment>
                   );
                 })}

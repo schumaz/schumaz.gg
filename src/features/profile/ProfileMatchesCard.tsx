@@ -2,6 +2,8 @@ import { CSSProperties, useState } from "react";
 import { RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
+import { ItemMetadataMap } from "../../components/ui";
+import { MatchItemsGrid } from "./MatchItemsGrid";
 import { AvailableModeItem, formatDuration, getMultiKillBadge } from "./profileHelpers";
 
 interface ProfileMatchesCardProps {
@@ -11,6 +13,7 @@ interface ProfileMatchesCardProps {
   activeMode: string;
   onSelectMode: (mode: string) => void;
   glassBlurStyle: CSSProperties;
+  itemMetadata?: ItemMetadataMap;
 }
 
 export function ProfileMatchesCard({
@@ -20,6 +23,7 @@ export function ProfileMatchesCard({
   activeMode,
   onSelectMode,
   glassBlurStyle,
+  itemMetadata,
 }: ProfileMatchesCardProps) {
   const { t, formatCompactNumber, formatRelativeTime } = useTranslation();
   const [expandedGameId, setExpandedGameId] = useState<number | null>(null);
@@ -159,25 +163,11 @@ export function ProfileMatchesCard({
                       </span>
                     </div>
 
-                    <div className="match-items-grid" aria-label={t("profile.finalItemsAria")}>
-                      {Array.from({ length: 6 }).map((_, slotIdx) => {
-                        const iconUrl = match.item_icon_urls[slotIdx] || "";
-                        const itemId = match.item_ids[slotIdx] || 0;
-                        return (
-                          <div key={slotIdx} className="match-item-slot">
-                            {itemId > 0 && iconUrl ? (
-                              <img
-                                src={resolveCachedAssetUrl(iconUrl)}
-                                alt={t("common.itemAlt", { id: itemId })}
-                                className="match-item-img"
-                              />
-                            ) : (
-                              <span className="match-item-empty" />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <MatchItemsGrid
+                      itemIds={match.item_ids}
+                      itemIconUrls={match.item_icon_urls}
+                      itemMetadata={itemMetadata}
+                    />
                   </button>
 
                   {isExpanded && (

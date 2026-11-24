@@ -6,6 +6,7 @@ use super::parsers::{
     parse_all_ddragon_champions, parse_ddragon_item_classifications, parse_ddragon_runes,
     parse_ddragon_summoners, parse_latest_ddragon_version,
 };
+use super::tooltip_parser::parse_ddragon_items;
 use crate::models::AppLocale;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -96,9 +97,10 @@ pub(super) async fn load_ddragon_bundle_for_version(
         {
             let classification = parse_ddragon_item_classifications(&items_res);
             set_dynamic_item_classifications(classification.clone());
-            return Some(classification);
+            let items = parse_ddragon_items(&items_res);
+            return (Some(classification), items);
         }
-        None
+        (None, HashMap::new())
     };
 
     let summoners_fut = async {
@@ -114,7 +116,7 @@ pub(super) async fn load_ddragon_bundle_for_version(
 
     let arena_augments_fut = fetch_arena_augments_catalog(client, base_url, locale);
 
-    let (champions_res, runes_res, item_classifications, spells, arena_augments) = tokio::join!(
+    let (champions_res, runes_res, (item_classifications, items), spells, arena_augments) = tokio::join!(
         champions_fut,
         runes_fut,
         items_fut,
@@ -131,6 +133,7 @@ pub(super) async fn load_ddragon_bundle_for_version(
             champions,
             runes,
             spells,
+            items,
             arena_augments,
         },
         item_classifications,

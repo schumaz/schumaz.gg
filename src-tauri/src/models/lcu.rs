@@ -1,5 +1,7 @@
+use super::build::ItemMetadata;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::HashMap;
 
 /// Basic summoner details parsed from `/lol-summoner/v1/current-summoner`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
@@ -95,6 +97,8 @@ pub struct PlayerProfile {
     pub ranked_stats: Vec<RankedQueueStats>,
     pub top_masteries: Vec<ChampionMasteryInfo>,
     pub recent_matches: Vec<RecentMatchInfo>,
+    #[serde(default)]
+    pub item_metadata: HashMap<i32, ItemMetadata>,
 }
 
 /// Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR.

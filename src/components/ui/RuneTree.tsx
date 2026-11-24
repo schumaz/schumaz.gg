@@ -1,6 +1,8 @@
-import { ChampionBuild } from "../../types";
+import { ChampionBuild, RuneMetadata } from "../../types";
 import { TranslationKey, useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
+import { RuneTooltipContent } from "./BuildTooltips";
+import { Tooltip } from "./Tooltip";
 
 interface RuneTreeProps {
   build: ChampionBuild;
@@ -21,6 +23,28 @@ const SHARD_KEY_BY_ID: Record<number, TranslationKey> = {
   5011: "runes.shards.health",
   5012: "runes.shards.tenacity",
 };
+
+function renderMinorPerk(perk: RuneMetadata, keyPrefix: string, index: number) {
+  return (
+    <Tooltip
+      key={`${keyPrefix}-${index}-${perk.id}`}
+      content={<RuneTooltipContent rune={perk} />}
+      triggerClassName="ui-tooltip-trigger-block"
+      ariaLabel={perk.name}
+    >
+      <div className="perk-item">
+        {perk.icon_url && (
+          <img
+            src={resolveCachedAssetUrl(perk.icon_url)}
+            alt={perk.name}
+            className="perk-icon"
+          />
+        )}
+        <span className="perk-name">{perk.name}</span>
+      </div>
+    </Tooltip>
+  );
+}
 
 export function RuneTree({
   build,
@@ -147,31 +171,26 @@ export function RuneTree({
           </div>
 
           {perksList.length > 0 && (
-            <div className="keystone-item" title={perksList[0].name}>
-              {perksList[0].icon_url && (
-                <img
-                  src={resolveCachedAssetUrl(perksList[0].icon_url)}
-                  alt={perksList[0].name}
-                  className="keystone-icon"
-                />
-              )}
-              <span className="keystone-name">{perksList[0].name}</span>
-            </div>
+            <Tooltip
+              content={<RuneTooltipContent rune={perksList[0]} />}
+              triggerClassName="ui-tooltip-trigger-block"
+              ariaLabel={perksList[0].name}
+            >
+              <div className="keystone-item">
+                {perksList[0].icon_url && (
+                  <img
+                    src={resolveCachedAssetUrl(perksList[0].icon_url)}
+                    alt={perksList[0].name}
+                    className="keystone-icon"
+                  />
+                )}
+                <span className="keystone-name">{perksList[0].name}</span>
+              </div>
+            </Tooltip>
           )}
 
           <div className="minor-perks-list">
-            {perksList.slice(1, 4).map((perk, index) => (
-              <div key={`primary-${index}-${perk.id}`} className="perk-item" title={perk.name}>
-                {perk.icon_url && (
-                  <img
-                    src={resolveCachedAssetUrl(perk.icon_url)}
-                    alt={perk.name}
-                    className="perk-icon"
-                  />
-                )}
-                <span className="perk-name">{perk.name}</span>
-              </div>
-            ))}
+            {perksList.slice(1, 4).map((perk, index) => renderMinorPerk(perk, "primary", index))}
           </div>
         </div>
 
@@ -188,18 +207,7 @@ export function RuneTree({
           </div>
 
           <div className="minor-perks-list">
-            {perksList.slice(4, 6).map((perk, index) => (
-              <div key={`sub-${index}-${perk.id}`} className="perk-item" title={perk.name}>
-                {perk.icon_url && (
-                  <img
-                    src={resolveCachedAssetUrl(perk.icon_url)}
-                    alt={perk.name}
-                    className="perk-icon"
-                  />
-                )}
-                <span className="perk-name">{perk.name}</span>
-              </div>
-            ))}
+            {perksList.slice(4, 6).map((perk, index) => renderMinorPerk(perk, "sub", index))}
           </div>
 
           <div className="stat-shards-section">
@@ -209,16 +217,23 @@ export function RuneTree({
                 const shardKey = SHARD_KEY_BY_ID[shard.id] ?? null;
                 const shardLabel = shardKey ? t(shardKey) : shard.name;
                 return (
-                  <div key={`shard-${index}-${shard.id}`} className="shard-item" title={shard.name}>
-                    {shard.icon_url && (
-                      <img
-                        src={resolveCachedAssetUrl(shard.icon_url)}
-                        alt={shard.name}
-                        className="shard-icon"
-                      />
-                    )}
-                    <span className="shard-name">{shardLabel}</span>
-                  </div>
+                  <Tooltip
+                    key={`shard-${index}-${shard.id}`}
+                    content={<RuneTooltipContent rune={shard} />}
+                    triggerClassName="ui-tooltip-trigger-block"
+                    ariaLabel={shard.name}
+                  >
+                    <div className="shard-item">
+                      {shard.icon_url && (
+                        <img
+                          src={resolveCachedAssetUrl(shard.icon_url)}
+                          alt={shard.name}
+                          className="shard-icon"
+                        />
+                      )}
+                      <span className="shard-name">{shardLabel}</span>
+                    </div>
+                  </Tooltip>
                 );
               })}
             </div>

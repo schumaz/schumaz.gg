@@ -27,6 +27,7 @@ fn sample_ddragon_spells_catalog() -> HashMap<i32, SpellMetadata> {
                     name: name.to_string(),
                     icon_url: String::new(),
                     modes: modes.iter().map(|m| (*m).to_string()).collect(),
+                    ..Default::default()
                 },
             )
         })

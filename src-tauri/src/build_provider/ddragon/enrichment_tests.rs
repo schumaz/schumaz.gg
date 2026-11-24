@@ -5,12 +5,9 @@ use crate::models::{AppLocale, QUEUE_ARAM, QUEUE_ARAM_MAYHEM};
 use std::collections::HashMap;
 
 #[test]
-fn test_enrich_build_with_ddragon_populates_urls_spells_and_shards() {
+fn test_enrich_build_with_ddragon_populates_urls_spells_shards_and_item_metadata() {
     let mut ddragon_cache = DataDragonCache {
         version: "14.23.1".to_string(),
-        champions: HashMap::new(),
-        runes: HashMap::new(),
-        spells: HashMap::new(),
         ..Default::default()
     };
 
@@ -34,10 +31,23 @@ fn test_enrich_build_with_ddragon_populates_urls_spells_and_shards() {
             icon_url:
                 "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png"
                     .to_string(),
+            short_desc: String::new(),
         },
     );
 
     let mut build = build_fallback_champion_build(103, "Ahri", 420);
+    let sample_item_id = build.item_blocks[0].item_ids[0];
+    ddragon_cache.items.insert(
+        sample_item_id,
+        ItemMetadata {
+            id: sample_item_id,
+            name: "Anel de Doran".to_string(),
+            gold_total: 400,
+            stats: vec!["18 de Poder de Habilidade".to_string()],
+            plaintext: "Bom item iniciante para conjuradores".to_string(),
+        },
+    );
+
     enrich_build_with_ddragon_with_flash_key(&mut build, &ddragon_cache, FlashKeyPreference::D);
 
     assert_eq!(
@@ -48,9 +58,17 @@ fn test_enrich_build_with_ddragon_populates_urls_spells_and_shards() {
     assert_eq!(build.spells[0].name, "Flash");
     assert!(build.spells[0].icon_url.contains("SummonerFlash.png"));
     assert_eq!(build.perks.len(), 9);
+    assert!(!build.perks[6].short_desc.is_empty());
     assert_eq!(build.item_blocks.len(), 5);
     assert!(!build.item_blocks[0].item_icon_urls.is_empty());
     assert!(build.item_blocks[0].item_icon_urls[0].contains("/img/item/"));
+    assert_eq!(
+        build
+            .item_metadata
+            .get(&sample_item_id)
+            .map(|m| m.gold_total),
+        Some(400)
+    );
 }
 
 #[test]
@@ -83,9 +101,6 @@ fn test_get_spell_metadata_uses_official_pt_br_names() {
 fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes() {
     let cache = DataDragonCache {
         version: "16.22.1".to_string(),
-        champions: HashMap::new(),
-        runes: HashMap::new(),
-        spells: HashMap::new(),
         ..Default::default()
     };
 
@@ -175,9 +190,6 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
 fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() {
     let cache = DataDragonCache {
         version: "16.22.1".to_string(),
-        champions: HashMap::new(),
-        runes: HashMap::new(),
-        spells: HashMap::new(),
         ..Default::default()
     };
 
@@ -271,12 +283,9 @@ fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() 
 
 #[test]
 fn test_en_us_localization_for_shards_spells_and_build_labels() {
-    assert_eq!(
-        get_stat_shard_metadata_for_locale(5008, AppLocale::EnUs)
-            .unwrap()
-            .name,
-        "Adaptive Force"
-    );
+    let adaptive = get_stat_shard_metadata_for_locale(5008, AppLocale::EnUs).unwrap();
+    assert_eq!(adaptive.name, "Adaptive Force");
+    assert_eq!(adaptive.short_desc, "+9 Adaptive Force");
     assert_eq!(
         get_stat_shard_metadata_for_locale(5005, AppLocale::EnUs)
             .unwrap()
@@ -311,8 +320,6 @@ fn test_en_us_localization_for_shards_spells_and_build_labels() {
     let cache = DataDragonCache {
         version: "16.22.1".to_string(),
         champions: HashMap::new(),
-        runes: HashMap::new(),
-        spells: HashMap::new(),
         ..Default::default()
     };
 

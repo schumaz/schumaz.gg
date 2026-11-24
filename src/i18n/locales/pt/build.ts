@@ -44,6 +44,7 @@ export const ptBuild: BuildTranslations = {
     mostUsed: "Mais Usado",
     alternative: "Alternativo",
     secondMostUsed: "Segundo Mais Usado",
+    cooldownSeconds: "{secs}s recarga",
   },
   items: {
     titleReadOnly: "Build Recomendada",
@@ -63,6 +64,7 @@ export const ptBuild: BuildTranslations = {
     blockSituational: "Itens Situacionais / Úteis",
     build1MostPopular: "Build 1 (Mais Feita)",
     buildOptionNumber: "Build {num}",
+    goldCost: "{gold} ouro",
   },
   arena: {
     modeNoticeBadge: "Arena",

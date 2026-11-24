@@ -34,6 +34,19 @@ pub struct ChampionMetadata {
     pub icon_url: String,
 }
 
+/// Lightweight localized item metadata extracted from DataDragon's `item.json` for rich tooltips.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
+pub struct ItemMetadata {
+    pub id: i32,
+    pub name: String,
+    #[serde(default)]
+    pub gold_total: i32,
+    #[serde(default)]
+    pub stats: Vec<String>,
+    #[serde(default)]
+    pub plaintext: String,
+}
+
 /// Metadata for a rune or style from DataDragon's `runesReforged.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct RuneMetadata {
@@ -41,6 +54,8 @@ pub struct RuneMetadata {
     pub key: String,
     pub name: String,
     pub icon_url: String,
+    #[serde(default)]
+    pub short_desc: String,
 }
 
 /// Metadata for a summoner spell.
@@ -51,6 +66,10 @@ pub struct SpellMetadata {
     pub icon_url: String,
     #[serde(default)]
     pub modes: Vec<String>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub cooldown_secs: Option<i32>,
 }
 
 /// Metadata for a complete 9-perk rune page option (keystone, primary tree, secondary tree, stat mods).
@@ -74,7 +93,7 @@ pub struct RunePageOption {
     pub perks: Vec<RuneMetadata>,
 }
 
-/// In-memory cache holding champion, rune, spell, and Arena augment metadata from DataDragon/CDragon.
+/// In-memory cache holding champion, rune, spell, item, and Arena augment metadata from DataDragon/CDragon.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct DataDragonCache {
     pub version: String,
@@ -82,6 +101,8 @@ pub struct DataDragonCache {
     pub runes: HashMap<i32, RuneMetadata>,
     #[serde(default)]
     pub spells: HashMap<i32, SpellMetadata>,
+    #[serde(default)]
+    pub items: HashMap<i32, ItemMetadata>,
     #[serde(default)]
     pub arena_augments: HashMap<i32, ArenaAugmentMetadata>,
 }
@@ -204,6 +225,8 @@ pub struct ChampionBuild {
     #[serde(default)]
     pub spell_choices: Vec<SpellMetadata>,
     #[serde(default)]
+    pub item_metadata: HashMap<i32, ItemMetadata>,
+    #[serde(default)]
     pub active_position: String,
     #[serde(default)]
     pub active_tier: String,
@@ -255,6 +278,7 @@ impl Default for ChampionBuild {
             perks: Vec::new(),
             spells: Vec::new(),
             spell_choices: Vec::new(),
+            item_metadata: HashMap::new(),
             active_position: String::new(),
             active_tier: String::new(),
             active_region: String::new(),

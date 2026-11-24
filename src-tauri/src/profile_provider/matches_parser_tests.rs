@@ -24,7 +24,7 @@ fn sample_cache() -> DataDragonCache {
             name: "Flash".to_string(),
             icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/SummonerFlash.png"
                 .to_string(),
-            modes: Vec::new(),
+            ..Default::default()
         },
     );
     spells.insert(
@@ -34,7 +34,7 @@ fn sample_cache() -> DataDragonCache {
             name: "Incendiar".to_string(),
             icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/SummonerDot.png"
                 .to_string(),
-            modes: Vec::new(),
+            ..Default::default()
         },
     );
 
@@ -43,7 +43,6 @@ fn sample_cache() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells,
-
         ..Default::default()
     }
 }

@@ -2,12 +2,14 @@ use super::*;
 use crate::build_provider::items::TEST_CLASSIFICATION_MUTEX;
 use crate::build_provider::*;
 use crate::models::AppLocale;
+use std::sync::Arc;
+use std::time::Duration;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 #[allow(clippy::await_holding_lock)]
-async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_error() {
+async fn test_ddragon_lz4_persistence_hydrates_items_tooltips_and_supports_stale_while_error() {
     let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
     let dir = std::env::temp_dir().join(format!(
         "schumaz_dd_test_{}_{}",
@@ -38,14 +40,39 @@ async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_er
         .await;
     Mock::given(method("GET"))
         .and(path("/cdn/16.30.1/data/en_US/runesReforged.json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+            {
+                "id": 8100,
+                "key": "Domination",
+                "name": "Domination",
+                "icon": "perk-images/Styles/7200_Domination.png",
+                "slots": [
+                    {
+                        "runes": [
+                            {
+                                "id": 8112,
+                                "key": "Electrocute",
+                                "name": "Electrocute",
+                                "icon": "perk-images/Styles/Domination/Electrocute/Electrocute.png",
+                                "shortDesc": "Hitting a champion with 3 separate attacks deals <b>bonus adaptive damage</b>."
+                            }
+                        ]
+                    }
+                ]
+            }
+        ])))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
         .and(path("/cdn/16.30.1/data/en_US/item.json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": {
-                "9950": { "name": "Base Disk Item", "gold": { "total": 2800 } },
+                "9950": {
+                    "name": "Base Disk Item",
+                    "gold": { "total": 2800 },
+                    "plaintext": "Increases Ability Power",
+                    "description": "<mainText><stats><attention>80</attention> Ability Power</stats></mainText>"
+                },
                 "9951": { "name": "Evolved Disk Item", "inStore": false, "specialRecipe": 9950 }
             }
         })))
@@ -53,7 +80,18 @@ async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_er
         .await;
     Mock::given(method("GET"))
         .and(path("/cdn/16.30.1/data/en_US/summoner.json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "data": {} })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "SummonerFlash": {
+                    "key": "4",
+                    "name": "Flash",
+                    "description": "Teleports your champion a short distance.",
+                    "cooldown": [300],
+                    "image": { "full": "SummonerFlash.png" },
+                    "modes": ["CLASSIC"]
+                }
+            }
+        })))
         .mount(&server)
         .await;
 
@@ -65,7 +103,7 @@ async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_er
     assert_eq!(loaded.version, "16.30.1");
     assert!(ddragon_metadata_file_path(&dir, AppLocale::EnUs).exists());
 
-    // Clear RAM caches and hydrate from disk (.lz4) -> should restore both DataDragonCache and DYNAMIC_ITEM_CLASSIFICATIONS
+    // Clear RAM caches and hydrate from disk (.lz4) -> restores tooltip metadata and classifications
     if let Ok(mut g) = get_ddragon_cache_store().write() {
         g.remove(&AppLocale::EnUs);
     }
@@ -76,6 +114,82 @@ async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_er
     assert_eq!(hydrated.version, "16.30.1");
     assert_eq!(hydrated.champions.get(&103).unwrap().display_name, "Ahri");
     assert_eq!(normalize_tear_item_dynamic(9951), 9950);
+    let item = hydrated.items.get(&9950).expect("Item hydrated from .lz4");
+    assert_eq!(item.gold_total, 2800);
+    assert_eq!(item.stats, vec!["80 Ability Power"]);
+    assert_eq!(item.plaintext, "Increases Ability Power");
+    assert_eq!(
+        hydrated.runes.get(&8112).unwrap().short_desc,
+        "Hitting a champion with 3 separate attacks deals bonus adaptive damage."
+    );
+    assert_eq!(hydrated.spells.get(&4).unwrap().cooldown_secs, Some(300));
+
+    // Legacy disk bundle missing `items` on same version must trigger automatic backfill
+    let legacy_bundle = DataDragonDiskBundle {
+        ddragon: DataDragonCache {
+            version: "16.30.1".to_string(),
+            champions: hydrated.champions.clone(),
+            ..Default::default()
+        },
+        item_classifications: None,
+    };
+    save_ddragon_bundle_to_dir(&dir, AppLocale::EnUs, &legacy_bundle).unwrap();
+    if let Ok(mut g) = get_ddragon_cache_store().write() {
+        g.remove(&AppLocale::EnUs);
+    }
+    let backfilled =
+        refresh_ddragon_if_outdated_with_base(&client, &server.uri(), Some(&dir), AppLocale::EnUs)
+            .await
+            .unwrap();
+    assert!(backfilled.items.contains_key(&9950));
+
+    // Patch rollout (16.30.1 -> 16.31.1): refreshes active locale and evicts stale-patch locales from RAM
+    if let Ok(mut g) = get_ddragon_cache_store().write() {
+        g.insert(
+            AppLocale::PtBr,
+            Arc::new(DataDragonCache {
+                version: "16.30.1".to_string(),
+                ..Default::default()
+            }),
+        );
+    }
+    let next_patch_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/versions.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["16.31.1"])))
+        .mount(&next_patch_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.31.1/data/en_US/champion.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "Ahri": { "id": "Ahri", "key": "103", "name": "Ahri", "image": { "full": "Ahri.png" } }
+            }
+        })))
+        .mount(&next_patch_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.31.1/data/en_US/runesReforged.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&next_patch_server)
+        .await;
+    let rolled = refresh_ddragon_if_outdated_with_base(
+        &client,
+        &next_patch_server.uri(),
+        Some(&dir),
+        AppLocale::EnUs,
+    )
+    .await
+    .unwrap();
+    assert_eq!(rolled.version, "16.31.1");
+    assert!(
+        get_ddragon_cache_store()
+            .read()
+            .unwrap()
+            .get(&AppLocale::PtBr)
+            .is_none(),
+        "stale-patch locale must be evicted from RAM when patch advances"
+    );
 
     // Offline server: refresh falls back to disk/RAM cache (*Stale-While-Error*)
     if let Ok(mut g) = get_ddragon_cache_store().write() {
@@ -92,9 +206,52 @@ async fn test_ddragon_lz4_persistence_hydrates_items_and_supports_stale_while_er
         refresh_ddragon_if_outdated_with_base(&client, &offline.uri(), Some(&dir), AppLocale::EnUs)
             .await
             .unwrap();
-    assert_eq!(rescued.version, "16.30.1");
+    assert_eq!(rescued.version, "16.31.1");
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_ddragon_patch_expiration_helpers() {
+    assert!(super::patch_state::is_ddragon_version_current(
+        "16.30.1", None
+    ));
+    assert!(super::patch_state::is_ddragon_version_current(
+        "16.30.1",
+        Some("16.30.1")
+    ));
+    assert!(!super::patch_state::is_ddragon_version_current(
+        "16.30.1",
+        Some("16.31.1")
+    ));
+    assert!(!super::patch_state::is_ddragon_version_current(
+        "16.30.1",
+        Some("16.30.2")
+    ));
+
+    // Same patch within recheck window -> no unnecessary recheck.
+    assert!(!super::patch_state::should_recheck_current_patch(
+        "16.30.1",
+        Some(Duration::from_secs(60)),
+        Some("16.30")
+    ));
+    // Newer OP.GG patch major.minor -> triggers immediate patch recheck even within window.
+    assert!(super::patch_state::should_recheck_current_patch(
+        "16.30.1",
+        Some(Duration::from_secs(60)),
+        Some("16.31")
+    ));
+    // Recheck interval elapsed or never checked -> triggers recheck for long-running tray sessions.
+    assert!(super::patch_state::should_recheck_current_patch(
+        "16.30.1",
+        None,
+        Some("16.30")
+    ));
+    assert!(super::patch_state::should_recheck_current_patch(
+        "16.30.1",
+        Some(Duration::from_secs(crate::storage::VERSIONS_DISK_TTL_SECS)),
+        Some("16.30")
+    ));
 }
 
 #[test]

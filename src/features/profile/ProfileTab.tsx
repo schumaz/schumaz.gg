@@ -154,6 +154,7 @@ export function ProfileTab({
               activeMode={activeMode}
               onSelectMode={handleSelectMode}
               glassBlurStyle={glassBlurStyle}
+              itemMetadata={profile?.item_metadata}
             />
           </div>
         </div>

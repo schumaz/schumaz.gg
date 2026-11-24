@@ -498,9 +498,10 @@ export type ChampionBuild_Deserialize = {
 	primary_style_icon_url?: string,
 	sub_style_name?: string,
 	sub_style_icon_url?: string,
-	perks?: RuneMetadata[],
+	perks?: RuneMetadata_Deserialize[],
 	spells?: SpellMetadata_Deserialize[],
 	spell_choices?: SpellMetadata_Deserialize[],
+	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
 	active_position?: string,
 	active_tier?: string,
 	active_region?: string,
@@ -537,9 +538,10 @@ export type ChampionBuild_Serialize = {
 	primary_style_icon_url: string,
 	sub_style_name: string,
 	sub_style_icon_url: string,
-	perks: RuneMetadata[],
+	perks: RuneMetadata_Serialize[],
 	spells: SpellMetadata_Serialize[],
 	spell_choices: SpellMetadata_Serialize[],
+	item_metadata: { [key in number]: ItemMetadata_Serialize },
 	active_position: string,
 	active_tier: string,
 	active_region: string,
@@ -664,6 +666,27 @@ export type ItemBlock_Serialize = {
 	item_icon_urls: string[],
 };
 
+/**  Lightweight localized item metadata extracted from DataDragon's `item.json` for rich tooltips. */
+export type ItemMetadata = ItemMetadata_Serialize | ItemMetadata_Deserialize;
+
+/**  Lightweight localized item metadata extracted from DataDragon's `item.json` for rich tooltips. */
+export type ItemMetadata_Deserialize = {
+	id: number,
+	name: string,
+	gold_total?: number,
+	stats?: string[],
+	plaintext?: string,
+};
+
+/**  Lightweight localized item metadata extracted from DataDragon's `item.json` for rich tooltips. */
+export type ItemMetadata_Serialize = {
+	id: number,
+	name: string,
+	gold_total: number,
+	stats: string[],
+	plaintext: string,
+};
+
 export type LcuConnected = LcuConnected_Serialize | LcuConnected_Deserialize;
 
 export type LcuConnected_Deserialize = SummonerInfo_Deserialize;
@@ -752,6 +775,7 @@ export type PlayerProfile_Deserialize = {
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
 	recent_matches: RecentMatchInfo[],
+	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
 };
 
 /**  Aggregated player profile payload for the Profile tab. */
@@ -765,6 +789,7 @@ export type PlayerProfile_Serialize = {
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
 	recent_matches: RecentMatchInfo[],
+	item_metadata: { [key in number]: ItemMetadata_Serialize },
 };
 
 export type ProfileAppearanceSettings = {
@@ -885,11 +910,24 @@ export type RecommendedBuild_Deserialize = ChampionBuild_Deserialize;
 export type RecommendedBuild_Serialize = ChampionBuild_Serialize;
 
 /**  Metadata for a rune or style from DataDragon's `runesReforged.json`. */
-export type RuneMetadata = {
+export type RuneMetadata = RuneMetadata_Serialize | RuneMetadata_Deserialize;
+
+/**  Metadata for a rune or style from DataDragon's `runesReforged.json`. */
+export type RuneMetadata_Deserialize = {
 	id: number,
 	key: string,
 	name: string,
 	icon_url: string,
+	short_desc?: string,
+};
+
+/**  Metadata for a rune or style from DataDragon's `runesReforged.json`. */
+export type RuneMetadata_Serialize = {
+	id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	short_desc: string,
 };
 
 /**  Metadata for a complete 9-perk rune page option (keystone, primary tree, secondary tree, stat mods). */
@@ -907,7 +945,7 @@ export type RunePageOption_Deserialize = {
 	primary_style_icon_url?: string,
 	sub_style_name?: string,
 	sub_style_icon_url?: string,
-	perks?: RuneMetadata[],
+	perks?: RuneMetadata_Deserialize[],
 };
 
 /**  Metadata for a complete 9-perk rune page option (keystone, primary tree, secondary tree, stat mods). */
@@ -922,7 +960,7 @@ export type RunePageOption_Serialize = {
 	primary_style_icon_url: string,
 	sub_style_name: string,
 	sub_style_icon_url: string,
-	perks: RuneMetadata[],
+	perks: RuneMetadata_Serialize[],
 };
 
 /**  Metadata for a summoner spell. */
@@ -934,6 +972,8 @@ export type SpellMetadata_Deserialize = {
 	name: string,
 	icon_url: string,
 	modes?: string[],
+	description?: string,
+	cooldown_secs?: number | null,
 };
 
 /**  Metadata for a summoner spell. */
@@ -942,6 +982,8 @@ export type SpellMetadata_Serialize = {
 	name: string,
 	icon_url: string,
 	modes: string[],
+	description: string,
+	cooldown_secs: number | null,
 };
 
 /**  Basic summoner details parsed from `/lol-summoner/v1/current-summoner`. */

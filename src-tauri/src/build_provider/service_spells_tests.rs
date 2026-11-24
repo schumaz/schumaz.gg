@@ -33,6 +33,7 @@ fn ddragon_cache_with_real_spell_modes() -> DataDragonCache {
                     name: name.to_string(),
                     icon_url: format!("https://example.com/{id}.png"),
                     modes: modes.iter().map(|m| (*m).to_string()).collect(),
+                    ..Default::default()
                 },
             )
         })
@@ -43,7 +44,6 @@ fn ddragon_cache_with_real_spell_modes() -> DataDragonCache {
         champions,
         runes: HashMap::new(),
         spells,
-
         ..Default::default()
     }
 }

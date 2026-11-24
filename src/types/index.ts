@@ -40,6 +40,7 @@ export type {
   InjectionReport,
   ItemBlock,
   ItemBlockKind,
+  ItemMetadata,
   LcuConnected,
   LcuDisconnected,
   LocalCacheInfo,

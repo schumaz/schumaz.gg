@@ -41,6 +41,7 @@ export interface BuildTranslations {
     mostUsed: string;
     alternative: string;
     secondMostUsed: string;
+    cooldownSeconds: string;
   };
   items: {
     titleReadOnly: string;
@@ -60,6 +61,7 @@ export interface BuildTranslations {
     blockSituational: string;
     build1MostPopular: string;
     buildOptionNumber: string;
+    goldCost: string;
   };
   arena: {
     modeNoticeBadge: string;

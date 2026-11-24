@@ -168,4 +168,37 @@ describe("ItemBlocks", () => {
     expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/60\.0% uso/i);
     expect(screen.queryByText(/escolha/i)).not.toBeInTheDocument();
   });
+
+  it("shows rich item tooltip with gold, stats and summary instead of block title", () => {
+    const buildWithMeta: ChampionBuild = {
+      ...mockBuild,
+      item_metadata: {
+        3089: {
+          id: 3089,
+          name: "Capuz da Morte de Rabadon",
+          gold_total: 3500,
+          stats: ["130 de Poder de Habilidade"],
+          plaintext: "Aumenta drasticamente o Poder de Habilidade.",
+        },
+      },
+    };
+
+    const { container } = render(
+      <ItemBlocks
+        build={buildWithMeta}
+        selectedBuildIndex={0}
+        onSelectBuild={vi.fn()}
+      />
+    );
+
+    const itemBox = container.querySelector(".block-kind-core .item-icon-box")!;
+    expect(itemBox).not.toHaveAttribute("title");
+
+    fireEvent.mouseEnter(itemBox.parentElement!);
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Capuz da Morte de Rabadon");
+    expect(tooltip).toHaveTextContent(/3[.,]500 ouro/);
+    expect(tooltip).toHaveTextContent("130 de Poder de Habilidade");
+    expect(tooltip).toHaveTextContent("Aumenta drasticamente o Poder de Habilidade.");
+  });
 });

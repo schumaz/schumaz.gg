@@ -44,6 +44,7 @@ export const enBuild: BuildTranslations = {
     mostUsed: "Most Used",
     alternative: "Alternative",
     secondMostUsed: "Second Most Used",
+    cooldownSeconds: "{secs}s CD",
   },
   items: {
     titleReadOnly: "Recommended Build",
@@ -63,6 +64,7 @@ export const enBuild: BuildTranslations = {
     blockSituational: "Situational / Utility Items",
     build1MostPopular: "Build 1 (Most Popular)",
     buildOptionNumber: "Build {num}",
+    goldCost: "{gold}g",
   },
   arena: {
     modeNoticeBadge: "Arena",

@@ -52,8 +52,16 @@ fn spawn_prewarm_task(
             build_provider::fetch_opgg_versions(client, "global"),
         );
 
-        let gc_stats =
-            storage::run_garbage_collector(&paths, &opgg_versions, storage::now_unix_secs());
+        let current_ddragon_version = ddragon_refresh_res
+            .as_ref()
+            .ok()
+            .map(|d| d.version.as_str());
+        let gc_stats = storage::run_garbage_collector(
+            &paths,
+            &opgg_versions,
+            current_ddragon_version,
+            storage::now_unix_secs(),
+        );
         let ddragon_ver = ddragon_refresh_res
             .as_ref()
             .map(|d| d.version.as_str())

@@ -8,7 +8,9 @@ use super::super::skins::{
     skin_cache, skins_file_path,
 };
 use super::*;
-use crate::models::{ChampionMetadata, RankedQueueStats, SummonerInfo};
+use crate::models::{
+    ChampionMetadata, ItemMetadata, RankedQueueStats, RecentMatchInfo, SummonerInfo,
+};
 
 fn sample_cache() -> DataDragonCache {
     let mut champions = HashMap::new();
@@ -23,11 +25,22 @@ fn sample_cache() -> DataDragonCache {
         },
     );
 
+    let mut items = HashMap::new();
+    items.insert(
+        3089,
+        ItemMetadata {
+            id: 3089,
+            name: "Rabadon's Deathcap".to_string(),
+            gold_total: 3500,
+            stats: vec!["130 Ability Power".to_string()],
+            plaintext: "Massively increases Ability Power".to_string(),
+        },
+    );
+
     DataDragonCache {
         version: "16.22.1".to_string(),
         champions,
-        runes: HashMap::new(),
-        spells: HashMap::new(),
+        items,
         ..Default::default()
     }
 }
@@ -87,7 +100,7 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
         Some("Ahri Florescer Espiritual")
     );
 
-    // Save & reload profile with SWR detection + EN-US relocalization
+    // Save & reload profile with SWR detection + EN-US relocalization (including match item_metadata)
     let profile = PlayerProfile {
         summoner: SummonerInfo {
             summoner_id: 55501,
@@ -116,7 +129,14 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
             losses: 8,
         }],
         top_masteries: vec![],
-        recent_matches: vec![],
+        recent_matches: vec![RecentMatchInfo {
+            game_id: 42,
+            queue_id: 420,
+            champion_id: 103,
+            item_ids: vec![3089, 0, 0, 0, 0, 0],
+            ..Default::default()
+        }],
+        item_metadata: HashMap::new(),
     };
 
     save_profile_to_dir(&profile_dir, &profile, "16.22.1").unwrap();
@@ -127,10 +147,18 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
     let mut loaded_stale = load_profile_from_dir(&profile_dir, 55501, now + 400).unwrap();
     assert!(loaded_stale.is_stale);
 
-    // Relocalize cached profile to en_US
+    // Relocalize cached profile to en_US -> rehydrates localized item tooltip metadata
     let dd = sample_cache();
     relocalize_player_profile(&mut loaded_stale.profile, AppLocale::EnUs, Some(&dd));
     assert_eq!(loaded_stale.profile.ranked_stats[0].tier_label, "Emerald");
+    assert_eq!(
+        loaded_stale
+            .profile
+            .item_metadata
+            .get(&3089)
+            .map(|m| m.name.as_str()),
+        Some("Rabadon's Deathcap")
+    );
 
     // Still valid after 25h (within 48h TTL)
     assert!(load_profile_from_dir(&profile_dir, 55501, now + 25 * 3600).is_some());
