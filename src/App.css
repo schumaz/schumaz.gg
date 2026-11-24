@@ -2,6 +2,9 @@
 @import "./styles/cards-controls.css";
 @import "./features/champ-select/ChampSelect.css";
 @import "./components/ui/ArenaPanel.css";
+@import "./components/ui/RuneTree.css";
+@import "./components/ui/SpellsBar.css";
+@import "./components/ui/ItemBlocks.css";
 @import "./components/ui/SkillOrderCard.css";
 @import "./components/ui/Tooltip.css";
 @import "./features/settings/SettingsTab.css";

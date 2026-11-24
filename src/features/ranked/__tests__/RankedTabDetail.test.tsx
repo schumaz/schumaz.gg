@@ -42,12 +42,19 @@ describe("RankedTab Detail & Loading States", () => {
     expect(within(view).getByTestId("champ-hero")).toBeInTheDocument();
     expect(within(view).getByTestId("runes-tree")).toBeInTheDocument();
     expect(within(view).getByTestId("spells-card")).toBeInTheDocument();
-    expect(within(view).getByTestId("skill-order-card")).toBeInTheDocument();
+    expect(within(view).getByTestId("skill-order-trigger")).toBeInTheDocument();
     expect(within(view).getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
+    expect(within(view).queryByTestId("skill-order-popover")).not.toBeInTheDocument();
+    fireEvent.click(within(view).getByTestId("skill-order-trigger"));
+    expect(within(view).getByTestId("skill-order-card")).toBeInTheDocument();
     expect(within(view).getByTestId("item-blocks")).toBeInTheDocument();
 
-    expect(within(view).getByText("Feitiços que Pode Usar")).toBeInTheDocument();
-    expect(within(view).queryByText("Escolha de Segundo Feitiço")).not.toBeInTheDocument();
+    expect(within(view).getByTestId("secondary-spell-selector")).toHaveAttribute(
+      "aria-label",
+      "Feitiços que Pode Usar"
+    );
+    expect(within(view).getByText("Opções")).toBeInTheDocument();
+    expect(within(view).queryByText("2º")).not.toBeInTheDocument();
     expect(within(view).queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
     expect(within(view).getByTestId("sec-spell-info-14")).toBeInTheDocument();
     expect(within(view).queryByTestId("sec-spell-btn-14")).not.toBeInTheDocument();

@@ -51,7 +51,8 @@ describe("App — Rune Pages & Unified Build Options", () => {
     expect(opt2).not.toHaveClass("active");
 
     expect(screen.getByText("Opção 1 (Mais Usada)")).toBeInTheDocument();
-    expect(screen.getByText(/45[.,]000 partidas/i)).toBeInTheDocument();
+    expect(opt0).toHaveTextContent(/45[.,]0k/i);
+    expect(opt0).toHaveAttribute("title", expect.stringMatching(/45[.,]000 partidas/i));
     expect(screen.getByText("Eletrocutar")).toBeInTheDocument();
 
     act(() => {

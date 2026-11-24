@@ -105,7 +105,7 @@ describe("RuneTree", () => {
     expect(screen.getByText(/Feitiços dinâmicos recomendados/i)).toBeInTheDocument();
   });
 
-  it("renders standard rune tree layout when runes are supported (normal ARAM / Ranked)", () => {
+  it("renders standard rune tree sub-cards with visible minor perk names, shard labels, and rich tooltips", () => {
     render(
       <RuneTree
         build={mockNormalBuild}
@@ -115,24 +115,24 @@ describe("RuneTree", () => {
     );
 
     expect(screen.getByTestId("runes-tree")).toBeInTheDocument();
+    expect(screen.getByText("Runas na Partida")).toBeInTheDocument();
     expect(screen.getByText("Precisão")).toBeInTheDocument();
     expect(screen.getByText("Dominação")).toBeInTheDocument();
+    expect(screen.getByText("Primária")).toBeInTheDocument();
+    expect(screen.getByText("Secundária")).toBeInTheDocument();
     expect(screen.getByText("Pressione o Ataque")).toBeInTheDocument();
-  });
 
-  it("renders simplified stat shard labels with icons and shows rich tooltips on hover and focus", () => {
-    render(
-      <RuneTree
-        build={mockNormalBuild}
-        selectedRunePageIndex={0}
-        onSelectRunePage={vi.fn()}
-      />
-    );
+    expect(screen.getByTestId("primary-rune-medallions").children).toHaveLength(3);
+    expect(screen.getByTestId("secondary-rune-medallions").children).toHaveLength(2);
+    expect(screen.getByTestId("stat-shards-medallions").children).toHaveLength(3);
 
+    expect(screen.getByText("Triunfo")).toBeInTheDocument();
+    expect(screen.getByText("Lenda: Espontaneidade")).toBeInTheDocument();
+    expect(screen.getByText("Golpe de Misericórdia")).toBeInTheDocument();
+    expect(screen.getByText("Gosto de Sangue")).toBeInTheDocument();
+    expect(screen.getByText("Caçador de Tesouros")).toBeInTheDocument();
     expect(screen.getAllByText("Adaptativa")).toHaveLength(2);
     expect(screen.getByText("Vida Esc.")).toBeInTheDocument();
-    expect(screen.getAllByAltText("Força Adaptativa")).toHaveLength(2);
-    expect(screen.getByAltText("Vida")).toBeInTheDocument();
 
     const keystoneTrigger = screen.getByLabelText("Pressione o Ataque");
     fireEvent.mouseEnter(keystoneTrigger);
@@ -141,12 +141,17 @@ describe("RuneTree", () => {
     );
     fireEvent.mouseLeave(keystoneTrigger);
 
+    const minorPerkTrigger = screen.getByLabelText("Triunfo");
+    fireEvent.mouseEnter(minorPerkTrigger);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Triunfo");
+    fireEvent.mouseLeave(minorPerkTrigger);
+
     const healthShardTrigger = screen.getByLabelText("Vida");
     fireEvent.focus(healthShardTrigger);
     expect(screen.getByRole("tooltip")).toHaveTextContent("+10–180 de Vida (com base no nível).");
   });
 
-  it("uses Página labels instead of Opção labels in readOnly mode", () => {
+  it("uses Runas Recomendadas, Página labels, and uso telemetry in readOnly mode", () => {
     const { rerender } = render(
       <RuneTree
         build={mockMultiPageBuild}
@@ -155,6 +160,9 @@ describe("RuneTree", () => {
       />
     );
 
+    expect(screen.getByText("Runas na Partida")).toBeInTheDocument();
+    expect(screen.getByTestId("active-rune-meta")).toHaveTextContent(/68\.5% escolha/i);
+    expect(screen.getByTestId("active-rune-meta")).toHaveTextContent(/4[.,]200 partidas/i);
     expect(screen.getByText("Opção 1 (Mais Usada)")).toBeInTheDocument();
     expect(screen.getByText("Opção 2")).toBeInTheDocument();
 
@@ -167,6 +175,8 @@ describe("RuneTree", () => {
       />
     );
 
+    expect(screen.getByText("Runas Recomendadas")).toBeInTheDocument();
+    expect(screen.getByTestId("active-rune-meta")).toHaveTextContent(/68\.5% uso/i);
     expect(screen.getByText("Página 1 (Mais Usada)")).toBeInTheDocument();
     expect(screen.getByText("Página 2")).toBeInTheDocument();
     expect(screen.queryByText("Opção 1 (Mais Usada)")).not.toBeInTheDocument();

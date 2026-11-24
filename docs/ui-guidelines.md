@@ -10,8 +10,9 @@
 - `user-select: none;` na raiz; `-webkit-user-drag: none;` em imagens.
 
 ## 2. Grid e Responsividade
-- Dashboard em 2 colunas (`.dashboard-col-left` para `RuneTree` / aviso ARAM Mayhem + `SpellsBar` + `SkillOrderCard`; `.dashboard-col-right` para `BuildSelector` + `ItemBlocks`).
-- Abaixo de `840px`, colapsa para 1 coluna mantendo fit-to-screen.
+- Dashboard em 2 colunas (`.dashboard-col-left` para `RuneTree` / aviso ARAM Mayhem + `SpellsBar`, ou `ArenaAugmentsCard` + `ArenaSynergiesCard` no modo Arena; `.dashboard-col-right` dedicada integralmente a `ItemBlocks`).
+- Prioridade de habilidades (`SkillOrderPopover`) ancorada à direita da barra de filtros no `FiltersHeader`, abrindo a matriz completa `1–18` em popover flutuante sob demanda sem gerar rolagem nas colunas.
+- Abaixo de `860px`, colapsa para 1 coluna mantendo fit-to-screen.
 
 ## 3. Paleta Dark Amethyst & Animações
 - Base `#0d0e12`, cards `#13141a`, hover `#1a1b24` / `#151620`, vidro `.floating-dock`: `rgba(19, 20, 26, 0.85)` + `backdrop-filter: blur(20px)`.

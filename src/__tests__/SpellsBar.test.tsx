@@ -54,7 +54,11 @@ describe("SpellsBar", () => {
 
     expect(screen.getByText("Flash")).toBeInTheDocument();
     expect(screen.getAllByText("Incendiar").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Escolha de Segundo Feitiço")).toBeInTheDocument();
+    expect(screen.getByTestId("secondary-spell-selector")).toHaveAttribute(
+      "aria-label",
+      "Escolha de Segundo Feitiço"
+    );
+    expect(screen.getByText("2º")).toBeInTheDocument();
     expect(screen.getByText("D")).toBeInTheDocument();
     expect(screen.getByText("F")).toBeInTheDocument();
 
@@ -109,16 +113,37 @@ describe("SpellsBar", () => {
       />
     );
 
-    expect(screen.getByText("Feitiços que Pode Usar")).toBeInTheDocument();
-    expect(screen.queryByText("Escolha de Segundo Feitiço")).not.toBeInTheDocument();
+    expect(screen.getByTestId("secondary-spell-selector")).toHaveAttribute(
+      "aria-label",
+      "Feitiços que Pode Usar"
+    );
+    expect(screen.getByText("Opções")).toBeInTheDocument();
+    expect(screen.queryByText("2º")).not.toBeInTheDocument();
     expect(screen.queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
     expect(container.querySelectorAll(".spell-key-indicator")).toHaveLength(0);
     expect(screen.queryByText("D")).not.toBeInTheDocument();
     expect(screen.queryByText("F")).not.toBeInTheDocument();
 
-    expect(screen.getByTestId("sec-spell-info-14")).toBeInTheDocument();
+    expect(screen.getByTestId("sec-spell-info-14")).toHaveClass("dd-icon-frame");
+    expect(screen.getByTestId("sec-spell-info-14").querySelector(".dd-icon-frame")).toBeNull();
     expect(screen.getByTestId("sec-spell-info-12")).toBeInTheDocument();
     expect(screen.queryByTestId("sec-spell-btn-14")).not.toBeInTheDocument();
     expect(screen.queryByTestId("sec-spell-btn-12")).not.toBeInTheDocument();
+  });
+
+  it("renders single squircle frame on interactive secondary spell buttons without nested frames", () => {
+    render(
+      <SpellsBar
+        orderedSpells={mockSpells}
+        spellChoices={mockChoices}
+        selectedSecondarySpellId={14}
+        onInvertSpells={vi.fn()}
+        onSelectSecondarySpell={vi.fn()}
+      />
+    );
+
+    const activeBtn = screen.getByTestId("sec-spell-btn-14");
+    expect(activeBtn).toHaveClass("dd-icon-frame", "secondary-spell-btn", "active");
+    expect(activeBtn.querySelector(".dd-icon-frame")).toBeNull();
   });
 });

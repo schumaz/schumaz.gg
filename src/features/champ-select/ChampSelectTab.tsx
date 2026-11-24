@@ -9,7 +9,6 @@ import { ArenaSynergiesCard } from "../../components/ui/ArenaSynergiesCard";
 import { FiltersHeader } from "../../components/ui/FiltersHeader";
 import { ItemBlocks } from "../../components/ui/ItemBlocks";
 import { RuneTree } from "../../components/ui/RuneTree";
-import { SkillOrderCard } from "../../components/ui/SkillOrderCard";
 import { SpellsBar } from "../../components/ui/SpellsBar";
 import { isArenaBuildContext } from "../../components/ui/queueContext";
 import { IdleState } from "./IdleState";
@@ -94,8 +93,6 @@ export function ChampSelectTab({
                     onInvertSpells={onInvertSpells}
                     onSelectSecondarySpell={onSelectSecondarySpell}
                   />
-
-                  <SkillOrderCard skillOrder={build.skill_order} />
                 </>
               )}
             </div>

@@ -49,7 +49,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     expect(spellItemsBefore[1]).toHaveTextContent("Incendiar");
 
     const invertBtn = screen.getByTestId("invert-spells-btn");
-    expect(invertBtn).toHaveTextContent(/Inverter Feitiços/i);
+    expect(invertBtn).toHaveAccessibleName(/Inverter Feitiços/i);
 
     await act(async () => {
       fireEvent.click(invertBtn);
@@ -114,8 +114,11 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
 
     expect(screen.getByText("Flash")).toBeInTheDocument();
     expect(screen.getAllByText("Incendiar")[0]).toBeInTheDocument();
-    expect(screen.getByTestId("skill-order-card")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-order-trigger")).toBeInTheDocument();
     expect(screen.getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
+    expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("skill-order-trigger"));
+    expect(screen.getByTestId("skill-order-card")).toBeInTheDocument();
   });
 
   it("renders the 4 filter selectors (Elo, Rota, Servidor, Patch) and handles filter updates", async () => {

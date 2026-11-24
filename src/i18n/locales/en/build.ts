@@ -2,6 +2,10 @@ import { BuildTranslations } from "../../types";
 
 export const enBuild: BuildTranslations = {
   runes: {
+    titleReadOnly: "Recommended Runes",
+    titleActive: "Match Runes",
+    primaryBadge: "Primary",
+    secondaryBadge: "Secondary",
     mayhemBadge: "⚡ ARAM Mayhem",
     mayhemDisabledTitle: "Runes Disabled",
     mayhemDisabledPrefix: "The ",
@@ -35,12 +39,15 @@ export const enBuild: BuildTranslations = {
   },
   spells: {
     title: "Summoner Spells",
+    shortTitle: "Spells",
     invertBtn: "Swap Spells",
     invertTitle: "Swap summoner spells between D and F keys",
     spell1Fallback: "Spell 1",
     spell2Fallback: "Spell 2",
     secondaryReadOnlyTitle: "Available Spell Options",
     secondaryEditTitle: "Secondary Spell Choice",
+    secondaryShortReadOnly: "Options",
+    secondaryShortEdit: "2nd",
     mostUsed: "Most Used",
     alternative: "Alternative",
     secondMostUsed: "Second Most Used",
@@ -75,6 +82,8 @@ export const enBuild: BuildTranslations = {
     abilityFallback: "Ability {key}",
     cooldownLabel: "{cd}s CD",
     winRateShort: "{rate}% WR",
+    togglePopoverTitle: "Toggle full skill leveling table (levels 1–18)",
+    closePopoverAria: "Close skill order table",
   },
   arena: {
     modeNoticeBadge: "Arena",

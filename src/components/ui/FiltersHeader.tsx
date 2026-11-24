@@ -8,6 +8,7 @@ import { getPositionOptions, getRegionOptions, getTierOptions } from "./filterOp
 import { PatchProtectionIndicator } from "./PatchProtectionIndicator";
 import { computePatchUiMeta } from "./patchUiMeta";
 import { isAramBuildContextMode, isArenaBuildContext } from "./queueContext";
+import { SkillOrderPopover } from "./SkillOrderPopover";
 
 export * from "./filterOptions";
 export * from "./patchUiMeta";
@@ -21,6 +22,7 @@ interface FiltersHeaderProps {
   backButtonTitle?: string;
   statusTagText?: string;
   queueModeLabel?: string;
+  readOnly?: boolean;
 }
 
 export function FiltersHeader({
@@ -32,6 +34,7 @@ export function FiltersHeader({
   backButtonTitle,
   statusTagText,
   queueModeLabel,
+  readOnly = false,
 }: FiltersHeaderProps) {
   const { t } = useTranslation();
 
@@ -227,6 +230,14 @@ export function FiltersHeader({
             />
           )}
         </div>
+
+        {!isArena && build.skill_order && (
+          <SkillOrderPopover
+            skillOrder={build.skill_order}
+            readOnly={readOnly}
+            resetKey={`${build.champion_id}-${build.active_position ?? ""}-${build.active_patch ?? ""}`}
+          />
+        )}
       </div>
     </section>
   );

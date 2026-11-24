@@ -10,12 +10,13 @@ const ABILITY_ROWS = ["Q", "W", "E", "R"] as const;
 interface SkillOrderCardProps {
   skillOrder?: SkillOrderRecommendation | null;
   readOnly?: boolean;
+  onClose?: () => void;
 }
 
 /**
  * Pure visual card displaying basic skill maxing priority (`Q > E > W`) and level `1–18` grid.
  */
-export function SkillOrderCard({ skillOrder, readOnly = false }: SkillOrderCardProps) {
+export function SkillOrderCard({ skillOrder, readOnly = false, onClose }: SkillOrderCardProps) {
   const { t, formatNumber } = useTranslation();
 
   if (!skillOrder) {
@@ -105,27 +106,42 @@ export function SkillOrderCard({ skillOrder, readOnly = false }: SkillOrderCardP
           )}
         </div>
 
-        {(winRate !== null || pickRate !== null || playCount !== null) && (
-          <div className="skill-order-stats" data-testid="skill-order-stats">
-            {winRate !== null && (
-              <span className={`skill-stat-pill ${winRate >= 52 ? "is-high" : ""}`}>
-                {t("skills.winRateShort", { rate: winRate.toFixed(1) })}
-              </span>
+        {(winRate !== null || pickRate !== null || playCount !== null || onClose) && (
+          <div className="skill-order-header-actions">
+            {(winRate !== null || pickRate !== null || playCount !== null) && (
+              <div className="skill-order-stats" data-testid="skill-order-stats">
+                {winRate !== null && (
+                  <span className={`skill-stat-pill ${winRate >= 52 ? "is-high" : ""}`}>
+                    {t("skills.winRateShort", { rate: winRate.toFixed(1) })}
+                  </span>
+                )}
+                {pickRate !== null ? (
+                  <span className="skill-stat-pill">
+                    {`${pickRate.toFixed(1)}% ${
+                      readOnly ? t("items.usageLabel") : t("items.pickLabel")
+                    }`}
+                  </span>
+                ) : (
+                  playCount !== null && (
+                    <span className="skill-stat-pill">
+                      {`${formatNumber(playCount)} ${t(
+                        playCount === 1 ? "common.gamesSingular" : "common.gamesPlural"
+                      )}`}
+                    </span>
+                  )
+                )}
+              </div>
             )}
-            {pickRate !== null ? (
-              <span className="skill-stat-pill">
-                {`${pickRate.toFixed(1)}% ${
-                  readOnly ? t("items.usageLabel") : t("items.pickLabel")
-                }`}
-              </span>
-            ) : (
-              playCount !== null && (
-                <span className="skill-stat-pill">
-                  {`${formatNumber(playCount)} ${t(
-                    playCount === 1 ? "common.gamesSingular" : "common.gamesPlural"
-                  )}`}
-                </span>
-              )
+            {onClose && (
+              <button
+                type="button"
+                className="skill-order-close-btn"
+                data-testid="skill-order-close-btn"
+                onClick={onClose}
+                aria-label={t("skills.closePopoverAria")}
+              >
+                ×
+              </button>
             )}
           </div>
         )}

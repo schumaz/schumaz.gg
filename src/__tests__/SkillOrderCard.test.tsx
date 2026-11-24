@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SkillOrderCard } from "../components/ui/SkillOrderCard";
+import { SkillOrderPopover } from "../components/ui/SkillOrderPopover";
 import type { SkillOrderRecommendation } from "../types";
 
 const sampleSkillOrder: SkillOrderRecommendation = {
@@ -109,5 +110,50 @@ describe("SkillOrderCard", () => {
     expect(screen.getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
     expect(screen.getByTestId("skill-order-stats")).toHaveTextContent(/150 partidas/i);
     expect(screen.getByTestId("skill-level-1")).toHaveTextContent("Q");
+  });
+
+  it("opens and closes the on-demand 1-18 popover via click, close button, Escape, outside click, and resetKey", () => {
+    const { rerender } = render(
+      <div>
+        <button type="button" data-testid="outside-el">
+          Fora
+        </button>
+        <SkillOrderPopover skillOrder={sampleSkillOrder} readOnly={true} resetKey="103-mid" />
+      </div>
+    );
+
+    const trigger = screen.getByTestId("skill-order-trigger");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*E.*>.*W/);
+    expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("skill-order-popover")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-order-grid")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-order-stats")).toHaveTextContent(/79\.2% uso/i);
+
+    fireEvent.click(screen.getByTestId("skill-order-close-btn"));
+    expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    fireEvent.mouseDown(screen.getByTestId("outside-el"));
+    expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(screen.getByTestId("skill-order-popover")).toBeInTheDocument();
+    rerender(
+      <div>
+        <button type="button" data-testid="outside-el">
+          Fora
+        </button>
+        <SkillOrderPopover skillOrder={sampleSkillOrder} readOnly={true} resetKey="238-mid" />
+      </div>
+    );
+    expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
   });
 });

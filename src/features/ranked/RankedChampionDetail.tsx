@@ -9,7 +9,6 @@ import { FiltersHeader } from "../../components/ui/FiltersHeader";
 import { ItemBlocks } from "../../components/ui/ItemBlocks";
 import { LoadingDots } from "../../components/ui/LoadingIndicators";
 import { RuneTree } from "../../components/ui/RuneTree";
-import { SkillOrderCard } from "../../components/ui/SkillOrderCard";
 import { SpellsBar } from "../../components/ui/SpellsBar";
 
 interface RankedChampionDetailProps {
@@ -60,6 +59,7 @@ export function RankedChampionDetail({
             onBackToTierList={onBackToTierList}
             statusTagText={detailStatusTag}
             queueModeLabel={t("filters.queueRankedSr")}
+            readOnly={true}
           />
 
           <div className="dashboard-split-grid">
@@ -77,8 +77,6 @@ export function RankedChampionDetail({
                 selectedSecondarySpellId={null}
                 readOnly={true}
               />
-
-              <SkillOrderCard skillOrder={championBuild.skill_order} readOnly={true} />
             </div>
 
             <div className="dashboard-col dashboard-col-right">

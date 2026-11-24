@@ -2,6 +2,10 @@ import { BuildTranslations } from "../../types";
 
 export const ptBuild: BuildTranslations = {
   runes: {
+    titleReadOnly: "Runas Recomendadas",
+    titleActive: "Runas na Partida",
+    primaryBadge: "Primária",
+    secondaryBadge: "Secundária",
     mayhemBadge: "⚡ ARAM Mayhem",
     mayhemDisabledTitle: "Runas Desativadas",
     mayhemDisabledPrefix: "O modo ",
@@ -35,12 +39,15 @@ export const ptBuild: BuildTranslations = {
   },
   spells: {
     title: "Feitiços de Invocador",
+    shortTitle: "Feitiços",
     invertBtn: "Inverter Feitiços",
     invertTitle: "Inverter a posição dos feitiços entre as teclas D e F",
     spell1Fallback: "Feitiço 1",
     spell2Fallback: "Feitiço 2",
     secondaryReadOnlyTitle: "Feitiços que Pode Usar",
     secondaryEditTitle: "Escolha de Segundo Feitiço",
+    secondaryShortReadOnly: "Opções",
+    secondaryShortEdit: "2º",
     mostUsed: "Mais Usado",
     alternative: "Alternativo",
     secondMostUsed: "Segundo Mais Usado",
@@ -75,6 +82,8 @@ export const ptBuild: BuildTranslations = {
     abilityFallback: "Habilidade {key}",
     cooldownLabel: "{cd}s recarga",
     winRateShort: "{rate}% WR",
+    togglePopoverTitle: "Abrir ou fechar a tabela completa de habilidades (níveis 1–18)",
+    closePopoverAria: "Fechar tabela de ordem de habilidades",
   },
   arena: {
     modeNoticeBadge: "Arena",

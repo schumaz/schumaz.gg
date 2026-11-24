@@ -1,5 +1,9 @@
 export interface BuildTranslations {
   runes: {
+    titleReadOnly: string;
+    titleActive: string;
+    primaryBadge: string;
+    secondaryBadge: string;
     mayhemBadge: string;
     mayhemDisabledTitle: string;
     mayhemDisabledPrefix: string;
@@ -32,12 +36,15 @@ export interface BuildTranslations {
   };
   spells: {
     title: string;
+    shortTitle: string;
     invertBtn: string;
     invertTitle: string;
     spell1Fallback: string;
     spell2Fallback: string;
     secondaryReadOnlyTitle: string;
     secondaryEditTitle: string;
+    secondaryShortReadOnly: string;
+    secondaryShortEdit: string;
     mostUsed: string;
     alternative: string;
     secondMostUsed: string;
@@ -72,6 +79,8 @@ export interface BuildTranslations {
     abilityFallback: string;
     cooldownLabel: string;
     winRateShort: string;
+    togglePopoverTitle: string;
+    closePopoverAria: string;
   };
   arena: {
     modeNoticeBadge: string;
