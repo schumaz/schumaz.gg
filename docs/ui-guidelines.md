@@ -10,7 +10,7 @@
 - `user-select: none;` na raiz; `-webkit-user-drag: none;` em imagens.
 
 ## 2. Grid e Responsividade
-- Dashboard em 2 colunas (`.dashboard-col-left` para `RuneTree` / aviso ARAM Mayhem + `SpellsBar`; `.dashboard-col-right` para `BuildSelector` + `ItemBlocks`).
+- Dashboard em 2 colunas (`.dashboard-col-left` para `RuneTree` / aviso ARAM Mayhem + `SpellsBar` + `SkillOrderCard`; `.dashboard-col-right` para `BuildSelector` + `ItemBlocks`).
 - Abaixo de `840px`, colapsa para 1 coluna mantendo fit-to-screen.
 
 ## 3. Paleta Dark Amethyst & Animações

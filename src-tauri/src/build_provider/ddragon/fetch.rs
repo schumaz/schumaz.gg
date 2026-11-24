@@ -3,8 +3,9 @@ use super::super::models::DataDragonCache;
 use super::augments::fetch_arena_augments_catalog;
 use super::cache::DataDragonDiskBundle;
 use super::parsers::{
-    parse_all_ddragon_champions, parse_ddragon_item_classifications, parse_ddragon_runes,
-    parse_ddragon_summoners, parse_latest_ddragon_version,
+    parse_all_ddragon_champion_abilities, parse_all_ddragon_champions,
+    parse_ddragon_item_classifications, parse_ddragon_runes, parse_ddragon_summoners,
+    parse_latest_ddragon_version,
 };
 use super::tooltip_parser::parse_ddragon_items;
 use crate::models::AppLocale;
@@ -45,12 +46,31 @@ pub(super) async fn load_ddragon_bundle_for_version(
 ) -> Result<DataDragonDiskBundle, String> {
     let dd_locale = locale.ddragon_code();
 
+    let champion_full_url = format!("{base_url}/cdn/{version}/data/{dd_locale}/championFull.json");
     let champions_url = format!("{base_url}/cdn/{version}/data/{dd_locale}/champion.json");
     let runes_url = format!("{base_url}/cdn/{version}/data/{dd_locale}/runesReforged.json");
     let items_url = format!("{base_url}/cdn/{version}/data/{dd_locale}/item.json");
     let summoners_url = format!("{base_url}/cdn/{version}/data/{dd_locale}/summoner.json");
 
     let champions_fut = async {
+        let t0_full = Instant::now();
+        if let Ok(res) = client.get(&champion_full_url).send().await {
+            crate::logging::record_http_status_log(
+                "ddragon",
+                res.status().as_u16(),
+                t0_full.elapsed().as_millis(),
+            );
+            if res.status().is_success()
+                && let Ok(full_json) = res.json::<serde_json::Value>().await
+                && full_json
+                    .get("data")
+                    .and_then(|d| d.as_object())
+                    .is_some_and(|m| !m.is_empty())
+            {
+                return Ok(full_json);
+            }
+        }
+
         let t0 = Instant::now();
         let res = client.get(&champions_url).send().await.map_err(|e| {
             crate::logging::record_http_network_error_log(
@@ -124,7 +144,9 @@ pub(super) async fn load_ddragon_bundle_for_version(
         arena_augments_fut
     );
 
-    let champions = parse_all_ddragon_champions(&champions_res?, version)?;
+    let champions_json = champions_res?;
+    let champions = parse_all_ddragon_champions(&champions_json, version)?;
+    let champion_abilities = parse_all_ddragon_champion_abilities(&champions_json, version);
     let runes = parse_ddragon_runes(&runes_res?)?;
 
     Ok(DataDragonDiskBundle {
@@ -135,6 +157,7 @@ pub(super) async fn load_ddragon_bundle_for_version(
             spells,
             items,
             arena_augments,
+            champion_abilities,
         },
         item_classifications,
     })

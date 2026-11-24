@@ -87,6 +87,7 @@ describe("useRanked hook state and filter preservation", () => {
   it("switches rune pages and build options locally in Ranked without injecting anything into the game", async () => {
     const mockMultiBuild: ChampionBuild_Serialize = {
       ...mockAhriBuild,
+      skill_order: null,
       rune_pages: [
         {
           primary_style_id: 8100,

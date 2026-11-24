@@ -1,4 +1,5 @@
 use super::arena::{ArenaAugmentEntry, ArenaAugmentMetadata, ArenaSynergyEntry};
+pub use super::skills::{ChampionAbilityMetadata, SkillOrderRecommendation};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -105,6 +106,8 @@ pub struct DataDragonCache {
     pub items: HashMap<i32, ItemMetadata>,
     #[serde(default)]
     pub arena_augments: HashMap<i32, ArenaAugmentMetadata>,
+    #[serde(default)]
+    pub champion_abilities: HashMap<i32, Vec<ChampionAbilityMetadata>>,
 }
 
 /// Complete unified build archetype (Core 3 + matching 6-item Final Build).
@@ -252,6 +255,8 @@ pub struct ChampionBuild {
     pub first_place_rate: Option<f64>,
     #[serde(default)]
     pub avg_placement: Option<f64>,
+    #[serde(default)]
+    pub skill_order: Option<SkillOrderRecommendation>,
 }
 
 impl Default for ChampionBuild {
@@ -292,6 +297,7 @@ impl Default for ChampionBuild {
             arena_synergies: Vec::new(),
             first_place_rate: None,
             avg_placement: None,
+            skill_order: None,
         }
     }
 }

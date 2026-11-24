@@ -6,6 +6,7 @@ pub mod events;
 pub mod injector;
 pub mod lcu;
 pub mod ranked;
+pub mod skills;
 pub mod updater;
 pub mod ws;
 
@@ -17,5 +18,6 @@ pub use events::*;
 pub use injector::*;
 pub use lcu::*;
 pub use ranked::*;
+pub use skills::*;
 pub use updater::*;
 pub use ws::*;

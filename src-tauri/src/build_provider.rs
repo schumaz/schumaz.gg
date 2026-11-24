@@ -9,6 +9,7 @@ pub mod runes;
 pub mod service;
 pub mod service_entry_points;
 pub mod service_helpers;
+pub mod skills;
 pub mod spells;
 
 pub use analytics::*;
@@ -21,4 +22,5 @@ pub use patch::*;
 pub use runes::*;
 pub use service::*;
 pub use service_entry_points::*;
+pub use skills::*;
 pub use spells::*;

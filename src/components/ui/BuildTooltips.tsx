@@ -1,4 +1,9 @@
-import { ItemMetadata, RuneMetadata, SpellMetadata } from "../../types";
+import {
+  ChampionAbilityMetadata,
+  ItemMetadata,
+  RuneMetadata,
+  SpellMetadata,
+} from "../../types";
 import { useTranslation } from "../../i18n";
 
 export type ItemMetadataMap = Partial<Record<number, ItemMetadata>>;
@@ -93,6 +98,41 @@ export function SpellTooltipContent({ spell, subtitle }: SpellTooltipContentProp
         )}
       </div>
       {subtitle && <span className="rich-tooltip-subtitle">{subtitle}</span>}
+      {desc && <p className="rich-tooltip-desc">{desc}</p>}
+    </>
+  );
+}
+
+interface SkillTooltipContentProps {
+  skillKey: string;
+  ability?: ChampionAbilityMetadata;
+}
+
+/**
+ * Pure visual rich tooltip body for a champion ability (`Q`, `W`, `E`, `R`).
+ */
+export function SkillTooltipContent({ skillKey, ability }: SkillTooltipContentProps) {
+  const { t } = useTranslation();
+  const normalizedKey = skillKey.trim().toUpperCase();
+  const title = ability?.name?.trim() || t("skills.abilityFallback", { key: normalizedKey });
+  const cd = ability?.cooldown_burn?.trim() ?? "";
+  const desc = ability?.description?.trim() ?? "";
+
+  return (
+    <>
+      <div className="rich-tooltip-header">
+        <span className="rich-tooltip-skill-title-wrap">
+          <span className={`rich-tooltip-skill-key skill-key-${normalizedKey.toLowerCase()}`}>
+            {normalizedKey}
+          </span>
+          <span className="rich-tooltip-title">{title}</span>
+        </span>
+        {cd && cd !== "0" && (
+          <span className="rich-tooltip-badge">
+            {t("skills.cooldownLabel", { cd })}
+          </span>
+        )}
+      </div>
       {desc && <p className="rich-tooltip-desc">{desc}</p>}
     </>
   );

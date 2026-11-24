@@ -10,6 +10,7 @@ export * from "./BuildSelector";
 export * from "./Tooltip";
 export * from "./BuildTooltips";
 export * from "./SpellsBar";
+export * from "./SkillOrderCard";
 export * from "./ItemBlocks";
 export * from "./RuneTree";
 export * from "./ArenaAugmentsCard";

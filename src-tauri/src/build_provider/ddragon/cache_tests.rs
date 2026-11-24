@@ -30,6 +30,26 @@ async fn test_ddragon_lz4_persistence_hydrates_items_tooltips_and_supports_stale
         .mount(&server)
         .await;
     Mock::given(method("GET"))
+        .and(path("/cdn/16.30.1/data/en_US/championFull.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "Ahri": {
+                    "id": "Ahri",
+                    "key": "103",
+                    "name": "Ahri",
+                    "image": { "full": "Ahri.png" },
+                    "spells": [
+                        { "name": "Orb of Deception", "description": "Throws an orb.", "cooldownBurn": "7", "maxrank": 5, "image": { "full": "AhriQ.png" } },
+                        { "name": "Fox-Fire", "description": "Releases fox-fires.", "cooldownBurn": "9/8/7/6/5", "maxrank": 5, "image": { "full": "AhriW.png" } },
+                        { "name": "Charm", "description": "Charms an enemy.", "cooldownBurn": "12", "maxrank": 5, "image": { "full": "AhriE.png" } },
+                        { "name": "Spirit Rush", "description": "Dashes forward.", "cooldownBurn": "130/115/100", "maxrank": 3, "image": { "full": "AhriR.png" } }
+                    ]
+                }
+            }
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
         .and(path("/cdn/16.30.1/data/en_US/champion.json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "data": {
@@ -123,8 +143,14 @@ async fn test_ddragon_lz4_persistence_hydrates_items_tooltips_and_supports_stale
         "Hitting a champion with 3 separate attacks deals bonus adaptive damage."
     );
     assert_eq!(hydrated.spells.get(&4).unwrap().cooldown_secs, Some(300));
+    let ahri_spells = hydrated
+        .champion_abilities
+        .get(&103)
+        .expect("Champion abilities hydrated from .lz4");
+    assert_eq!(ahri_spells.len(), 4);
+    assert_eq!(ahri_spells[0].name, "Orb of Deception");
 
-    // Legacy disk bundle missing `items` on same version must trigger automatic backfill
+    // Legacy disk bundle missing `items` and `champion_abilities` on same version must backfill
     let legacy_bundle = DataDragonDiskBundle {
         ddragon: DataDragonCache {
             version: "16.30.1".to_string(),
@@ -142,6 +168,7 @@ async fn test_ddragon_lz4_persistence_hydrates_items_tooltips_and_supports_stale
             .await
             .unwrap();
     assert!(backfilled.items.contains_key(&9950));
+    assert_eq!(backfilled.champion_abilities.get(&103).map(Vec::len), Some(4));
 
     // Patch rollout (16.30.1 -> 16.31.1): refreshes active locale and evicts stale-patch locales from RAM
     if let Ok(mut g) = get_ddragon_cache_store().write() {

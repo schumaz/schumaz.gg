@@ -1,4 +1,6 @@
-use super::super::models::{ChampionMetadata, RuneMetadata, SpellMetadata};
+use super::super::models::{
+    ChampionAbilityMetadata, ChampionMetadata, RuneMetadata, SpellMetadata,
+};
 pub use super::item_parser::{parse_ddragon_completed_items, parse_ddragon_item_classifications};
 use super::tooltip_parser::sanitize_ddragon_html;
 use std::collections::HashMap;
@@ -220,6 +222,88 @@ pub fn parse_ddragon_runes(
     }
 
     Ok(map)
+}
+
+/// Parses active `Q/W/E/R` spell metadata for every champion from DataDragon `championFull.json`.
+pub fn parse_all_ddragon_champion_abilities(
+    ddragon_json: &serde_json::Value,
+    version: &str,
+) -> HashMap<i32, Vec<ChampionAbilityMetadata>> {
+    let Some(data_map) = ddragon_json.get("data").and_then(|v| v.as_object()) else {
+        return HashMap::new();
+    };
+
+    let slot_keys = ["Q", "W", "E", "R"];
+    let mut map = HashMap::with_capacity(data_map.len());
+
+    for (_name_key, champ_data) in data_map {
+        let Some(champ_id) = champ_data
+            .get("key")
+            .and_then(|k| k.as_str())
+            .and_then(|s| s.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        let Some(spells) = champ_data.get("spells").and_then(|v| v.as_array()) else {
+            continue;
+        };
+
+        let mut abilities = Vec::with_capacity(4);
+        for (&slot_key, spell) in slot_keys.iter().zip(spells.iter()) {
+            let raw_name = spell.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let sanitized_name = sanitize_ddragon_html(raw_name);
+            let name = if sanitized_name.is_empty() {
+                slot_key.to_string()
+            } else {
+                sanitized_name
+            };
+            let icon_url = spell
+                .pointer("/image/full")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|img| {
+                    format!(
+                        "https://ddragon.leagueoflegends.com/cdn/{}/img/spell/{}",
+                        version, img
+                    )
+                })
+                .unwrap_or_default();
+            let description = spell
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(sanitize_ddragon_html)
+                .unwrap_or_default();
+            let cooldown_burn = spell
+                .get("cooldownBurn")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && *s != "0")
+                .unwrap_or("")
+                .to_string();
+            let max_rank = spell
+                .get("maxrank")
+                .and_then(|v| v.as_i64())
+                .map(|n| n as i32)
+                .filter(|&n| n > 0)
+                .unwrap_or_else(|| if slot_key == "R" { 3 } else { 5 });
+
+            abilities.push(ChampionAbilityMetadata {
+                key: slot_key.to_string(),
+                name,
+                icon_url,
+                description,
+                cooldown_burn,
+                max_rank,
+            });
+        }
+
+        if !abilities.is_empty() {
+            map.insert(champ_id, abilities);
+        }
+    }
+
+    map
 }
 
 /// Parses DataDragon `champion.json` to find champion metadata by numeric ID.

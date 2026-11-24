@@ -156,3 +156,66 @@ fn test_parse_ddragon_item_classifications_supplements_offensive_tags_from_stats
     assert!(cache.item_tags[&6610].iter().any(|t| t == "Damage"));
     assert!(cache.item_tags[&4646].iter().any(|t| t == "SpellDamage"));
 }
+
+#[test]
+fn test_parse_all_ddragon_champion_abilities_extracts_qwer_and_sanitizes_html() {
+    let champion_full = serde_json::json!({
+        "data": {
+            "Ahri": {
+                "id": "Ahri",
+                "key": "103",
+                "name": "Ahri",
+                "image": { "full": "Ahri.png" },
+                "spells": [
+                    {
+                        "name": "Orb of Deception",
+                        "description": "Ahri sends out and pulls back her orb, dealing <magicDamage>magic damage</magicDamage>.",
+                        "cooldownBurn": "7",
+                        "maxrank": 5,
+                        "image": { "full": "AhriQ.png" }
+                    },
+                    {
+                        "name": "Fox-Fire",
+                        "description": "Ahri gains Move Speed and releases three fox-fires.",
+                        "cooldownBurn": "9/8/7/6/5",
+                        "maxrank": 5,
+                        "image": { "full": "AhriW.png" }
+                    },
+                    {
+                        "name": "Charm",
+                        "description": "Ahri blows a kiss that charms an enemy.",
+                        "cooldownBurn": "12",
+                        "maxrank": 5,
+                        "image": { "full": "AhriE.png" }
+                    },
+                    {
+                        "name": "Spirit Rush",
+                        "description": "Ahri dashes forward and fires essence bolts.",
+                        "cooldownBurn": "130/115/100",
+                        "maxrank": 3,
+                        "image": { "full": "AhriR.png" }
+                    }
+                ]
+            }
+        }
+    });
+
+    let map = parse_all_ddragon_champion_abilities(&champion_full, "16.22.1");
+    let ahri = map.get(&103).expect("Ahri abilities should be parsed");
+    assert_eq!(ahri.len(), 4);
+    assert_eq!(ahri[0].key, "Q");
+    assert_eq!(ahri[0].name, "Orb of Deception");
+    assert_eq!(
+        ahri[0].icon_url,
+        "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/AhriQ.png"
+    );
+    assert_eq!(
+        ahri[0].description,
+        "Ahri sends out and pulls back her orb, dealing magic damage."
+    );
+    assert_eq!(ahri[0].cooldown_burn, "7");
+    assert_eq!(ahri[0].max_rank, 5);
+    assert_eq!(ahri[1].cooldown_burn, "9/8/7/6/5");
+    assert_eq!(ahri[3].key, "R");
+    assert_eq!(ahri[3].max_rank, 3);
+}

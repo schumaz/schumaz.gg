@@ -242,3 +242,58 @@ async fn test_load_ddragon_cache_loads_en_us_locale() {
     assert_eq!(cache.spells.get(&14).unwrap().name, "Ignite");
     assert_eq!(cache.spells.get(&32).unwrap().name, "Mark");
 }
+
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn test_load_ddragon_cache_prefers_champion_full_when_available() {
+    let _lock = TEST_CLASSIFICATION_MUTEX.lock().unwrap();
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/versions.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["16.22.1"])))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.22.1/data/pt_BR/championFull.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "Ahri": {
+                    "id": "Ahri",
+                    "key": "103",
+                    "name": "Ahri",
+                    "image": { "full": "Ahri.png" },
+                    "spells": [
+                        { "name": "Orbe da Ilusão", "description": "Arremessa um orbe.", "cooldownBurn": "7", "maxrank": 5, "image": { "full": "AhriQ.png" } },
+                        { "name": "Fogo de Raposa", "description": "Libera chamas.", "cooldownBurn": "9/8/7/6/5", "maxrank": 5, "image": { "full": "AhriW.png" } },
+                        { "name": "Encanto", "description": "Encanta o alvo.", "cooldownBurn": "12", "maxrank": 5, "image": { "full": "AhriE.png" } },
+                        { "name": "Ímpeto Espiritual", "description": "Avança rapidamente.", "cooldownBurn": "130/115/100", "maxrank": 3, "image": { "full": "AhriR.png" } }
+                    ]
+                }
+            }
+        })))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/cdn/16.22.1/data/pt_BR/runesReforged.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+        .mount(&mock_server)
+        .await;
+
+    let client = reqwest::Client::new();
+    let cache = load_ddragon_cache_from_base_url(&client, &mock_server.uri())
+        .await
+        .expect("Loading ddragon cache from championFull.json should succeed");
+
+    let abilities = cache
+        .champion_abilities
+        .get(&103)
+        .expect("champion_abilities should populate from championFull.json");
+    assert_eq!(abilities.len(), 4);
+    assert_eq!(abilities[0].key, "Q");
+    assert_eq!(abilities[0].name, "Orbe da Ilusão");
+    assert_eq!(abilities[3].key, "R");
+    assert_eq!(abilities[3].max_rank, 3);
+}

@@ -231,6 +231,7 @@ pub fn parse_opgg_mcp_text_for_mode(
             ..Default::default()
         })
         .collect();
+    let skill_order = super::super::skills::extract_mcp_skill_order(text);
 
     Ok(ChampionBuild {
         champion_id,
@@ -248,6 +249,7 @@ pub fn parse_opgg_mcp_text_for_mode(
         rune_pages: top_rune_pages,
         build_options,
         supports_runes,
+        skill_order,
         ..Default::default()
     })
 }

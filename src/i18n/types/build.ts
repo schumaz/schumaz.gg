@@ -63,6 +63,16 @@ export interface BuildTranslations {
     buildOptionNumber: string;
     goldCost: string;
   };
+  skills: {
+    title: string;
+    priorityAriaLabel: string;
+    gridAriaLabel: string;
+    levelHeader: string;
+    levelLabel: string;
+    abilityFallback: string;
+    cooldownLabel: string;
+    winRateShort: string;
+  };
   arena: {
     modeNoticeBadge: string;
     modeNoticeText: string;

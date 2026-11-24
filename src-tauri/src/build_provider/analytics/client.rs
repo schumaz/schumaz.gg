@@ -64,7 +64,9 @@ pub async fn fetch_opgg_champion_analysis(
                     "data.last_items[].{ids[],play,win,pick_rate}",
                     "data.fourth_items[].{ids[],play,win,pick_rate}",
                     "data.fifth_items[].{ids[],play,win,pick_rate}",
-                    "data.sixth_items[].{ids[],play,win,pick_rate}"
+                    "data.sixth_items[].{ids[],play,win,pick_rate}",
+                    "data.skill_masteries[].{ids[],play,win,pick_rate,builds[].{order[],play,win,pick_rate}}",
+                    "data.skills[].{order[],play,win,pick_rate}"
                 ]
             }
         }
@@ -241,7 +243,9 @@ pub async fn fetch_opgg_mcp_depth_items(
                 "desired_output_fields": [
                     "data.fourth_items[].{ids[],play,win,pick_rate}",
                     "data.fifth_items[].{ids[],play,win,pick_rate}",
-                    "data.sixth_items[].{ids[],play,win,pick_rate}"
+                    "data.sixth_items[].{ids[],play,win,pick_rate}",
+                    "data.skill_masteries[].{ids[],play,win,pick_rate,builds[].{order[],play,win,pick_rate}}",
+                    "data.skills[].{order[],play,win,pick_rate}"
                 ]
             }
         }

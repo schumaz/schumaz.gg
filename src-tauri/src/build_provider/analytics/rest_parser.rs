@@ -262,6 +262,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
             ..Default::default()
         })
         .collect();
+    let skill_order = super::super::skills::extract_rest_skill_order(analysis);
 
     Ok(ChampionBuild {
         champion_id,
@@ -279,6 +280,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
         rune_pages: top_rune_pages,
         build_options,
         supports_runes: effective_supports_runes,
+        skill_order,
         ..Default::default()
     })
 }

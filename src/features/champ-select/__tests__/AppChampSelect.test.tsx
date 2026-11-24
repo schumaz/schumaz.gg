@@ -114,6 +114,8 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
 
     expect(screen.getByText("Flash")).toBeInTheDocument();
     expect(screen.getAllByText("Incendiar")[0]).toBeInTheDocument();
+    expect(screen.getByTestId("skill-order-card")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
   });
 
   it("renders the 4 filter selectors (Elo, Rota, Servidor, Patch) and handles filter updates", async () => {

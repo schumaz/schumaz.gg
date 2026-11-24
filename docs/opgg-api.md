@@ -27,7 +27,9 @@
     "starter_items": [{ "ids": [1055, 2003], "play": 6000, "win": 3100, "pick_rate": 0.5 }],
     "core_items": [{ "ids": [3142, 6691, 6694], "play": 3200, "win": 1750, "pick_rate": 0.28 }],
     "boots": [{ "ids": [3158], "play": 5000, "win": 2600, "pick_rate": 0.42 }],
-    "last_items": [{ "ids": [6692], "play": 1800, "win": 990, "pick_rate": 0.15 }]
+    "last_items": [{ "ids": [6692], "play": 1800, "win": 990, "pick_rate": 0.15 }],
+    "skill_masteries": [{ "ids": ["Q", "E", "W"], "play": 9500, "win": 5000, "pick_rate": 0.78, "builds": [{ "order": ["Q", "W", "E"], "play": 6000, "win": 3200, "pick_rate": 0.63 }] }],
+    "skills": [{ "order": ["Q", "W", "E"], "play": 6000, "win": 3200, "pick_rate": 0.49 }]
   }
 }
 ```

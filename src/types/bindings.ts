@@ -474,6 +474,41 @@ export type ChampSelected_Deserialize = ChampSelectedPayload_Deserialize;
 
 export type ChampSelected_Serialize = ChampSelectedPayload_Serialize;
 
+/**  Localized metadata for a champion's active ability (`Q`, `W`, `E`, or `R`) from DataDragon. */
+export type ChampionAbilityMetadata = ChampionAbilityMetadata_Serialize | ChampionAbilityMetadata_Deserialize;
+
+/**  Localized metadata for a champion's active ability (`Q`, `W`, `E`, or `R`) from DataDragon. */
+export type ChampionAbilityMetadata_Deserialize = {
+	/**  Canonical slot key: `"Q"`, `"W"`, `"E"`, or `"R"`. */
+	key: string,
+	/**  Localized ability name from DataDragon. */
+	name: string,
+	/**  Official DataDragon ability icon URL (`https://ddragon.leagueoflegends.com/cdn/{ver}/img/spell/{img}`). */
+	icon_url?: string,
+	/**  Sanitized plain-text description from DataDragon `spells[].description` for rich tooltips. */
+	description?: string,
+	/**  Cooldown progression string from DataDragon (e.g. `"7"` or `"14/13/12/11/10"`). */
+	cooldown_burn?: string,
+	/**  Maximum rank for this ability (normally 5 for Q/W/E, 3 for R; 6 for kits like Jayce/Udyr/Yuumi). */
+	max_rank?: number,
+};
+
+/**  Localized metadata for a champion's active ability (`Q`, `W`, `E`, or `R`) from DataDragon. */
+export type ChampionAbilityMetadata_Serialize = {
+	/**  Canonical slot key: `"Q"`, `"W"`, `"E"`, or `"R"`. */
+	key: string,
+	/**  Localized ability name from DataDragon. */
+	name: string,
+	/**  Official DataDragon ability icon URL (`https://ddragon.leagueoflegends.com/cdn/{ver}/img/spell/{img}`). */
+	icon_url: string,
+	/**  Sanitized plain-text description from DataDragon `spells[].description` for rich tooltips. */
+	description: string,
+	/**  Cooldown progression string from DataDragon (e.g. `"7"` or `"14/13/12/11/10"`). */
+	cooldown_burn: string,
+	/**  Maximum rank for this ability (normally 5 for Q/W/E, 3 for R; 6 for kits like Jayce/Udyr/Yuumi). */
+	max_rank: number,
+};
+
 /**  Complete build recommendations fetched and parsed from OP.GG enriched with DataDragon visual assets. */
 export type ChampionBuild = ChampionBuild_Serialize | ChampionBuild_Deserialize;
 
@@ -515,6 +550,7 @@ export type ChampionBuild_Deserialize = {
 	arena_synergies?: ArenaSynergyEntry[],
 	first_place_rate?: number | null,
 	avg_placement?: number | null,
+	skill_order?: SkillOrderRecommendation_Deserialize | null,
 };
 
 /**  Complete build recommendations fetched and parsed from OP.GG enriched with DataDragon visual assets. */
@@ -555,6 +591,7 @@ export type ChampionBuild_Serialize = {
 	arena_synergies: ArenaSynergyEntry[],
 	first_place_rate: number | null,
 	avg_placement: number | null,
+	skill_order: SkillOrderRecommendation_Serialize | null,
 };
 
 /**  Top champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
@@ -961,6 +998,45 @@ export type RunePageOption_Serialize = {
 	sub_style_name: string,
 	sub_style_icon_url: string,
 	perks: RuneMetadata_Serialize[],
+};
+
+/**  Recommended skill maxing priority (e.g. `Q > E > W`) and level-by-level leveling order (`1..=18`). */
+export type SkillOrderRecommendation = SkillOrderRecommendation_Serialize | SkillOrderRecommendation_Deserialize;
+
+/**  Recommended skill maxing priority (e.g. `Q > E > W`) and level-by-level leveling order (`1..=18`). */
+export type SkillOrderRecommendation_Deserialize = {
+	/**  Maxing priority order of basic abilities (e.g. `["Q", "E", "W"]`). */
+	priority?: string[],
+	/**  Level-by-level skill picks from level 1 up to 18 (e.g. `["Q", "W", "E", "Q", ...]`). */
+	order?: string[],
+	/**  Total games recorded for the chosen skill mastery / order. */
+	play?: number,
+	/**  Total wins recorded for the chosen skill mastery / order. */
+	win?: number,
+	/**  Pick rate normalized to percentage `0.0..=100.0` (1 decimal place). */
+	pick_rate?: number | null,
+	/**  Win rate normalized to percentage `0.0..=100.0` (1 decimal place). */
+	win_rate?: number | null,
+	/**  Localized ability metadata for `Q`, `W`, `E`, `R` hydrated from DataDragon. */
+	abilities?: ChampionAbilityMetadata_Deserialize[],
+};
+
+/**  Recommended skill maxing priority (e.g. `Q > E > W`) and level-by-level leveling order (`1..=18`). */
+export type SkillOrderRecommendation_Serialize = {
+	/**  Maxing priority order of basic abilities (e.g. `["Q", "E", "W"]`). */
+	priority: string[],
+	/**  Level-by-level skill picks from level 1 up to 18 (e.g. `["Q", "W", "E", "Q", ...]`). */
+	order: string[],
+	/**  Total games recorded for the chosen skill mastery / order. */
+	play: number,
+	/**  Total wins recorded for the chosen skill mastery / order. */
+	win: number,
+	/**  Pick rate normalized to percentage `0.0..=100.0` (1 decimal place). */
+	pick_rate: number | null,
+	/**  Win rate normalized to percentage `0.0..=100.0` (1 decimal place). */
+	win_rate: number | null,
+	/**  Localized ability metadata for `Q`, `W`, `E`, `R` hydrated from DataDragon. */
+	abilities: ChampionAbilityMetadata_Serialize[],
 };
 
 /**  Metadata for a summoner spell. */

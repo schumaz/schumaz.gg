@@ -8,7 +8,7 @@
 }
 
 .dashboard-split-grid {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 1.12fr 1fr;
@@ -28,8 +28,7 @@
 }
 
 .runes-tree-card {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
 }
@@ -364,8 +363,7 @@
 /* Shop Item Blocks with Official DataDragon Icons */
 .item-blocks-preview {
   margin-top: 0;
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;

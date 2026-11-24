@@ -66,6 +66,16 @@ export const ptBuild: BuildTranslations = {
     buildOptionNumber: "Build {num}",
     goldCost: "{gold} ouro",
   },
+  skills: {
+    title: "Ordem de Habilidades",
+    priorityAriaLabel: "Prioridade de maximização das habilidades",
+    gridAriaLabel: "Ordem de habilidades por nível",
+    levelHeader: "Nv",
+    levelLabel: "Nível {level}: {skill}",
+    abilityFallback: "Habilidade {key}",
+    cooldownLabel: "{cd}s recarga",
+    winRateShort: "{rate}% WR",
+  },
   arena: {
     modeNoticeBadge: "Arena",
     modeNoticeText:

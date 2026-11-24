@@ -277,6 +277,7 @@ pub fn parse_arena_champion_payload(
     );
     let arena_augments = parse_arena_augments(data);
     let arena_synergies = parse_arena_synergies(data, ddragon);
+    let skill_order = crate::build_provider::skills::extract_rest_skill_order(data);
 
     Ok(ChampionBuild {
         champion_id,
@@ -300,6 +301,7 @@ pub fn parse_arena_champion_payload(
         arena_synergies,
         first_place_rate,
         avg_placement,
+        skill_order,
         ..Default::default()
     })
 }

@@ -179,6 +179,7 @@ pub async fn refresh_ddragon_if_outdated_with_base(
         c.items.is_empty()
             || (!c.runes.is_empty() && !c.runes.values().any(|r| !r.short_desc.is_empty()))
             || (!c.spells.is_empty() && !c.spells.values().any(|s| !s.description.is_empty()))
+            || (!c.champions.is_empty() && c.champion_abilities.is_empty())
     });
 
     if let Some(ref cached) = existing

@@ -42,6 +42,8 @@ describe("RankedTab Detail & Loading States", () => {
     expect(within(view).getByTestId("champ-hero")).toBeInTheDocument();
     expect(within(view).getByTestId("runes-tree")).toBeInTheDocument();
     expect(within(view).getByTestId("spells-card")).toBeInTheDocument();
+    expect(within(view).getByTestId("skill-order-card")).toBeInTheDocument();
+    expect(within(view).getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
     expect(within(view).getByTestId("item-blocks")).toBeInTheDocument();
 
     expect(within(view).getByText("Feitiços que Pode Usar")).toBeInTheDocument();

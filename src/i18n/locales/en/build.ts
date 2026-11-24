@@ -66,6 +66,16 @@ export const enBuild: BuildTranslations = {
     buildOptionNumber: "Build {num}",
     goldCost: "{gold}g",
   },
+  skills: {
+    title: "Skill Order",
+    priorityAriaLabel: "Skill maxing priority",
+    gridAriaLabel: "Skill leveling order by level",
+    levelHeader: "Lv",
+    levelLabel: "Level {level}: {skill}",
+    abilityFallback: "Ability {key}",
+    cooldownLabel: "{cd}s CD",
+    winRateShort: "{rate}% WR",
+  },
   arena: {
     modeNoticeBadge: "Arena",
     modeNoticeText:
