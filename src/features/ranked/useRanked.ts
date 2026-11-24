@@ -113,13 +113,7 @@ export function useRanked(
       setBuildLoading(true);
       setBuildError(null);
       try {
-        const build = await rankedIpc.getRankedChampionBuild(
-          champion.id,
-          laneOverride,
-          targetFilters.tier,
-          targetFilters.region,
-          targetFilters.patch
-        );
+        const build = await rankedIpc.getRankedChampionBuild(champion.id, laneOverride, targetFilters.tier, targetFilters.region, targetFilters.patch);
         if (buildSeqRef.current === seq) setChampionBuild(build);
       } catch (err: unknown) {
         if (buildSeqRef.current === seq) {
@@ -173,13 +167,7 @@ export function useRanked(
   const handleDetailFilterChange = useCallback(
     (filterType: "position" | "tier" | "region" | "patch", value: string) => {
       const currentChamp = selectedChampion;
-      const { nextFilters, nextLane } = computeNextDetailRankedFilters(
-        filters,
-        championBuild,
-        currentChamp,
-        filterType,
-        value
-      );
+      const { nextFilters, nextLane } = computeNextDetailRankedFilters(filters, championBuild, currentChamp, filterType, value);
       persistFilters(nextFilters);
       setFilters(nextFilters);
       setTierError(null);
@@ -221,8 +209,8 @@ export function useRanked(
   }, [filters, isActive, selectedChampion, fetchTierList, fetchChampionBuild, persistFilters]);
 
   const orderedSpells = useMemo(
-    () => computeOrderedSpells(championBuild?.spells, null, championBuild?.spell_choices, flashKey, false),
-    [championBuild?.spells, championBuild?.spell_choices, flashKey]
+    () => computeOrderedSpells(championBuild?.spells, 0, championBuild?.spell_options, flashKey, false),
+    [championBuild?.spells, championBuild?.spell_options, flashKey]
   );
 
   return {

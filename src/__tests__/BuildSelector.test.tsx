@@ -47,11 +47,40 @@ describe("BuildSelector", () => {
     const firstCard = screen.getByTestId("build-opt-btn-0");
     expect(firstCard).toHaveClass("active");
     expect(firstCard.querySelectorAll(".build-pill-mini-icon")).toHaveLength(3);
+    expect(firstCard.querySelectorAll(".build-pill-icon-sep")).toHaveLength(2);
+    expect(firstCard.querySelector(".build-pill-top .build-pill-stat")).toHaveTextContent("60.0%");
 
     const secondPill = screen.getByTestId("build-opt-btn-1");
     fireEvent.click(secondPill);
 
     expect(handleSelect).toHaveBeenCalledWith(1);
+  });
+
+  it("renders rich item tooltips on core icons when itemMetadata is provided", () => {
+    render(
+      <BuildSelector
+        buildOptions={mockOptions}
+        selectedBuildIndex={0}
+        onSelectBuild={vi.fn()}
+        itemMetadata={{
+          3089: {
+            id: 3089,
+            name: "Capuz da Morte de Rabadon",
+            gold_total: 3500,
+            stats: ["130 de Poder de Habilidade"],
+            plaintext: "Aumenta drasticamente o Poder de Habilidade.",
+          },
+        }}
+      />
+    );
+
+    const firstCard = screen.getByTestId("build-opt-btn-0");
+    const firstIconFrame = firstCard.querySelector(".build-pill-mini-frame")!;
+    fireEvent.mouseEnter(firstIconFrame.parentElement!);
+
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Capuz da Morte de Rabadon");
+    expect(tooltip).toHaveTextContent(/3[.,]500 ouro/);
   });
 
   it("returns null if options are missing or single", () => {

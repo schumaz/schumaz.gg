@@ -34,211 +34,188 @@ fn sample_ddragon_spells_catalog() -> HashMap<i32, SpellMetadata> {
         .collect()
 }
 
-#[test]
-fn test_extract_summoner_spell_choices_yunara_and_jungle() {
-    let yunara_json = serde_json::json!({
-        "summoner_spells": [
-            { "ids": [4, 21], "play": 61208, "win": 30365 },
-            { "ids": [3, 4], "play": 17302, "win": 8780 }
-        ]
-    });
-    let (top_spells, choices) = extract_summoner_spell_choices(&yunara_json, false);
-    assert_eq!(top_spells, (4, 21));
-    assert_eq!(choices, vec![21, 3]);
-
-    let hecarim_json = serde_json::json!({
-        "summoner_spells": [
-            { "ids": [6, 11], "play": 45000, "win": 23000 },
-            { "ids": [4, 11], "play": 12000, "win": 6000 }
-        ]
-    });
-    let (jng_spells, jng_choices) = extract_summoner_spell_choices(&hecarim_json, true);
-    assert_eq!(jng_spells, (6, 11));
-    assert_eq!(jng_choices, vec![6, 4]);
-
-    let shaco_json = serde_json::json!({
-        "summoner_spells": [
-            { "ids": [14, 11], "play": 38000, "win": 20000 },
-            { "ids": [4, 11], "play": 5000, "win": 2500 }
-        ]
-    });
-    let (_, shaco_choices) = extract_summoner_spell_choices(&shaco_json, true);
-    assert_eq!(shaco_choices, vec![14, 4]);
+fn pair_ids(options: &[SpellPairOption]) -> Vec<(i32, i32)> {
+    options
+        .iter()
+        .map(|o| (o.spell1_id, o.spell2_id))
+        .collect()
 }
 
 #[test]
-fn test_extract_summoner_spell_choices_aram_tristana_and_numeric_opgg_order() {
-    let tristana_aram = serde_json::json!({
+fn test_extract_ahri_mid_real_opgg_json_pairs_and_stats() {
+    let ahri_json = serde_json::json!({
+        "data": {
+            "position": "mid",
+            "win_rate": 51.4,
+            "pick_rate": 11.2,
+            "runes": {
+                "primary_style_id": 8100,
+                "sub_style_id": 8200,
+                "primary_perk_ids": [8112, 8126, 8138, 8106],
+                "sub_perk_ids": [8226, 8210],
+                "stat_shards": [5008, 5008, 5001]
+            },
+            "summoner_spells": [
+                { "ids": [4, 14], "win": 43679, "play": 84666, "pick_rate": 0.6954 },
+                { "ids": [4, 12], "win": 17612, "play": 34826, "pick_rate": 0.2861 },
+                { "ids": [4, 21], "win": 310, "play": 620, "pick_rate": 0.0051 }
+            ],
+            "items": {
+                "starters": [1056, 2003],
+                "core": [3118, 4645, 3157]
+            }
+        }
+    });
+
+    let build = parse_opgg_analysis_payload(&ahri_json, 103, "Ahri")
+        .expect("Parsing Ahri with real OP.GG summoner_spells pairs should succeed");
+
+    assert_eq!((build.spell1_id, build.spell2_id), (4, 14));
+    assert_eq!(pair_ids(&build.spell_options), vec![(4, 14), (4, 12)]);
+    assert_eq!(build.spell_options[0].play, 84666);
+    assert_eq!(build.spell_options[0].win, 43679);
+    assert_eq!(build.spell_options[0].pick_rate, 69.5);
+    assert_eq!(build.spell_options[1].play, 34826);
+    assert_eq!(build.spell_options[1].win, 17612);
+    assert_eq!(build.spell_options[1].pick_rate, 28.6);
+}
+
+#[test]
+fn test_extract_spell_pairs_preserves_distinct_primary_spells_across_options() {
+    // Gwen / Camille: Teleport+Ignite (12, 14) vs Flash+Teleport (4, 12)
+    let gwen_json = serde_json::json!({
         "summoner_spells": [
-            { "ids": [4, 32], "play": 8500, "win": 4300 },
-            { "ids": [4, 7], "play": 42000, "win": 22500 },
-            { "ids": [4, 21], "play": 19500, "win": 10300 }
+            { "ids": [12, 14], "play": 42000, "win": 21800, "pick_rate": 0.582 },
+            { "ids": [12, 4], "play": 28000, "win": 14100, "pick_rate": 0.388 }
         ]
     });
-    let (top_spells, choices) = extract_summoner_spell_choices(&tristana_aram, false);
-    assert_eq!(top_spells, (4, 7));
-    assert_eq!(choices, vec![7, 21]);
+    let (gwen_top, gwen_opts) = extract_summoner_spell_pairs(&gwen_json, false);
+    assert_eq!(gwen_top, (12, 14));
+    assert_eq!(pair_ids(&gwen_opts), vec![(12, 14), (4, 12)]);
 
+    // Darius: Flash+Ghost (4, 6) vs Ghost+Teleport (6, 12) - non-Flash 2nd pair preserved intact!
+    let darius_json = serde_json::json!({
+        "summoner_spells": [
+            { "ids": [4, 6], "play": 51000, "win": 26500, "pick_rate": 0.64 },
+            { "ids": [6, 12], "play": 18500, "win": 9400, "pick_rate": 0.23 }
+        ]
+    });
+    let (darius_top, darius_opts) = extract_summoner_spell_pairs(&darius_json, false);
+    assert_eq!(darius_top, (4, 6));
+    assert_eq!(pair_ids(&darius_opts), vec![(4, 6), (6, 12)]);
+}
+
+#[test]
+fn test_extract_summoner_spell_pairs_jungle_and_non_smite_filtering() {
+    let hecarim_json = serde_json::json!({
+        "summoner_spells": [
+            { "ids": [4, 14], "play": 99999, "win": 50000 },
+            { "ids": [6, 11], "play": 45000, "win": 23000, "pick_rate": 0.72 },
+            { "ids": [4, 11], "play": 12000, "win": 6000, "pick_rate": 0.19 }
+        ]
+    });
+    let (jng_top, jng_opts) = extract_summoner_spell_pairs(&hecarim_json, true);
+    assert_eq!(jng_top, (6, 11));
+    assert_eq!(pair_ids(&jng_opts), vec![(6, 11), (4, 11)]);
+    assert_eq!(jng_opts[0].pick_rate, 72.0);
+
+    // Shaco numerically-ordered [11, 14] normalizes to (14, 11)
+    let shaco_json = serde_json::json!({
+        "summoner_spells": [
+            { "ids": [11, 14], "play": 38000, "win": 20000 },
+            { "ids": [11, 4], "play": 5000, "win": 2500 }
+        ]
+    });
+    let (shaco_top, shaco_opts) = extract_summoner_spell_pairs(&shaco_json, true);
+    assert_eq!(shaco_top, (14, 11));
+    assert_eq!(pair_ids(&shaco_opts), vec![(14, 11), (4, 11)]);
+}
+
+#[test]
+fn test_extract_spell_pairs_deduplicates_unordered_pairs_and_synthesizes_fallback() {
+    let dup_json = serde_json::json!({
+        "summoner_spells": [
+            { "ids": [4, 14], "play": 10000, "win": 5200, "pick_rate": 0.50 },
+            { "ids": [14, 4], "play": 2000, "win": 1050, "pick_rate": 0.10 }
+        ]
+    });
+    let (top, opts) = extract_summoner_spell_pairs(&dup_json, false);
+    assert_eq!(top, (4, 14));
+    assert_eq!(opts.len(), 2);
+    assert_eq!(opts[0].spell1_id, 4);
+    assert_eq!(opts[0].spell2_id, 14);
+    assert_eq!(opts[0].play, 12000);
+    assert_eq!(opts[0].win, 6250);
+    assert_eq!(opts[0].pick_rate, 60.0);
+    assert_eq!((opts[1].spell1_id, opts[1].spell2_id), (4, 12));
+    assert_eq!(opts[1].play, 0);
+    assert_eq!(opts[1].pick_rate, 0.0);
+
+    // Numeric OP.GG ordering [1, 4] and [3, 4] normalizes Flash first
     let cleanse_flash = serde_json::json!({
         "summoner_spells": [
             { "ids": [1, 4], "play": 28000, "win": 14500 },
             { "ids": [3, 4], "play": 12000, "win": 6100 }
         ]
     });
-    let (cleanse_top, cleanse_choices) = extract_summoner_spell_choices(&cleanse_flash, false);
+    let (cleanse_top, cleanse_opts) = extract_summoner_spell_pairs(&cleanse_flash, false);
     assert_eq!(cleanse_top, (4, 1));
-    assert_eq!(cleanse_choices, vec![1, 3]);
+    assert_eq!(pair_ids(&cleanse_opts), vec![(4, 1), (4, 3)]);
 }
 
 #[test]
-fn test_extract_most_used_summoner_spells_from_opgg_rest_structure() {
-    let json = serde_json::json!({
-        "data": {
-            "win_rate": 49.5,
-            "pick_rate": 12.1,
-            "runes": {
-                "primary_style_id": 8000,
-                "sub_style_id": 8300,
-                "primary_perk_ids": [8008, 9111, 9104, 8017],
-                "sub_perk_ids": [8304, 8345],
-                "stat_shards": [5005, 5008, 5011]
-            },
-            "summoner_spells": [
-                { "ids": [4, 21], "win": 30822, "play": 62087, "pick_rate": 0.7006 },
-                { "ids": [3, 4], "win": 8894, "play": 17529, "pick_rate": 0.1978 },
-                { "ids": [4, 14], "win": 250, "play": 500, "pick_rate": 0.005 }
-            ],
-            "items": {
-                "starters": [1055, 2003],
-                "core": [3031, 3094, 3036]
-            }
-        }
-    });
-
-    let build = parse_opgg_analysis_payload(&json, 804, "Yunara")
-        .expect("Parsing Yunara with OP.GG summoner_spells array should succeed");
-
-    assert_eq!(build.spell1_id, 4);
-    assert_eq!(build.spell2_id, 21);
-}
-
-#[test]
-fn test_aram_mayhem_filters_exhaust_while_classic_aram_preserves_it_when_supported() {
+fn test_mode_filtering_for_spell_pairs_across_mayhem_aram_and_sr() {
     let catalog = sample_ddragon_spells_catalog();
     let lulu_aram = serde_json::json!({
         "summoner_spells": [
-            { "ids": [3, 4], "play": 22000, "win": 11500 },
-            { "ids": [4, 7], "play": 12000, "win": 6200 },
-            { "ids": [4, 21], "play": 7000, "win": 3600 }
+            { "ids": [3, 4], "play": 22000, "win": 11500, "pick_rate": 0.52 },
+            { "ids": [4, 7], "play": 12000, "win": 6200, "pick_rate": 0.29 },
+            { "ids": [4, 21], "play": 7000, "win": 3600, "pick_rate": 0.17 }
         ]
     });
 
-    // ARAM Mayhem (2400 -> "KIWI"): Exhaust (3) must be filtered out; Flash + Heal (7) promoted.
     let mayhem_mode = ddragon_mode_for_queue(QUEUE_ARAM_MAYHEM);
-    assert_eq!(mayhem_mode, "KIWI");
-    let (mayhem_top, mayhem_choices) = extract_summoner_spell_choices_for_mode(
+    let (mayhem_top, mayhem_opts) = extract_summoner_spell_pairs_for_mode(
         &lulu_aram,
         false,
         Some(mayhem_mode),
         Some(&catalog),
     );
     assert_eq!(mayhem_top, (4, 7));
-    assert_eq!(mayhem_choices, vec![7, 21]);
-    assert!(!mayhem_choices.contains(&SPELL_EXHAUST_ID));
-    assert!(!mayhem_choices.contains(&SPELL_TELEPORT_ID));
+    assert_eq!(pair_ids(&mayhem_opts), vec![(4, 7), (4, 21)]);
 
-    // Classic ARAM (450 -> "ARAM"): Exhaust (3) remains allowed while DataDragon lists "ARAM".
     let aram_mode = ddragon_mode_for_queue(QUEUE_ARAM);
-    assert_eq!(aram_mode, "ARAM");
-    let (aram_top, aram_choices) =
-        extract_summoner_spell_choices_for_mode(&lulu_aram, false, Some(aram_mode), Some(&catalog));
+    let (aram_top, aram_opts) =
+        extract_summoner_spell_pairs_for_mode(&lulu_aram, false, Some(aram_mode), Some(&catalog));
     assert_eq!(aram_top, (4, 3));
-    assert_eq!(aram_choices, vec![3, 7]);
+    assert_eq!(pair_ids(&aram_opts), vec![(4, 3), (4, 7)]);
 
-    // If DataDragon removes "ARAM" from Exhaust, Classic ARAM also drops it dynamically.
-    let mut updated_catalog = catalog.clone();
-    updated_catalog.get_mut(&3).unwrap().modes = vec!["CLASSIC".to_string()];
-    let (aram_no_exh_top, aram_no_exh_choices) = extract_summoner_spell_choices_for_mode(
-        &lulu_aram,
-        false,
-        Some(aram_mode),
-        Some(&updated_catalog),
-    );
-    assert_eq!(aram_no_exh_top, (4, 7));
-    assert_eq!(aram_no_exh_choices, vec![7, 21]);
-}
-
-#[test]
-fn test_aram_and_mayhem_fallbacks_never_emit_exhaust_in_mayhem_or_teleport_in_aram() {
-    let catalog = sample_ddragon_spells_catalog();
-
-    // Jayce in ARAM Mayhem: #1 is Mark (32), #2 is Exhaust (3) -> must drop Exhaust and fall back to Heal (7).
-    let jayce_only_mark_and_exhaust = serde_json::json!({
-        "summoner_spells": [
-            { "ids": [4, 32], "play": 18000, "win": 9200 },
-            { "ids": [3, 4], "play": 9500, "win": 4800 }
-        ]
-    });
-    let (jayce_top, jayce_choices) = extract_summoner_spell_choices_for_mode(
-        &jayce_only_mark_and_exhaust,
-        false,
-        Some(ddragon_mode_for_queue(QUEUE_ARAM_MAYHEM)),
-        Some(&catalog),
-    );
-    assert_eq!(jayce_top, (4, 32));
-    assert_eq!(jayce_choices, vec![32, 7]);
-    assert!(!jayce_choices.contains(&SPELL_EXHAUST_ID));
-    assert!(!jayce_choices.contains(&SPELL_TELEPORT_ID));
-
-    // Only Exhaust + Flash in ARAM Mayhem -> replaces Exhaust with Mark (32), secondary Heal (7).
+    // Only Exhaust + Flash in ARAM Mayhem -> falls back to (4, 32) and (4, 7)
     let exhaust_only = serde_json::json!({
-        "summoner_spells": [
-            { "ids": [3, 4], "play": 15000, "win": 7800 }
-        ]
+        "summoner_spells": [{ "ids": [3, 4], "play": 15000, "win": 7800 }]
     });
-    let (fallback_top, fallback_choices) = extract_summoner_spell_choices_for_mode(
+    let (fb_top, fb_opts) = extract_summoner_spell_pairs_for_mode(
         &exhaust_only,
         false,
-        Some(ddragon_mode_for_queue(QUEUE_ARAM_MAYHEM)),
+        Some(mayhem_mode),
         Some(&catalog),
     );
-    assert_eq!(fallback_top, (4, 32));
-    assert_eq!(fallback_choices, vec![32, 7]);
+    assert_eq!(fb_top, (4, 32));
+    assert_eq!(pair_ids(&fb_opts), vec![(4, 32), (4, 7)]);
 
-    // Ignite + Teleport in Classic ARAM (450) and ARAM Mayhem (2400) -> Teleport (12) is never emitted.
-    let ignite_and_tp = serde_json::json!({
-        "summoner_spells": [
-            { "ids": [4, 12], "play": 30000, "win": 15000 },
-            { "ids": [4, 14], "play": 10000, "win": 5000 }
-        ]
-    });
-    for queue_id in [QUEUE_ARAM, QUEUE_ARAM_MAYHEM] {
-        let mode = ddragon_mode_for_queue(queue_id);
-        let (top, choices) = extract_summoner_spell_choices_for_mode(
-            &ignite_and_tp,
-            false,
-            Some(mode),
-            Some(&catalog),
-        );
-        assert_eq!(top, (4, 14));
-        assert_eq!(choices, vec![14, 32]);
-        assert!(!choices.contains(&SPELL_TELEPORT_ID));
-    }
-
-    // Summoner's Rift (420 -> "CLASSIC"): Teleport (12) is allowed, Mark (32) is filtered out.
+    // Summoner's Rift filters Mark (32) and keeps Teleport (12)
     let sr_with_mark = serde_json::json!({
         "summoner_spells": [
             { "ids": [4, 32], "play": 30000, "win": 15000 },
             { "ids": [4, 12], "play": 10000, "win": 5200 }
         ]
     });
-    let (sr_top, sr_choices) = extract_summoner_spell_choices_for_mode(
+    let (sr_top, sr_opts) = extract_summoner_spell_pairs_for_mode(
         &sr_with_mark,
         false,
         Some(ddragon_mode_for_queue(QUEUE_SOLO_DUO)),
         Some(&catalog),
     );
     assert_eq!(sr_top, (4, 12));
-    assert!(!sr_choices.contains(&SPELL_MARK_ID));
-    assert_eq!(sr_choices, vec![12, 14]);
+    assert_eq!(pair_ids(&sr_opts), vec![(4, 12), (4, 14)]);
 }

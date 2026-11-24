@@ -8,10 +8,9 @@ export const injectorIpc = {
   async injectSummonerSpells(
     spell1Id: number,
     spell2Id: number,
-    championId: number | null,
-    secondarySpellId: number | null
+    championId: number | null
   ): Promise<null> {
-    return commands.injectSummonerSpells(spell1Id, spell2Id, championId, secondarySpellId);
+    return commands.injectSummonerSpells(spell1Id, spell2Id, championId);
   },
 
   async injectRunePage(

@@ -208,6 +208,10 @@ describe("App — ARAM Modes & Match Lifecycle Navigation", () => {
       eventListeners["champ-select-ended"]({ payload: null });
     });
     expect(screen.getByTestId("champ-hero")).toBeInTheDocument();
+    expect(screen.getByTestId("spell-pair-info-0")).toBeInTheDocument();
+    expect(screen.getByTestId("invert-spells-readonly")).toBeInTheDocument();
+    expect(screen.queryByTestId("spell-pair-btn-0")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
 
     await act(async () => {
       eventListeners["gameflow-phase-changed"]({ payload: "EndOfGame" });

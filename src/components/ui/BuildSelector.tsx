@@ -1,11 +1,15 @@
+import { Fragment } from "react";
 import { UnifiedBuildOption } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
+import { ItemMetadataMap, ItemTooltipContent, lookupItemMetadata } from "./BuildTooltips";
+import { Tooltip } from "./Tooltip";
 
 interface BuildSelectorProps {
   buildOptions?: UnifiedBuildOption[];
   selectedBuildIndex: number;
   onSelectBuild: (index: number) => void;
+  itemMetadata?: ItemMetadataMap;
 }
 
 function formatCompactGames(play: number): string {
@@ -20,6 +24,7 @@ export function BuildSelector({
   buildOptions,
   selectedBuildIndex,
   onSelectBuild,
+  itemMetadata,
 }: BuildSelectorProps) {
   const { t, formatNumber } = useTranslation();
 
@@ -55,6 +60,11 @@ export function BuildSelector({
               : opt.play > 0
               ? `${formatCompactGames(opt.play)}`
               : null;
+          const ariaSummary = `${displayName} · ${formatNumber(opt.play)} ${t(
+            opt.play === 1 ? "common.gamesSingular" : "common.gamesPlural"
+          )}${
+            typeof opt.pick_rate === "number" ? ` (${opt.pick_rate.toFixed(1)}%)` : ""
+          }`;
 
           return (
             <button
@@ -63,37 +73,48 @@ export function BuildSelector({
               className={`unified-build-pill ${isSelected ? "active" : ""}`}
               data-testid={`build-opt-btn-${optIdx}`}
               onClick={() => onSelectBuild(optIdx)}
-              title={`${displayName} · ${formatNumber(opt.play)} ${t(
-                opt.play === 1 ? "common.gamesSingular" : "common.gamesPlural"
-              )}${
-                typeof opt.pick_rate === "number" ? ` (${opt.pick_rate.toFixed(1)}%)` : ""
-              }`}
+              aria-label={ariaSummary}
+              aria-pressed={isSelected}
             >
               <div className="build-pill-top">
                 <span className="build-pill-name" title={displayName}>
                   {displayName}
                 </span>
+                {pickLabel && <span className="build-pill-stat">{pickLabel}</span>}
               </div>
 
               <div className="build-pill-bottom">
                 <div className="build-pill-icons">
-                  {opt.core_item_icon_urls?.map((iconUrl, iconIdx) => (
-                    <span
-                      key={`core-icon-${optIdx}-${iconIdx}`}
-                      className="dd-icon-frame build-pill-mini-frame"
-                    >
-                      <img
-                        src={resolveCachedAssetUrl(iconUrl)}
-                        alt={t("common.itemAlt", { id: opt.core_item_ids[iconIdx] })}
-                        className="build-pill-mini-icon"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
-                    </span>
-                  ))}
+                  {opt.core_item_icon_urls?.map((iconUrl, iconIdx) => {
+                    const itemId = opt.core_item_ids[iconIdx] ?? 0;
+                    const itemMeta = lookupItemMetadata(itemMetadata, itemId);
+                    const itemAlt = itemMeta?.name || t("common.itemAlt", { id: itemId });
+                    return (
+                      <Fragment key={`core-icon-${optIdx}-${iconIdx}`}>
+                        {iconIdx > 0 && (
+                          <span className="build-pill-icon-sep" aria-hidden="true">
+                            ›
+                          </span>
+                        )}
+                        <Tooltip
+                          content={<ItemTooltipContent itemId={itemId} metadata={itemMeta} />}
+                          focusable={false}
+                        >
+                          <span className="dd-icon-frame build-pill-mini-frame">
+                            <img
+                              src={resolveCachedAssetUrl(iconUrl)}
+                              alt={itemAlt}
+                              className="build-pill-mini-icon"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                              }}
+                            />
+                          </span>
+                        </Tooltip>
+                      </Fragment>
+                    );
+                  })}
                 </div>
-                {pickLabel && <span className="build-pill-stat">{pickLabel}</span>}
               </div>
             </button>
           );

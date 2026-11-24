@@ -92,6 +92,7 @@ export function ItemBlocks({
           buildOptions={build.build_options}
           selectedBuildIndex={selectedBuildIndex}
           onSelectBuild={onSelectBuild}
+          itemMetadata={build.item_metadata}
         />
       </div>
 

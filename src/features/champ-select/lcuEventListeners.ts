@@ -26,7 +26,7 @@ export interface LcuListenersContext {
   setBuild: Dispatch<SetStateAction<ChampionBuild | null>>;
   setGameflowPhase: Dispatch<SetStateAction<string>>;
   setSpellsInverted: Dispatch<SetStateAction<boolean>>;
-  setSelectedSecondarySpellId: Dispatch<SetStateAction<number | null>>;
+  setSelectedSpellPairIndex: Dispatch<SetStateAction<number>>;
   setSelectedRunePageIndex: Dispatch<SetStateAction<number>>;
   setSelectedBuildIndex: Dispatch<SetStateAction<number>>;
   setErrorMsg: Dispatch<SetStateAction<string | null>>;
@@ -55,7 +55,7 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionH
   let livePhaseEventSeq = 0;
 
   const resetBuildSelections = () => {
-    ctx.setSelectedSecondarySpellId(null);
+    ctx.setSelectedSpellPairIndex(0);
     ctx.setSelectedRunePageIndex(0);
     ctx.setSelectedBuildIndex(0);
   };

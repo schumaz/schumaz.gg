@@ -104,21 +104,15 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
         ..Default::default()
     };
 
-    // 1. ARAM Tristana: Flash (4) + Curar (7) primary, Barreira (21) secondary
+    // 1. ARAM Tristana: Flash (4) + Curar (7) primary, Flash (4) + Barreira (21) secondary
     let mut tristana_aram = ChampionBuild {
         champion_id: 18,
         champion_name: "Tristana".to_string(),
         spell1_id: 7,
         spell2_id: 4,
-        spell_choices: vec![
-            SpellMetadata {
-                id: 7,
-                ..Default::default()
-            },
-            SpellMetadata {
-                id: 21,
-                ..Default::default()
-            },
+        spell_options: vec![
+            SpellPairOption { spell1_id: 7, spell2_id: 4, ..Default::default() },
+            SpellPairOption { spell1_id: 4, spell2_id: 21, ..Default::default() },
         ],
         active_position: String::new(),
         ..Default::default()
@@ -129,14 +123,16 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
     assert_eq!(tristana_aram.spell2_id, 7);
     assert_eq!(tristana_aram.spells[0].name, "Flash");
     assert_eq!(tristana_aram.spells[1].name, "Curar");
-    assert_eq!(tristana_aram.spell_choices[0].name, "Curar");
-    assert_eq!(tristana_aram.spell_choices[1].name, "Barreira");
+    assert_eq!((tristana_aram.spell_options[0].spell1_id, tristana_aram.spell_options[0].spell2_id), (4, 7));
+    assert_eq!((tristana_aram.spell_options[1].spell1_id, tristana_aram.spell_options[1].spell2_id), (4, 21));
+    assert_eq!(tristana_aram.spell_options[1].spells[1].name, "Barreira");
 
     enrich_build_with_ddragon_with_flash_key(&mut tristana_aram, &cache, FlashKeyPreference::F);
     assert_eq!(tristana_aram.spell1_id, 7);
     assert_eq!(tristana_aram.spell2_id, 4);
     assert_eq!(tristana_aram.spells[0].name, "Curar");
     assert_eq!(tristana_aram.spells[1].name, "Flash");
+    assert_eq!((tristana_aram.spell_options[1].spell1_id, tristana_aram.spell_options[1].spell2_id), (21, 4));
 
     // 2. ARAM with Marca (32) + Flash (4) in numeric/reversed order [32, 4]
     let mut ahri_aram = ChampionBuild {
@@ -168,7 +164,7 @@ fn test_enrich_build_with_ddragon_with_flash_key_applies_preference_in_all_modes
     assert_eq!(cleanse_mayhem.spell2_id, 1);
     assert_eq!(cleanse_mayhem.spells[0].name, "Flash");
     assert_eq!(cleanse_mayhem.spells[1].name, "Purificar");
-    assert_eq!(cleanse_mayhem.spell_choices[1].id, 32);
+    assert_eq!(cleanse_mayhem.spell_options[1].spell2_id, 32);
 
     // 4. Summoner's Rift non-jungle ("mid") also respects FlashKeyPreference
     let mut mid_sr = ChampionBuild {
@@ -193,21 +189,15 @@ fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() 
         ..Default::default()
     };
 
-    // Stale/legacy ARAM Mayhem build with Flash + Exhaust and [Exhaust, Heal] choices
+    // Stale/legacy ARAM Mayhem build with Flash + Exhaust and [Exhaust, Heal] options
     let mut lulu_mayhem = ChampionBuild {
         champion_id: 117,
         champion_name: "Lulu".to_string(),
         spell1_id: 4,
         spell2_id: 3,
-        spell_choices: vec![
-            SpellMetadata {
-                id: 3,
-                ..Default::default()
-            },
-            SpellMetadata {
-                id: 7,
-                ..Default::default()
-            },
+        spell_options: vec![
+            SpellPairOption { spell1_id: 4, spell2_id: 3, ..Default::default() },
+            SpellPairOption { spell1_id: 4, spell2_id: 7, ..Default::default() },
         ],
         supports_runes: false,
         ..Default::default()
@@ -223,14 +213,14 @@ fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() 
     assert_eq!(lulu_mayhem.spell2_id, 4);
     assert_eq!(
         lulu_mayhem
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![7, 32]
+        vec![(7, 4), (32, 4)]
     );
 
-    // Classic ARAM (450) with Ignite (14) and empty choices must fall back to Mark (32), never Teleport (12)
+    // Classic ARAM (450) with Ignite (14) and empty options must fall back to Mark (32), never Teleport (12)
     let mut ignite_aram = ChampionBuild {
         champion_id: 103,
         champion_name: "Ahri".to_string(),
@@ -248,14 +238,14 @@ fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() 
     );
     assert_eq!(
         ignite_aram
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![14, 32]
+        vec![(4, 14), (4, 32)]
     );
 
-    // Barrier (21) with empty choices in ARAM Mayhem must fall back to Mark (32), never Exhaust (3)
+    // Barrier (21) with empty options in ARAM Mayhem must fall back to Mark (32), never Exhaust (3)
     let mut barrier_mayhem = ChampionBuild {
         champion_id: 18,
         champion_name: "Tristana".to_string(),
@@ -273,11 +263,11 @@ fn test_enrichment_sanitizes_exhaust_in_mayhem_and_teleport_in_aram_fallbacks() 
     );
     assert_eq!(
         barrier_mayhem
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![21, 32]
+        vec![(4, 21), (4, 32)]
     );
 }
 

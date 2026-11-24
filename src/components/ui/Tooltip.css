@@ -181,6 +181,48 @@
   word-break: break-word;
 }
 
+.rich-tooltip-pair-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rich-tooltip-pair-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rich-tooltip-pair-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rich-tooltip-pair-name {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rich-tooltip-pair-cd {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent-primary-hover);
+  flex-shrink: 0;
+}
+
+.rich-tooltip-pair-desc {
+  margin: 0;
+  font-size: 0.71rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 @keyframes uiTooltipEnter {
   from {
     opacity: 0;

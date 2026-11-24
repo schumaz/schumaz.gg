@@ -22,22 +22,15 @@ pub async fn inject_rune_page(
     .await
 }
 
-/// Tauri command to immediately inject only summoner spells into an active Champ Select session.
+/// Tauri command to immediately inject summoner spells into an active Champ Select session.
 #[tauri::command]
 #[specta::specta]
 pub async fn inject_summoner_spells(
     spell1_id: i32,
     spell2_id: i32,
     champion_id: Option<i32>,
-    secondary_spell_id: Option<i32>,
 ) -> Result<(), String> {
-    lcu_injector::apply_manual_summoner_spells(
-        spell1_id,
-        spell2_id,
-        champion_id,
-        secondary_spell_id,
-    )
-    .await
+    lcu_injector::apply_manual_summoner_spells(spell1_id, spell2_id, champion_id).await
 }
 
 /// Tauri command to immediately update and re-inject item sets into the LoL client shop.

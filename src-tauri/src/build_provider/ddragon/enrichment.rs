@@ -1,8 +1,8 @@
 use super::super::analytics::aram::normalize_opgg_champion_key;
 use super::super::models::{ChampionBuild, DataDragonCache, ItemBlockKind, ItemMetadata};
 use super::super::spells::{
-    SPELL_CLARITY_ID, SPELL_MARK_ID, ddragon_mode_for_queue, sanitize_spell_choices_for_mode,
-    sanitize_spell_pair_for_mode,
+    SPELL_CLARITY_ID, SPELL_MARK_ID, ddragon_mode_for_queue,
+    sanitize_spell_pair_options_for_mode, sanitize_top_pair_from_options,
 };
 use super::metadata::{resolve_rune_metadata_for_locale, resolve_spell_metadata_for_locale};
 use crate::lcu_injector::FlashKeyPreference;
@@ -63,7 +63,7 @@ pub fn localize_build_labels(build: &mut ChampionBuild, locale: AppLocale) {
 }
 
 /// Sanitizes spells for the active queue mode, applies Flash key preference (D vs F) and Jungle
-/// Smite rule, and enriches `spells` and `spell_choices` using DataDragon cache and `locale`.
+/// Smite rule, and enriches `spells` and `spell_options` using DataDragon cache and `locale`.
 pub fn apply_build_spells_for_queue_with_preference_and_locale(
     build: &mut ChampionBuild,
     cache: &DataDragonCache,
@@ -75,7 +75,7 @@ pub fn apply_build_spells_for_queue_with_preference_and_locale(
         build.spell1_id = 0;
         build.spell2_id = 0;
         build.spells.clear();
-        build.spell_choices.clear();
+        build.spell_options.clear();
         return;
     }
 
@@ -83,12 +83,11 @@ pub fn apply_build_spells_for_queue_with_preference_and_locale(
     let mode = queue_id
         .map(ddragon_mode_for_queue)
         .or_else(|| infer_mode_from_build(build));
-    let existing_choice_ids: Vec<i32> = build.spell_choices.iter().map(|s| s.id).collect();
 
-    let (clean_s1, clean_s2) = sanitize_spell_pair_for_mode(
+    let (clean_s1, clean_s2) = sanitize_top_pair_from_options(
         build.spell1_id,
         build.spell2_id,
-        &existing_choice_ids,
+        &build.spell_options,
         is_jungle,
         mode,
         Some(&cache.spells),
@@ -104,22 +103,33 @@ pub fn apply_build_spells_for_queue_with_preference_and_locale(
         resolve_spell_metadata_for_locale(cache, build.spell2_id, locale),
     ];
 
-    let sanitized_choices = sanitize_spell_choices_for_mode(
-        build.spell1_id,
-        build.spell2_id,
-        &existing_choice_ids,
+    let mut sanitized_options = sanitize_spell_pair_options_for_mode(
+        clean_s1,
+        clean_s2,
+        &build.spell_options,
         is_jungle,
         mode,
         Some(&cache.spells),
     );
-    build.spell_choices = sanitized_choices
-        .into_iter()
-        .map(|id| resolve_spell_metadata_for_locale(cache, id, locale))
-        .collect();
+    for opt in &mut sanitized_options {
+        let (o1, o2) = crate::lcu_injector::apply_jungle_smite_and_flash_preference(
+            opt.spell1_id,
+            opt.spell2_id,
+            flash_key,
+            is_jungle,
+        );
+        opt.spell1_id = o1;
+        opt.spell2_id = o2;
+        opt.spells = vec![
+            resolve_spell_metadata_for_locale(cache, o1, locale),
+            resolve_spell_metadata_for_locale(cache, o2, locale),
+        ];
+    }
+    build.spell_options = sanitized_options;
 }
 
 /// Applies Flash key preference (D vs F) and Jungle Smite rule to a ChampionBuild's spell slots
-/// and enriches `spells` and `spell_choices` using DataDragon cache and `locale`.
+/// and enriches `spells` and `spell_options` using DataDragon cache and `locale`.
 pub fn apply_build_spells_with_preference_and_locale(
     build: &mut ChampionBuild,
     cache: &DataDragonCache,

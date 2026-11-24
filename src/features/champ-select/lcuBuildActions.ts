@@ -83,17 +83,17 @@ export async function fetchRecommendedPayloadBuild(
     : buildIpc.getRecommendedBuildForChampion(payload.champion_id, qId);
 }
 
-export async function injectSecondarySpellAction(
+export async function injectSpellPairAction(
   build: ChampionBuild | null,
-  spellId: number,
+  pairIndex: number,
   flashKey: FlashKeyPreference,
   spellsInverted: boolean
 ) {
   if (!build || build.supports_spells === false) return;
   const reordered = computeOrderedSpells(
     build.spells,
-    spellId,
-    build.spell_choices,
+    pairIndex,
+    build.spell_options,
     flashKey,
     spellsInverted
   );
@@ -102,11 +102,10 @@ export async function injectSecondarySpellAction(
       await injectorIpc.injectSummonerSpells(
         reordered[0].id,
         reordered[1].id,
-        build.champion_id ?? null,
-        spellId
+        build.champion_id ?? null
       );
     } catch (e) {
-      console.warn("Failed to inject secondary spell change:", e);
+      console.warn("Failed to inject spell pair change:", e);
     }
   }
 }

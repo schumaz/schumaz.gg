@@ -125,11 +125,11 @@ async fn test_lulu_aram_mayhem_filters_exhaust_in_fast_spells_and_full_build_whi
     assert_ne!(mayhem_build.spell2_id, 3);
     assert_eq!(
         mayhem_build
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![7, 21]
+        vec![(4, 7), (4, 21)]
     );
 
     // 2. Classic ARAM (450 / "ARAM"): Exhaust (3) remains allowed while listed in DataDragon "ARAM"
@@ -154,10 +154,10 @@ async fn test_lulu_aram_mayhem_filters_exhaust_in_fast_spells_and_full_build_whi
     assert_eq!((fast_aram.spell1_id, fast_aram.spell2_id), (4, 3));
     assert_eq!(
         aram_build
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![3, 7]
+        vec![(4, 3), (4, 7)]
     );
 }

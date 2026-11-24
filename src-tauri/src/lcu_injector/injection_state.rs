@@ -1,6 +1,6 @@
 use super::preferences::{FlashKeyPreference, UserPreferences};
 use super::selections::get_champion_selections;
-use super::spell_rules::{SPELL_FLASH_ID, SPELL_SMITE_ID, apply_jungle_smite_and_flash_preference};
+use super::spell_rules::apply_jungle_smite_and_flash_preference;
 use crate::build_provider::ChampionBuild;
 use crate::logging;
 pub use crate::models::InjectionReport;
@@ -154,7 +154,7 @@ impl SafetyInjectionSink for crate::lcu_connector::LcuConnection {
 }
 
 /// Resolves the final `(spell1Id, spell2Id)` pair to inject for a champion, applying
-/// user secondary spell selections, mandatory Jungle Smite rules, and Flash key preference (D vs F)
+/// user spell pair selections, mandatory Jungle Smite rules, and Flash key preference (D vs F)
 /// across all game modes (Summoner's Rift, ARAM, ARAM Mayhem, Practice Tool).
 pub fn resolve_injection_spell_pair_from_raw(
     champion_id: i32,
@@ -163,27 +163,16 @@ pub fn resolve_injection_spell_pair_from_raw(
     is_jungle: bool,
     flash_key: FlashKeyPreference,
 ) -> (i32, i32) {
-    let (mut s1, mut s2) = (spell1_id, spell2_id);
-
-    if let Some(sel) = get_champion_selections(champion_id)
-        && let Some(sec_spell) = sel.secondary_spell_id
+    let (s1, s2) = if let Some(sel) = get_champion_selections(champion_id)
+        && let Some((sel_s1, sel_s2)) = sel.selected_spell_pair
+        && sel_s1 > 0
+        && sel_s2 > 0
+        && sel_s1 != sel_s2
     {
-        if is_jungle {
-            if s1 == SPELL_SMITE_ID {
-                s2 = sec_spell;
-            } else if s2 == SPELL_SMITE_ID {
-                s1 = sec_spell;
-            } else {
-                s2 = sec_spell;
-            }
-        } else if s1 == SPELL_FLASH_ID {
-            s2 = sec_spell;
-        } else if s2 == SPELL_FLASH_ID {
-            s1 = sec_spell;
-        } else {
-            s2 = sec_spell;
-        }
-    }
+        (sel_s1, sel_s2)
+    } else {
+        (spell1_id, spell2_id)
+    };
 
     apply_jungle_smite_and_flash_preference(s1, s2, flash_key, is_jungle)
 }

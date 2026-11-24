@@ -44,9 +44,29 @@ export const baseBuild: ChampionBuild = {
       perks: [],
     },
   ],
-  spell_choices: [
-    { id: 7, name: "Curar", icon_url: "heal.png" },
-    { id: 21, name: "Barreira", icon_url: "barrier.png" },
+  spell_options: [
+    {
+      spell1_id: 4,
+      spell2_id: 7,
+      play: 1125,
+      win: 599,
+      pick_rate: 33.6,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png" },
+        { id: 7, name: "Curar", icon_url: "heal.png" },
+      ],
+    },
+    {
+      spell1_id: 4,
+      spell2_id: 21,
+      play: 695,
+      win: 404,
+      pick_rate: 20.8,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png" },
+        { id: 21, name: "Barreira", icon_url: "barrier.png" },
+      ],
+    },
   ],
   spells: [
     { id: 4, name: "Flash", icon_url: "flash.png" },

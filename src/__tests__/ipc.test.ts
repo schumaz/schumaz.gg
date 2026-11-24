@@ -74,12 +74,11 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
       patch: "16.22",
     });
 
-    await injectorIpc.injectSummonerSpells(4, 14, 103, 14);
+    await injectorIpc.injectSummonerSpells(4, 14, 103);
     expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
       championId: 103,
       spell1Id: 4,
       spell2Id: 14,
-      secondarySpellId: 14,
     });
 
     await injectorIpc.injectRunePage(103, "Ahri", 0, 8100, 8200, [8112]);

@@ -39,15 +39,15 @@ export interface BuildTranslations {
     shortTitle: string;
     invertBtn: string;
     invertTitle: string;
+    invertReadOnlyHint: string;
     spell1Fallback: string;
     spell2Fallback: string;
-    secondaryReadOnlyTitle: string;
-    secondaryEditTitle: string;
-    secondaryShortReadOnly: string;
-    secondaryShortEdit: string;
-    mostUsed: string;
-    alternative: string;
-    secondMostUsed: string;
+    optionsReadOnlyTitle: string;
+    optionsEditTitle: string;
+    optionsShortLabel: string;
+    mostUsedPair: string;
+    alternativePair: string;
+    secondMostUsedPair: string;
     cooldownSeconds: string;
   };
   items: {

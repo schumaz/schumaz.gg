@@ -1,6 +1,7 @@
 import { useTranslation } from "../../i18n";
 import {
   ChampionBuild,
+  FlashKeyPreference,
   RankedChampionEntry,
   SpellMetadata,
 } from "../../types";
@@ -18,6 +19,7 @@ interface RankedChampionDetailProps {
   buildError: string | null;
   detailStatusTag: string;
   orderedSpells: SpellMetadata[];
+  flashKey?: FlashKeyPreference;
   selectedRunePageIndex: number;
   selectedBuildIndex: number;
   onDetailFilterChange: (
@@ -37,6 +39,7 @@ export function RankedChampionDetail({
   buildError,
   detailStatusTag,
   orderedSpells,
+  flashKey,
   selectedRunePageIndex,
   selectedBuildIndex,
   onDetailFilterChange,
@@ -73,8 +76,8 @@ export function RankedChampionDetail({
 
               <SpellsBar
                 orderedSpells={orderedSpells}
-                spellChoices={championBuild.spell_choices}
-                selectedSecondarySpellId={null}
+                spellOptions={championBuild.spell_options}
+                flashKey={flashKey}
                 readOnly={true}
               />
             </div>

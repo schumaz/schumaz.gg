@@ -49,17 +49,28 @@ describe("RankedTab Detail & Loading States", () => {
     expect(within(view).getByTestId("skill-order-card")).toBeInTheDocument();
     expect(within(view).getByTestId("item-blocks")).toBeInTheDocument();
 
-    expect(within(view).getByTestId("secondary-spell-selector")).toHaveAttribute(
+    expect(within(view).getByTestId("spell-pair-selector")).toHaveAttribute(
       "aria-label",
-      "Feitiços que Pode Usar"
+      "Combinações de Feitiços"
     );
-    expect(within(view).getByText("Opções")).toBeInTheDocument();
-    expect(within(view).queryByText("2º")).not.toBeInTheDocument();
+    expect(within(view).queryByText("Opções")).not.toBeInTheDocument();
     expect(within(view).queryByTestId("invert-spells-btn")).not.toBeInTheDocument();
-    expect(within(view).getByTestId("sec-spell-info-14")).toBeInTheDocument();
-    expect(within(view).queryByTestId("sec-spell-btn-14")).not.toBeInTheDocument();
-    expect(within(view).queryByText("D")).not.toBeInTheDocument();
-    expect(within(view).queryByText("F")).not.toBeInTheDocument();
+    expect(within(view).queryByTestId("spell-pair-btn-0")).not.toBeInTheDocument();
+    expect(within(view).queryByTestId("spell-pair-btn-1")).not.toBeInTheDocument();
+
+    const pair0 = within(view).getByTestId("spell-pair-info-0");
+    const pair1 = within(view).getByTestId("spell-pair-info-1");
+    expect(pair0.tagName).toBe("DIV");
+    expect(pair0).toHaveClass("spell-pair-card", "is-readonly", "active");
+    expect(within(pair0).getByText("D")).toBeInTheDocument();
+    expect(within(pair0).getByText("F")).toBeInTheDocument();
+    expect(pair1.tagName).toBe("DIV");
+    expect(pair1).toHaveClass("spell-pair-card", "is-readonly");
+    expect(pair1).not.toHaveClass("active");
+
+    const readonlySwap = within(view).getByTestId("invert-spells-readonly");
+    expect(readonlySwap.tagName).toBe("SPAN");
+    expect(readonlySwap).toHaveAttribute("aria-disabled", "true");
     expect(within(view).getByText("Build Recomendada")).toBeInTheDocument();
     expect(within(view).queryByText("Build na Loja")).not.toBeInTheDocument();
 

@@ -112,17 +112,19 @@ fn test_real_opgg_aram_tristana_payload_blocks_options_and_spells() {
     let aram_build = parse_opgg_analysis_payload(&rest_json, 18, "Tristana")
         .expect("Real Tristana ARAM payload should parse");
 
-    // Summoner spells: Flash + Heal (4, 7) and top secondary choices [7, 21]
+    // Summoner spells: Flash + Heal (4, 7) and top pair options [(4, 7), (4, 21)]
     assert_eq!(aram_build.spell1_id, 4);
     assert_eq!(aram_build.spell2_id, 7);
     assert_eq!(
         aram_build
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![7, 21]
+        vec![(4, 7), (4, 21)]
     );
+    assert_eq!(aram_build.spell_options[0].pick_rate, 33.6);
+    assert_eq!(aram_build.spell_options[1].pick_rate, 20.8);
 
     // 5 Item Blocks aligned with OP.GG:
     assert_eq!(aram_build.item_blocks.len(), 5);

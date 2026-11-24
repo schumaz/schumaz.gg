@@ -73,6 +73,21 @@ pub struct SpellMetadata {
     pub cooldown_secs: Option<i32>,
 }
 
+/// Metadata for a complete 2-spell summoner pair option (e.g. Flash + Ignite vs Flash + Teleport).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Type)]
+pub struct SpellPairOption {
+    pub spell1_id: i32,
+    pub spell2_id: i32,
+    #[serde(default)]
+    pub play: i64,
+    #[serde(default)]
+    pub win: i64,
+    #[serde(default)]
+    pub pick_rate: f64,
+    #[serde(default)]
+    pub spells: Vec<SpellMetadata>,
+}
+
 /// Metadata for a complete 9-perk rune page option (keystone, primary tree, secondary tree, stat mods).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Type)]
 pub struct RunePageOption {
@@ -226,7 +241,7 @@ pub struct ChampionBuild {
     #[serde(default)]
     pub spells: Vec<SpellMetadata>,
     #[serde(default)]
-    pub spell_choices: Vec<SpellMetadata>,
+    pub spell_options: Vec<SpellPairOption>,
     #[serde(default)]
     pub item_metadata: HashMap<i32, ItemMetadata>,
     #[serde(default)]
@@ -282,7 +297,7 @@ impl Default for ChampionBuild {
             sub_style_icon_url: String::new(),
             perks: Vec::new(),
             spells: Vec::new(),
-            spell_choices: Vec::new(),
+            spell_options: Vec::new(),
             item_metadata: HashMap::new(),
             active_position: String::new(),
             active_tier: String::new(),

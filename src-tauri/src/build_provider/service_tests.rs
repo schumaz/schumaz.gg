@@ -159,11 +159,11 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
     assert_eq!(mayhem_build.spell2_id, 7);
     assert_eq!(
         mayhem_build
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![7, 21]
+        vec![(4, 7), (4, 21)]
     );
 
     let aram_build = get_recommended_build_with_filters_and_endpoints(

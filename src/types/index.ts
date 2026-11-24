@@ -65,6 +65,8 @@ export type {
   SkillOrderRecommendation,
   SkillOrderRecommendation_Serialize,
   SpellMetadata,
+  SpellPairOption,
+  SpellPairOption_Serialize,
   SummonerInfo,
   UnifiedBuildOption,
   UpdaterSettings,

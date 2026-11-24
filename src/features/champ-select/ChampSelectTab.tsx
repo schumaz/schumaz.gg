@@ -1,6 +1,7 @@
 import {
   ChampionBuild,
   ChampSelectedPayload,
+  FlashKeyPreference,
   SpellMetadata,
   SummonerInfo,
 } from "../../types";
@@ -12,16 +13,19 @@ import { RuneTree } from "../../components/ui/RuneTree";
 import { SpellsBar } from "../../components/ui/SpellsBar";
 import { isArenaBuildContext } from "../../components/ui/queueContext";
 import { IdleState } from "./IdleState";
+import { isInGamePhase } from "./lcuEventListeners";
 
 interface ChampSelectTabProps {
   isActive: boolean;
   build: ChampionBuild | null;
   champSelect: ChampSelectedPayload | null;
   summoner: SummonerInfo | null;
+  gameflowPhase?: string;
   loading: boolean;
   errorMsg: string | null;
   orderedSpells: SpellMetadata[];
-  selectedSecondarySpellId: number | null;
+  flashKey: FlashKeyPreference;
+  selectedSpellPairIndex: number;
   selectedRunePageIndex: number;
   selectedBuildIndex: number;
   onFilterChange: (
@@ -30,7 +34,7 @@ interface ChampSelectTabProps {
   ) => void;
   onSelectRunePage: (pageIndex: number) => void;
   onInvertSpells: () => void;
-  onSelectSecondarySpell: (spellId: number) => void;
+  onSelectSpellPair: (pairIndex: number) => void;
   onSelectBuild: (index: number) => void;
 }
 
@@ -39,19 +43,22 @@ export function ChampSelectTab({
   build,
   champSelect,
   summoner,
+  gameflowPhase = "",
   loading,
   errorMsg,
   orderedSpells,
-  selectedSecondarySpellId,
+  flashKey,
+  selectedSpellPairIndex,
   selectedRunePageIndex,
   selectedBuildIndex,
   onFilterChange,
   onSelectRunePage,
   onInvertSpells,
-  onSelectSecondarySpell,
+  onSelectSpellPair,
   onSelectBuild,
 }: ChampSelectTabProps) {
   const isArena = isArenaBuildContext(build, champSelect);
+  const isSpellsReadOnly = isInGamePhase(gameflowPhase) || build?.supports_spells === false;
 
   return (
     <div
@@ -88,10 +95,12 @@ export function ChampSelectTab({
 
                   <SpellsBar
                     orderedSpells={orderedSpells}
-                    spellChoices={build.spell_choices}
-                    selectedSecondarySpellId={selectedSecondarySpellId}
-                    onInvertSpells={onInvertSpells}
-                    onSelectSecondarySpell={onSelectSecondarySpell}
+                    spellOptions={build.spell_options}
+                    selectedSpellPairIndex={selectedSpellPairIndex}
+                    flashKey={flashKey}
+                    onInvertSpells={isSpellsReadOnly ? undefined : onInvertSpells}
+                    onSelectSpellPair={isSpellsReadOnly ? undefined : onSelectSpellPair}
+                    readOnly={isSpellsReadOnly}
                   />
                 </>
               )}

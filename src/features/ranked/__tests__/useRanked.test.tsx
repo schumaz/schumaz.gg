@@ -212,6 +212,12 @@ describe("useRanked hook state and filter preservation", () => {
     fireEvent.click(screen.getByTestId("build-opt-btn-1"));
     expect(screen.getByTestId("active-build-meta")).toHaveTextContent(/30.0% uso/i);
 
+    expect(screen.getByTestId("spell-pair-info-0")).toHaveClass("active");
+    fireEvent.click(screen.getByTestId("spell-pair-info-1"));
+    expect(screen.getByTestId("spell-pair-info-0")).toHaveClass("active");
+    expect(screen.getByTestId("spell-pair-info-1")).not.toHaveClass("active");
+    expect(screen.getByTestId("invert-spells-readonly")).toBeInTheDocument();
+
     expect(injectRunesSpy).not.toHaveBeenCalled();
     expect(injectBuildSpy).not.toHaveBeenCalled();
     expect(injectSpellsSpy).not.toHaveBeenCalled();

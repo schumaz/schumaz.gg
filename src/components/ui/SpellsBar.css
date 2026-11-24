@@ -1,7 +1,7 @@
-/* Compact Summoner Spells Card (Squircle Icons + Natural-Width Labels) */
+/* Compact Summoner Spells Card (Top-2 Pair Cards + Swap Control with Action-Gated Interactivity) */
 
 .card.spells-card {
-  padding: 10px 14px;
+  padding: 8px 12px;
   margin-bottom: 0;
   flex-shrink: 0;
 }
@@ -9,16 +9,7 @@
 .spells-bar-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.spells-primary-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -32,20 +23,83 @@
   flex-shrink: 0;
 }
 
-.spells-list {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+.spell-pair-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1;
   min-width: 0;
 }
 
-.spell-item {
-  display: inline-flex;
+.spell-pair-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.spell-pair-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 9px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  text-align: left;
+  font-family: inherit;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease,
+    transform 0.14s ease, box-shadow 0.16s ease;
+}
+
+.spell-pair-card:not(.is-readonly) {
+  cursor: pointer;
+}
+
+.spell-pair-card.is-readonly {
+  cursor: default;
+}
+
+.spell-pair-card:not(.is-readonly):hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-highlight);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.spell-pair-card:focus-visible {
+  outline: 1.5px solid var(--accent-primary-hover);
+  outline-offset: 2px;
+}
+
+.ui-tooltip-trigger:hover .spell-pair-card.is-readonly:not(.active),
+.ui-tooltip-trigger:focus-visible .spell-pair-card.is-readonly:not(.active) {
+  border-color: var(--border-highlight);
+}
+
+.spell-pair-card.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 0 10px var(--accent-subtle);
+}
+
+.spell-pair-items {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 0;
   min-width: 0;
+  flex: 1;
+}
+
+.spell-card-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .spell-icon-anchor {
@@ -54,19 +108,18 @@
   flex-shrink: 0;
 }
 
-.spell-icon-frame {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+.spell-card-icon-frame {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
 }
 
-.spell-icon-frame::after {
+.spell-card-icon-frame::after {
   box-shadow: inset 0 0 0 1px var(--border-highlight);
 }
 
-.ui-tooltip-trigger:hover .spell-icon-frame::after,
-.ui-tooltip-trigger:focus-visible .spell-icon-frame::after {
-  box-shadow: inset 0 0 0 1.5px var(--accent-primary-hover);
+.spell-pair-card.active .spell-card-icon-frame::after {
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.45);
 }
 
 .spell-icon {
@@ -80,16 +133,16 @@
 .spell-key-indicator {
   position: absolute;
   bottom: -3px;
-  right: -4px;
+  right: -3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   background-color: var(--bg-base);
   border: 1px solid var(--accent-border);
-  border-radius: 5px;
-  font-size: 0.62rem;
+  border-radius: 4px;
+  font-size: 0.56rem;
   font-weight: 800;
   line-height: 1;
   color: var(--accent-primary-hover);
@@ -101,12 +154,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  font-size: 0.7rem;
+  border-radius: 5px;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--accent-primary-hover);
   flex-shrink: 0;
@@ -114,9 +167,53 @@
 
 .spell-name {
   font-weight: 600;
-  font-size: 0.84rem;
-  color: var(--text-primary);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.spell-pair-card:not(.is-readonly):hover .spell-name,
+.ui-tooltip-trigger:hover .spell-pair-card.is-readonly:not(.active) .spell-name,
+.ui-tooltip-trigger:focus-visible .spell-pair-card.is-readonly:not(.active) .spell-name {
+  color: var(--text-primary);
+}
+
+.spell-pair-card.active .spell-name {
+  color: #ffffff;
+}
+
+.spell-pair-stat {
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.spell-pair-card.active .spell-pair-stat {
+  color: var(--accent-primary-hover);
+}
+
+.spell-pair-fallback {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 9px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+}
+
+.invert-spells-tooltip-trigger {
+  flex-shrink: 0;
+  border-radius: 9999px;
 }
 
 .invert-spells-btn {
@@ -132,96 +229,40 @@
   color: var(--accent-primary-hover);
   font-size: 0.85rem;
   line-height: 1;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.14s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.14s ease,
+    opacity 0.16s ease;
 }
 
-.invert-spells-btn:hover {
+.invert-spells-btn:not(.is-readonly) {
+  cursor: pointer;
+}
+
+.invert-spells-btn:not(.is-readonly):hover {
   background-color: var(--accent-subtle);
   border-color: var(--accent-primary);
   transform: translateY(-1px);
 }
 
-.invert-spells-btn:active {
+.invert-spells-btn:not(.is-readonly):active {
   transform: translateY(0);
 }
 
-/* Inline Secondary Spell Choices (Single Squircle Frame, Zero Double-Square) */
-.secondary-spell-selector {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-
-.secondary-spell-title {
-  font-size: 0.7rem;
-  font-weight: 700;
+.invert-spells-btn.is-readonly {
+  cursor: default;
+  opacity: 0.45;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
 }
 
-.secondary-spell-options {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.secondary-spell-btn,
-.secondary-spell-pill {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: none;
-  border-radius: 9px;
-  background-color: var(--bg-input);
-}
-
-.secondary-spell-pill::after,
-.secondary-spell-btn::after {
-  box-shadow: inset 0 0 0 1px var(--border-highlight);
-  transition: box-shadow 0.16s ease;
-}
-
-.secondary-spell-btn {
-  cursor: pointer;
-  transition: transform 0.14s ease, box-shadow 0.16s ease;
-}
-
-.secondary-spell-btn:hover {
-  transform: translateY(-1px);
-}
-
-.secondary-spell-btn:hover::after,
-.ui-tooltip-trigger:hover .secondary-spell-pill::after,
-.ui-tooltip-trigger:focus-visible .secondary-spell-pill::after {
-  box-shadow: inset 0 0 0 1.5px var(--accent-primary-hover);
-}
-
-.secondary-spell-btn.active {
-  box-shadow: 0 0 10px var(--accent-subtle);
-}
-
-.secondary-spell-btn.active::after {
-  box-shadow: inset 0 0 0 2px var(--accent-primary);
-}
-
-.secondary-spell-icon {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transform: scale(1.12);
+@media (max-width: 960px) {
+  .spell-pair-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .invert-spells-btn,
-  .secondary-spell-btn {
+  .spell-pair-card {
     transition: none;
   }
 }

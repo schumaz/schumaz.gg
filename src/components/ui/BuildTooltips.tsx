@@ -103,6 +103,69 @@ export function SpellTooltipContent({ spell, subtitle }: SpellTooltipContentProp
   );
 }
 
+interface SpellPairTooltipContentProps {
+  spells: SpellMetadata[];
+  subtitle?: string;
+  play?: number;
+  pickRate?: number;
+}
+
+/**
+ * Pure visual rich tooltip body for a 2-spell summoner combination option.
+ */
+export function SpellPairTooltipContent({
+  spells,
+  subtitle,
+  play,
+  pickRate,
+}: SpellPairTooltipContentProps) {
+  const { t, formatNumber } = useTranslation();
+  const pairTitle =
+    spells.length >= 2 ? `${spells[0].name} + ${spells[1].name}` : spells[0]?.name || "";
+  const pctBadge =
+    typeof pickRate === "number" && pickRate > 0 ? `${pickRate.toFixed(1)}%` : null;
+  const metaParts: string[] = [];
+  if (subtitle) metaParts.push(subtitle);
+  if (typeof play === "number" && play > 0) {
+    metaParts.push(
+      `${formatNumber(play)} ${t(play === 1 ? "common.gamesSingular" : "common.gamesPlural")}`
+    );
+  }
+  const metaLine = metaParts.join(" · ");
+
+  return (
+    <>
+      <div className="rich-tooltip-header">
+        <span className="rich-tooltip-title">{pairTitle}</span>
+        {pctBadge && <span className="rich-tooltip-badge">{pctBadge}</span>}
+      </div>
+      {metaLine && <span className="rich-tooltip-subtitle">{metaLine}</span>}
+      <div className="rich-tooltip-pair-list">
+        {spells.slice(0, 2).map((spell, idx) => {
+          const cd =
+            typeof spell.cooldown_secs === "number" && spell.cooldown_secs > 0
+              ? spell.cooldown_secs
+              : null;
+          const desc = spell.description?.trim() ?? "";
+          return (
+            <div key={`pair-tip-${spell.id}-${idx}`} className="rich-tooltip-pair-item">
+              <div className="rich-tooltip-pair-row">
+                <span className="rich-tooltip-pair-name">{spell.name}</span>
+                {cd !== null && (
+                  <span className="rich-tooltip-pair-cd">
+                    {t("spells.cooldownSeconds", { secs: cd })}
+                  </span>
+                )}
+              </div>
+              {desc && <p className="rich-tooltip-pair-desc">{desc}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 interface SkillTooltipContentProps {
   skillKey: string;
   ability?: ChampionAbilityMetadata;

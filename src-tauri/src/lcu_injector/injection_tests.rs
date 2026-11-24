@@ -3,7 +3,7 @@ use crate::build_provider::{ItemBlock, ItemBlockKind, RunePageOption};
 use crate::lcu_injector::{
     FlashKeyPreference, TEST_SELECTIONS_LOCK, build_item_sets_payload, build_rune_page_payload,
     build_spells_payload, clear_champion_selections, resolve_injection_spell_pair,
-    set_selected_rune_page, set_selected_secondary_spell,
+    set_selected_rune_page, set_selected_spell_pair,
 };
 use crate::models::AppLocale;
 use std::sync::Mutex;
@@ -139,7 +139,7 @@ fn test_resolve_injection_spell_pair_all_modes_and_numeric_opgg_order() {
         (1, 4)
     );
 
-    set_selected_secondary_spell(18, 21);
+    set_selected_spell_pair(18, 4, 21);
     assert_eq!(
         resolve_injection_spell_pair(&build_cleanse, FlashKeyPreference::D),
         (4, 21)
@@ -150,6 +150,20 @@ fn test_resolve_injection_spell_pair_all_modes_and_numeric_opgg_order() {
     );
 
     clear_champion_selections();
+    let build_darius = ChampionBuild {
+        champion_id: 122,
+        spell1_id: 4,
+        spell2_id: 6,
+        active_position: "top".to_string(),
+        ..Default::default()
+    };
+    set_selected_spell_pair(122, 6, 12); // Switch both spells from Flash+Ghost to Ghost+Teleport
+    assert_eq!(
+        resolve_injection_spell_pair(&build_darius, FlashKeyPreference::D),
+        (6, 12)
+    );
+
+    clear_champion_selections();
     let build_jungle = ChampionBuild {
         champion_id: 120,
         spell1_id: 4,
@@ -157,7 +171,7 @@ fn test_resolve_injection_spell_pair_all_modes_and_numeric_opgg_order() {
         active_position: "jungle".to_string(),
         ..Default::default()
     };
-    set_selected_secondary_spell(120, 6);
+    set_selected_spell_pair(120, 6, 11);
     assert_eq!(
         resolve_injection_spell_pair(&build_jungle, FlashKeyPreference::D),
         (6, 11)
@@ -206,7 +220,7 @@ async fn test_safety_reinject_with_runes_mode_preserves_manual_selections() {
 
     // Simulate user manual selections made before FINALIZATION timer expires
     set_selected_rune_page(103, 1);
-    set_selected_secondary_spell(103, 12); // Teleport instead of Ignite
+    set_selected_spell_pair(103, 12, 14); // Full pair switch (Teleport + Ignite) instead of Flash + Ignite
 
     let prefs = UserPreferences::default();
     let sink = MockInjectionSink::default();
@@ -228,7 +242,7 @@ async fn test_safety_reinject_with_runes_mode_preserves_manual_selections() {
     assert_eq!(rune_payloads[0]["primaryStyleId"], 8300);
 
     let spell_pairs = sink.spell_pairs.lock().unwrap();
-    assert_eq!(spell_pairs.as_slice(), &[(4, 12)]);
+    assert_eq!(spell_pairs.as_slice(), &[(12, 14)]);
 
     let item_payloads = sink.item_payloads.lock().unwrap();
     assert_eq!(item_payloads.len(), 1);

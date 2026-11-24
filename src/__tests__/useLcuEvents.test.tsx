@@ -86,9 +86,29 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
         { id: 4, name: "Flash", icon_url: "flash.png" },
         { id: 32, name: "Marca", icon_url: "snowball.png" },
       ],
-      spell_choices: [
-        { id: 32, name: "Marca", icon_url: "snowball.png" },
-        { id: 13, name: "Clareza", icon_url: "clarity.png" },
+      spell_options: [
+        {
+          spell1_id: 4,
+          spell2_id: 32,
+          play: 500,
+          win: 260,
+          pick_rate: 70.0,
+          spells: [
+            { id: 4, name: "Flash", icon_url: "flash.png" },
+            { id: 32, name: "Marca", icon_url: "snowball.png" },
+          ],
+        },
+        {
+          spell1_id: 4,
+          spell2_id: 13,
+          play: 150,
+          win: 75,
+          pick_rate: 20.0,
+          spells: [
+            { id: 4, name: "Flash", icon_url: "flash.png" },
+            { id: 13, name: "Clareza", icon_url: "clarity.png" },
+          ],
+        },
       ],
       supports_runes: true,
     };
@@ -130,13 +150,13 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
     });
 
     await act(async () => {
-      await result.current.handleSelectSecondarySpell(21);
+      await result.current.handleSelectSpellPair(1);
       await result.current.handleSelectRunePage(1);
       await result.current.handleSelectBuild(1);
       result.current.setSpellsInverted(true);
     });
 
-    expect(result.current.selectedSecondarySpellId).toBe(21);
+    expect(result.current.selectedSpellPairIndex).toBe(1);
     expect(result.current.selectedRunePageIndex).toBe(1);
     expect(result.current.selectedBuildIndex).toBe(1);
     expect(result.current.spellsInverted).toBe(true);
@@ -171,7 +191,7 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
 
     expect(result.current.champSelect?.champion_id).toBe(103);
     expect(result.current.build?.champion_id).toBe(103);
-    expect(result.current.selectedSecondarySpellId).toBeNull();
+    expect(result.current.selectedSpellPairIndex).toBe(0);
     expect(result.current.selectedRunePageIndex).toBe(0);
     expect(result.current.selectedBuildIndex).toBe(0);
     expect(result.current.spellsInverted).toBe(false);
@@ -199,7 +219,7 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
     });
 
     await act(async () => {
-      await result.current.handleSelectSecondarySpell(21);
+      await result.current.handleSelectSpellPair(1);
       await result.current.handleSelectBuild(1);
       result.current.setSpellsInverted(true);
     });
@@ -221,7 +241,7 @@ describe("useLcuEvents rapid champion switch, finalization reconciliation and AR
 
     expect(result.current.champSelect?.champion_id).toBe(18);
     expect(result.current.build?.supports_runes).toBe(false);
-    expect(result.current.selectedSecondarySpellId).toBe(21);
+    expect(result.current.selectedSpellPairIndex).toBe(1);
     expect(result.current.selectedBuildIndex).toBe(1);
     expect(result.current.spellsInverted).toBe(true);
   });

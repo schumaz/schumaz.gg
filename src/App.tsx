@@ -22,7 +22,7 @@ import {
   usePreferences,
 } from "./features/settings";
 import { ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
-import { useLcuEvents } from "./features/champ-select";
+import { isInGamePhase, useLcuEvents } from "./features/champ-select";
 import { useAram } from "./features/aram";
 import { useArena } from "./features/arena";
 import { useRanked } from "./features/ranked";
@@ -42,18 +42,22 @@ function App({ forceStartupLoading }: AppProps = {}) {
   const arenaPatchChangeRef = useRef<(() => void) | null>(null);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
-    if (lcu.build?.supports_spells === false || lcu.champSelect?.queue_mode === "Arena") {
+    if (
+      isInGamePhase(lcu.gameflowPhase) ||
+      lcu.build?.supports_spells === false ||
+      lcu.champSelect?.queue_mode === "Arena"
+    ) {
       return;
     }
     const reordered = computeOrderedSpells(
       lcu.build?.spells,
-      lcu.selectedSecondarySpellId,
-      lcu.build?.spell_choices,
+      lcu.selectedSpellPairIndex,
+      lcu.build?.spell_options,
       newFlashKey,
       lcu.spellsInverted
     );
     if (reordered.length >= 2) {
-      injectorIpc.injectSummonerSpells(reordered[0].id, reordered[1].id, null, null).catch(() => {});
+      injectorIpc.injectSummonerSpells(reordered[0].id, reordered[1].id, null).catch(() => {});
     }
   };
 

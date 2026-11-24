@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "../../i18n";
 import { RankedLane, RankedTierListResponse } from "../../types";
 import { FilterDropdown } from "../../components/ui/FilterDropdown";
@@ -8,6 +8,7 @@ import {
   getTierOptions,
 } from "../../components/ui/filterOptions";
 import { LoadingBar } from "../../components/ui/LoadingIndicators";
+import { PatchProtectionIndicator } from "../../components/ui/PatchProtectionIndicator";
 import { computePatchUiMeta } from "../../components/ui/patchUiMeta";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { RankedFilters } from "./rankedStorage";
@@ -40,7 +41,6 @@ export function RankedToolbarCard({
   onTierListFilterChange,
 }: RankedToolbarCardProps) {
   const { t } = useTranslation();
-  const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
 
   const tierOptions = useMemo(() => getTierOptions(t), [t]);
   const regionOptions = useMemo(() => getRegionOptions(t), [t]);
@@ -143,38 +143,11 @@ export function RankedToolbarCard({
           />
 
           {isPatchProtectionActive && (
-            <div
-              className="patch-protection-wrap"
-              onMouseEnter={() => setShowProtectionTooltip(true)}
-              onMouseLeave={() => setShowProtectionTooltip(false)}
-            >
-              <button
-                type="button"
-                className="patch-protection-indicator"
-                data-testid="ranked-patch-protection-indicator"
-                aria-label={protectionTooltipText}
-                aria-describedby={showProtectionTooltip ? "ranked-patch-protection-tooltip" : undefined}
-                onFocus={() => setShowProtectionTooltip(true)}
-                onBlur={() => setShowProtectionTooltip(false)}
-              >
-                !
-              </button>
-              {remainingHoursShort && (
-                <span className="patch-protection-hours" data-testid="ranked-patch-protection-hours">
-                  {remainingHoursShort}
-                </span>
-              )}
-              {showProtectionTooltip && (
-                <div
-                  id="ranked-patch-protection-tooltip"
-                  role="tooltip"
-                  className="patch-protection-tooltip"
-                  data-testid="ranked-patch-protection-tooltip"
-                >
-                  {protectionTooltipText}
-                </div>
-              )}
-            </div>
+            <PatchProtectionIndicator
+              idPrefix="ranked-"
+              remainingHoursShort={remainingHoursShort}
+              tooltipText={protectionTooltipText}
+            />
           )}
         </div>
       </div>

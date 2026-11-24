@@ -1,7 +1,7 @@
 use super::injection::{inject_item_sets, inject_specific_rune_page};
 use super::payloads::build_spells_payload;
 use super::preferences::{get_user_preferences, set_active_locale, set_user_preferences};
-use super::selections::{set_selected_build, set_selected_rune_page, set_selected_secondary_spell};
+use super::selections::{set_selected_build, set_selected_rune_page, set_selected_spell_pair};
 use crate::models::{AppLocale, FlashKeyPreference, QUEUE_SOLO_DUO, UserPreferences};
 use crate::storage::AppSettings;
 use crate::{build_provider, lcu_connector, storage};
@@ -45,15 +45,14 @@ pub async fn apply_manual_rune_page(
     .await
 }
 
-/// Saves optional secondary spell selection, connects to LCU, and patches summoner spells.
+/// Saves optional spell pair selection, connects to LCU, and patches summoner spells.
 pub async fn apply_manual_summoner_spells(
     spell1_id: i32,
     spell2_id: i32,
     champion_id: Option<i32>,
-    secondary_spell_id: Option<i32>,
 ) -> Result<(), String> {
-    if let (Some(champ_id), Some(sec_spell)) = (champion_id, secondary_spell_id) {
-        set_selected_secondary_spell(champ_id, sec_spell);
+    if let Some(champ_id) = champion_id {
+        set_selected_spell_pair(champ_id, spell1_id, spell2_id);
     }
     let conn = lcu_connector::LcuConnection::connect()
         .map_err(|e| format!("Não foi possível conectar ao cliente do LoL: {}", e))?;

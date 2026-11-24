@@ -4,7 +4,7 @@ use std::sync::{OnceLock, RwLock};
 pub struct ChampionSelections {
     pub champion_id: i32,
     pub rune_page_index: Option<usize>,
-    pub secondary_spell_id: Option<i32>,
+    pub selected_spell_pair: Option<(i32, i32)>,
     pub build_index: Option<usize>,
 }
 
@@ -22,14 +22,14 @@ pub fn set_selected_rune_page(champion_id: i32, page_index: usize) {
         let current = guard.get_or_insert_with(|| ChampionSelections {
             champion_id,
             rune_page_index: None,
-            secondary_spell_id: None,
+            selected_spell_pair: None,
             build_index: None,
         });
         if current.champion_id != champion_id {
             *current = ChampionSelections {
                 champion_id,
                 rune_page_index: Some(page_index),
-                secondary_spell_id: None,
+                selected_spell_pair: None,
                 build_index: None,
             };
         } else {
@@ -38,23 +38,26 @@ pub fn set_selected_rune_page(champion_id: i32, page_index: usize) {
     }
 }
 
-pub fn set_selected_secondary_spell(champion_id: i32, spell_id: i32) {
+pub fn set_selected_spell_pair(champion_id: i32, spell1_id: i32, spell2_id: i32) {
+    if spell1_id <= 0 || spell2_id <= 0 || spell1_id == spell2_id {
+        return;
+    }
     if let Ok(mut guard) = get_selections_lock().write() {
         let current = guard.get_or_insert_with(|| ChampionSelections {
             champion_id,
             rune_page_index: None,
-            secondary_spell_id: None,
+            selected_spell_pair: None,
             build_index: None,
         });
         if current.champion_id != champion_id {
             *current = ChampionSelections {
                 champion_id,
                 rune_page_index: None,
-                secondary_spell_id: Some(spell_id),
+                selected_spell_pair: Some((spell1_id, spell2_id)),
                 build_index: None,
             };
         } else {
-            current.secondary_spell_id = Some(spell_id);
+            current.selected_spell_pair = Some((spell1_id, spell2_id));
         }
     }
 }
@@ -64,14 +67,14 @@ pub fn set_selected_build(champion_id: i32, build_index: usize) {
         let current = guard.get_or_insert_with(|| ChampionSelections {
             champion_id,
             rune_page_index: None,
-            secondary_spell_id: None,
+            selected_spell_pair: None,
             build_index: None,
         });
         if current.champion_id != champion_id {
             *current = ChampionSelections {
                 champion_id,
                 rune_page_index: None,
-                secondary_spell_id: None,
+                selected_spell_pair: None,
                 build_index: Some(build_index),
             };
         } else {
@@ -106,15 +109,22 @@ mod tests {
         clear_champion_selections();
         assert_eq!(get_champion_selections(103), None);
 
-        // User selected rune page index 1, secondary spell 3 (Exhaust), and build index 0 for Ahri (103)
+        // User selected rune page index 1, spell pair (4, 3), and build index 0 for Ahri (103)
         set_selected_rune_page(103, 1);
-        set_selected_secondary_spell(103, 3);
+        set_selected_spell_pair(103, 4, 3);
         set_selected_build(103, 0);
 
         let sel = get_champion_selections(103).expect("Selections should exist for champ 103");
         assert_eq!(sel.rune_page_index, Some(1));
-        assert_eq!(sel.secondary_spell_id, Some(3));
+        assert_eq!(sel.selected_spell_pair, Some((4, 3)));
         assert_eq!(sel.build_index, Some(0));
+
+        // Invalid pair updates are ignored
+        set_selected_spell_pair(103, 4, 4);
+        assert_eq!(
+            get_champion_selections(103).unwrap().selected_spell_pair,
+            Some((4, 3))
+        );
 
         // Different champion query should return None
         assert_eq!(get_champion_selections(804), None);

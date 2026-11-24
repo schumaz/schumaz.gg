@@ -144,14 +144,28 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
       cooldown_secs: 180,
     },
   ],
-  spell_choices: [
+  spell_options: [
     {
-      id: 14,
-      name: "Incendiar",
-      icon_url: "ignite.png",
-      modes: ["CLASSIC", "ARAM", "KIWI"],
-      description: "",
-      cooldown_secs: 180,
+      spell1_id: 4,
+      spell2_id: 14,
+      play: 84666,
+      win: 43679,
+      pick_rate: 69.5,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png", modes: ["CLASSIC", "ARAM", "KIWI"], description: "", cooldown_secs: 300 },
+        { id: 14, name: "Incendiar", icon_url: "ignite.png", modes: ["CLASSIC", "ARAM", "KIWI"], description: "", cooldown_secs: 180 },
+      ],
+    },
+    {
+      spell1_id: 4,
+      spell2_id: 12,
+      play: 34826,
+      win: 17612,
+      pick_rate: 28.6,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png", modes: ["CLASSIC", "ARAM", "KIWI"], description: "", cooldown_secs: 300 },
+        { id: 12, name: "Teleporte", icon_url: "teleport.png", modes: ["CLASSIC"], description: "", cooldown_secs: 300 },
+      ],
     },
   ],
   item_metadata: {},

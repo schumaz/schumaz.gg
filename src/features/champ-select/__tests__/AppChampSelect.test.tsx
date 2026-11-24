@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import App from "../../../App";
 import { invoke } from "@tauri-apps/api/core";
 import { defaultAppInvokeMock, mockAhriBuild, resetMockAppSettings } from "../../../__tests__/appTestFixtures";
@@ -44,7 +44,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
 
     expect(screen.queryByTestId("injection-report")).not.toBeInTheDocument();
 
-    const spellItemsBefore = screen.getAllByText(/Flash|Incendiar/);
+    const spellItemsBefore = within(screen.getByTestId("spell-pair-btn-0")).getAllByText(/Flash|Incendiar/);
     expect(spellItemsBefore[0]).toHaveTextContent("Flash");
     expect(spellItemsBefore[1]).toHaveTextContent("Incendiar");
 
@@ -55,7 +55,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
       fireEvent.click(invertBtn);
     });
 
-    const spellItemsAfter = screen.getAllByText(/Flash|Incendiar/);
+    const spellItemsAfter = within(screen.getByTestId("spell-pair-btn-0")).getAllByText(/Flash|Incendiar/);
     expect(spellItemsAfter[0]).toHaveTextContent("Incendiar");
     expect(spellItemsAfter[1]).toHaveTextContent("Flash");
 
@@ -63,7 +63,6 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
       spell1Id: 14,
       spell2Id: 4,
       championId: null,
-      secondarySpellId: null,
     });
 
     expect(invoke).toHaveBeenCalledWith("sync_user_preferences", {
@@ -80,7 +79,6 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
       spell1Id: 4,
       spell2Id: 14,
       championId: null,
-      secondarySpellId: null,
     });
   });
 
@@ -112,8 +110,8 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     expect(screen.getByText("Feitiçaria")).toBeInTheDocument();
     expect(screen.getByText("Fragmentos de Atributo")).toBeInTheDocument();
 
-    expect(screen.getByText("Flash")).toBeInTheDocument();
-    expect(screen.getAllByText("Incendiar")[0]).toBeInTheDocument();
+    expect(within(screen.getByTestId("spell-pair-btn-0")).getByText("Flash")).toBeInTheDocument();
+    expect(within(screen.getByTestId("spell-pair-btn-0")).getByText("Incendiar")).toBeInTheDocument();
     expect(screen.getByTestId("skill-order-trigger")).toBeInTheDocument();
     expect(screen.getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
     expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();
@@ -201,7 +199,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     expect(screen.queryByTestId("champ-tier-badge")).not.toBeInTheDocument();
   });
 
-  it("displays Practice Tool badge and allows toggling secondary spell choice", async () => {
+  it("displays Practice Tool badge and allows toggling unified spell pair", async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -211,36 +209,31 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
 
     await act(async () => {
       eventListeners["champ-selected"]({
-        payload: {
-          champion_id: 103,
-          queue_id: -1,
-          queue_mode: "PracticeTool",
-          locked_in: true,
-        },
+        payload: { champion_id: 103, queue_id: -1, queue_mode: "PracticeTool", locked_in: true },
       });
       eventListeners["recommended-build"]({ payload: mockAhriBuild });
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("secondary-spell-selector")).toBeInTheDocument();
+      expect(screen.getByTestId("spell-pair-selector")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Modo Treino (Build Ranqueada)")).toBeInTheDocument();
 
-    const igniteBtn = screen.getByTestId("sec-spell-btn-14");
-    const tpBtn = screen.getByTestId("sec-spell-btn-12");
-    expect(igniteBtn).toHaveClass("active");
+    const pair0Btn = screen.getByTestId("spell-pair-btn-0");
+    const pair1Btn = screen.getByTestId("spell-pair-btn-1");
+    expect(pair0Btn).toHaveClass("active");
 
     await act(async () => {
-      fireEvent.click(tpBtn);
+      fireEvent.click(pair1Btn);
     });
 
-    expect(tpBtn).toHaveClass("active");
+    expect(pair1Btn).toHaveClass("active");
+    expect(screen.getByText("Teleporte")).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
       spell1Id: 4,
       spell2Id: 12,
       championId: 103,
-      secondarySpellId: 12,
     });
   });
 });

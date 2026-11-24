@@ -4,7 +4,7 @@ use super::analytics::{
 use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_locale;
 use super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::patch::{extract_patch_trend_timestamps, resolve_effective_patch};
-use super::spells::{ddragon_mode_for_queue, extract_summoner_spell_choices_for_mode};
+use super::spells::{ddragon_mode_for_queue, extract_summoner_spell_pairs_for_mode};
 use crate::models::{AppLocale, FlashKeyPreference, queue_supports_spells};
 use std::time::Duration;
 
@@ -77,7 +77,7 @@ pub(super) fn extract_fast_spells_from_rest(
         return None;
     }
     let mode = ddragon_mode_for_queue(queue_id);
-    let ((s1, s2), _) = extract_summoner_spell_choices_for_mode(
+    let ((s1, s2), _) = extract_summoner_spell_pairs_for_mode(
         analysis,
         is_jungle,
         Some(mode),

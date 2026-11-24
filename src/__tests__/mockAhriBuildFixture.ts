@@ -107,14 +107,29 @@ export const mockAhriBuild: ChampionBuild = {
     { id: 4, name: "Flash", icon_url: "flash.png" },
     { id: 14, name: "Incendiar", icon_url: "ignite.png" },
   ],
-  spell_choices: [
-    { id: 14, name: "Incendiar", icon_url: "ignite.png" },
-    { id: 12, name: "Teleporte", icon_url: "teleport.png" },
-    { id: 3, name: "Exaustão", icon_url: "exhaust.png" },
-    { id: 7, name: "Curar", icon_url: "heal.png" },
-    { id: 21, name: "Barreira", icon_url: "barrier.png" },
-    { id: 6, name: "Fantasma", icon_url: "ghost.png" },
-    { id: 1, name: "Purificar", icon_url: "cleanse.png" },
+  spell_options: [
+    {
+      spell1_id: 4,
+      spell2_id: 14,
+      play: 84666,
+      win: 43679,
+      pick_rate: 69.5,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png" },
+        { id: 14, name: "Incendiar", icon_url: "ignite.png" },
+      ],
+    },
+    {
+      spell1_id: 4,
+      spell2_id: 12,
+      play: 34826,
+      win: 17612,
+      pick_rate: 28.6,
+      spells: [
+        { id: 4, name: "Flash", icon_url: "flash.png" },
+        { id: 12, name: "Teleporte", icon_url: "teleport.png" },
+      ],
+    },
   ],
   build_options: [
     {

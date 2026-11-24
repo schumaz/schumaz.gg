@@ -55,6 +55,7 @@ export function ArenaChampionDetail({
             backButtonTitle={t("filters.backToArenaTierListTitle")}
             statusTagText={detailStatusTag}
             queueModeLabel={t("filters.queueArena")}
+            readOnly={true}
           />
 
           <div className="dashboard-split-grid is-arena-grid">

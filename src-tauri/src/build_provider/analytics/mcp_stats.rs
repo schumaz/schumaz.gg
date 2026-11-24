@@ -157,18 +157,102 @@ pub fn parse_mcp_tier(text: &str) -> Option<i32> {
     None
 }
 
+fn parse_mcp_spell_stats(
+    after_bracket: &str,
+    non_id_fields: &[&str],
+) -> (i64, i64, f64, usize) {
+    let Some(close_paren) = after_bracket.find(')') else {
+        return (1, 0, 0.0, 0);
+    };
+    let stats_str = after_bracket[..close_paren].trim_start_matches(',');
+    let args = split_top_level_args(stats_str);
+    let mut play = 1i64;
+    let mut win = 0i64;
+    let mut pick_rate = 0.0f64;
+
+    if !non_id_fields.is_empty() && non_id_fields.len() == args.len() {
+        for (&field, &val_str) in non_id_fields.iter().zip(args.iter()) {
+            match field {
+                "play" => {
+                    if let Ok(p) = val_str.trim().parse::<f64>() {
+                        play = p.round() as i64;
+                    }
+                }
+                "win" => {
+                    if let Ok(w) = val_str.trim().parse::<f64>() {
+                        win = (w.round() as i64).max(0);
+                    }
+                }
+                "pick_rate" => {
+                    if let Ok(pr) = val_str.trim().parse::<f64>() {
+                        pick_rate = pr;
+                    }
+                }
+                _ => {}
+            }
+        }
+    } else {
+        let numeric_args: Vec<&str> = args
+            .iter()
+            .copied()
+            .filter(|s| !s.starts_with('[') && !s.starts_with('"'))
+            .collect();
+        if !non_id_fields.is_empty() && non_id_fields.len() == numeric_args.len() {
+            for (&field, &val_str) in non_id_fields.iter().zip(numeric_args.iter()) {
+                match field {
+                    "play" => {
+                        if let Ok(p) = val_str.parse::<f64>() {
+                            play = p.round() as i64;
+                        }
+                    }
+                    "win" => {
+                        if let Ok(w) = val_str.parse::<f64>() {
+                            win = (w.round() as i64).max(0);
+                        }
+                    }
+                    "pick_rate" => {
+                        if let Ok(pr) = val_str.parse::<f64>() {
+                            pick_rate = pr;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            let mut ints: Vec<i64> = Vec::new();
+            for tok in numeric_args {
+                if !tok.contains('.')
+                    && let Ok(n) = tok.parse::<i64>()
+                {
+                    ints.push(n);
+                } else if let Ok(f) = tok.parse::<f64>() {
+                    pick_rate = f;
+                }
+            }
+            if ints.len() >= 2 {
+                // Without explicit header, OP.GG MCP typically emits (win, play) where play >= win
+                play = ints[0].max(ints[1]);
+                win = ints[0].min(ints[1]).max(0);
+            } else if let Some(&p) = ints.first() {
+                play = p;
+            }
+        }
+    }
+
+    (play, win, pick_rate, close_paren + 1)
+}
+
 /// Extracts all `SummonerSpells(...)` entries from OP.GG MCP text into a JSON array
-/// compatible with `extract_summoner_spell_choices`.
+/// compatible with `extract_summoner_spell_pairs_for_mode`.
 pub fn extract_mcp_summoner_spell_entries(
     text: &str,
     all_entries: &[ItemStatEntry],
 ) -> serde_json::Value {
     let spell_fields = parse_class_fields(text, "class SummonerSpells:");
-
-    let play_after_ids_idx = spell_fields
-        .iter()
-        .filter(|&&f| f != "ids" && f != "ids_names")
-        .position(|&f| f == "play");
+    let non_id_fields: Vec<&str> = spell_fields
+        .into_iter()
+        .filter(|&f| f != "ids" && f != "ids_names")
+        .collect();
 
     let mut spell_combos: Vec<serde_json::Value> = Vec::new();
     let mut search_slice = text;
@@ -188,32 +272,15 @@ pub fn extract_mcp_summoner_spell_entries(
             .collect();
 
         let rest_after_bracket = &after_ss[c + 1..];
-        let mut play = 1i64;
-        if let Some(close_paren) = rest_after_bracket.find(')') {
-            let stats_nums: Vec<i64> = rest_after_bracket[..close_paren]
-                .trim_start_matches(',')
-                .split(',')
-                .filter_map(|s| s.trim().parse::<i64>().ok())
-                .collect();
-            if let Some(idx) = play_after_ids_idx
-                && let Some(&p) = stats_nums.get(idx)
-            {
-                play = p;
-            } else if stats_nums.len() >= 2 {
-                // Without explicit header, OP.GG MCP typically emits (win, play) where play >= win
-                play = stats_nums[0].max(stats_nums[1]);
-            } else if let Some(&p) = stats_nums.first() {
-                play = p;
-            }
-            search_slice = &rest_after_bracket[close_paren + 1..];
-        } else {
-            search_slice = rest_after_bracket;
-        }
+        let (play, win, pick_rate, advance) = parse_mcp_spell_stats(rest_after_bracket, &non_id_fields);
+        search_slice = &rest_after_bracket[advance..];
 
         if ids.len() >= 2 {
             spell_combos.push(serde_json::json!({
                 "ids": [ids[0], ids[1]],
-                "play": play
+                "play": play,
+                "win": win,
+                "pick_rate": pick_rate
             }));
         }
     }
@@ -226,7 +293,9 @@ pub fn extract_mcp_summoner_spell_entries(
             {
                 spell_combos.push(serde_json::json!({
                     "ids": [entry.ids[0], entry.ids[1]],
-                    "play": entry.play
+                    "play": entry.play,
+                    "win": entry.win,
+                    "pick_rate": entry.pick_rate
                 }));
             }
         }

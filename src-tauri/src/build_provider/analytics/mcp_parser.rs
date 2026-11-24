@@ -1,7 +1,7 @@
 ﻿use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
 use super::super::runes::extract_all_mcp_runes;
-use super::super::spells::extract_summoner_spell_choices_for_mode;
+use super::super::spells::extract_summoner_spell_pairs_for_mode;
 use super::mcp_extractors::{extract_all_core_items_from_text, extract_mcp_grouped_item_lists};
 use super::mcp_stats::{
     extract_mcp_summoner_spell_entries, is_known_summoner_spell_id, parse_mcp_average_stats,
@@ -71,9 +71,9 @@ pub fn parse_opgg_mcp_text_for_mode(
     };
     let is_jungle = position.eq_ignore_ascii_case("jungle");
 
-    // 4. Extract summoner spells via shared extract_summoner_spell_choices_for_mode
+    // 4. Extract summoner spell pairs via shared extract_summoner_spell_pairs_for_mode
     let spells_json = extract_mcp_summoner_spell_entries(text, &all_entries);
-    let ((spell1_id, spell2_id), spell_choice_ids) = extract_summoner_spell_choices_for_mode(
+    let ((spell1_id, spell2_id), spell_options) = extract_summoner_spell_pairs_for_mode(
         &spells_json,
         is_jungle,
         spell_mode,
@@ -224,13 +224,6 @@ pub fn parse_opgg_mcp_text_for_mode(
         position,
     );
 
-    let spell_choices = spell_choice_ids
-        .into_iter()
-        .map(|id| SpellMetadata {
-            id,
-            ..Default::default()
-        })
-        .collect();
     let skill_order = super::super::skills::extract_mcp_skill_order(text);
 
     Ok(ChampionBuild {
@@ -245,7 +238,7 @@ pub fn parse_opgg_mcp_text_for_mode(
         spell1_id,
         spell2_id,
         item_blocks,
-        spell_choices,
+        spell_options,
         rune_pages: top_rune_pages,
         build_options,
         supports_runes,

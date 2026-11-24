@@ -156,7 +156,7 @@ describe("App — Arena (CHERRY / 3x6) Champ Select Integration", () => {
 
     await act(async () => {
       await result.current.handleSelectRunePage(0);
-      await result.current.handleSelectSecondarySpell(14);
+      await result.current.handleSelectSpellPair(0);
       await result.current.handleFilterChange("tier", "master_plus");
       await result.current.handleSelectBuild(1);
     });

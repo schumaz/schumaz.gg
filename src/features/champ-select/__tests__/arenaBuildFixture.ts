@@ -23,7 +23,7 @@ export const mockArenaMasterYiBuild: ChampionBuild = {
   supports_spells: false,
   rune_pages: [],
   spells: [],
-  spell_choices: [],
+  spell_options: [],
   arena_augments: [
     {
       id: 101,

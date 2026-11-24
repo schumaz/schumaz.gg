@@ -154,8 +154,12 @@ async fn test_tristana_aram_and_mayhem_rest_plus_mcp_merge_builds_exact_opgg_blo
         assert_eq!(build.spell1_id, 4);
         assert_eq!(build.spell2_id, 7);
         assert_eq!(
-            build.spell_choices.iter().map(|s| s.id).collect::<Vec<_>>(),
-            vec![7, 21]
+            build
+                .spell_options
+                .iter()
+                .map(|o| (o.spell1_id, o.spell2_id))
+                .collect::<Vec<_>>(),
+            vec![(4, 7), (4, 21)]
         );
         assert_eq!(build.item_blocks[0].item_ids, vec![1038, 2003]);
         assert_eq!(build.item_blocks[1].item_ids, vec![3032, 6675, 3031]);

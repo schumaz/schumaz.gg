@@ -34,8 +34,8 @@ export const commands = {
 	syncUserPreferences: (preferences: UserPreferences_Deserialize) => __TAURI_INVOKE<void>("sync_user_preferences", { preferences }),
 	/**  Tauri command to update the active backend locale (`pt_BR` | `en_US`), persist to `UserSettings.ini`, and pre-warm DataDragon cache. */
 	setLocale: (locale: AppLocale) => __TAURI_INVOKE<void>("set_locale", { locale }),
-	/**  Tauri command to immediately inject only summoner spells into an active Champ Select session. */
-	injectSummonerSpells: (spell1Id: number, spell2Id: number, championId: number | null, secondarySpellId: number | null) => __TAURI_INVOKE<null>("inject_summoner_spells", { spell1Id, spell2Id, championId, secondarySpellId }),
+	/**  Tauri command to immediately inject summoner spells into an active Champ Select session. */
+	injectSummonerSpells: (spell1Id: number, spell2Id: number, championId: number | null) => __TAURI_INVOKE<null>("inject_summoner_spells", { spell1Id, spell2Id, championId }),
 	/**  Tauri command to immediately inject a specific chosen rune page into the LoL client. */
 	injectRunePage: (championId: number, championName: string, pageIndex: number, primaryStyleId: number, subStyleId: number, selectedPerkIds: number[]) => __TAURI_INVOKE<null>("inject_rune_page", { championId, championName, pageIndex, primaryStyleId, subStyleId, selectedPerkIds }),
 	/**  Tauri command to immediately update and re-inject item sets into the LoL client shop. */
@@ -535,7 +535,7 @@ export type ChampionBuild_Deserialize = {
 	sub_style_icon_url?: string,
 	perks?: RuneMetadata_Deserialize[],
 	spells?: SpellMetadata_Deserialize[],
-	spell_choices?: SpellMetadata_Deserialize[],
+	spell_options?: SpellPairOption_Deserialize[],
 	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
 	active_position?: string,
 	active_tier?: string,
@@ -576,7 +576,7 @@ export type ChampionBuild_Serialize = {
 	sub_style_icon_url: string,
 	perks: RuneMetadata_Serialize[],
 	spells: SpellMetadata_Serialize[],
-	spell_choices: SpellMetadata_Serialize[],
+	spell_options: SpellPairOption_Serialize[],
 	item_metadata: { [key in number]: ItemMetadata_Serialize },
 	active_position: string,
 	active_tier: string,
@@ -1060,6 +1060,29 @@ export type SpellMetadata_Serialize = {
 	modes: string[],
 	description: string,
 	cooldown_secs: number | null,
+};
+
+/**  Metadata for a complete 2-spell summoner pair option (e.g. Flash + Ignite vs Flash + Teleport). */
+export type SpellPairOption = SpellPairOption_Serialize | SpellPairOption_Deserialize;
+
+/**  Metadata for a complete 2-spell summoner pair option (e.g. Flash + Ignite vs Flash + Teleport). */
+export type SpellPairOption_Deserialize = {
+	spell1_id: number,
+	spell2_id: number,
+	play?: number,
+	win?: number,
+	pick_rate?: number | null,
+	spells?: SpellMetadata_Deserialize[],
+};
+
+/**  Metadata for a complete 2-spell summoner pair option (e.g. Flash + Ignite vs Flash + Teleport). */
+export type SpellPairOption_Serialize = {
+	spell1_id: number,
+	spell2_id: number,
+	play: number,
+	win: number,
+	pick_rate: number | null,
+	spells: SpellMetadata_Serialize[],
 };
 
 /**  Basic summoner details parsed from `/lol-summoner/v1/current-summoner`. */

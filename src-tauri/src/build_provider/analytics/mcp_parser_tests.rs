@@ -147,26 +147,34 @@ fn test_parse_opgg_mcp_text_aram_tristana_multiple_spells_and_numeric_order() {
         "Parsing Tristana ARAM Mayhem MCP payload with multiple SummonerSpells should succeed",
     );
 
-    // Most-played pair is Flash (4) + Heal (7) (play=32000), secondary choice is Barrier (21) (play=18000)
+    // Most-played pair is Flash (4) + Heal (7) (play=32000), 2nd pair is Flash (4) + Barrier (21) (play=18000)
     assert_eq!(build.spell1_id, 4);
     assert_eq!(build.spell2_id, 7);
     assert_eq!(
-        build.spell_choices.iter().map(|s| s.id).collect::<Vec<_>>(),
-        vec![7, 21]
+        build
+            .spell_options
+            .iter()
+            .map(|o| (o.spell1_id, o.spell2_id))
+            .collect::<Vec<_>>(),
+        vec![(4, 7), (4, 21)]
     );
+    assert_eq!(build.spell_options[0].play, 32000);
+    assert_eq!(build.spell_options[0].win, 17000);
 
     // Numerically-ordered pair [3, 4] (Exhaust + Flash) normalizes Flash into spell1_id
-    let text_numeric_order = "class LolGetChampionAnalysis: data\nclass SummonerSpells: ids,play,win\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(50000,0.53,0.09)),\"AP\",CoreItems([6655,4646,4645],5000,2700,0.2),CoreItems([3020],10000,5300,0.5),CoreItems([3802,2003],8000,4200,0.4),[SummonerSpells([3,4],25000,13000),SummonerSpells([1,4],12000,6200)]))";
+    let text_numeric_order = "class LolGetChampionAnalysis: data\nclass SummonerSpells: ids,play,win,pick_rate\n\nLolGetChampionAnalysis(Data(Summary(AverageStats(50000,0.53,0.09)),\"AP\",CoreItems([6655,4646,4645],5000,2700,0.2),CoreItems([3020],10000,5300,0.5),CoreItems([3802,2003],8000,4200,0.4),[SummonerSpells([3,4],25000,13000,0.625),SummonerSpells([1,4],12000,6200,0.30)]))";
     let numeric_build = parse_opgg_mcp_text_with_options(text_numeric_order, 103, "Ahri", false)
         .expect("Parsing numeric-ordered MCP spells should succeed");
     assert_eq!(numeric_build.spell1_id, 4);
     assert_eq!(numeric_build.spell2_id, 3);
     assert_eq!(
         numeric_build
-            .spell_choices
+            .spell_options
             .iter()
-            .map(|s| s.id)
+            .map(|o| (o.spell1_id, o.spell2_id))
             .collect::<Vec<_>>(),
-        vec![3, 1]
+        vec![(4, 3), (4, 1)]
     );
+    assert_eq!(numeric_build.spell_options[0].pick_rate, 62.5);
+    assert_eq!(numeric_build.spell_options[1].pick_rate, 30.0);
 }

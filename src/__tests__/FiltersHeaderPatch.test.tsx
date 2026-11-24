@@ -145,6 +145,7 @@ describe("FiltersHeader — Keyboard, Loading, and Patch Protection", () => {
 
     const indicator = screen.getByTestId("patch-protection-indicator");
     expect(indicator).toBeInTheDocument();
+    expect(indicator.tagName).toBe("SPAN");
     expect(indicator).toHaveTextContent("!");
 
     expect(screen.getByTestId("patch-protection-hours")).toHaveTextContent("Faltam 38h");

@@ -93,16 +93,16 @@ describe("App — Rune Pages & Unified Build Options", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("sec-spell-btn-12")).toBeInTheDocument();
+      expect(screen.getByTestId("spell-pair-btn-1")).toBeInTheDocument();
       expect(screen.getByTestId("rune-page-btn-1")).toBeInTheDocument();
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByTestId("sec-spell-btn-12"));
+      fireEvent.click(screen.getByTestId("spell-pair-btn-1"));
       fireEvent.click(screen.getByTestId("rune-page-btn-1"));
     });
 
-    expect(screen.getByTestId("sec-spell-btn-12")).toHaveClass("active");
+    expect(screen.getByTestId("spell-pair-btn-1")).toHaveClass("active");
     expect(screen.getByTestId("rune-page-btn-1")).toHaveClass("active");
 
     await act(async () => {
@@ -117,7 +117,7 @@ describe("App — Rune Pages & Unified Build Options", () => {
       eventListeners["recommended-build"]({ payload: mockAhriBuild });
     });
 
-    expect(screen.getByTestId("sec-spell-btn-12")).toHaveClass("active");
+    expect(screen.getByTestId("spell-pair-btn-1")).toHaveClass("active");
     expect(screen.getByTestId("rune-page-btn-1")).toHaveClass("active");
     expect(screen.getByText("Aprimoramento Glacial")).toBeInTheDocument();
 

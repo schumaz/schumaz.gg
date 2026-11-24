@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "../../i18n";
 import type { ArenaTierListResponse } from "../../types";
 import { FilterDropdown, FilterDropdownOption } from "../../components/ui/FilterDropdown";
 import { LoadingBar } from "../../components/ui/LoadingIndicators";
+import { PatchProtectionIndicator } from "../../components/ui/PatchProtectionIndicator";
 import { computePatchUiMeta } from "../../components/ui/patchUiMeta";
 import { SearchInput } from "../../components/ui/SearchInput";
 import type { ArenaFilters } from "./arenaStorage";
@@ -32,7 +33,6 @@ export function ArenaToolbarCard({
   onPatchChange,
 }: ArenaToolbarCardProps) {
   const { t } = useTranslation();
-  const [showProtectionTooltip, setShowProtectionTooltip] = useState(false);
 
   const championTierFilterOptions = useMemo<FilterDropdownOption[]>(
     () => [
@@ -156,38 +156,11 @@ export function ArenaToolbarCard({
           />
 
           {isPatchProtectionActive && (
-            <div
-              className="patch-protection-wrap"
-              onMouseEnter={() => setShowProtectionTooltip(true)}
-              onMouseLeave={() => setShowProtectionTooltip(false)}
-            >
-              <button
-                type="button"
-                className="patch-protection-indicator"
-                data-testid="arena-patch-protection-indicator"
-                aria-label={protectionTooltipText}
-                aria-describedby={showProtectionTooltip ? "arena-patch-protection-tooltip" : undefined}
-                onFocus={() => setShowProtectionTooltip(true)}
-                onBlur={() => setShowProtectionTooltip(false)}
-              >
-                !
-              </button>
-              {remainingHoursShort && (
-                <span className="patch-protection-hours" data-testid="arena-patch-protection-hours">
-                  {remainingHoursShort}
-                </span>
-              )}
-              {showProtectionTooltip && (
-                <div
-                  id="arena-patch-protection-tooltip"
-                  role="tooltip"
-                  className="patch-protection-tooltip"
-                  data-testid="arena-patch-protection-tooltip"
-                >
-                  {protectionTooltipText}
-                </div>
-              )}
-            </div>
+            <PatchProtectionIndicator
+              idPrefix="arena-"
+              remainingHoursShort={remainingHoursShort}
+              tooltipText={protectionTooltipText}
+            />
           )}
         </div>
       </div>

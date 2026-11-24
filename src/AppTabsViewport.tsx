@@ -54,16 +54,18 @@ export function AppTabsViewport({
         build={lcu.build}
         champSelect={lcu.champSelect}
         summoner={lcu.summoner}
+        gameflowPhase={lcu.gameflowPhase}
         loading={lcu.loading}
         errorMsg={lcu.errorMsg}
         orderedSpells={lcu.orderedSpells}
-        selectedSecondarySpellId={lcu.selectedSecondarySpellId}
+        flashKey={preferences.flashKey}
+        selectedSpellPairIndex={lcu.selectedSpellPairIndex}
         selectedRunePageIndex={lcu.selectedRunePageIndex}
         selectedBuildIndex={lcu.selectedBuildIndex}
         onFilterChange={lcu.handleFilterChange}
         onSelectRunePage={lcu.handleSelectRunePage}
         onInvertSpells={onInvertSpells}
-        onSelectSecondarySpell={lcu.handleSelectSecondarySpell}
+        onSelectSpellPair={lcu.handleSelectSpellPair}
         onSelectBuild={lcu.handleSelectBuild}
       />
 
@@ -78,6 +80,7 @@ export function AppTabsViewport({
         buildLoading={ranked.buildLoading}
         buildError={ranked.buildError}
         orderedSpells={ranked.orderedSpells}
+        flashKey={preferences.flashKey}
         selectedRunePageIndex={ranked.selectedRunePageIndex}
         selectedBuildIndex={ranked.selectedBuildIndex}
         onTierListFilterChange={ranked.handleTierListFilterChange}

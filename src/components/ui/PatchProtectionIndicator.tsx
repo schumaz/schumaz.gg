@@ -23,8 +23,9 @@ export function PatchProtectionIndicator({
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <button
-        type="button"
+      <span
+        role="img"
+        tabIndex={0}
         className="patch-protection-indicator"
         data-testid={`${idPrefix}patch-protection-indicator`}
         aria-label={tooltipText}
@@ -33,7 +34,7 @@ export function PatchProtectionIndicator({
         onBlur={() => setShowTooltip(false)}
       >
         !
-      </button>
+      </span>
       {remainingHoursShort && (
         <span className="patch-protection-hours" data-testid={`${idPrefix}patch-protection-hours`}>
           {remainingHoursShort}

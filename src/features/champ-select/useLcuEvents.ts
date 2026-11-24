@@ -14,7 +14,7 @@ import {
   fetchFilteredChampSelectBuild,
   injectItemBuildAction,
   injectRunePageAction,
-  injectSecondarySpellAction,
+  injectSpellPairAction,
 } from "./lcuBuildActions";
 import { isInGamePhase, subscribeToLcuEvents } from "./lcuEventListeners";
 
@@ -39,7 +39,7 @@ export function useLcuEvents(
   const [build, setBuild] = useState<ChampionBuild | null>(null);
   const [gameflowPhase, setGameflowPhase] = useState<string>("");
   const [spellsInverted, setSpellsInverted] = useState(false);
-  const [selectedSecondarySpellId, setSelectedSecondarySpellId] = useState<number | null>(null);
+  const [selectedSpellPairIndex, setSelectedSpellPairIndex] = useState<number>(0);
   const [selectedRunePageIndex, setSelectedRunePageIndex] = useState<number>(0);
   const [selectedBuildIndex, setSelectedBuildIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -152,7 +152,7 @@ export function useLcuEvents(
       setBuild,
       setGameflowPhase,
       setSpellsInverted,
-      setSelectedSecondarySpellId,
+      setSelectedSpellPairIndex,
       setSelectedRunePageIndex,
       setSelectedBuildIndex,
       setErrorMsg,
@@ -192,16 +192,17 @@ export function useLcuEvents(
     ? []
     : computeOrderedSpells(
         build?.spells,
-        selectedSecondarySpellId,
-        build?.spell_choices,
+        selectedSpellPairIndex,
+        build?.spell_options,
         flashKey,
         spellsInverted
       );
 
-  const handleSelectSecondarySpell = async (spellId: number) => {
-    if (isArena || build?.supports_spells === false) return;
-    setSelectedSecondarySpellId(spellId);
-    await injectSecondarySpellAction(build, spellId, flashKey, spellsInverted);
+  const handleSelectSpellPair = async (pairIndex: number) => {
+    if (isArena || build?.supports_spells === false || isInGamePhase(gameflowPhaseRef.current)) return;
+    if (!build?.spell_options || pairIndex < 0 || pairIndex >= build.spell_options.length) return;
+    setSelectedSpellPairIndex(pairIndex);
+    await injectSpellPairAction(build, pairIndex, flashKey, spellsInverted);
   };
 
   const handleSelectRunePage = async (pageIndex: number) => {
@@ -225,14 +226,14 @@ export function useLcuEvents(
     gameflowPhase,
     spellsInverted,
     setSpellsInverted,
-    selectedSecondarySpellId,
+    selectedSpellPairIndex,
     selectedRunePageIndex,
     selectedBuildIndex,
     loading,
     errorMsg,
     orderedSpells,
     handleFilterChange,
-    handleSelectSecondarySpell,
+    handleSelectSpellPair,
     handleSelectRunePage,
     handleSelectBuild,
   };

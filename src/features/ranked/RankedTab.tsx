@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import {
   ChampionBuild,
+  FlashKeyPreference,
   RankedChampionEntry,
   RankedTierListResponse,
   SpellMetadata,
@@ -31,6 +32,7 @@ interface RankedTabProps {
   buildLoading: boolean;
   buildError: string | null;
   orderedSpells: SpellMetadata[];
+  flashKey?: FlashKeyPreference;
   selectedRunePageIndex: number;
   selectedBuildIndex: number;
   onTierListFilterChange: (
@@ -62,6 +64,7 @@ export function RankedTab({
   buildLoading,
   buildError,
   orderedSpells,
+  flashKey,
   selectedRunePageIndex,
   selectedBuildIndex,
   onTierListFilterChange,
@@ -138,6 +141,7 @@ export function RankedTab({
           buildError={buildError}
           detailStatusTag={detailStatusTag}
           orderedSpells={orderedSpells}
+          flashKey={flashKey}
           selectedRunePageIndex={selectedRunePageIndex}
           selectedBuildIndex={selectedBuildIndex}
           onDetailFilterChange={onDetailFilterChange}

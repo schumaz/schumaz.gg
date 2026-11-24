@@ -1,6 +1,6 @@
 use super::super::items::*;
 use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
-use super::super::spells::extract_summoner_spell_choices_for_mode;
+use super::super::spells::extract_summoner_spell_pairs_for_mode;
 use super::mcp_extractors::parse_json_item_entries;
 use super::mcp_parser::parse_opgg_mcp_text_for_mode;
 use super::rest_extractors::{
@@ -101,9 +101,9 @@ pub fn parse_opgg_analysis_payload_for_mode(
     let tier = extract_rest_tier(analysis, position);
     let is_jungle = position.eq_ignore_ascii_case("jungle");
 
-    // Extract summoner spells filtered by active mode and DataDragon spell catalog
-    let ((spell1_id, spell2_id), spell_choice_ids) =
-        extract_summoner_spell_choices_for_mode(analysis, is_jungle, spell_mode, spells_catalog);
+    // Extract summoner spell pairs filtered by active mode and DataDragon spell catalog
+    let ((spell1_id, spell2_id), spell_options) =
+        extract_summoner_spell_pairs_for_mode(analysis, is_jungle, spell_mode, spells_catalog);
 
     // Extract item entries from JSON
     let starter_val = analysis
@@ -255,13 +255,6 @@ pub fn parse_opgg_analysis_payload_for_mode(
         position,
     );
 
-    let spell_choices = spell_choice_ids
-        .into_iter()
-        .map(|id| SpellMetadata {
-            id,
-            ..Default::default()
-        })
-        .collect();
     let skill_order = super::super::skills::extract_rest_skill_order(analysis);
 
     Ok(ChampionBuild {
@@ -276,7 +269,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
         spell1_id,
         spell2_id,
         item_blocks,
-        spell_choices,
+        spell_options,
         rune_pages: top_rune_pages,
         build_options,
         supports_runes: effective_supports_runes,
