@@ -85,10 +85,25 @@ pub(crate) async fn process_gameflow_phase_update(
             "ws.gameflow",
             format!("event=phase_changed from={from_label} to={next_phase}"),
         );
+        let in_game_now = is_in_game_phase(&next_phase);
         let _ = models::GameflowPhaseChanged(next_phase).emit(handle);
+        if in_game_now {
+            tokio::spawn(super::lobby_actions::sync_swiftplay_assigned_champion_on_match_start(
+                handle.clone(),
+            ));
+        }
     }
 
     if emit_match_ended {
+        {
+            let state_ref = super::reconcile_state::shared_session_state();
+            let mut guard = state_ref.lock().await;
+            if guard.last_payload.as_ref().is_some_and(|p| p.is_lobby_preselect) {
+                guard.reset_session();
+                super::reconcile_state::shared_active_queue_id()
+                    .store(0, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
         let _ = models::MatchEnded.emit(handle);
     }
 

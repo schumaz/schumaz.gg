@@ -19,11 +19,12 @@ const CHAMP_SELECT_FALLBACK_POLL_MS: u64 = 1500;
 
 /// Adaptive fallback polling interval: 1.5s during Champ Select / active session, 4s otherwise.
 pub fn resolve_fallback_poll_interval(phase: &str, has_active_session: bool) -> Duration {
-    if phase == "ChampSelect" || has_active_session {
-        Duration::from_millis(CHAMP_SELECT_FALLBACK_POLL_MS)
+    let ms = if phase == "ChampSelect" || has_active_session {
+        CHAMP_SELECT_FALLBACK_POLL_MS
     } else {
-        Duration::from_millis(IDLE_FALLBACK_POLL_MS)
-    }
+        IDLE_FALLBACK_POLL_MS
+    };
+    Duration::from_millis(ms)
 }
 
 /// Returns `None` when an immediate 0ms poll is required (e.g. right after LCU transitions to connected),
@@ -33,11 +34,7 @@ pub fn resolve_next_poll_delay(
     phase: &str,
     has_active_session: bool,
 ) -> Option<Duration> {
-    if needs_immediate_poll {
-        None
-    } else {
-        Some(resolve_fallback_poll_interval(phase, has_active_session))
-    }
+    (!needs_immediate_poll).then(|| resolve_fallback_poll_interval(phase, has_active_session))
 }
 
 /// Only query `/lol-champ-select/v1/session` when in Champ Select or cleaning up an active session.
@@ -45,32 +42,34 @@ pub fn should_poll_champ_select_session(phase: &str, has_active_session: bool) -
     phase == "ChampSelect" || has_active_session
 }
 
+/// Query `/lol-lobby/v2/lobby` during lobby/matchmaking phases or when cleaning up an active lobby pre-select.
+pub fn should_poll_lobby_session(phase: &str, has_active_lobby_session: bool) -> bool {
+    matches!(phase, "Lobby" | "Matchmaking" | "ReadyCheck") || has_active_lobby_session
+}
+
 /// Gateway abstraction for a single LCU fallback/bootstrap poll cycle (mockable in tests).
 pub(crate) trait LcuPollGateway: Send + Sync {
-    fn get_gameflow_phase(
-        &self,
-    ) -> impl std::future::Future<Output = Result<String, String>> + Send;
-
-    fn get_champ_select_session(
-        &self,
-    ) -> impl std::future::Future<Output = Result<Option<serde_json::Value>, String>> + Send;
-
-    fn get_current_queue_id(&self)
-    -> impl std::future::Future<Output = Result<i32, String>> + Send;
+    fn get_gameflow_phase(&self) -> impl std::future::Future<Output = Result<String, String>> + Send;
+    fn get_champ_select_session(&self) -> impl std::future::Future<Output = Result<Option<serde_json::Value>, String>> + Send;
+    fn get_current_queue_id(&self) -> impl std::future::Future<Output = Result<i32, String>> + Send;
+    fn get_lobby_session(&self) -> impl std::future::Future<Output = Result<Option<serde_json::Value>, String>> + Send;
 }
 
 /// Side-effect sink for a single LCU poll cycle so tests can assert state and scheduling decisions.
 pub(crate) trait LcuPollSink: Send + Sync {
     fn on_gameflow_phase(&self, phase: String) -> impl std::future::Future<Output = ()> + Send;
-
     fn on_session_update(
         &self,
         transition: WsSessionTransition,
         session_json: &serde_json::Value,
         defer_initial_inject: bool,
     ) -> impl std::future::Future<Output = ()> + Send;
-
     fn on_session_ended(&self) -> impl std::future::Future<Output = ()> + Send;
+    fn on_lobby_update(
+        &self,
+        event_type: &str,
+        lobby_json: &serde_json::Value,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
 
 struct LiveLcuPollGateway {
@@ -81,13 +80,14 @@ impl LcuPollGateway for LiveLcuPollGateway {
     async fn get_gameflow_phase(&self) -> Result<String, String> {
         self.conn.get_gameflow_phase().await
     }
-
     async fn get_champ_select_session(&self) -> Result<Option<serde_json::Value>, String> {
         self.conn.get_champ_select_session().await
     }
-
     async fn get_current_queue_id(&self) -> Result<i32, String> {
         self.conn.get_current_queue_id().await
+    }
+    async fn get_lobby_session(&self) -> Result<Option<serde_json::Value>, String> {
+        self.conn.get_lobby_session().await
     }
 }
 
@@ -109,24 +109,15 @@ impl LcuPollSink for LiveLcuPollSink<'_> {
     ) {
         let is_active = matches!(transition, WsSessionTransition::Active(_));
         handle_session_transition(
-            &self.ctx.app_handle,
-            transition,
-            &self.ctx.session_state,
-            &self.ctx.active_queue_id,
-            &self.ctx.coordinator,
-            &self.ctx.last_gameflow_phase,
-            defer_initial_inject,
+            &self.ctx.app_handle, transition, &self.ctx.session_state, &self.ctx.active_queue_id,
+            &self.ctx.coordinator, &self.ctx.last_gameflow_phase, defer_initial_inject,
         )
         .await;
 
         if is_active {
             process_session_timer(
-                &self.ctx.app_handle,
-                session_json,
-                &self.ctx.session_state,
-                &self.ctx.reconcile_lock,
-                &self.ctx.active_queue_id,
-                &self.ctx.coordinator,
+                &self.ctx.app_handle, session_json, &self.ctx.session_state,
+                &self.ctx.reconcile_lock, &self.ctx.active_queue_id, &self.ctx.coordinator,
             )
             .await;
         }
@@ -135,11 +126,13 @@ impl LcuPollSink for LiveLcuPollSink<'_> {
     async fn on_session_ended(&self) {
         clear_active_session(self.ctx, true).await;
     }
+
+    async fn on_lobby_update(&self, event_type: &str, lobby_json: &serde_json::Value) {
+        super::lobby_handler::handle_lobby_ws_payload(self.ctx, event_type, lobby_json).await;
+    }
 }
 
-/// Executes a single LCU gameflow + Champ Select poll cycle using the supplied gateway and sink.
-/// Queries `/lol-champ-select/v1/session` and `/lol-gameflow/v1/session` (queue ID) in parallel
-/// when in `ChampSelect` and coalesces initial injection if already inside the `FINALIZATION` window.
+/// Executes a single LCU gameflow + Champ Select / Lobby poll cycle using the supplied gateway and sink.
 pub(crate) async fn poll_lcu_session_with_gateway<G, S>(
     gateway: &G,
     sink: &S,
@@ -151,7 +144,14 @@ pub(crate) async fn poll_lcu_session_with_gateway<G, S>(
     S: LcuPollSink,
 {
     let current_phase = last_gameflow_phase.lock().await.clone();
-    let has_active_session = session_state.lock().await.last_payload.is_some();
+    let (has_active_champ_select, is_lobby_session) = {
+        let guard = session_state.lock().await;
+        match guard.last_payload.as_ref() {
+            Some(p) if p.is_lobby_preselect => (false, true),
+            Some(_) => (true, false),
+            None => (false, false),
+        }
+    };
 
     let mut effective_phase = current_phase;
     if let Ok(phase) = gateway.get_gameflow_phase().await {
@@ -159,7 +159,18 @@ pub(crate) async fn poll_lcu_session_with_gateway<G, S>(
         sink.on_gameflow_phase(phase).await;
     }
 
-    if !should_poll_champ_select_session(&effective_phase, has_active_session) {
+    if !should_poll_champ_select_session(&effective_phase, has_active_champ_select) {
+        let active_non_game_lobby =
+            is_lobby_session && !super::gameflow::is_in_game_phase(&effective_phase);
+        if should_poll_lobby_session(&effective_phase, active_non_game_lobby) {
+            match gateway.get_lobby_session().await {
+                Ok(Some(lobby_json)) => sink.on_lobby_update("Update", &lobby_json).await,
+                Ok(None) if active_non_game_lobby => {
+                    sink.on_lobby_update("Delete", &serde_json::Value::Null).await;
+                }
+                _ => {}
+            }
+        }
         return;
     }
 
@@ -199,17 +210,10 @@ pub(crate) async fn poll_lcu_session_with_gateway<G, S>(
 }
 
 async fn poll_lcu_session_once_locked(ctx: &WsListenerCtx) {
-    let Ok(conn) = crate::lcu_connector::LcuConnection::connect() else {
-        return;
-    };
-    let gateway = LiveLcuPollGateway { conn };
-    let sink = LiveLcuPollSink { ctx };
+    let Ok(conn) = crate::lcu_connector::LcuConnection::connect() else { return };
+    let (gateway, sink) = (LiveLcuPollGateway { conn }, LiveLcuPollSink { ctx });
     poll_lcu_session_with_gateway(
-        &gateway,
-        &sink,
-        &ctx.last_gameflow_phase,
-        &ctx.session_state,
-        &ctx.active_queue_id,
+        &gateway, &sink, &ctx.last_gameflow_phase, &ctx.session_state, &ctx.active_queue_id,
     )
     .await;
 }
@@ -260,10 +264,7 @@ async fn run_fallback_poll_loop(ctx: WsListenerCtx) {
         if !*conn_rx.borrow() {
             needs_immediate_poll = true;
             clear_active_session(&ctx, false).await;
-            {
-                let mut phase_guard = ctx.last_gameflow_phase.lock().await;
-                phase_guard.clear();
-            }
+            ctx.last_gameflow_phase.lock().await.clear();
             if conn_rx.changed().await.is_err() {
                 break;
             }
@@ -279,12 +280,8 @@ async fn run_fallback_poll_loop(ctx: WsListenerCtx) {
             tokio::select! {
                 _ = tokio::time::sleep(poll_interval) => {}
                 changed = conn_rx.changed() => {
-                    if changed.is_err() {
-                        break;
-                    }
-                    if *conn_rx.borrow() {
-                        needs_immediate_poll = true;
-                    }
+                    if changed.is_err() { break; }
+                    if *conn_rx.borrow() { needs_immediate_poll = true; }
                     continue;
                 }
             }

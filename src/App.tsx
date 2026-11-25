@@ -22,7 +22,7 @@ import {
   usePreferences,
 } from "./features/settings";
 import { ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
-import { isInGamePhase, useLcuEvents } from "./features/champ-select";
+import { isSpellsLockedPhase, useLcuEvents } from "./features/champ-select";
 import { useAram } from "./features/aram";
 import { useArena } from "./features/arena";
 import { useRanked } from "./features/ranked";
@@ -42,7 +42,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
     if (
-      isInGamePhase(lcu.gameflowPhase) ||
+      isSpellsLockedPhase(lcu.gameflowPhase, lcu.champSelect?.is_lobby_preselect) ||
       lcu.build?.supports_spells === false ||
       lcu.champSelect?.queue_mode === "Arena"
     ) {

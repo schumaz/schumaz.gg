@@ -13,6 +13,13 @@ export function isInGamePhase(phase: string): boolean {
   return phase === "GameStart" || phase === "InProgress" || phase === "Reconnect";
 }
 
+export function isSpellsLockedPhase(phase: string, isLobbyPreselect?: boolean): boolean {
+  return (
+    isInGamePhase(phase) ||
+    (Boolean(isLobbyPreselect) && (phase === "Matchmaking" || phase === "ReadyCheck"))
+  );
+}
+
 export interface LcuListenersContext {
   activeChampIdRef: MutableRefObject<number | null>;
   buildRef: MutableRefObject<ChampionBuild | null>;
@@ -122,6 +129,9 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionH
         }
         return payload;
       });
+      if (payload.is_lobby_preselect) {
+        return;
+      }
       await fetchBuildForPayload(payload, fetchSeq);
     }),
     lcuIpc.onChampSelectEnded(() => {

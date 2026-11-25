@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -8,94 +9,56 @@ pub struct ChampionSelections {
     pub build_index: Option<usize>,
 }
 
-static CHAMPION_SELECTIONS: OnceLock<RwLock<Option<ChampionSelections>>> = OnceLock::new();
+static CHAMPION_SELECTIONS: OnceLock<RwLock<HashMap<i32, ChampionSelections>>> = OnceLock::new();
 
 #[cfg(test)]
 pub(crate) static TEST_SELECTIONS_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-fn get_selections_lock() -> &'static RwLock<Option<ChampionSelections>> {
-    CHAMPION_SELECTIONS.get_or_init(|| RwLock::new(None))
+fn get_selections_lock() -> &'static RwLock<HashMap<i32, ChampionSelections>> {
+    CHAMPION_SELECTIONS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn upsert_champion_selection(champion_id: i32, update: impl FnOnce(&mut ChampionSelections)) {
+    if let Ok(mut guard) = get_selections_lock().write() {
+        let entry = guard.entry(champion_id).or_insert_with(|| ChampionSelections {
+            champion_id,
+            ..Default::default()
+        });
+        update(entry);
+    }
 }
 
 pub fn set_selected_rune_page(champion_id: i32, page_index: usize) {
-    if let Ok(mut guard) = get_selections_lock().write() {
-        let current = guard.get_or_insert_with(|| ChampionSelections {
-            champion_id,
-            rune_page_index: None,
-            selected_spell_pair: None,
-            build_index: None,
-        });
-        if current.champion_id != champion_id {
-            *current = ChampionSelections {
-                champion_id,
-                rune_page_index: Some(page_index),
-                selected_spell_pair: None,
-                build_index: None,
-            };
-        } else {
-            current.rune_page_index = Some(page_index);
-        }
-    }
+    upsert_champion_selection(champion_id, |entry| {
+        entry.rune_page_index = Some(page_index);
+    });
 }
 
 pub fn set_selected_spell_pair(champion_id: i32, spell1_id: i32, spell2_id: i32) {
     if spell1_id <= 0 || spell2_id <= 0 || spell1_id == spell2_id {
         return;
     }
-    if let Ok(mut guard) = get_selections_lock().write() {
-        let current = guard.get_or_insert_with(|| ChampionSelections {
-            champion_id,
-            rune_page_index: None,
-            selected_spell_pair: None,
-            build_index: None,
-        });
-        if current.champion_id != champion_id {
-            *current = ChampionSelections {
-                champion_id,
-                rune_page_index: None,
-                selected_spell_pair: Some((spell1_id, spell2_id)),
-                build_index: None,
-            };
-        } else {
-            current.selected_spell_pair = Some((spell1_id, spell2_id));
-        }
-    }
+    upsert_champion_selection(champion_id, |entry| {
+        entry.selected_spell_pair = Some((spell1_id, spell2_id));
+    });
 }
 
 pub fn set_selected_build(champion_id: i32, build_index: usize) {
-    if let Ok(mut guard) = get_selections_lock().write() {
-        let current = guard.get_or_insert_with(|| ChampionSelections {
-            champion_id,
-            rune_page_index: None,
-            selected_spell_pair: None,
-            build_index: None,
-        });
-        if current.champion_id != champion_id {
-            *current = ChampionSelections {
-                champion_id,
-                rune_page_index: None,
-                selected_spell_pair: None,
-                build_index: Some(build_index),
-            };
-        } else {
-            current.build_index = Some(build_index);
-        }
-    }
+    upsert_champion_selection(champion_id, |entry| {
+        entry.build_index = Some(build_index);
+    });
 }
 
 pub fn get_champion_selections(champion_id: i32) -> Option<ChampionSelections> {
-    if let Ok(guard) = get_selections_lock().read()
-        && let Some(sel) = guard.as_ref()
-        && sel.champion_id == champion_id
-    {
-        return Some(sel.clone());
+    if let Ok(guard) = get_selections_lock().read() {
+        return guard.get(&champion_id).cloned();
     }
     None
 }
 
 pub fn clear_champion_selections() {
     if let Ok(mut guard) = get_selections_lock().write() {
-        *guard = None;
+        guard.clear();
     }
 }
 
@@ -126,8 +89,13 @@ mod tests {
             Some((4, 3))
         );
 
-        // Different champion query should return None
+        // Different champion query should return None when unset, and store independently when set
         assert_eq!(get_champion_selections(804), None);
+        set_selected_rune_page(804, 2);
+        set_selected_spell_pair(804, 4, 14);
+        assert_eq!(get_champion_selections(103).unwrap().rune_page_index, Some(1));
+        assert_eq!(get_champion_selections(804).unwrap().rune_page_index, Some(2));
+        assert_eq!(get_champion_selections(804).unwrap().selected_spell_pair, Some((4, 14)));
 
         // Clearing selections resets back to None
         clear_champion_selections();

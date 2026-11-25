@@ -1,4 +1,5 @@
 export * from "./FilterDropdown";
+export * from "./LobbySlotsBar";
 export * from "./SearchInput";
 export * from "./RegionFlag";
 export * from "./LanguageFlag";

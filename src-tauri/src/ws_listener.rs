@@ -4,6 +4,9 @@
 pub mod coordinator;
 pub mod extract;
 pub mod gameflow;
+pub mod lobby;
+pub mod lobby_actions;
+pub mod lobby_handler;
 pub mod polling;
 pub mod reconcile;
 pub mod reconcile_state;
@@ -13,6 +16,8 @@ mod subscription;
 pub use coordinator::*;
 pub use extract::*;
 pub use gameflow::*;
+pub use lobby::*;
+pub use lobby_actions::*;
 pub use polling::*;
 pub use reconcile::*;
 pub use reconcile_state::*;

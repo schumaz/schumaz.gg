@@ -1,8 +1,9 @@
 ﻿pub use crate::models::{
-    ChampSelectedPayload, MAP_ARENA, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_ARENA, QUEUE_ARENA_1710,
-    QUEUE_ARENA_1740, QUEUE_ARENA_1750, QUEUE_FLEX, QUEUE_NORMAL_DRAFT, QUEUE_PRACTICE_TOOL,
-    QUEUE_QUICKPLAY, QUEUE_SOLO_DUO, QueueMode, is_arena_game_mode, is_arena_queue,
-    queue_supports_runes, queue_supports_spells,
+    ChampSelectedPayload, LobbyPreselectSlot, MAP_ARENA, QUEUE_ARAM, QUEUE_ARAM_MAYHEM,
+    QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1740, QUEUE_ARENA_1750, QUEUE_CLASH, QUEUE_FLEX,
+    QUEUE_NORMAL_DRAFT, QUEUE_PRACTICE_TOOL, QUEUE_QUICKPLAY, QUEUE_SOLO_DUO, QUEUE_SWIFTPLAY,
+    QueueMode, canonical_build_queue_id, is_arena_game_mode, is_arena_queue, is_clash_queue,
+    is_lobby_preselect_queue, is_swiftplay_game_mode, queue_supports_runes, queue_supports_spells,
 };
 use std::time::Duration;
 
@@ -41,25 +42,13 @@ pub fn is_custom_or_practice_session(session_json: &serde_json::Value) -> bool {
 /// Extracts timer metadata from `/lol-champ-select/v1/session` JSON.
 pub fn extract_champ_select_timer(session_json: &serde_json::Value) -> Option<ChampSelectTimer> {
     let timer = session_json.get("timer")?;
-    let phase = timer
-        .get("phase")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let phase = timer.get("phase").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let adjusted_time_left_ms = timer
         .get("adjustedTimeLeftInPhase")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    let is_infinite = timer
-        .get("isInfinite")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    Some(ChampSelectTimer {
-        phase,
-        adjusted_time_left_ms,
-        is_infinite,
-    })
+    let is_infinite = timer.get("isInfinite").and_then(|v| v.as_bool()).unwrap_or(false);
+    Some(ChampSelectTimer { phase, adjusted_time_left_ms, is_infinite })
 }
 
 /// Evaluates whether the session timer requires immediate final reconciliation,
@@ -111,9 +100,9 @@ pub fn evaluate_ws_event(
             queue_mode: QueueMode::from(effective_queue_id),
             locked_in,
             assigned_position: assigned_pos,
+            ..Default::default()
         }),
-        Ok(None) => WsSessionTransition::NoChampionSelected,
-        Err(_) => WsSessionTransition::NoChampionSelected,
+        Ok(None) | Err(_) => WsSessionTransition::NoChampionSelected,
     }
 }
 
@@ -322,9 +311,20 @@ pub fn extract_queue_id(gameflow_json: &serde_json::Value) -> Result<i32, String
         if id == -1 || (is_custom && id <= 0) {
             return Ok(QUEUE_PRACTICE_TOOL);
         }
-        return Ok(id);
+        if id > 0 {
+            return Ok(id);
+        }
     }
 
+    if is_swiftplay_game_mode(game_mode) {
+        return Ok(QUEUE_SWIFTPLAY);
+    }
+    if game_mode.eq_ignore_ascii_case("CLASH") {
+        return Ok(QUEUE_CLASH);
+    }
+    if let Some(id) = id_opt {
+        return Ok(id);
+    }
     if is_custom {
         return Ok(QUEUE_PRACTICE_TOOL);
     }

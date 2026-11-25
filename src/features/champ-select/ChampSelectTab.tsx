@@ -13,7 +13,7 @@ import { RuneTree } from "../../components/ui/RuneTree";
 import { SpellsBar } from "../../components/ui/SpellsBar";
 import { isArenaBuildContext } from "../../components/ui/queueContext";
 import { IdleState } from "./IdleState";
-import { isInGamePhase } from "./lcuEventListeners";
+import { isSpellsLockedPhase } from "./lcuEventListeners";
 
 interface ChampSelectTabProps {
   isActive: boolean;
@@ -36,6 +36,7 @@ interface ChampSelectTabProps {
   onInvertSpells: () => void;
   onSelectSpellPair: (pairIndex: number) => void;
   onSelectBuild: (index: number) => void;
+  onSelectLobbySlot?: (slotIndex: number) => void;
 }
 
 export function ChampSelectTab({
@@ -56,9 +57,12 @@ export function ChampSelectTab({
   onInvertSpells,
   onSelectSpellPair,
   onSelectBuild,
+  onSelectLobbySlot,
 }: ChampSelectTabProps) {
   const isArena = isArenaBuildContext(build, champSelect);
-  const isSpellsReadOnly = isInGamePhase(gameflowPhase) || build?.supports_spells === false;
+  const isSpellsReadOnly =
+    isSpellsLockedPhase(gameflowPhase, champSelect?.is_lobby_preselect) ||
+    build?.supports_spells === false;
 
   return (
     <div
@@ -73,6 +77,7 @@ export function ChampSelectTab({
             champSelect={champSelect}
             loading={loading}
             onFilterChange={onFilterChange}
+            onSelectLobbySlot={onSelectLobbySlot}
           />
 
           <div className={`dashboard-split-grid ${isArena ? "is-arena-grid" : ""}`}>

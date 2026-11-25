@@ -122,6 +122,14 @@ export interface CoreTranslations {
     queuePracticeTool: string;
     queueSr: string;
     queueRankedSr: string;
+    queueSwiftplay: string;
+    queueQuickplay: string;
+    queueClash: string;
+    lobbyPreselectTag: string;
+    lobbySlotsAria: string;
+    lobbySlotPrimary: string;
+    lobbySlotSecondary: string;
+    lobbySlotFill: string;
     tiers: {
       all: string;
       challenger: string;

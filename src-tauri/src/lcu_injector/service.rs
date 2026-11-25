@@ -1,21 +1,27 @@
 use super::injection::{inject_item_sets, inject_specific_rune_page};
+use super::lobby_injection::{
+    inject_multi_item_sets, patch_single_lobby_slot_runes, patch_single_lobby_slot_spells,
+};
 use super::payloads::build_spells_payload;
 use super::preferences::{get_user_preferences, set_active_locale, set_user_preferences};
 use super::selections::{set_selected_build, set_selected_rune_page, set_selected_spell_pair};
-use crate::models::{AppLocale, FlashKeyPreference, QUEUE_SOLO_DUO, UserPreferences};
+use crate::models::{
+    AppLocale, FlashKeyPreference, QUEUE_SOLO_DUO, UserPreferences, canonical_build_queue_id,
+};
 use crate::storage::AppSettings;
-use crate::{build_provider, lcu_connector, storage};
+use crate::{build_provider, lcu_connector, logging, storage};
 
 /// Resolves the active queue ID for item build injection without hardcoding 420.
+/// Redirects Clash (`700`) and Practice Tool (`-1` / `0`) to Solo/Duo (`420`).
 pub fn normalize_item_build_queue_id(
     provided_queue_id: Option<i32>,
     lcu_queue_id: Option<i32>,
 ) -> i32 {
     match provided_queue_id {
-        Some(q) if q > 0 => q,
+        Some(q) if q > 0 => canonical_build_queue_id(q),
         Some(_) => QUEUE_SOLO_DUO,
         None => match lcu_queue_id {
-            Some(q) if q > 0 => q,
+            Some(q) if q > 0 => canonical_build_queue_id(q),
             _ => QUEUE_SOLO_DUO,
         },
     }
@@ -42,7 +48,31 @@ pub async fn apply_manual_rune_page(
         sub_style_id,
         selected_perk_ids,
     )
-    .await
+    .await?;
+
+    if let Some((slot_idx, active_champ_id, is_editable)) =
+        crate::ws_listener::active_lobby_preselect_context().await
+        && is_editable
+    {
+        let target_slot = (active_champ_id == champion_id).then_some(slot_idx);
+        if let Err(err) = patch_single_lobby_slot_runes(
+            &conn,
+            target_slot,
+            champion_id,
+            primary_style_id,
+            sub_style_id,
+            selected_perk_ids,
+        )
+        .await
+        {
+            logging::log_warn(
+                "lcu.injector",
+                format!("event=lobby_slot_rune_patch_failed champ_id={champion_id} err={err}"),
+            );
+        }
+    }
+
+    Ok(())
 }
 
 /// Saves optional spell pair selection, connects to LCU, and patches summoner spells.
@@ -51,11 +81,28 @@ pub async fn apply_manual_summoner_spells(
     spell2_id: i32,
     champion_id: Option<i32>,
 ) -> Result<(), String> {
-    if let Some(champ_id) = champion_id {
+    let lobby_ctx = crate::ws_listener::active_lobby_preselect_context().await;
+    let target_champ_for_selection = champion_id.or_else(|| lobby_ctx.map(|(_, cid, _)| cid));
+    if let Some(champ_id) = target_champ_for_selection {
         set_selected_spell_pair(champ_id, spell1_id, spell2_id);
     }
     let conn = lcu_connector::LcuConnection::connect()
         .map_err(|e| format!("Não foi possível conectar ao cliente do LoL: {}", e))?;
+
+    if let Some((slot_idx, active_champ_id, is_editable)) = lobby_ctx {
+        if !is_editable {
+            return Err(
+                "Os feitiços do lobby não podem ser alterados durante a fila ou partida."
+                    .to_string(),
+            );
+        }
+        let target_champ = champion_id.unwrap_or(active_champ_id);
+        let target_slot = (target_champ == active_champ_id).then_some(slot_idx);
+        patch_single_lobby_slot_spells(&conn, target_slot, target_champ, spell1_id, spell2_id)
+            .await?;
+        return Ok(());
+    }
+
     let payload = build_spells_payload(spell1_id, spell2_id)?;
     conn.patch_summoner_spells(&payload)
         .await
@@ -90,6 +137,16 @@ pub async fn apply_manual_item_build(
     let client = build_provider::shared_http_client();
     let build =
         build_provider::get_recommended_build(client, champion_id, resolved_queue_id).await?;
+
+    if let Some(other_builds) = crate::ws_listener::get_cached_lobby_builds_for_merge().await {
+        let mut merged: Vec<build_provider::ChampionBuild> = other_builds
+            .into_iter()
+            .filter(|b| b.champion_id != champion_id)
+            .collect();
+        merged.push(build);
+        let refs: Vec<&build_provider::ChampionBuild> = merged.iter().collect();
+        return inject_multi_item_sets(&conn, summoner.summoner_id, &refs).await;
+    }
 
     inject_item_sets(&conn, summoner.summoner_id, &build).await
 }
@@ -171,9 +228,13 @@ mod tests {
     fn test_normalize_item_build_queue_id_respects_active_queue() {
         assert_eq!(normalize_item_build_queue_id(Some(450), None), 450);
         assert_eq!(normalize_item_build_queue_id(Some(2400), None), 2400);
+        assert_eq!(normalize_item_build_queue_id(Some(480), None), 480);
+        assert_eq!(normalize_item_build_queue_id(Some(700), None), 420);
         assert_eq!(normalize_item_build_queue_id(Some(440), None), 440);
         assert_eq!(normalize_item_build_queue_id(Some(-1), None), 420);
         assert_eq!(normalize_item_build_queue_id(None, Some(450)), 450);
+        assert_eq!(normalize_item_build_queue_id(None, Some(480)), 480);
+        assert_eq!(normalize_item_build_queue_id(None, Some(700)), 420);
         assert_eq!(normalize_item_build_queue_id(None, Some(2400)), 2400);
         assert_eq!(normalize_item_build_queue_id(None, None), 420);
     }

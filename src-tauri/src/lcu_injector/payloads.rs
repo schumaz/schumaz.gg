@@ -109,9 +109,7 @@ pub fn build_spells_payload(spell1_id: i32, spell2_id: i32) -> Result<serde_json
     }))
 }
 
-/// Builds the JSON payload for custom item sets via PUT /lol-item-sets/v1/item-sets/{summonerId}/sets.
-/// Sets the item set title as "%Champname% | schumaz.gg".
-pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde_json::Value {
+fn build_single_item_set(build: &ChampionBuild) -> (serde_json::Value, bool) {
     let selections = get_champion_selections(build.champion_id);
     let mut blocks = Vec::new();
 
@@ -162,19 +160,48 @@ pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde
         }
     }
 
+    let is_empty = blocks.is_empty();
+    let set = json!({
+        "title": format!("{}{}", build.champion_name, SCHUMAZ_PAGE_SUFFIX),
+        "associatedChampions": [build.champion_id],
+        "associatedMaps": [11, 12, 30],
+        "blocks": blocks,
+        "mode": "any",
+        "type": "custom"
+    });
+    (set, !is_empty)
+}
+
+/// Builds a combined item sets payload containing one item set per distinct champion build
+/// (used in Swiftplay/Quickplay lobbies so both Primary and Secondary champions are present in shop).
+pub fn build_multi_item_sets_payload(
+    summoner_id: u64,
+    builds: &[&ChampionBuild],
+) -> serde_json::Value {
+    let mut seen_champs = std::collections::HashSet::new();
+    let mut item_sets = Vec::new();
+    let single = builds.len() == 1;
+
+    for build in builds {
+        if !seen_champs.insert(build.champion_id) {
+            continue;
+        }
+        let (set, has_blocks) = build_single_item_set(build);
+        if single || has_blocks {
+            item_sets.push(set);
+        }
+    }
+
     json!({
         "accountId": summoner_id,
-        "itemSets": [
-            {
-                "title": format!("{}{}", build.champion_name, SCHUMAZ_PAGE_SUFFIX),
-                "associatedChampions": [build.champion_id],
-                "associatedMaps": [11, 12, 30],
-                "blocks": blocks,
-                "mode": "any",
-                "type": "custom"
-            }
-        ]
+        "itemSets": item_sets
     })
+}
+
+/// Builds the JSON payload for custom item sets via PUT /lol-item-sets/v1/item-sets/{summonerId}/sets.
+/// Sets the item set title as "%Champname% | schumaz.gg".
+pub fn build_item_sets_payload(summoner_id: u64, build: &ChampionBuild) -> serde_json::Value {
+    build_multi_item_sets_payload(summoner_id, &[build])
 }
 
 #[cfg(test)]

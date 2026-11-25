@@ -30,6 +30,11 @@ export const commands = {
 	 *  so final Champ Select reconciliation can detect UI/backend divergence.
 	 */
 	syncDisplayedChampion: (championId: number | null) => __TAURI_INVOKE<void>("sync_displayed_champion", { championId }),
+	/**
+	 *  Switches the active Swiftplay/Quickplay pre-selection slot (Primary vs Secondary)
+	 *  and emits the corresponding build & selection events.
+	 */
+	selectLobbyPreselectSlot: (slotIndex: number) => __TAURI_INVOKE<ActiveChampSelectSnapshot_Serialize | null>("select_lobby_preselect_slot", { slotIndex }),
 	/**  Tauri command to sync user preferences from the frontend to the backend engine and `UserSettings.ini`. */
 	syncUserPreferences: (preferences: UserPreferences_Deserialize) => __TAURI_INVOKE<void>("sync_user_preferences", { preferences }),
 	/**  Tauri command to update the active backend locale (`pt_BR` | `en_US`), persist to `UserSettings.ini`, and pre-warm DataDragon cache. */
@@ -464,6 +469,9 @@ export type ChampSelectedPayload_Deserialize = {
 	queue_mode: QueueMode,
 	locked_in: boolean,
 	assigned_position?: string | null,
+	is_lobby_preselect?: boolean,
+	active_slot_index?: number | null,
+	lobby_slots?: LobbyPreselectSlot_Deserialize[],
 };
 
 /**  Payload emitted to the Tauri frontend when the user selects or locks in a champion. */
@@ -473,6 +481,9 @@ export type ChampSelectedPayload_Serialize = {
 	queue_mode: QueueMode,
 	locked_in: boolean,
 	assigned_position: string | null,
+	is_lobby_preselect: boolean,
+	active_slot_index: number | null,
+	lobby_slots: LobbyPreselectSlot_Serialize[],
 };
 
 export type ChampSelected_Deserialize = ChampSelectedPayload_Deserialize;
@@ -780,6 +791,27 @@ export type LcuConnected_Deserialize = SummonerInfo_Deserialize;
 export type LcuConnected_Serialize = SummonerInfo_Serialize;
 
 export type LcuDisconnected = null;
+
+/**  A champion/position slot pre-selected directly in a Swiftplay/Quickplay LCU lobby. */
+export type LobbyPreselectSlot = LobbyPreselectSlot_Serialize | LobbyPreselectSlot_Deserialize;
+
+/**  A champion/position slot pre-selected directly in a Swiftplay/Quickplay LCU lobby. */
+export type LobbyPreselectSlot_Deserialize = {
+	slot_index: number,
+	champion_id: number,
+	champion_name?: string,
+	champion_icon_url?: string,
+	assigned_position?: string | null,
+};
+
+/**  A champion/position slot pre-selected directly in a Swiftplay/Quickplay LCU lobby. */
+export type LobbyPreselectSlot_Serialize = {
+	slot_index: number,
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	assigned_position: string | null,
+};
 
 /**  Disk usage summary for `%LOCALAPPDATA%\schumazgg\Cache\`. */
 export type LocalCacheInfo = {

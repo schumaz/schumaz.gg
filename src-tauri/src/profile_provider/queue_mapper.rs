@@ -1,7 +1,15 @@
 use crate::models::{
-    AppLocale, QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1740, QUEUE_ARENA_1750,
-    is_arena_game_mode,
+    AppLocale, QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1740, QUEUE_ARENA_1750, QUEUE_CLASH,
+    QUEUE_QUICKPLAY, QUEUE_SWIFTPLAY, is_arena_game_mode,
 };
+
+fn swiftplay_label(locale: AppLocale) -> String {
+    match locale {
+        AppLocale::PtBr => "Jogo Rápido",
+        AppLocale::EnUs => "Swiftplay",
+    }
+    .to_string()
+}
 
 /// Maps LCU `queueId` and `gameMode` to normalized filter key and localized mode label.
 pub fn map_queue_mode_for_locale(
@@ -12,7 +20,9 @@ pub fn map_queue_mode_for_locale(
     match queue_id {
         420 => ("ranked_solo".to_string(), "Solo/Duo".to_string()),
         440 => ("ranked_flex".to_string(), "Flex".to_string()),
-        400 | 430 | 480 | 490 => ("normal".to_string(), "Normal".to_string()),
+        QUEUE_SWIFTPLAY => ("swiftplay".to_string(), swiftplay_label(locale)),
+        QUEUE_CLASH => ("clash".to_string(), "Clash".to_string()),
+        400 | 430 | QUEUE_QUICKPLAY => ("normal".to_string(), "Normal".to_string()),
         450 => ("aram".to_string(), "ARAM".to_string()),
         2400 => ("aram_mayhem".to_string(), "ARAM Mayhem".to_string()),
         QUEUE_ARENA | QUEUE_ARENA_1710 | QUEUE_ARENA_1740 | QUEUE_ARENA_1750 => {
@@ -53,7 +63,11 @@ pub fn map_queue_mode_for_locale(
                 ("arena".to_string(), "Arena".to_string())
             } else if mode_upper.contains("URF") {
                 ("urf".to_string(), "URF".to_string())
-            } else if mode_upper == "CLASSIC" || mode_upper == "SWIFTPLAY" {
+            } else if mode_upper == "SWIFTPLAY" {
+                ("swiftplay".to_string(), swiftplay_label(locale))
+            } else if mode_upper == "CLASH" {
+                ("clash".to_string(), "Clash".to_string())
+            } else if mode_upper == "CLASSIC" {
                 ("normal".to_string(), "Normal".to_string())
             } else if mode_upper.is_empty() {
                 (
@@ -89,6 +103,26 @@ mod tests {
         assert_eq!(
             map_queue_mode_for_locale(1300, "", AppLocale::EnUs).1,
             "Nexus Blitz"
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(QUEUE_SWIFTPLAY, "", AppLocale::PtBr),
+            ("swiftplay".to_string(), "Jogo Rápido".to_string())
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(QUEUE_SWIFTPLAY, "", AppLocale::EnUs),
+            ("swiftplay".to_string(), "Swiftplay".to_string())
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(QUEUE_CLASH, "", AppLocale::PtBr),
+            ("clash".to_string(), "Clash".to_string())
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(0, "SWIFTPLAY", AppLocale::EnUs),
+            ("swiftplay".to_string(), "Swiftplay".to_string())
+        );
+        assert_eq!(
+            map_queue_mode_for_locale(0, "CLASH", AppLocale::EnUs),
+            ("clash".to_string(), "Clash".to_string())
         );
         for arena_id in [
             QUEUE_ARENA,

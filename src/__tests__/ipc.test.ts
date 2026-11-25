@@ -58,6 +58,10 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     await lcuIpc.syncDisplayedChampion(103);
     expect(invoke).toHaveBeenCalledWith("sync_displayed_champion", { championId: 103 });
 
+    const slotSnap = await lcuIpc.selectLobbyPreselectSlot(1);
+    expect(invoke).toHaveBeenCalledWith("select_lobby_preselect_slot", { slotIndex: 1 });
+    expect(slotSnap).toBeNull();
+
     await buildIpc.getRecommendedBuildForChampion(103, 420);
     expect(invoke).toHaveBeenCalledWith("get_recommended_build_for_champion", {
       championId: 103,

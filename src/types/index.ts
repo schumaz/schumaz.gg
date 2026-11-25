@@ -48,6 +48,7 @@ export type {
   LaneMatchupsSummary_Serialize,
   LcuConnected,
   LcuDisconnected,
+  LobbyPreselectSlot,
   LocalCacheInfo,
   MatchEnded,
   NavigationState,

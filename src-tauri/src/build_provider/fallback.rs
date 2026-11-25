@@ -1,15 +1,26 @@
 use super::models::{ChampionBuild, ItemBlock, ItemBlockKind};
 use crate::models::{
-    QUEUE_ARAM_MAYHEM, is_arena_queue, queue_supports_runes, queue_supports_spells,
+    QUEUE_ARAM_MAYHEM, QUEUE_QUICKPLAY, QUEUE_SWIFTPLAY, is_arena_queue, queue_supports_runes,
+    queue_supports_spells,
 };
 
-/// Maps a queue ID into an OP.GG queue argument string ("aram", "arena", or "ranked").
-pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
+/// Maps a queue ID into an analytics REST/MCP mode slug (`"aram"`, `"arena"`, or `"ranked"`).
+///
+/// OP.GG REST & MCP do not currently expose a `swiftplay`/`quickplay` mode (HTTP 422), so
+/// Swiftplay (`480`) and Quickplay (`490`) use `"ranked"` analytics upstream while keeping their
+/// own isolated `queue_id = 480` cache partition and resolver policy.
+pub fn analytics_rest_mode_for_queue(queue_id: i32) -> &'static str {
     match queue_id {
         450 | QUEUE_ARAM_MAYHEM => "aram",
         q if is_arena_queue(q) => "arena",
+        QUEUE_SWIFTPLAY | QUEUE_QUICKPLAY => "ranked",
         _ => "ranked",
     }
+}
+
+/// Maps a queue ID into an OP.GG queue argument string ("aram", "arena", or "ranked").
+pub fn opgg_queue_param_from_id(queue_id: i32) -> &'static str {
+    analytics_rest_mode_for_queue(queue_id)
 }
 
 /// Returns sensible default summoner spells adapted to the queue type.
@@ -197,6 +208,10 @@ mod tests {
 
         assert_eq!(opgg_queue_param_from_id(440), "ranked");
         assert_eq!(opgg_queue_param_from_id(400), "ranked");
+        assert_eq!(opgg_queue_param_from_id(crate::models::QUEUE_SWIFTPLAY), "ranked");
+        assert_eq!(opgg_queue_param_from_id(crate::models::QUEUE_CLASH), "ranked");
+        assert_eq!(analytics_rest_mode_for_queue(crate::models::QUEUE_SWIFTPLAY), "ranked");
+        assert_eq!(analytics_rest_mode_for_queue(crate::models::QUEUE_CLASH), "ranked");
         assert_eq!(opgg_queue_param_from_id(-1), "ranked");
         assert_eq!(default_spells_for_queue(-1), (4, 14));
     }

@@ -15,10 +15,11 @@ import {
   injectItemBuildAction,
   injectRunePageAction,
   injectSpellPairAction,
+  selectLobbyPreselectSlotAction,
 } from "./lcuBuildActions";
-import { isInGamePhase, subscribeToLcuEvents } from "./lcuEventListeners";
+import { isInGamePhase, isSpellsLockedPhase, subscribeToLcuEvents } from "./lcuEventListeners";
 
-export { isInGamePhase };
+export { isInGamePhase, isSpellsLockedPhase };
 
 export interface UseLcuEventsOptions {
   onChampionPulled?: () => void;
@@ -199,42 +200,36 @@ export function useLcuEvents(
       );
 
   const handleSelectSpellPair = async (pairIndex: number) => {
-    if (isArena || build?.supports_spells === false || isInGamePhase(gameflowPhaseRef.current)) return;
+    if (isArena || build?.supports_spells === false || isSpellsLockedPhase(gameflowPhaseRef.current, champSelectRef.current?.is_lobby_preselect)) return;
     if (!build?.spell_options || pairIndex < 0 || pairIndex >= build.spell_options.length) return;
     setSelectedSpellPairIndex(pairIndex);
     await injectSpellPairAction(build, pairIndex, flashKey, spellsInverted);
   };
-
   const handleSelectRunePage = async (pageIndex: number) => {
     if (isArena || build?.supports_runes === false) return;
     if (!build?.rune_pages || pageIndex >= build.rune_pages.length) return;
     setSelectedRunePageIndex(pageIndex);
     await injectRunePageAction(build, pageIndex);
   };
-
   const handleSelectBuild = async (index: number) => {
     if (!build?.build_options || index >= build.build_options.length) return;
     setSelectedBuildIndex(index);
     await injectItemBuildAction(build, champSelect, index);
   };
+  const handleSelectLobbySlot = async (slotIndex: number) => {
+    const snap = await selectLobbyPreselectSlotAction(slotIndex).catch(() => null);
+    if (!snap?.champ_selected) return;
+    const next = snap.champ_selected;
+    const changed = activeChampIdRef.current !== next.champion_id;
+    activeChampIdRef.current = next.champion_id;
+    setChampSelect(next);
+    if (changed) { setSpellsInverted(false); setSelectedSpellPairIndex(0); setSelectedRunePageIndex(0); setSelectedBuildIndex(0); }
+    if (snap.build && snap.build.champion_id === next.champion_id) { buildRef.current = snap.build; setBuild(snap.build); }
+  };
 
   return {
-    summoner,
-    lcuInitialChecked,
-    champSelect,
-    build,
-    gameflowPhase,
-    spellsInverted,
-    setSpellsInverted,
-    selectedSpellPairIndex,
-    selectedRunePageIndex,
-    selectedBuildIndex,
-    loading,
-    errorMsg,
-    orderedSpells,
-    handleFilterChange,
-    handleSelectSpellPair,
-    handleSelectRunePage,
-    handleSelectBuild,
+    summoner, lcuInitialChecked, champSelect, build, gameflowPhase, spellsInverted, setSpellsInverted,
+    selectedSpellPairIndex, selectedRunePageIndex, selectedBuildIndex, loading, errorMsg, orderedSpells,
+    handleFilterChange, handleSelectSpellPair, handleSelectRunePage, handleSelectBuild, handleSelectLobbySlot,
   };
 }

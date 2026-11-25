@@ -45,6 +45,21 @@ export const lcuIpc = {
     return commands.syncDisplayedChampion(championId);
   },
 
+  async selectLobbyPreselectSlot(slotIndex: number): Promise<ActiveChampSelectSnapshot | null> {
+    if (typeof commands?.selectLobbyPreselectSlot !== "function") {
+      return null;
+    }
+    const snapshot = await commands.selectLobbyPreselectSlot(slotIndex);
+    if (!snapshot || typeof snapshot !== "object") {
+      return null;
+    }
+    return {
+      gameflow_phase: snapshot.gameflow_phase ?? null,
+      champ_selected: snapshot.champ_selected ?? null,
+      build: snapshot.build ?? null,
+    };
+  },
+
   async onLcuConnected(handler: (summoner: LcuConnected) => void): Promise<UnlistenFn> {
     return events.lcuConnected.listen((event) => handler(event.payload));
   },

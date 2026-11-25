@@ -1,16 +1,18 @@
+use std::collections::HashMap;
 use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, OnceLock};
 
 use super::coordinator::ChampSelectCoordinator;
 use super::extract::{
-    ChampSelectedPayload, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, QUEUE_PRACTICE_TOOL, QUEUE_SOLO_DUO,
+    ChampSelectedPayload, QUEUE_ARAM, QUEUE_ARAM_MAYHEM, canonical_build_queue_id,
     is_arena_queue, queue_supports_runes, queue_supports_spells,
 };
 use crate::build_provider::ChampionBuild;
 use crate::lcu_injector::{AppliedInjectionState, UserPreferences};
 use crate::models::ActiveChampSelectSnapshot;
 
-/// Holds the backend's latest processed, built, injected, and UI-displayed state for Champ Select.
+/// Holds the backend's latest processed, built, injected, and UI-displayed state for Champ Select
+/// or Swiftplay/Quickplay Lobby pre-selection.
 #[derive(Debug, Clone, Default)]
 pub struct ChampSelectSessionState {
     pub last_payload: Option<ChampSelectedPayload>,
@@ -18,6 +20,7 @@ pub struct ChampSelectSessionState {
     pub last_applied: Option<AppliedInjectionState>,
     pub ui_displayed_champion_id: Option<i32>,
     pub reconciled_champion_id: Option<i32>,
+    pub lobby_builds: HashMap<u32, ChampionBuild>,
 }
 
 impl ChampSelectSessionState {
@@ -26,6 +29,7 @@ impl ChampSelectSessionState {
         self.last_build = None;
         self.last_applied = None;
         self.reconciled_champion_id = None;
+        self.lobby_builds.clear();
     }
 
     pub fn record_processed(&mut self, payload: ChampSelectedPayload) {
@@ -91,10 +95,43 @@ pub fn shared_poll_lock() -> Arc<tokio::sync::Mutex<()>> {
 }
 
 /// Returns `true` when an IPC bootstrap snapshot request should probe LCU on demand
-/// because no gameflow phase has been recorded yet or `ChampSelect` has no cached payload yet.
+/// because no gameflow phase has been recorded yet or active selection has no cached payload yet.
 pub fn should_probe_lcu_for_snapshot(phase: &str, state: &ChampSelectSessionState) -> bool {
     let trimmed = phase.trim();
-    trimmed.is_empty() || (trimmed == "ChampSelect" && state.last_payload.is_none())
+    trimmed.is_empty()
+        || (matches!(trimmed, "ChampSelect" | "Lobby" | "Matchmaking" | "ReadyCheck")
+            && state.last_payload.is_none())
+}
+
+pub fn is_lobby_phase_editable(phase: &str) -> bool {
+    !matches!(
+        phase.trim(),
+        "Matchmaking" | "ReadyCheck" | "GameStart" | "InProgress" | "Reconnect"
+    )
+}
+
+pub async fn active_lobby_preselect_context() -> Option<(u32, i32, bool)> {
+    let payload = shared_session_state().lock().await.last_payload.clone()?;
+    if !payload.is_lobby_preselect {
+        return None;
+    }
+    let phase = shared_last_gameflow_phase().lock().await.clone();
+    Some((
+        payload.active_slot_index.unwrap_or(0),
+        payload.champion_id,
+        is_lobby_phase_editable(&phase),
+    ))
+}
+
+pub async fn get_cached_lobby_builds_for_merge() -> Option<Vec<ChampionBuild>> {
+    let state = shared_session_state();
+    let guard = state.lock().await;
+    if !guard.last_payload.as_ref().is_some_and(|p| p.is_lobby_preselect)
+        || guard.lobby_builds.is_empty()
+    {
+        return None;
+    }
+    Some(guard.lobby_builds.values().cloned().collect())
 }
 
 /// Builds an `ActiveChampSelectSnapshot` from in-memory session state and gameflow phase,
@@ -148,11 +185,7 @@ pub async fn record_filter_updated_build(build: ChampionBuild, applied: AppliedI
 }
 
 pub fn resolve_effective_build_queue_id(payload: &ChampSelectedPayload) -> i32 {
-    if payload.queue_id == 0 || payload.queue_id == QUEUE_PRACTICE_TOOL {
-        QUEUE_SOLO_DUO
-    } else {
-        payload.queue_id
-    }
+    canonical_build_queue_id(payload.queue_id)
 }
 
 pub fn resolve_effective_build_position(
@@ -241,7 +274,7 @@ pub fn evaluate_reconciliation_decision(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{QUEUE_ARENA, QueueMode};
+    use crate::models::{QUEUE_ARENA, QUEUE_SOLO_DUO, QueueMode};
 
     #[test]
     fn test_arena_reconciliation_recognizes_item_only_injection() {
@@ -251,6 +284,7 @@ mod tests {
             queue_mode: QueueMode::Arena,
             locked_in: true,
             assigned_position: Some("support".to_string()),
+            ..Default::default()
         };
         assert_eq!(resolve_effective_build_queue_id(&payload), QUEUE_ARENA);
         assert_eq!(
@@ -289,11 +323,26 @@ mod tests {
             }),
             ui_displayed_champion_id: Some(350),
             reconciled_champion_id: Some(350),
+            ..Default::default()
         };
         let prefs = UserPreferences::default();
         assert_eq!(
             evaluate_reconciliation_decision(&state, &payload, &prefs, QUEUE_ARENA),
             ReconciliationDecision::AlreadyReconciled
+        );
+        assert_eq!(
+            resolve_effective_build_queue_id(&ChampSelectedPayload {
+                queue_id: crate::models::QUEUE_CLASH,
+                ..Default::default()
+            }),
+            QUEUE_SOLO_DUO
+        );
+        assert_eq!(
+            resolve_effective_build_queue_id(&ChampSelectedPayload {
+                queue_id: crate::models::QUEUE_SWIFTPLAY,
+                ..Default::default()
+            }),
+            crate::models::QUEUE_SWIFTPLAY
         );
     }
 }

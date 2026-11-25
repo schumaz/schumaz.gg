@@ -158,13 +158,7 @@ async fn run_champ_select_build_and_inject(
     };
 
     let build_fut = crate::build_provider::get_recommended_build_with_filters_and_fast_spells(
-        http_client,
-        champ_id,
-        q_id,
-        assigned_pos.as_deref(),
-        None,
-        None,
-        None,
+        http_client, champ_id, q_id, assigned_pos.as_deref(), None, None, None,
         if supports_spells { Some(fast_tx) } else { None },
     );
 
@@ -308,37 +302,29 @@ pub async fn update_build_filters_and_reinject(
     app_handle: &tauri::AppHandle,
 ) -> Result<crate::build_provider::ChampionBuild, String> {
     let http_client = crate::build_provider::shared_http_client();
-    let q_id = queue_id.unwrap_or(QUEUE_SOLO_DUO);
+    let q_id = crate::models::canonical_build_queue_id(queue_id.unwrap_or(QUEUE_SOLO_DUO));
     let no_position_mode = q_id == QUEUE_ARAM || q_id == QUEUE_ARAM_MAYHEM || is_arena_queue(q_id);
-    let effective_position = if no_position_mode {
-        None
-    } else {
-        position.as_deref()
-    };
+    let effective_position = if no_position_mode { None } else { position.as_deref() };
 
     let build = crate::build_provider::get_recommended_build_with_filters(
-        http_client,
-        champion_id,
-        q_id,
-        effective_position,
-        tier.as_deref(),
-        region.as_deref(),
-        patch.as_deref(),
+        http_client, champion_id, q_id, effective_position, tier.as_deref(), region.as_deref(), patch.as_deref(),
     )
     .await?;
 
     let _ = models::RecommendedBuild(build.clone()).emit(app_handle);
+
+    if super::lobby_actions::reinject_active_lobby_filter_update(champion_id, &build, app_handle)
+        .await
+    {
+        return Ok(build);
+    }
 
     if let Ok(conn) = crate::lcu_connector::LcuConnection::connect()
         && let Ok(summoner) = conn.get_current_summoner().await
     {
         let report =
             crate::lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
-        let effective_q = if q_id == 0 || q_id == QUEUE_PRACTICE_TOOL {
-            QUEUE_SOLO_DUO
-        } else {
-            q_id
-        };
+        let effective_q = if q_id == 0 || q_id == QUEUE_PRACTICE_TOOL { QUEUE_SOLO_DUO } else { q_id };
         let applied = AppliedInjectionState::from_report(effective_q, &build, &report);
         record_filter_updated_build(build.clone(), applied).await;
         let _ = models::BuildInjected(report).emit(app_handle);

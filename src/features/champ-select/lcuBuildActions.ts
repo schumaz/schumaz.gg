@@ -1,9 +1,10 @@
 import {
+  ActiveChampSelectSnapshot,
   ChampionBuild,
   ChampSelectedPayload,
   FlashKeyPreference,
 } from "../../types";
-import { buildIpc, injectorIpc } from "../../services/ipc";
+import { buildIpc, injectorIpc, lcuIpc } from "../../services/ipc";
 import { computeOrderedSpells } from "../../utils/spells";
 import {
   isAramBuildContextMode,
@@ -64,6 +65,9 @@ export async function fetchRecommendedPayloadBuild(
   payload: ChampSelectedPayload
 ): Promise<ChampionBuild> {
   const qId = payload.queue_id || 420;
+  if (payload.is_lobby_preselect) {
+    return buildIpc.getRecommendedBuildForChampion(payload.champion_id, qId);
+  }
   const isArena = payload.queue_mode === "Arena" || isArenaQueueId(qId);
   const isAram =
     payload.queue_mode === "Aram" ||
@@ -81,6 +85,12 @@ export async function fetchRecommendedPayloadBuild(
         null
       )
     : buildIpc.getRecommendedBuildForChampion(payload.champion_id, qId);
+}
+
+export async function selectLobbyPreselectSlotAction(
+  slotIndex: number
+): Promise<ActiveChampSelectSnapshot | null> {
+  return lcuIpc.selectLobbyPreselectSlot(slotIndex);
 }
 
 export async function injectSpellPairAction(

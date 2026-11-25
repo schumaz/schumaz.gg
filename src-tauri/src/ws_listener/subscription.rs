@@ -194,6 +194,20 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
         },
     );
 
+    let lobby_ctx = ctx.clone();
+    let lobby_rt = rt_handle.clone();
+    ws.subscribe(
+        EventKind::json_api_event_callback_str(crate::lcu_connector::LOBBY_ENDPOINT),
+        move |event: &Event| {
+            let ctx = lobby_ctx.clone();
+            let event_type = event.2.event_type.clone();
+            let data = event.2.data.clone();
+            spawn_on_runtime(lobby_rt.as_ref(), async move {
+                super::lobby_handler::handle_lobby_ws_payload(&ctx, &event_type, &data).await;
+            });
+        },
+    );
+
     for endpoint in [
         crate::lcu_connector::OBJECTIVES_READY_ENDPOINT,
         crate::lcu_connector::LOL_OBJECTIVES_ENDPOINT,

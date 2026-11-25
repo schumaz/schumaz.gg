@@ -48,3 +48,14 @@ pub async fn get_player_profile(
 pub async fn sync_displayed_champion(champion_id: Option<i32>) {
     ws_listener::set_ui_displayed_champion(champion_id).await;
 }
+
+/// Switches the active Swiftplay/Quickplay pre-selection slot (Primary vs Secondary)
+/// and emits the corresponding build & selection events.
+#[tauri::command]
+#[specta::specta]
+pub async fn select_lobby_preselect_slot(
+    slot_index: u32,
+    app_handle: tauri::AppHandle,
+) -> Result<Option<models::ActiveChampSelectSnapshot>, String> {
+    ws_listener::select_lobby_preselect_slot_service(slot_index, &app_handle).await
+}

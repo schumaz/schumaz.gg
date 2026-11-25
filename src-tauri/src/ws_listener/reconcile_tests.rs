@@ -152,6 +152,7 @@ async fn test_reconcile_detects_champion_divergence_after_rapid_aram_bench_swap(
             queue_mode: QueueMode::Aram,
             locked_in: true,
             assigned_position: None,
+            ..Default::default()
         }),
         ui_displayed_champion_id: Some(18),
         ..Default::default()
@@ -230,6 +231,7 @@ async fn test_reconcile_same_champion_preserves_selections_and_respects_aram_may
             queue_mode: QueueMode::AramMayhem,
             locked_in: true,
             assigned_position: None,
+            ..Default::default()
         }),
         last_build: Some(ahri_mayhem_build.clone()),
         last_applied: Some(AppliedInjectionState {
@@ -243,6 +245,7 @@ async fn test_reconcile_same_champion_preserves_selections_and_respects_aram_may
         }),
         ui_displayed_champion_id: Some(103),
         reconciled_champion_id: None,
+        ..Default::default()
     }));
     let lock = Arc::new(tokio::sync::Mutex::new(()));
     let q_ref = Arc::new(AtomicI32::new(QUEUE_ARAM_MAYHEM));
@@ -315,6 +318,7 @@ async fn test_reconcile_detects_ui_only_divergence_and_resyncs_without_clearing_
             queue_mode: QueueMode::SummonersRift,
             locked_in: true,
             assigned_position: Some("mid".to_string()),
+            ..Default::default()
         }),
         last_build: Some(yasuo_build),
         ui_displayed_champion_id: Some(103),

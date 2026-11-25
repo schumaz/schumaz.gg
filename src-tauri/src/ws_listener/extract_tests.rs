@@ -91,6 +91,7 @@ fn test_should_emit_champ_select_deduplicates_timer_ticks() {
         queue_mode: QueueMode::SummonersRift,
         locked_in: false,
         assigned_position: Some("mid".to_string()),
+        ..Default::default()
     });
     let p2 = Some(ChampSelectedPayload {
         champion_id: 103,
@@ -98,6 +99,7 @@ fn test_should_emit_champ_select_deduplicates_timer_ticks() {
         queue_mode: QueueMode::SummonersRift,
         locked_in: false,
         assigned_position: Some("mid".to_string()),
+        ..Default::default()
     });
     let p3_locked = Some(ChampSelectedPayload {
         champion_id: 103,
@@ -105,6 +107,7 @@ fn test_should_emit_champ_select_deduplicates_timer_ticks() {
         queue_mode: QueueMode::SummonersRift,
         locked_in: true,
         assigned_position: Some("mid".to_string()),
+        ..Default::default()
     });
 
     assert!(!should_emit_champ_select(&p1, &p2));
@@ -119,6 +122,7 @@ fn test_should_request_lock_in_attention_across_modes_and_transitions() {
         queue_mode: QueueMode::SummonersRift,
         locked_in: false,
         assigned_position: Some("mid".to_string()),
+        ..Default::default()
     };
     let draft_locked = ChampSelectedPayload {
         locked_in: true,
@@ -170,6 +174,7 @@ fn test_should_request_lock_in_attention_across_modes_and_transitions() {
         queue_mode: QueueMode::PracticeTool,
         locked_in: false,
         assigned_position: None,
+        ..Default::default()
     };
     let practice_locked = ChampSelectedPayload {
         locked_in: true,
@@ -188,6 +193,7 @@ fn test_should_request_lock_in_attention_across_modes_and_transitions() {
         queue_mode: QueueMode::Aram,
         locked_in: true,
         assigned_position: None,
+        ..Default::default()
     };
     let aram_mayhem_swapped = ChampSelectedPayload {
         champion_id: 18,
@@ -195,6 +201,7 @@ fn test_should_request_lock_in_attention_across_modes_and_transitions() {
         queue_mode: QueueMode::AramMayhem,
         locked_in: true,
         assigned_position: None,
+        ..Default::default()
     };
     assert!(should_request_lock_in_attention(None, &aram_initial));
     assert!(should_request_lock_in_attention(

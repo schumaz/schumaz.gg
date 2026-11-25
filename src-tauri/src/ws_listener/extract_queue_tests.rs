@@ -144,6 +144,7 @@ fn test_evaluate_ws_event_arena() {
             queue_mode: QueueMode::Arena,
             locked_in: true,
             assigned_position: None,
+            ..Default::default()
         })
     );
 }
@@ -167,6 +168,7 @@ fn test_evaluate_ws_event_aram_mayhem() {
             queue_mode: QueueMode::AramMayhem,
             locked_in: true,
             assigned_position: None,
+            ..Default::default()
         })
     );
 }
@@ -192,6 +194,7 @@ fn test_evaluate_ws_event_create_update_and_delete() {
             queue_mode: QueueMode::SummonersRift,
             locked_in: false,
             assigned_position: None,
+            ..Default::default()
         })
     );
 
@@ -239,6 +242,7 @@ fn test_is_custom_or_practice_session_and_fallback() {
             queue_mode: QueueMode::PracticeTool,
             locked_in: false,
             assigned_position: None,
+            ..Default::default()
         })
     );
 }
@@ -257,4 +261,32 @@ fn test_extract_queue_id_with_normalized_game_mode() {
         extract_queue_id(&fixture_with_underscore),
         Ok(QUEUE_PRACTICE_TOOL)
     );
+}
+
+#[test]
+fn test_swiftplay_and_clash_queue_classification_and_build_redirection() {
+    let fixture_swiftplay = serde_json::json!({
+        "gameData": { "queue": { "id": QUEUE_SWIFTPLAY, "gameMode": "SWIFTPLAY" } }
+    });
+    assert_eq!(extract_queue_id(&fixture_swiftplay), Ok(QUEUE_SWIFTPLAY));
+    assert_eq!(QueueMode::from(QUEUE_SWIFTPLAY), QueueMode::SummonersRift);
+    assert!(is_lobby_preselect_queue(QUEUE_SWIFTPLAY));
+    assert_eq!(canonical_build_queue_id(QUEUE_SWIFTPLAY), QUEUE_SWIFTPLAY);
+
+    let fixture_swiftplay_mode_only = serde_json::json!({
+        "gameData": { "queue": { "id": 0 }, "gameMode": "SWIFTPLAY" }
+    });
+    assert_eq!(
+        extract_queue_id(&fixture_swiftplay_mode_only),
+        Ok(QUEUE_SWIFTPLAY)
+    );
+
+    let fixture_clash = serde_json::json!({
+        "gameData": { "queue": { "id": QUEUE_CLASH, "gameMode": "CLASSIC" } }
+    });
+    assert_eq!(extract_queue_id(&fixture_clash), Ok(QUEUE_CLASH));
+    assert_eq!(QueueMode::from(QUEUE_CLASH), QueueMode::SummonersRift);
+    assert!(is_clash_queue(QUEUE_CLASH));
+    assert!(!is_lobby_preselect_queue(QUEUE_CLASH));
+    assert_eq!(canonical_build_queue_id(QUEUE_CLASH), QUEUE_SOLO_DUO);
 }

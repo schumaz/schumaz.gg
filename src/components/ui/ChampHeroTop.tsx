@@ -135,6 +135,12 @@ export function resolveChampHeroQueueLabel(
       ? t("filters.queueAram")
       : champSelect?.queue_mode === "PracticeTool"
       ? t("filters.queuePracticeTool")
+      : champSelect?.queue_id === 480
+      ? t("filters.queueSwiftplay")
+      : champSelect?.queue_id === 490
+      ? t("filters.queueQuickplay")
+      : champSelect?.queue_id === 700
+      ? t("filters.queueClash")
       : t("filters.queueSr"))
   );
 }

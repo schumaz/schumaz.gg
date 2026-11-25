@@ -3,6 +3,7 @@ import { ChampionBuild, ChampSelectedPayload } from "../../types";
 import { ChampHeroTop, resolveChampHeroQueueLabel } from "./ChampHeroTop";
 import { FilterDropdown } from "./FilterDropdown";
 import { LoadingBar } from "./LoadingIndicators";
+import { LobbySlotsBar } from "./LobbySlotsBar";
 import { getPositionOptions, getRegionOptions, getTierOptions } from "./filterOptions";
 import { LaneMatchupsPopover } from "./LaneMatchupsPopover";
 import { PatchProtectionIndicator } from "./PatchProtectionIndicator";
@@ -25,6 +26,7 @@ interface FiltersHeaderProps {
   isAramMode?: boolean;
   readOnly?: boolean;
   onSelectMatchupChampion?: (championId: number) => void;
+  onSelectLobbySlot?: (slotIndex: number) => void;
 }
 
 export function FiltersHeader({
@@ -39,6 +41,7 @@ export function FiltersHeader({
   isAramMode = false,
   readOnly = false,
   onSelectMatchupChampion,
+  onSelectLobbySlot,
 }: FiltersHeaderProps) {
   const { t } = useTranslation();
 
@@ -58,10 +61,15 @@ export function FiltersHeader({
     });
 
   const resolvedTagText =
-    statusTagText ?? (champSelect?.locked_in ? t("filters.lockedIn") : t("filters.hovering"));
+    statusTagText ??
+    (champSelect?.is_lobby_preselect
+      ? t("filters.lobbyPreselectTag")
+      : champSelect?.locked_in
+      ? t("filters.lockedIn")
+      : t("filters.hovering"));
   const resolvedTagClass = statusTagText
     ? "tag hovering"
-    : `tag ${champSelect?.locked_in ? "locked" : "hovering"}`;
+    : `tag ${champSelect?.locked_in || champSelect?.is_lobby_preselect ? "locked" : "hovering"}`;
   const resolvedQueueLabel = resolveChampHeroQueueLabel(t, isArena, champSelect, queueModeLabel);
 
   const activeLaneValue = (build.active_position || "").trim().toLowerCase();
@@ -85,6 +93,15 @@ export function FiltersHeader({
         onBackToTierList={onBackToTierList}
         backButtonTitle={backButtonTitle}
       />
+
+      {champSelect?.is_lobby_preselect && (champSelect.lobby_slots?.length ?? 0) > 0 && (
+        <LobbySlotsBar
+          slots={champSelect.lobby_slots ?? []}
+          activeSlotIndex={champSelect.active_slot_index}
+          disabled={loading}
+          onSelectSlot={onSelectLobbySlot}
+        />
+      )}
 
       <div className="champ-filters-bar" data-testid="champ-filters-bar">
         {!isArena && (

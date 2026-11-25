@@ -39,6 +39,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     patch_48h_protection: bool,
     builds_dir: Option<&Path>,
 ) -> Result<ChampionBuild, String> {
+    let queue_id = crate::models::canonical_build_queue_id(queue_id);
     let started = Instant::now();
     let detail = format!("champ_id={champion_id} queue_id={queue_id}");
     let champ_name = ddragon_cache
@@ -70,7 +71,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
 
     let is_aram = queue_id == crate::ws_listener::QUEUE_ARAM
         || queue_id == crate::ws_listener::QUEUE_ARAM_MAYHEM;
-    let mode = if is_aram { "aram" } else { "ranked" };
+    let mode = super::fallback::analytics_rest_mode_for_queue(queue_id);
     let spell_mode = ddragon_mode_for_queue(queue_id);
     let supports_runes = queue_supports_runes(queue_id);
     let supports_spells = queue_supports_spells(queue_id);

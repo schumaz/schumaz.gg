@@ -233,3 +233,40 @@ fn test_build_item_sets_payload_uses_typed_block_kind_regardless_of_title() {
 
     clear_champion_selections();
 }
+
+#[test]
+fn test_build_multi_item_sets_payload_preserves_distinct_champions_and_dedups() {
+    let _test_guard = TEST_SELECTIONS_LOCK.blocking_lock();
+    clear_champion_selections();
+
+    let ahri = ChampionBuild {
+        champion_id: 103,
+        champion_name: "Ahri".to_string(),
+        item_blocks: vec![ItemBlock {
+            kind: ItemBlockKind::Starter,
+            title: "1. Itens Iniciais".to_string(),
+            item_ids: vec![1056, 2003],
+            item_icon_urls: vec![],
+        }],
+        ..Default::default()
+    };
+    let jinx = ChampionBuild {
+        champion_id: 222,
+        champion_name: "Jinx".to_string(),
+        item_blocks: vec![ItemBlock {
+            kind: ItemBlockKind::Starter,
+            title: "1. Itens Iniciais".to_string(),
+            item_ids: vec![1055, 2003],
+            item_icon_urls: vec![],
+        }],
+        ..Default::default()
+    };
+
+    let payload = build_multi_item_sets_payload(999, &[&ahri, &jinx, &ahri]);
+    let sets = payload["itemSets"].as_array().unwrap();
+    assert_eq!(sets.len(), 2);
+    assert_eq!(sets[0]["title"], "Ahri | schumaz.gg");
+    assert_eq!(sets[0]["associatedChampions"], serde_json::json!([103]));
+    assert_eq!(sets[1]["title"], "Jinx | schumaz.gg");
+    assert_eq!(sets[1]["associatedChampions"], serde_json::json!([222]));
+}

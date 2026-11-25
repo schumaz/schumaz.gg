@@ -9,7 +9,9 @@ use std::sync::atomic::AtomicUsize;
 mod finalization_tests;
 
 struct MockPollGateway {
+    phase: String,
     session: Option<serde_json::Value>,
+    lobby: Option<serde_json::Value>,
     queue_id: i32,
     session_calls: AtomicUsize,
     queue_calls: AtomicUsize,
@@ -17,7 +19,7 @@ struct MockPollGateway {
 
 impl LcuPollGateway for MockPollGateway {
     async fn get_gameflow_phase(&self) -> Result<String, String> {
-        Ok("ChampSelect".to_string())
+        Ok(self.phase.clone())
     }
     async fn get_champ_select_session(&self) -> Result<Option<serde_json::Value>, String> {
         self.session_calls.fetch_add(1, Ordering::SeqCst);
@@ -26,6 +28,9 @@ impl LcuPollGateway for MockPollGateway {
     async fn get_current_queue_id(&self) -> Result<i32, String> {
         self.queue_calls.fetch_add(1, Ordering::SeqCst);
         Ok(self.queue_id)
+    }
+    async fn get_lobby_session(&self) -> Result<Option<serde_json::Value>, String> {
+        Ok(self.lobby.clone())
     }
 }
 
@@ -60,6 +65,16 @@ impl LcuPollSink for RecordingPollSink {
     async fn on_session_ended(&self) {
         self.session.lock().await.reset_session();
     }
+    async fn on_lobby_update(&self, event_type: &str, lobby_json: &serde_json::Value) {
+        match crate::ws_listener::evaluate_lobby_ws_event(event_type, lobby_json, None, None) {
+            crate::ws_listener::LobbyPreselectTransition::Active(payload) => {
+                self.session.lock().await.last_payload = Some(payload);
+            }
+            _ => {
+                self.session.lock().await.reset_session();
+            }
+        }
+    }
 }
 
 struct PollHarness {
@@ -76,7 +91,9 @@ impl PollHarness {
         let session = Arc::new(tokio::sync::Mutex::new(ChampSelectSessionState::default()));
         Self {
             gw: MockPollGateway {
+                phase: "ChampSelect".to_string(),
                 session: Some(session_json),
+                lobby: None,
                 queue_id,
                 session_calls: AtomicUsize::new(0),
                 queue_calls: AtomicUsize::new(0),
@@ -167,11 +184,16 @@ fn test_should_poll_champ_select_session_and_snapshot_probe_rules() {
     assert!(should_poll_champ_select_session("ChampSelect", false));
     assert!(should_poll_champ_select_session("Lobby", true));
     assert!(!should_poll_champ_select_session("Lobby", false));
+    assert!(should_poll_lobby_session("Lobby", false));
+    assert!(should_poll_lobby_session("Matchmaking", false));
+    assert!(!should_poll_lobby_session("InProgress", false));
 
     let empty = ChampSelectSessionState::default();
     assert!(should_probe_lcu_for_snapshot("", &empty));
     assert!(should_probe_lcu_for_snapshot("ChampSelect", &empty));
-    assert!(!should_probe_lcu_for_snapshot("Lobby", &empty));
+    assert!(should_probe_lcu_for_snapshot("Lobby", &empty));
+    assert!(should_probe_lcu_for_snapshot("Matchmaking", &empty));
+    assert!(!should_probe_lcu_for_snapshot("InProgress", &empty));
 
     let cached = ChampSelectSessionState {
         last_payload: Some(ChampSelectedPayload {
@@ -180,10 +202,51 @@ fn test_should_poll_champ_select_session_and_snapshot_probe_rules() {
             queue_mode: QueueMode::SummonersRift,
             locked_in: true,
             assigned_position: Some("mid".to_string()),
+            ..Default::default()
         }),
         ..Default::default()
     };
     assert!(!should_probe_lcu_for_snapshot("ChampSelect", &cached));
+}
+
+#[tokio::test]
+async fn test_swiftplay_mid_lobby_bootstrap_poll_hydrates_preselect_snapshot() {
+    let phase = Arc::new(tokio::sync::Mutex::new(String::new()));
+    let session = Arc::new(tokio::sync::Mutex::new(ChampSelectSessionState::default()));
+    let q = Arc::new(AtomicI32::new(0));
+    let gw = MockPollGateway {
+        phase: "Lobby".to_string(),
+        session: None,
+        lobby: Some(serde_json::json!({
+            "gameConfig": { "queueId": crate::models::QUEUE_SWIFTPLAY, "gameMode": "SWIFTPLAY" },
+            "localMember": {
+                "playerSlots": [
+                    { "championId": 103, "positionPreference": "MIDDLE" },
+                    { "championId": 222, "positionPreference": "BOTTOM" }
+                ]
+            }
+        })),
+        queue_id: 0,
+        session_calls: AtomicUsize::new(0),
+        queue_calls: AtomicUsize::new(0),
+    };
+    let sink = RecordingPollSink {
+        phase: Arc::clone(&phase),
+        session: Arc::clone(&session),
+        spawns: AtomicUsize::new(0),
+        deferred: AtomicUsize::new(0),
+    };
+
+    poll_lcu_session_with_gateway(&gw, &sink, &phase, &session, &q).await;
+    assert_eq!(gw.session_calls.load(Ordering::SeqCst), 0);
+    let snap_phase = phase.lock().await.clone();
+    let snap_state = session.lock().await;
+    let snap = build_active_champ_select_snapshot(&snap_phase, &snap_state);
+    let sel = snap.champ_selected.expect("Swiftplay lobby should hydrate");
+    assert!(sel.is_lobby_preselect);
+    assert_eq!(sel.champion_id, 103);
+    assert_eq!(sel.queue_id, crate::models::QUEUE_SWIFTPLAY);
+    assert_eq!(sel.lobby_slots.len(), 2);
 }
 
 #[tokio::test]

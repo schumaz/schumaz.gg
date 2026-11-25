@@ -2,7 +2,9 @@
 
 ## Endpoints REST usados
 - `GET /lol-summoner/v1/current-summoner` → `{ summonerId, gameName, tagLine, displayName, summonerLevel, profileIconId }`
-- `GET /lol-gameflow/v1/session` → `{ gameData: { isCustomGame, gameMode, queue: { id, gameMode } } }`
+- `GET /lol-gameflow/v1/session` → `{ gameData: { isCustomGame, gameMode, queue: { id, gameMode }, teamOne, teamTwo, playerChampionSelections } }`
+- `GET /lol-lobby/v2/lobby` → `{ gameConfig: { queueId, gameMode }, localMember: { playerSlots: [{ championId, positionPreference, spell1, spell2, perks, skinId }] } }`
+- `GET / PUT /lol-lobby/v1/lobby/members/localMember/player-slots` → lê/atualiza os slots de pré-seleção no lobby do **Swiftplay (`480`)** / **Quickplay (`490`)** (`perks` JSON string + `spell1`/`spell2`, preservando `skinId`/`positionPreference`)
 - `GET /lol-champ-select/v1/session` → sessão do draft/lobby
 - `PATCH /lol-champ-select/v1/session/my-selection` → `{ spell1Id, spell2Id }` (retentar em `404` durante transição)
 - `GET/POST /lol-perks/v1/pages`, `PUT/DELETE /lol-perks/v1/pages/{id}` → página `"%Champ% | schumaz.gg"`
@@ -14,6 +16,7 @@
 
 ## WebSocket & Recortes Reais
 Tópico: `OnJsonApiEvent_lol-champ-select_v1_session` (`eventType`: `"Update"` | `"Delete"`).
+Tópico de pré-seleção em lobby: `OnJsonApiEvent_lol-lobby_v2_lobby` (`eventType`: `"Create"` | `"Update"` | `"Delete"`).
 Tópicos de objetivos/missões: `/lol-objectives/v1/ready`, `/lol-objectives/v1/objectives/{lol,tft,jade}`, `/lol-missions/v1/missions`, `/lol-missions/v1/series`.
 
 ```json
@@ -30,7 +33,7 @@ Tópicos de objetivos/missões: `/lol-objectives/v1/ready`, `/lol-objectives/v1/
 }
 ```
 > Ignorar `type == "ban"`. `assignedPosition`: `"top" | "jungle" | "middle" | "bottom" | "utility"`.
-> Filas: Solo/Duo `420`, Flex `440`, Normal `400`/`490`, ARAM `450`, ARAM Mayhem `2400` (`gameMode` contém `"MAYHEM"`), Arena `1700`/`1710`/`1750` (`CHERRY`/`ARENA`/`TGR` ou Mapa `30`), Practice Tool `-1` (`isCustomGame` ou `PRACTICETOOL`).
+> Filas: Solo/Duo `420`, Flex `440`, Normal `400`, Swiftplay `480` (pré-seleção em `/lol-lobby/v2/lobby` com partição de cache própria `480`), Quickplay `490`, Clash `700` (redireciona para builds Ranqueada `420` sem base própria), ARAM `450`, ARAM Mayhem `2400` (`gameMode` contém `"MAYHEM"`), Arena `1700`/`1710`/`1740`/`1750` (`CHERRY`/`ARENA`/`TGR` ou Mapa `30`), Practice Tool `-1` (`isCustomGame` ou `PRACTICETOOL`).
 
 ## Payload de Runas (`POST/PUT /lol-perks/v1/pages`)
 ```json

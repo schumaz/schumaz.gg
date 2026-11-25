@@ -1,5 +1,6 @@
 @import "./styles/tokens-shell.css";
 @import "./styles/cards-controls.css";
+@import "./components/ui/LobbySlotsBar.css";
 @import "./features/champ-select/ChampSelect.css";
 @import "./components/ui/ArenaPanel.css";
 @import "./components/ui/RuneTree.css";

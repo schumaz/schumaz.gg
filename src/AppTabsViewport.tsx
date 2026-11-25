@@ -67,6 +67,7 @@ export function AppTabsViewport({
         onInvertSpells={onInvertSpells}
         onSelectSpellPair={lcu.handleSelectSpellPair}
         onSelectBuild={lcu.handleSelectBuild}
+        onSelectLobbySlot={lcu.handleSelectLobbySlot}
       />
 
       <RankedTab
