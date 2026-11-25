@@ -91,6 +91,7 @@ export function AppTabsViewport({
         onRetryBuild={ranked.retryChampionBuild}
         onSelectRunePage={ranked.setSelectedRunePageIndex}
         onSelectBuild={ranked.setSelectedBuildIndex}
+        onSelectMatchupChampion={ranked.selectChampionById}
         savedChampionTierFilter={navigationState?.rankedChampionTierFilter}
         onChampionTierFilterChange={(tier) => updateNavigationState({ rankedChampionTierFilter: tier })}
       />

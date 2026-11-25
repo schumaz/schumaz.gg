@@ -7,7 +7,7 @@ use super::rest_extractors::{
     extract_rest_runes_and_pages, extract_rest_tier, extract_rest_win_and_pick_rates,
     infer_rest_damage_type,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 fn json_has_explicit_play_stats(val: Option<&serde_json::Value>) -> bool {
     match val {
@@ -55,6 +55,28 @@ pub fn parse_opgg_analysis_payload_for_mode(
     supports_runes: bool,
     spell_mode: Option<&str>,
     spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
+) -> Result<ChampionBuild, String> {
+    parse_opgg_analysis_payload_for_mode_and_roster(
+        opgg_json,
+        champion_id,
+        champion_name,
+        supports_runes,
+        spell_mode,
+        spells_catalog,
+        None,
+    )
+}
+
+/// Parses an OP.GG REST or wrapped MCP payload into a `ChampionBuild`, optionally filtering
+/// lane matchups to opponents belonging to `allowed_lane_champions`.
+pub fn parse_opgg_analysis_payload_for_mode_and_roster(
+    opgg_json: &serde_json::Value,
+    champion_id: i32,
+    champion_name: &str,
+    supports_runes: bool,
+    spell_mode: Option<&str>,
+    spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
+    allowed_lane_champions: Option<&HashSet<i32>>,
 ) -> Result<ChampionBuild, String> {
     let json_supports_runes = opgg_json
         .get("supports_runes")
@@ -256,6 +278,21 @@ pub fn parse_opgg_analysis_payload_for_mode(
     );
 
     let skill_order = super::super::skills::extract_rest_skill_order(analysis);
+    let is_non_sr_mode = spell_mode.is_some_and(|m| {
+        m.eq_ignore_ascii_case("ARAM")
+            || m.eq_ignore_ascii_case("KIWI")
+            || m.eq_ignore_ascii_case("CHERRY")
+    });
+    let lane_matchups = if is_non_sr_mode {
+        None
+    } else {
+        super::matchups::extract_rest_lane_matchups_for_roster(
+            analysis,
+            champion_id,
+            position,
+            allowed_lane_champions,
+        )
+    };
 
     Ok(ChampionBuild {
         champion_id,
@@ -274,6 +311,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
         build_options,
         supports_runes: effective_supports_runes,
         skill_order,
+        lane_matchups,
         ..Default::default()
     })
 }

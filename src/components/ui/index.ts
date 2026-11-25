@@ -12,6 +12,8 @@ export * from "./BuildTooltips";
 export * from "./SpellsBar";
 export * from "./SkillOrderCard";
 export * from "./SkillOrderPopover";
+export * from "./LaneMatchupsCard";
+export * from "./LaneMatchupsPopover";
 export * from "./ItemBlocks";
 export * from "./RunePagesSelector";
 export * from "./RuneTree";

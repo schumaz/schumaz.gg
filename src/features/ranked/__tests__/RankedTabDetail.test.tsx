@@ -11,6 +11,7 @@ describe("RankedTab Detail & Loading States", () => {
   it("renders read-only consultation build screen inside Ranked tab when a champion is selected", () => {
     const onBackToTierList = vi.fn();
     const onDetailFilterChange = vi.fn();
+    const onSelectMatchupChampion = vi.fn();
 
     render(
       <RankedTab
@@ -34,6 +35,7 @@ describe("RankedTab Detail & Loading States", () => {
         onRetryBuild={vi.fn()}
         onSelectRunePage={vi.fn()}
         onSelectBuild={vi.fn()}
+        onSelectMatchupChampion={onSelectMatchupChampion}
       />
     );
 
@@ -42,6 +44,15 @@ describe("RankedTab Detail & Loading States", () => {
     expect(within(view).getByTestId("champ-hero")).toBeInTheDocument();
     expect(within(view).getByTestId("runes-tree")).toBeInTheDocument();
     expect(within(view).getByTestId("spells-card")).toBeInTheDocument();
+    expect(within(view).getByTestId("lane-matchups-trigger")).toBeInTheDocument();
+    expect(within(view).queryByTestId("lane-matchups-popover")).not.toBeInTheDocument();
+    fireEvent.click(within(view).getByTestId("lane-matchups-trigger"));
+    expect(within(view).getByTestId("lane-matchups-card")).toBeInTheDocument();
+    expect(within(view).getByTestId("lane-matchup-row-245").tagName).toBe("BUTTON");
+    fireEvent.click(within(view).getByTestId("lane-matchup-row-245"));
+    expect(onSelectMatchupChampion).toHaveBeenCalledWith(245);
+    expect(within(view).queryByTestId("lane-matchups-popover")).not.toBeInTheDocument();
+
     expect(within(view).getByTestId("skill-order-trigger")).toBeInTheDocument();
     expect(within(view).getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
     expect(within(view).queryByTestId("skill-order-popover")).not.toBeInTheDocument();

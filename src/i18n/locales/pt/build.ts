@@ -85,6 +85,18 @@ export const ptBuild: BuildTranslations = {
     togglePopoverTitle: "Abrir ou fechar a tabela completa de habilidades (níveis 1–18)",
     closePopoverAria: "Fechar tabela de ordem de habilidades",
   },
+  matchups: {
+    triggerLabel: "Confrontos",
+    title: "Confrontos na Rota",
+    laneWinRateHint: "WR de {name} na rota",
+    hardTitle: "Difíceis",
+    favorableTitle: "Favoráveis",
+    emptySide: "Sem dados suficientes nesta rota.",
+    togglePopoverTitle: "Abrir ou fechar confrontos difíceis e favoráveis na rota",
+    closePopoverAria: "Fechar painel de confrontos na rota",
+    openBuildHint: "Abrir build de {name} nesta rota",
+    hardPreviewAria: "Principais counters na rota",
+  },
   arena: {
     modeNoticeBadge: "Arena",
     modeNoticeText:

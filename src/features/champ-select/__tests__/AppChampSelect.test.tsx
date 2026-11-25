@@ -112,6 +112,10 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
 
     expect(within(screen.getByTestId("spell-pair-btn-0")).getByText("Flash")).toBeInTheDocument();
     expect(within(screen.getByTestId("spell-pair-btn-0")).getByText("Incendiar")).toBeInTheDocument();
+    expect(screen.getByTestId("lane-matchups-trigger")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("lane-matchups-trigger"));
+    expect(screen.getByTestId("lane-matchups-card")).toBeInTheDocument();
+    expect(screen.getByTestId("lane-matchup-row-1").tagName).toBe("DIV");
     expect(screen.getByTestId("skill-order-trigger")).toBeInTheDocument();
     expect(screen.getByTestId("skill-priority-chain")).toHaveTextContent(/Q.*>.*W.*>.*E/);
     expect(screen.queryByTestId("skill-order-popover")).not.toBeInTheDocument();

@@ -30,6 +30,7 @@ interface RankedChampionDetailProps {
   onRetryBuild: () => void;
   onSelectRunePage: (pageIndex: number) => void;
   onSelectBuild: (index: number) => void;
+  onSelectMatchupChampion?: (championId: number) => void;
 }
 
 export function RankedChampionDetail({
@@ -47,6 +48,7 @@ export function RankedChampionDetail({
   onRetryBuild,
   onSelectRunePage,
   onSelectBuild,
+  onSelectMatchupChampion,
 }: RankedChampionDetailProps) {
   const { t } = useTranslation();
 
@@ -63,6 +65,7 @@ export function RankedChampionDetail({
             statusTagText={detailStatusTag}
             queueModeLabel={t("filters.queueRankedSr")}
             readOnly={true}
+            onSelectMatchupChampion={onSelectMatchupChampion}
           />
 
           <div className="dashboard-split-grid">

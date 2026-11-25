@@ -237,6 +237,13 @@ pub async fn fetch_ranked_tier_list_with_base_and_dir(
     };
 
     if !response.champions.is_empty() {
+        let positions_dir = (rest_base == OPGG_REST_API_BASE)
+            .then(|| crate::storage::global_paths().map(|p| p.opgg_positions_dir.as_path()))
+            .flatten();
+        let pos_patch = (!effective_patch.is_empty()).then_some(effective_patch.as_str());
+        super::positions::seed_champion_positions_cache(
+            rest_base, target_region, target_tier, pos_patch, &final_json, positions_dir,
+        );
         if let Some(dir) = ranked_dir {
             let path = cache::ranked_tier_list_file_path(
                 dir,

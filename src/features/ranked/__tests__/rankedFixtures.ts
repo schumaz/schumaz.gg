@@ -227,4 +227,14 @@ export const mockAhriBuild: ChampionBuild_Serialize = {
       },
     ],
   },
+  lane_matchups: {
+    hard: [
+      { champion_id: 800, key: "mel", name: "Mel", icon_url: "Mel.png", play: 2067, win: 993, win_rate: 48.0 },
+      { champion_id: 245, key: "ekko", name: "Ekko", icon_url: "Ekko.png", play: 3345, win: 1620, win_rate: 48.4 },
+    ],
+    favorable: [
+      { champion_id: 268, key: "azir", name: "Azir", icon_url: "Azir.png", play: 1835, win: 1014, win_rate: 55.3 },
+      { champion_id: 3, key: "galio", name: "Galio", icon_url: "Galio.png", play: 2786, win: 1532, win_rate: 55.0 },
+    ],
+  },
 };

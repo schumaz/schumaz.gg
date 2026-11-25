@@ -151,6 +151,33 @@ pub(super) fn merge_mcp_depth_into_json(
     }
 }
 
+pub(super) fn spawn_lane_roster_lookup(
+    client: &reqwest::Client,
+    rest_base: &str,
+    target_position: Option<&String>,
+    target_region: &str,
+    target_tier: &str,
+    version: Option<&str>,
+) -> Option<tokio::task::JoinHandle<Option<std::collections::HashSet<i32>>>> {
+    let lane = target_position?.clone();
+    let (c, base, reg, tier, ver) = (
+        client.clone(),
+        rest_base.to_string(),
+        target_region.to_string(),
+        target_tier.to_string(),
+        version.map(str::to_string),
+    );
+    let pos_dir = (rest_base == super::analytics::OPGG_REST_API_BASE)
+        .then(|| crate::storage::global_paths().map(|p| p.opgg_positions_dir.to_path_buf()))
+        .flatten();
+    Some(tokio::spawn(async move {
+        let fut = super::analytics::resolve_lane_champion_roster_with_base_and_dir(
+            &c, &base, &lane, &reg, &tier, ver.as_deref(), pos_dir.as_deref(),
+        );
+        tokio::time::timeout(MCP_DEPTH_TIMEOUT, fut).await.ok().flatten()
+    }))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn fetch_rest_with_patch_protection(
     client: &reqwest::Client,

@@ -225,4 +225,22 @@ describe("useRanked hook state and filter preservation", () => {
     expect(syncChampSpy).not.toHaveBeenCalled();
     expect(syncPrefsSpy).not.toHaveBeenCalled();
   });
+
+  it("navigates to opponent champion build in the same lane via selectChampionById", async () => {
+    vi.spyOn(rankedIpc, "getRankedTierList").mockResolvedValue(mockTierResponse);
+    const buildSpy = vi.spyOn(rankedIpc, "getRankedChampionBuild").mockResolvedValue(mockAhriBuild);
+
+    const { result } = renderHook(() => useRanked(true, "D", true));
+    await waitFor(() => expect(result.current.tierData).toBeTruthy());
+
+    act(() => result.current.selectChampion(mockRankedChampions[2]));
+    await waitFor(() => expect(result.current.championBuild).toBeTruthy());
+
+    act(() => result.current.selectChampionById(245));
+    await waitFor(() => expect(buildSpy).toHaveBeenCalledWith(245, "mid", "emerald_plus", "global", null));
+
+    act(() => result.current.selectChampionById(800));
+    await waitFor(() => expect(buildSpy).toHaveBeenCalledWith(800, "mid", "emerald_plus", "global", null));
+    expect(result.current.selectedChampion?.name).toBe("Mel");
+  });
 });

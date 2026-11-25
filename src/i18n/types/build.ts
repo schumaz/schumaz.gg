@@ -82,6 +82,18 @@ export interface BuildTranslations {
     togglePopoverTitle: string;
     closePopoverAria: string;
   };
+  matchups: {
+    triggerLabel: string;
+    title: string;
+    laneWinRateHint: string;
+    hardTitle: string;
+    favorableTitle: string;
+    emptySide: string;
+    togglePopoverTitle: string;
+    closePopoverAria: string;
+    openBuildHint: string;
+    hardPreviewAria: string;
+  };
   arena: {
     modeNoticeBadge: string;
     modeNoticeText: string;

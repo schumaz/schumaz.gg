@@ -6,6 +6,7 @@
 @import "./components/ui/SpellsBar.css";
 @import "./components/ui/ItemBlocks.css";
 @import "./components/ui/SkillOrderCard.css";
+@import "./components/ui/LaneMatchupsCard.css";
 @import "./components/ui/Tooltip.css";
 @import "./features/settings/SettingsTab.css";
 @import "./features/profile/ProfileTab.css";

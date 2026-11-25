@@ -16,6 +16,7 @@ import {
   DEFAULT_RANKED_FILTERS,
   extractIniRankedFilters,
   RankedFilters,
+  resolveRankedMatchupEntry,
   UseRankedPersistenceOptions,
 } from "./rankedStorage";
 import { computeOrderedSpells } from "../../utils/spells";
@@ -52,10 +53,8 @@ export function useRanked(
   const loadedCacheKeyRef = useRef<string | null>(null);
   const prevLocaleRef = useRef<AppLocale>(locale);
   const hydratedIniRef = useRef(Boolean(persistence?.savedFilters));
-  const selectedChampionRef = useRef<RankedChampionEntry | null>(selectedChampion);
-  selectedChampionRef.current = selectedChampion;
-  const filtersRef = useRef<RankedFilters>(filters);
-  filtersRef.current = filters;
+  const latestStateRef = useRef({ selectedChampion, filters, tierData, championBuild });
+  latestStateRef.current = { selectedChampion, filters, tierData, championBuild };
 
   const persistFilters = useCallback(
     (next: RankedFilters) => {
@@ -129,9 +128,8 @@ export function useRanked(
   useEffect(() => {
     if (prevLocaleRef.current === locale) return;
     prevLocaleRef.current = locale;
-    if (selectedChampionRef.current) {
-      fetchChampionBuild(selectedChampionRef.current, selectedChampionRef.current.lane, filtersRef.current);
-    }
+    const { selectedChampion: sc, filters: f } = latestStateRef.current;
+    if (sc) fetchChampionBuild(sc, sc.lane, f);
   }, [locale, fetchChampionBuild]);
 
   useEffect(() => {
@@ -162,6 +160,15 @@ export function useRanked(
       fetchChampionBuild(entry, entry.lane, filters);
     },
     [filters, fetchChampionBuild]
+  );
+
+  const selectChampionById = useCallback(
+    (championId: number) => {
+      const { tierData: td, championBuild: cb, selectedChampion: sc, filters: f } = latestStateRef.current;
+      const entry = resolveRankedMatchupEntry(championId, td, cb, sc, f);
+      if (entry) selectChampion(entry);
+    },
+    [selectChampion]
   );
 
   const handleDetailFilterChange = useCallback(
@@ -230,6 +237,7 @@ export function useRanked(
     handleTierListFilterChange,
     handleDetailFilterChange,
     selectChampion,
+    selectChampionById,
     clearSelectedChampion,
     retryTierList,
     retryChampionBuild,

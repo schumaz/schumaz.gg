@@ -145,3 +145,35 @@ async fn test_positions_disk_cache_and_stale_while_error() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn test_extract_lane_champion_roster_keeps_primary_and_flex_and_drops_off_role() {
+    let json = serde_json::json!({
+        "data": [
+            { "id": 103, "positions": [{ "name": "MID", "stats": { "play": 80000, "role_rate": 0.96 } }] },
+            { "id": 39, "positions": [
+                { "name": "TOP", "stats": { "play": 62000, "role_rate": 0.63 } },
+                { "name": "MID", "stats": { "play": 35000, "role_rate": 0.354 } }
+            ]},
+            { "id": 950, "positions": [
+                { "name": "JUNGLE", "stats": { "play": 69000, "role_rate": 0.798 } },
+                { "name": "MID", "stats": { "play": 12000, "role_rate": 0.139 } }
+            ]},
+            { "id": 54, "positions": [
+                { "name": "TOP", "stats": { "play": 94000, "role_rate": 0.802 } },
+                { "name": "MID", "stats": { "play": 9400, "role_rate": 0.081 } }
+            ]}
+        ]
+    });
+    let map = parse_opgg_champion_positions_ranking(&json);
+    let mid_roster = extract_lane_champion_roster(&map, "mid");
+    assert!(mid_roster.contains(&103));
+    assert!(mid_roster.contains(&39)); // flex 35.4% >= 25%
+    assert!(!mid_roster.contains(&950)); // off-role 13.9%
+    assert!(!mid_roster.contains(&54)); // off-role 8.1%
+
+    let top_roster = extract_lane_champion_roster(&map, "top");
+    assert!(top_roster.contains(&39));
+    assert!(top_roster.contains(&54));
+    assert!(!top_roster.contains(&103));
+}

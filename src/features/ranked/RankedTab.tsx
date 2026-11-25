@@ -49,6 +49,7 @@ interface RankedTabProps {
   onRetryBuild: () => void;
   onSelectRunePage: (pageIndex: number) => void;
   onSelectBuild: (index: number) => void;
+  onSelectMatchupChampion?: (championId: number) => void;
   savedChampionTierFilter?: string;
   onChampionTierFilterChange?: (tier: string) => void;
 }
@@ -75,6 +76,7 @@ export function RankedTab({
   onRetryBuild,
   onSelectRunePage,
   onSelectBuild,
+  onSelectMatchupChampion,
   savedChampionTierFilter,
   onChampionTierFilterChange,
 }: RankedTabProps) {
@@ -120,11 +122,13 @@ export function RankedTab({
           tier: getChampionTierLabel(selectedChampion.tier),
           rank: selectedChampion.overall_rank ?? 0,
         })
-      : t("ranked.detailStatusLane", {
-          tier: getChampionTierLabel(selectedChampion.tier),
-          rank: selectedChampion.rank,
-          lane: laneMeta[selectedChampion.lane].shortLabel,
-        })
+      : selectedChampion.rank > 0
+        ? t("ranked.detailStatusLane", {
+            tier: getChampionTierLabel(selectedChampion.tier),
+            rank: selectedChampion.rank,
+            lane: laneMeta[selectedChampion.lane].shortLabel,
+          })
+        : t("ranked.detailStatusFallback")
     : t("ranked.detailStatusFallback");
 
   return (
@@ -149,6 +153,7 @@ export function RankedTab({
           onRetryBuild={onRetryBuild}
           onSelectRunePage={onSelectRunePage}
           onSelectBuild={onSelectBuild}
+          onSelectMatchupChampion={onSelectMatchupChampion}
         />
       ) : (
         <div className="ranked-layout" data-testid="ranked-tierlist-view">

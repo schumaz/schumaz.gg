@@ -556,6 +556,7 @@ export type ChampionBuild_Deserialize = {
 	first_place_rate?: number | null,
 	avg_placement?: number | null,
 	skill_order?: SkillOrderRecommendation_Deserialize | null,
+	lane_matchups?: LaneMatchupsSummary_Deserialize | null,
 };
 
 /**  Complete build recommendations fetched and parsed from OP.GG enriched with DataDragon visual assets. */
@@ -597,6 +598,7 @@ export type ChampionBuild_Serialize = {
 	first_place_rate: number | null,
 	avg_placement: number | null,
 	skill_order: SkillOrderRecommendation_Serialize | null,
+	lane_matchups: LaneMatchupsSummary_Serialize | null,
 };
 
 /**  Top champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
@@ -727,6 +729,48 @@ export type ItemMetadata_Serialize = {
 	gold_total: number,
 	stats: string[],
 	plaintext: string,
+};
+
+/**  Individual lane matchup record between the active champion and an opponent. */
+export type LaneMatchupEntry = LaneMatchupEntry_Serialize | LaneMatchupEntry_Deserialize;
+
+/**  Individual lane matchup record between the active champion and an opponent. */
+export type LaneMatchupEntry_Deserialize = {
+	champion_id: number,
+	key?: string,
+	name?: string,
+	icon_url?: string,
+	play?: number,
+	win?: number,
+	/**  Active champion's win rate against this opponent (`0.0..=100.0`, 1 decimal place). */
+	win_rate?: number | null,
+};
+
+/**  Individual lane matchup record between the active champion and an opponent. */
+export type LaneMatchupEntry_Serialize = {
+	champion_id: number,
+	key: string,
+	name: string,
+	icon_url: string,
+	play: number,
+	win: number,
+	/**  Active champion's win rate against this opponent (`0.0..=100.0`, 1 decimal place). */
+	win_rate: number | null,
+};
+
+/**  Top hard counters and favorable lane matchups for Summoner's Rift lanes. */
+export type LaneMatchupsSummary = LaneMatchupsSummary_Serialize | LaneMatchupsSummary_Deserialize;
+
+/**  Top hard counters and favorable lane matchups for Summoner's Rift lanes. */
+export type LaneMatchupsSummary_Deserialize = {
+	hard?: LaneMatchupEntry_Deserialize[],
+	favorable?: LaneMatchupEntry_Deserialize[],
+};
+
+/**  Top hard counters and favorable lane matchups for Summoner's Rift lanes. */
+export type LaneMatchupsSummary_Serialize = {
+	hard: LaneMatchupEntry_Serialize[],
+	favorable: LaneMatchupEntry_Serialize[],
 };
 
 export type LcuConnected = LcuConnected_Serialize | LcuConnected_Deserialize;

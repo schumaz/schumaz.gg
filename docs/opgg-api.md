@@ -29,7 +29,8 @@
     "boots": [{ "ids": [3158], "play": 5000, "win": 2600, "pick_rate": 0.42 }],
     "last_items": [{ "ids": [6692], "play": 1800, "win": 990, "pick_rate": 0.15 }],
     "skill_masteries": [{ "ids": ["Q", "E", "W"], "play": 9500, "win": 5000, "pick_rate": 0.78, "builds": [{ "order": ["Q", "W", "E"], "play": 6000, "win": 3200, "pick_rate": 0.63 }] }],
-    "skills": [{ "order": ["Q", "W", "E"], "play": 6000, "win": 3200, "pick_rate": 0.49 }]
+    "skills": [{ "order": ["Q", "W", "E"], "play": 6000, "win": 3200, "pick_rate": 0.49 }],
+    "counters": [{ "champion_id": 950, "play": 511, "win": 239 }]
   }
 }
 ```

@@ -3,6 +3,7 @@ import {
   NavigationStatePatch,
   RankedChampionEntry,
   RankedLane,
+  RankedTierListResponse,
 } from "../../types";
 
 export type RankedLaneFilter = "all" | RankedLane;
@@ -104,4 +105,49 @@ export function computeNextDetailRankedFilters(
       : currentLane;
 
   return { nextFilters, nextLane };
+}
+
+export function resolveRankedMatchupEntry(
+  championId: number,
+  tierData: RankedTierListResponse | null,
+  championBuild: ChampionBuild | null,
+  currentChampion: RankedChampionEntry | null,
+  filters: RankedFilters
+): RankedChampionEntry | null {
+  const rawPos = championBuild?.active_position?.trim().toLowerCase() ?? "";
+  const targetLane: RankedLane =
+    rawPos !== "all" && VALID_LANES.has(rawPos)
+      ? (rawPos as RankedLane)
+      : currentChampion?.lane ?? (filters.lane !== "all" ? filters.lane : "mid");
+
+  const allChampions = tierData?.champions ?? [];
+  const exactMatch = allChampions.find((c) => c.id === championId && c.lane === targetLane);
+  if (exactMatch) return exactMatch;
+
+  const anyLaneMatch = allChampions.find((c) => c.id === championId);
+  if (anyLaneMatch) {
+    return { ...anyLaneMatch, lane: targetLane, rank: 0, overall_rank: 0 };
+  }
+
+  const matchupList = [
+    ...(championBuild?.lane_matchups?.hard ?? []),
+    ...(championBuild?.lane_matchups?.favorable ?? []),
+  ];
+  const fromMatchup = matchupList.find((m) => m.champion_id === championId);
+  if (!fromMatchup) return null;
+
+  return {
+    id: fromMatchup.champion_id,
+    key: fromMatchup.key?.trim() || String(fromMatchup.champion_id),
+    name: fromMatchup.name?.trim() || `#${fromMatchup.champion_id}`,
+    icon_url: fromMatchup.icon_url ?? "",
+    lane: targetLane,
+    tier: 4,
+    rank: 0,
+    overall_rank: 0,
+    win_rate: null,
+    pick_rate: null,
+    ban_rate: null,
+    role_rate: null,
+  };
 }

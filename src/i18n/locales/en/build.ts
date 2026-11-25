@@ -85,6 +85,18 @@ export const enBuild: BuildTranslations = {
     togglePopoverTitle: "Toggle full skill leveling table (levels 1–18)",
     closePopoverAria: "Close skill order table",
   },
+  matchups: {
+    triggerLabel: "Matchups",
+    title: "Lane Matchups",
+    laneWinRateHint: "{name} lane WR",
+    hardTitle: "Hard",
+    favorableTitle: "Favorable",
+    emptySide: "Not enough lane matchup data.",
+    togglePopoverTitle: "Toggle hard and favorable lane matchups",
+    closePopoverAria: "Close lane matchups panel",
+    openBuildHint: "Open {name} build for this lane",
+    hardPreviewAria: "Top lane counters",
+  },
   arena: {
     modeNoticeBadge: "Arena",
     modeNoticeText:

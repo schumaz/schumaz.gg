@@ -1,10 +1,10 @@
 import { useTranslation } from "../../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../../types";
-import { resolveCachedAssetUrl } from "../../utils/assets";
-import { getChampionTierClass, getChampionTierLabel } from "./championTier";
+import { ChampHeroTop, resolveChampHeroQueueLabel } from "./ChampHeroTop";
 import { FilterDropdown } from "./FilterDropdown";
 import { LoadingBar } from "./LoadingIndicators";
 import { getPositionOptions, getRegionOptions, getTierOptions } from "./filterOptions";
+import { LaneMatchupsPopover } from "./LaneMatchupsPopover";
 import { PatchProtectionIndicator } from "./PatchProtectionIndicator";
 import { computePatchUiMeta } from "./patchUiMeta";
 import { isAramBuildContextMode, isArenaBuildContext } from "./queueContext";
@@ -24,6 +24,7 @@ interface FiltersHeaderProps {
   queueModeLabel?: string;
   isAramMode?: boolean;
   readOnly?: boolean;
+  onSelectMatchupChampion?: (championId: number) => void;
 }
 
 export function FiltersHeader({
@@ -37,6 +38,7 @@ export function FiltersHeader({
   queueModeLabel,
   isAramMode = false,
   readOnly = false,
+  onSelectMatchupChampion,
 }: FiltersHeaderProps) {
   const { t } = useTranslation();
 
@@ -60,104 +62,29 @@ export function FiltersHeader({
   const resolvedTagClass = statusTagText
     ? "tag hovering"
     : `tag ${champSelect?.locked_in ? "locked" : "hovering"}`;
+  const resolvedQueueLabel = resolveChampHeroQueueLabel(t, isArena, champSelect, queueModeLabel);
 
-  const resolvedQueueLabel =
-    queueModeLabel ??
-    (isArena
-      ? t("filters.queueArena")
-      : champSelect?.queue_mode === "AramMayhem"
-      ? t("filters.queueAramMayhem")
-      : champSelect?.queue_mode === "Aram"
-      ? t("filters.queueAram")
-      : champSelect?.queue_mode === "PracticeTool"
-      ? t("filters.queuePracticeTool")
-      : t("filters.queueSr"));
+  const activeLaneValue = (build.active_position || "").trim().toLowerCase();
+  const activeLaneLabel =
+    positionOptions.find((opt) => opt.value === activeLaneValue)?.label ?? undefined;
+  const resetKey = `${build.champion_id}-${build.active_position ?? ""}-${build.active_patch ?? ""}-${build.active_tier ?? ""}-${build.active_region ?? ""}`;
 
   return (
     <section className="card champ-hero-card" data-testid="champ-hero">
       <LoadingBar active={loading} testId="filters-loading-bar" />
 
-      <div className="champ-hero-top">
-        <div className="champ-hero-left">
-          {onBackToTierList && (
-            <button
-              type="button"
-              className="ranked-back-btn"
-              data-testid="ranked-back-btn"
-              onClick={onBackToTierList}
-              title={backButtonTitle ?? t("filters.backToTierListTitle")}
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              <span>{t("common.back")}</span>
-            </button>
-          )}
-
-          {build.champion_icon_url ? (
-            <div className="dd-icon-frame champ-avatar-frame">
-              <img
-                src={resolveCachedAssetUrl(build.champion_icon_url)}
-                alt={build.champion_name}
-                className="champ-avatar"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                }}
-              />
-            </div>
-          ) : (
-            <div className="champ-avatar-placeholder">
-              {build.champion_name.slice(0, 2).toUpperCase()}
-            </div>
-          )}
-
-          <h2 className="champ-name" title={build.champion_name}>
-            {build.champion_name}
-          </h2>
-
-          {typeof build.tier === "number" && (
-            <span
-              className={`aram-tier-pill champ-hero-tier-pill ${getChampionTierClass(build.tier)}`}
-              data-testid="champ-tier-badge"
-            >
-              {getChampionTierLabel(build.tier)}
-            </span>
-          )}
-        </div>
-
-        <div className="champ-hero-right">
-          <span className={resolvedTagClass}>{resolvedTagText}</span>
-
-          <div className="champ-meta-row">
-            <span className="badge-meta">{resolvedQueueLabel}</span>
-            {isArena && (build.win_rate ?? 0) > 0 && (
-              <span className="badge badge-neutral badge-stat">
-                {t("filters.top3Rate", { rate: (build.win_rate ?? 0).toFixed(1) })}
-              </span>
-            )}
-            {isArena && (build.first_place_rate ?? 0) > 0 && (
-              <span className="badge badge-neutral badge-stat">
-                {t("filters.firstPlaceRate", { rate: (build.first_place_rate ?? 0).toFixed(1) })}
-              </span>
-            )}
-            {(build.pick_rate ?? 0) > 0 && (
-              <span className="badge badge-neutral badge-stat">
-                {t("filters.pickRate", { rate: (build.pick_rate ?? 0).toFixed(1) })}
-              </span>
-            )}
-            {isPatchProtectionActive && (
-              <span
-                className="badge badge-warning badge-stat patch-fallback-badge"
-                title={protectionTooltipText}
-                data-testid="patch-fallback-badge"
-              >
-                🛡️ {t("filters.protectedVolume", { patch: build.active_patch ?? "" })}
-                {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+      <ChampHeroTop
+        build={build}
+        isArena={isArena}
+        resolvedTagClass={resolvedTagClass}
+        resolvedTagText={resolvedTagText}
+        resolvedQueueLabel={resolvedQueueLabel}
+        isPatchProtectionActive={isPatchProtectionActive}
+        remainingHoursShort={remainingHoursShort}
+        protectionTooltipText={protectionTooltipText}
+        onBackToTierList={onBackToTierList}
+        backButtonTitle={backButtonTitle}
+      />
 
       <div className="champ-filters-bar" data-testid="champ-filters-bar">
         {!isArena && (
@@ -233,13 +160,25 @@ export function FiltersHeader({
           )}
         </div>
 
-        {!isArena && build.skill_order && (
-          <SkillOrderPopover
-            skillOrder={build.skill_order}
-            readOnly={readOnly}
-            resetKey={`${build.champion_id}-${build.active_position ?? ""}-${build.active_patch ?? ""}`}
-          />
-        )}
+        <div className="champ-filters-actions">
+          {!isArena && !isAram && build.lane_matchups && (
+            <LaneMatchupsPopover
+              matchups={build.lane_matchups}
+              championName={build.champion_name}
+              laneLabel={activeLaneLabel}
+              onSelectChampion={onSelectMatchupChampion}
+              resetKey={resetKey}
+            />
+          )}
+
+          {!isArena && build.skill_order && (
+            <SkillOrderPopover
+              skillOrder={build.skill_order}
+              readOnly={readOnly}
+              resetKey={`${build.champion_id}-${build.active_position ?? ""}-${build.active_patch ?? ""}`}
+            />
+          )}
+        </div>
       </div>
     </section>
   );

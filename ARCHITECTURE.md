@@ -58,7 +58,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 ├── scripts/                       # Automação de release, gatekeeper de linhas e higiene do target Cargo (run-tauri, sweep-cargo-target)
 ├── src/
 │   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, diagnostics, @tauri-apps/api, plugin-updater, plugin-opener)
-│   ├── components/ui/             # Componentes visuais puros (FiltersHeader, PatchProtectionIndicator, championTier, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, SkillOrderCard, ItemBlocks, Docks)
+│   ├── components/ui/             # Componentes visuais puros (FiltersHeader, PatchProtectionIndicator, championTier, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, SkillOrderCard, LaneMatchupsCard, ItemBlocks, Docks)
 │   ├── hooks/                     # Hooks transversais do shell (useAppBootstrap, useAppUpdater, useWindowMinimized)
 │   ├── features/                  # Domínios isolados (cada qual com componentes, hooks, helpers e CSS locais)
 │   │   ├── champ-select/          # Sessão LCU, IdleState e auto-injeção
@@ -97,7 +97,7 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 | **LCU REST & Auth** | `src-tauri/src/lcu_connector.rs` (`lcu_connector/`) | `docs/lcu-api.md` |
 | **LCU WebSocket / Draft** | `src-tauri/src/ws_listener/` (`extract.rs`, `subscription.rs`, `polling.rs`, `reconcile.rs`) | `docs/lcu-api.md` |
 | **LCU Injeção (Runas/Spells/Itens)** | `src-tauri/src/lcu_injector/` (`payloads.rs`, `injection.rs`, `spell_rules.rs`) | `docs/lcu-api.md` |
-| **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `cooldown.rs`, `versions.rs`, `positions.rs`, `rest_extractors.rs`, `rest_parser.rs`, `mcp_{parser,extractors,stats}.rs`, `ranked.rs`, `arena/`, `aram.rs`, `aram/{augments,mcp_augments,parsers,cache,html_extract}.rs`) | `docs/opgg-api.md` |
+| **OP.GG Analytics (REST & MCP)** | `src-tauri/src/build_provider/analytics/` (`client.rs`, `cooldown.rs`, `versions.rs`, `positions.rs`, `matchups.rs`, `rest_extractors.rs`, `rest_parser.rs`, `mcp_{parser,extractors,stats}.rs`, `ranked.rs`, `arena/`, `aram.rs`, `aram/{augments,mcp_augments,parsers,cache,html_extract}.rs`) | `docs/opgg-api.md` |
 | **DataDragon Cache & Assets** | `src-tauri/src/build_provider/ddragon.rs` (`ddragon/`), `src-tauri/src/storage/assets.rs`, `src/utils/assets.ts` | — |
 | **Lógica de Itens (5 blocos / builds)** | `src-tauri/src/build_provider/items/` (`blocks.rs`, `options.rs`, `classification.rs`, `affinity.rs`) | — |
 | **System Tray, Autostart & WebView Sob Demanda** | `src-tauri/src/app_bootstrap/` (`tray.rs`, `window_factory.rs`, `prewarm.rs`, `window_events.rs`), `src-tauri/src/lib.rs`, `src-tauri/src/commands/system.rs` | `docs/tauri-v2-capabilities.md` |

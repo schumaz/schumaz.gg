@@ -289,6 +289,7 @@ pub fn enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
     }
 
     super::super::skills::enrich_skill_order_with_ddragon(build, cache);
+    super::super::analytics::enrich_lane_matchups_with_ddragon(build, cache);
     localize_build_labels(build, locale);
 }
 

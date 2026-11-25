@@ -1,4 +1,5 @@
 use super::arena::{ArenaAugmentEntry, ArenaAugmentMetadata, ArenaSynergyEntry};
+pub use super::matchups::{LaneMatchupEntry, LaneMatchupsSummary};
 pub use super::skills::{ChampionAbilityMetadata, SkillOrderRecommendation};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -272,6 +273,8 @@ pub struct ChampionBuild {
     pub avg_placement: Option<f64>,
     #[serde(default)]
     pub skill_order: Option<SkillOrderRecommendation>,
+    #[serde(default)]
+    pub lane_matchups: Option<LaneMatchupsSummary>,
 }
 
 impl Default for ChampionBuild {
@@ -313,6 +316,7 @@ impl Default for ChampionBuild {
             first_place_rate: None,
             avg_placement: None,
             skill_order: None,
+            lane_matchups: None,
         }
     }
 }

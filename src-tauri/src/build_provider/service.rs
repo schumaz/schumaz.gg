@@ -1,6 +1,6 @@
 use super::analytics::{
     fetch_opgg_mcp_depth_items, fetch_opgg_versions_from_base,
-    parse_opgg_analysis_payload_for_mode, resolve_champion_most_played_lane,
+    parse_opgg_analysis_payload_for_mode_and_roster, resolve_champion_most_played_lane,
 };
 use super::cache::{
     load_disk_build_envelope, make_build_cache_key, store_disk_build, store_ram_cached_build,
@@ -16,7 +16,7 @@ pub use super::service_helpers::FastSpellRecommendation;
 use super::service_helpers::{
     FallbackBuild, MCP_DEPTH_TIMEOUT, extract_fast_spells_from_rest,
     fetch_rest_with_patch_protection, merge_mcp_depth_into_json, resolve_build_fallback,
-    send_build_fast_spells,
+    send_build_fast_spells, spawn_lane_roster_lookup,
 };
 use super::spells::ddragon_mode_for_queue;
 use crate::models::{is_arena_queue, queue_supports_runes, queue_supports_spells};
@@ -205,6 +205,7 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
         .and_then(|res| res.ok())
     });
 
+    let lane_roster_handle = spawn_lane_roster_lookup(client, rest_base, target_position.as_ref(), target_region, target_tier, (!initial_patch.is_empty()).then_some(initial_patch.as_str()));
     let fetch_outcome = fetch_rest_with_patch_protection(
         client,
         rest_base,
@@ -234,17 +235,19 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     }
 
     let mcp_depth_opt = mcp_depth_handle.await.ok().flatten();
+    let lane_roster_opt = match lane_roster_handle { Some(h) => h.await.ok().flatten(), None => None };
     let mut fetched_ok = false;
     let parsed_build = match fetch_outcome.result {
         Ok(mut json_res) => {
             merge_mcp_depth_into_json(&mut json_res, target_position.as_ref(), mcp_depth_opt);
-            parse_opgg_analysis_payload_for_mode(
+            parse_opgg_analysis_payload_for_mode_and_roster(
                 &json_res,
                 champion_id,
                 champ_name,
                 supports_runes,
                 Some(spell_mode),
                 Some(&ddragon_cache.spells),
+                lane_roster_opt.as_ref(),
             )
             .ok()
         }
