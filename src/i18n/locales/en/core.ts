@@ -91,6 +91,7 @@ export const enCore: CoreTranslations = {
     hovering: "Selecting (Hover)",
     backToTierListTitle: "Back to Ranked Tier List",
     backToArenaTierListTitle: "Back to Arena Tier List",
+    backToAramTierListTitle: "Back to ARAM Rankings",
     pickRate: "{rate}% Pick Rate",
     top3Rate: "{rate}% Top 3",
     firstPlaceRate: "{rate}% 1st Place",

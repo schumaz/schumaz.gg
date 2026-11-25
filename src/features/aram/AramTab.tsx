@@ -1,32 +1,20 @@
 import { useMemo, useState } from "react";
-import { AramAugmentEntry, AramChampionRank, AramMode } from "../../types";
+import { useTranslation } from "../../i18n";
+import { computeOrderedSpells } from "../../utils/spells";
 import {
+  AramMayhemPanel,
+  AramTabProps,
   AugmentRarityFilter,
+  getChampionTierLabel,
   normalizeAramSearch,
   sortAugmentsBestToWorst,
 } from "./aramHelpers";
 import { AramModeChooser } from "./AramModeChooser";
 import { AramClassicView } from "./AramClassicView";
+import { AramClassicChampionDetail } from "./AramClassicChampionDetail";
 import { AramMayhemView } from "./AramMayhemView";
 
 export * from "./aramHelpers";
-
-interface AramTabProps {
-  isActive: boolean;
-  savedMode: AramMode | null;
-  showChooser: boolean;
-  tierLists: Partial<Record<AramMode, AramChampionRank[]>>;
-  tierLoading: Partial<Record<AramMode, boolean>>;
-  tierErrors: Partial<Record<AramMode, string | null>>;
-  selectedChampionKey: string | null;
-  augmentsByChampion: Record<string, AramAugmentEntry[]>;
-  augmentsLoading: boolean;
-  augmentsError: string | null;
-  onSelectMode: (mode: AramMode) => void;
-  onSelectChampion: (championKey: string) => void;
-  onRetryTierList: (mode: AramMode) => void;
-  onRetryAugments: () => void;
-}
 
 export function AramTab({
   isActive,
@@ -43,11 +31,39 @@ export function AramTab({
   onSelectChampion,
   onRetryTierList,
   onRetryAugments,
+  selectedClassicChampion = null,
+  classicBuild = null,
+  classicBuildLoading = false,
+  classicBuildError = null,
+  classicOrderedSpells,
+  classicRunePageIndex,
+  classicBuildIndex,
+  onSelectClassicChampion,
+  onBackToClassicList,
+  onClassicDetailFilterChange,
+  onRetryClassicBuild,
+  onSelectClassicRunePage,
+  onSelectClassicBuild,
+  mayhemPanel,
+  onSelectMayhemPanel,
+  mayhemBuildsByChampion,
+  mayhemBuildLoading = false,
+  mayhemBuildError = null,
+  mayhemOrderedSpells,
+  mayhemBuildIndex,
+  onSelectMayhemBuild,
+  onRetryMayhemBuild,
+  flashKey = "D",
 }: AramTabProps) {
+  const { t } = useTranslation();
   const [aramSearch, setAramSearch] = useState("");
   const [mayhemChampSearch, setMayhemChampSearch] = useState("");
   const [augmentSearch, setAugmentSearch] = useState("");
   const [rarityFilter, setRarityFilter] = useState<AugmentRarityFilter>("all");
+  const [localMayhemPanel, setLocalMayhemPanel] = useState<AramMayhemPanel>("augments");
+  const [localClassicRuneIdx, setLocalClassicRuneIdx] = useState(0);
+  const [localClassicBuildIdx, setLocalClassicBuildIdx] = useState(0);
+  const [localMayhemBuildIdx, setLocalMayhemBuildIdx] = useState(0);
 
   const activeMode = savedMode ?? "aram";
   const currentChampions = tierLists[activeMode] ?? [];
@@ -84,6 +100,43 @@ export function AramTab({
     });
   }, [selectedChampionKey, augmentsByChampion, rarityFilter, augmentSearch]);
 
+  const resolvedMayhemPanel = mayhemPanel ?? localMayhemPanel;
+  const handleSelectMayhemPanel = (panel: AramMayhemPanel) => {
+    if (mayhemPanel === undefined) setLocalMayhemPanel(panel);
+    onSelectMayhemPanel?.(panel);
+  };
+
+  const resolvedClassicRuneIdx = classicRunePageIndex ?? localClassicRuneIdx;
+  const resolvedClassicBuildIdx = classicBuildIndex ?? localClassicBuildIdx;
+  const resolvedMayhemBuildIdx = mayhemBuildIndex ?? localMayhemBuildIdx;
+
+  const activeMayhemBuild = selectedChampionKey
+    ? mayhemBuildsByChampion?.[selectedChampionKey.trim().toLowerCase()] ?? null
+    : null;
+
+  const resolvedClassicSpells = useMemo(
+    () =>
+      classicOrderedSpells ??
+      computeOrderedSpells(classicBuild?.spells, 0, classicBuild?.spell_options, flashKey, false),
+    [classicOrderedSpells, classicBuild?.spells, classicBuild?.spell_options, flashKey]
+  );
+
+  const resolvedMayhemSpells = useMemo(
+    () =>
+      mayhemOrderedSpells ??
+      computeOrderedSpells(activeMayhemBuild?.spells, 0, activeMayhemBuild?.spell_options, flashKey, false),
+    [mayhemOrderedSpells, activeMayhemBuild?.spells, activeMayhemBuild?.spell_options, flashKey]
+  );
+
+  const classicDetailStatusTag = selectedClassicChampion
+    ? selectedClassicChampion.rank > 0
+      ? t("aram.classicDetailStatus", {
+          tier: getChampionTierLabel(selectedClassicChampion.tier),
+          rank: selectedClassicChampion.rank,
+        })
+      : t("aram.classicDetailStatusFallback")
+    : t("aram.classicDetailStatusFallback");
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -93,15 +146,41 @@ export function AramTab({
       {showChooser ? (
         <AramModeChooser savedMode={savedMode} onSelectMode={onSelectMode} />
       ) : activeMode === "aram" ? (
-        <AramClassicView
-          currentChampions={currentChampions}
-          filteredAramChampions={filteredAramChampions}
-          isLoadingList={isLoadingList}
-          listError={listError}
-          aramSearch={aramSearch}
-          onSearchChange={setAramSearch}
-          onRetryTierList={onRetryTierList}
-        />
+        selectedClassicChampion ? (
+          <AramClassicChampionDetail
+            selectedChampion={selectedClassicChampion}
+            championBuild={classicBuild}
+            buildLoading={classicBuildLoading}
+            buildError={classicBuildError}
+            detailStatusTag={classicDetailStatusTag}
+            orderedSpells={resolvedClassicSpells}
+            flashKey={flashKey}
+            selectedRunePageIndex={resolvedClassicRuneIdx}
+            selectedBuildIndex={resolvedClassicBuildIdx}
+            onDetailFilterChange={(filterType, val) => onClassicDetailFilterChange?.(filterType, val)}
+            onBackToTierList={() => onBackToClassicList?.()}
+            onRetryBuild={() => onRetryClassicBuild?.()}
+            onSelectRunePage={(idx) => {
+              if (classicRunePageIndex === undefined) setLocalClassicRuneIdx(idx);
+              onSelectClassicRunePage?.(idx);
+            }}
+            onSelectBuild={(idx) => {
+              if (classicBuildIndex === undefined) setLocalClassicBuildIdx(idx);
+              onSelectClassicBuild?.(idx);
+            }}
+          />
+        ) : (
+          <AramClassicView
+            currentChampions={currentChampions}
+            filteredAramChampions={filteredAramChampions}
+            isLoadingList={isLoadingList}
+            listError={listError}
+            aramSearch={aramSearch}
+            onSearchChange={setAramSearch}
+            onSelectChampion={onSelectClassicChampion}
+            onRetryTierList={onRetryTierList}
+          />
+        )
       ) : (
         <AramMayhemView
           currentChampions={currentChampions}
@@ -122,6 +201,19 @@ export function AramTab({
           augmentsError={augmentsError}
           currentAugments={currentAugments}
           onRetryAugments={onRetryAugments}
+          activePanel={resolvedMayhemPanel}
+          onSelectPanel={handleSelectMayhemPanel}
+          mayhemBuild={activeMayhemBuild}
+          mayhemBuildLoading={mayhemBuildLoading}
+          mayhemBuildError={mayhemBuildError}
+          mayhemOrderedSpells={resolvedMayhemSpells}
+          flashKey={flashKey}
+          mayhemBuildIndex={resolvedMayhemBuildIdx}
+          onSelectMayhemBuild={(idx) => {
+            if (mayhemBuildIndex === undefined) setLocalMayhemBuildIdx(idx);
+            onSelectMayhemBuild?.(idx);
+          }}
+          onRetryMayhemBuild={onRetryMayhemBuild}
         />
       )}
     </div>

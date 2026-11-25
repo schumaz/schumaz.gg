@@ -1,9 +1,73 @@
 import { TranslationKey, TranslationParams, translate } from "../../i18n";
-import { AramAugmentEntry } from "../../types";
+import {
+  AramAugmentEntry,
+  AramChampionRank,
+  AramMode,
+  ChampionBuild,
+  FlashKeyPreference,
+  SpellMetadata,
+} from "../../types";
 
 export { getChampionTierClass, getChampionTierLabel } from "../../components/ui/championTier";
 
 export type AugmentRarityFilter = "all" | 1 | 4 | 8;
+
+export type AramMayhemPanel = "augments" | "build";
+
+export interface AramClassicBuildFilters {
+  tier: string | null;
+  region: string;
+  patch: string | null;
+}
+
+export const DEFAULT_ARAM_CLASSIC_FILTERS: AramClassicBuildFilters = {
+  tier: null,
+  region: "global",
+  patch: null,
+};
+
+export interface AramTabProps {
+  isActive: boolean;
+  savedMode: AramMode | null;
+  showChooser: boolean;
+  tierLists: Partial<Record<AramMode, AramChampionRank[]>>;
+  tierLoading: Partial<Record<AramMode, boolean>>;
+  tierErrors: Partial<Record<AramMode, string | null>>;
+  selectedChampionKey: string | null;
+  augmentsByChampion: Record<string, AramAugmentEntry[]>;
+  augmentsLoading: boolean;
+  augmentsError: string | null;
+  onSelectMode: (mode: AramMode) => void;
+  onSelectChampion: (championKey: string) => void;
+  onRetryTierList: (mode: AramMode) => void;
+  onRetryAugments: () => void;
+  selectedClassicChampion?: AramChampionRank | null;
+  classicBuild?: ChampionBuild | null;
+  classicBuildLoading?: boolean;
+  classicBuildError?: string | null;
+  classicOrderedSpells?: SpellMetadata[];
+  classicRunePageIndex?: number;
+  classicBuildIndex?: number;
+  onSelectClassicChampion?: (champion: AramChampionRank) => void;
+  onBackToClassicList?: () => void;
+  onClassicDetailFilterChange?: (
+    filterType: "position" | "tier" | "region" | "patch",
+    value: string
+  ) => void;
+  onRetryClassicBuild?: () => void;
+  onSelectClassicRunePage?: (pageIndex: number) => void;
+  onSelectClassicBuild?: (index: number) => void;
+  mayhemPanel?: AramMayhemPanel;
+  onSelectMayhemPanel?: (panel: AramMayhemPanel) => void;
+  mayhemBuildsByChampion?: Record<string, ChampionBuild>;
+  mayhemBuildLoading?: boolean;
+  mayhemBuildError?: string | null;
+  mayhemOrderedSpells?: SpellMetadata[];
+  mayhemBuildIndex?: number;
+  onSelectMayhemBuild?: (index: number) => void;
+  onRetryMayhemBuild?: () => void;
+  flashKey?: FlashKeyPreference;
+}
 
 type TranslatorFn = (key: TranslationKey, params?: TranslationParams) => string;
 const defaultTranslate: TranslatorFn = (key, params) => translate("pt_BR", key, params);

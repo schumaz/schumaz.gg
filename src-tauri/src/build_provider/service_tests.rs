@@ -295,3 +295,15 @@ async fn test_fast_spells_channel_resolves_without_waiting_for_slow_mcp_and_avoi
     assert_eq!(build.spell1_id, 4);
     assert_eq!(build.spell2_id, 7);
 }
+
+#[test]
+fn test_aram_mode_to_queue_id_maps_classic_and_mayhem() {
+    assert_eq!(
+        aram_mode_to_queue_id(crate::models::AramMode::Aram),
+        crate::models::QUEUE_ARAM
+    );
+    assert_eq!(
+        aram_mode_to_queue_id(crate::models::AramMode::AramMayhem),
+        crate::models::QUEUE_ARAM_MAYHEM
+    );
+}

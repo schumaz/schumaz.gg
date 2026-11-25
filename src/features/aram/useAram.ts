@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppLocale,
   AramAugmentEntry,
   AramChampionRank,
   AramMode,
+  FlashKeyPreference,
 } from "../../types";
 import { aramIpc } from "../../services/ipc";
 import { translate } from "../../i18n";
 import { UseAramPersistenceOptions } from "./aramStorage";
+import { useAramBuilds } from "./useAramBuilds";
 
 export * from "./aramStorage";
 
@@ -15,7 +17,8 @@ export function useAram(
   isActive: boolean,
   currentChampionId: number | null,
   locale: AppLocale = "pt_BR",
-  persistence?: UseAramPersistenceOptions
+  persistence?: UseAramPersistenceOptions,
+  flashKey: FlashKeyPreference = "D"
 ) {
   const onNavigationPatch = persistence?.onNavigationPatch;
 
@@ -170,6 +173,22 @@ export function useAram(
     fetchAugmentsForChampion,
   ]);
 
+  const selectedMayhemChampion = useMemo(() => {
+    if (!selectedChampionKey) return null;
+    return (tierLists.aram_mayhem ?? []).find((c) => c.key === selectedChampionKey) ?? null;
+  }, [tierLists.aram_mayhem, selectedChampionKey]);
+
+  const builds = useAramBuilds({
+    isActive,
+    savedMode,
+    showChooser,
+    selectedMayhemChampion,
+    flashKey,
+    locale,
+  });
+
+  const clearSelectedClassicChampion = builds.clearSelectedClassicChampion;
+
   const handleAramDockClick = useCallback(
     (wasAlreadyOnAram: boolean) => {
       if (!wasAlreadyOnAram) {
@@ -188,10 +207,11 @@ export function useAram(
   const selectMode = useCallback(
     (mode: AramMode) => {
       onNavigationPatch?.({ savedAramMode: mode });
+      clearSelectedClassicChampion();
       setSavedMode(mode);
       setShowChooser(false);
     },
-    [onNavigationPatch]
+    [onNavigationPatch, clearSelectedClassicChampion]
   );
 
   const retryTierList = useCallback((mode: AramMode) => fetchTierList(mode, true), [fetchTierList]);
@@ -215,5 +235,6 @@ export function useAram(
     selectChampion: fetchAugmentsForChampion,
     retryTierList,
     retryAugments,
+    ...builds,
   };
 }

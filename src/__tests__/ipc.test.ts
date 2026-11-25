@@ -135,6 +135,9 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     await aramIpc.getAramMayhemAugments("ahri");
     expect(invoke).toHaveBeenCalledWith("get_aram_mayhem_augments", { championKey: "ahri" });
 
+    await aramIpc.getAramChampionBuild(103, "aram", "all", "global", "16.22");
+    expect(invoke).toHaveBeenCalledWith("get_aram_champion_build", { championId: 103, mode: "aram", tier: "all", region: "global", patch: "16.22" });
+
     await settingsIpc.getAppSettings();
     expect(invoke).toHaveBeenCalledWith("get_app_settings");
 

@@ -38,8 +38,7 @@ export interface AppProps {
 function App({ forceStartupLoading }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
   const isAppMinimized = useWindowMinimized();
-  const rankedPatchChangeRef = useRef<(() => void) | null>(null);
-  const arenaPatchChangeRef = useRef<(() => void) | null>(null);
+  const patchChangeHandlersRef = useRef<Array<() => void>>([]);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
     if (
@@ -63,8 +62,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
 
   const handlePatchProtectionChange = () => {
     if (lcu.build) lcu.handleFilterChange("patch", "");
-    rankedPatchChangeRef.current?.();
-    arenaPatchChangeRef.current?.();
+    for (const handler of patchChangeHandlersRef.current) handler();
   };
 
   const prefs = usePreferences(handleFlashKeyChange, handlePatchProtectionChange);
@@ -111,14 +109,13 @@ function App({ forceStartupLoading }: AppProps = {}) {
   );
 
   const patch48hProtection = preferences.patch48hProtection ?? true;
-  const aram = useAram(activeTab === "aram", currentChampionId, locale, aramPersistence);
+  const aram = useAram(activeTab === "aram", currentChampionId, locale, aramPersistence, preferences.flashKey);
   const ranked = useRanked(activeTab === "ranked", preferences.flashKey, patch48hProtection, locale, rankedPersistence);
   const arena = useArena(activeTab === "arena", patch48hProtection, locale);
 
   useEffect(() => {
-    rankedPatchChangeRef.current = ranked.handlePatchProtectionChange;
-    arenaPatchChangeRef.current = arena.handlePatchProtectionChange;
-  }, [ranked.handlePatchProtectionChange, arena.handlePatchProtectionChange]);
+    patchChangeHandlersRef.current = [ranked.handlePatchProtectionChange, arena.handlePatchProtectionChange, aram.handlePatchProtectionChange];
+  }, [ranked.handlePatchProtectionChange, arena.handlePatchProtectionChange, aram.handlePatchProtectionChange]);
 
   const playerProfile = usePlayerProfile(lcu.summoner, locale);
 

@@ -44,6 +44,11 @@ export const commands = {
 	getAramTierList: (mode: AramMode) => __TAURI_INVOKE<AramChampionRank_Serialize[]>("get_aram_tier_list", { mode }),
 	/**  Tauri command to fetch ARAM Mayhem augments for a specific champion key. */
 	getAramMayhemAugments: (championKey: string) => __TAURI_INVOKE<AramAugmentEntry_Serialize[]>("get_aram_mayhem_augments", { championKey }),
+	/**
+	 *  Tauri command to fetch a read-only ARAM or ARAM Mayhem champion build preview
+	 *  without emitting Champ Select events or injecting into LCU.
+	 */
+	getAramChampionBuild: (championId: number, mode: AramMode, tier: string | null, region: string | null, patch: string | null) => __TAURI_INVOKE<ChampionBuild_Serialize>("get_aram_champion_build", { championId, mode, tier, region, patch }),
 	/**  Tauri command to fetch Ranked Summoner's Rift tier list filtered by region, elo tier, and patch. */
 	getRankedTierList: (region: string | null, tier: string | null, patch: string | null) => __TAURI_INVOKE<RankedTierListResponse_Serialize>("get_ranked_tier_list", { region, tier, patch }),
 	/**

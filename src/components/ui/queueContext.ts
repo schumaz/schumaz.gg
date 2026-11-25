@@ -43,6 +43,7 @@ export function isAramBuildContextMode(
     champSelect?.queue_mode === "AramMayhem" ||
     champSelect?.queue_id === 450 ||
     champSelect?.queue_id === 2400 ||
-    build?.supports_runes === false
+    build?.supports_runes === false ||
+    (!champSelect && build?.active_position === "")
   );
 }

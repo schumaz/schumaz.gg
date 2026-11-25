@@ -22,6 +22,7 @@ interface FiltersHeaderProps {
   backButtonTitle?: string;
   statusTagText?: string;
   queueModeLabel?: string;
+  isAramMode?: boolean;
   readOnly?: boolean;
 }
 
@@ -34,12 +35,13 @@ export function FiltersHeader({
   backButtonTitle,
   statusTagText,
   queueModeLabel,
+  isAramMode = false,
   readOnly = false,
 }: FiltersHeaderProps) {
   const { t } = useTranslation();
 
   const isArena = isArenaBuildContext(build, champSelect);
-  const isAram = isAramBuildContextMode(build, champSelect);
+  const isAram = isAramMode || isAramBuildContextMode(build, champSelect);
   const tierOptions = getTierOptions(t);
   const positionOptions = getPositionOptions(t);
   const regionOptions = getRegionOptions(t);
@@ -167,7 +169,7 @@ export function FiltersHeader({
               id="filter-tier"
               labelId="filter-tier-label"
               testId="filter-tier"
-              value={build.active_tier || "emerald_plus"}
+              value={build.active_tier || (isAram ? "all" : "emerald_plus")}
               options={tierOptions}
               disabled={loading}
               onChange={(val) => onFilterChange("tier", val)}

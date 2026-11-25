@@ -12,6 +12,7 @@ interface AramClassicViewProps {
   listError: string | null;
   aramSearch: string;
   onSearchChange: (val: string) => void;
+  onSelectChampion?: (champ: AramChampionRank) => void;
   onRetryTierList: (mode: AramMode) => void;
 }
 
@@ -22,6 +23,7 @@ export function AramClassicView({
   listError,
   aramSearch,
   onSearchChange,
+  onSelectChampion,
   onRetryTierList,
 }: AramClassicViewProps) {
   const { t } = useTranslation();
@@ -78,7 +80,13 @@ export function AramClassicView({
         ) : (
           <div className="aram-classic-list" data-testid="aram-classic-list">
             {filteredAramChampions.map((champ) => (
-              <div key={champ.id} className="aram-classic-row">
+              <button
+                key={champ.id}
+                type="button"
+                className="aram-classic-row"
+                onClick={() => onSelectChampion?.(champ)}
+                data-testid={`aram-classic-champ-${champ.key}`}
+              >
                 <span className="aram-rank-num">#{champ.rank}</span>
                 <div className="dd-icon-frame aram-champ-frame">
                   <img
@@ -117,7 +125,7 @@ export function AramClassicView({
                     {getChampionTierLabel(champ.tier)}
                   </span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}

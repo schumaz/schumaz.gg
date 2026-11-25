@@ -12,8 +12,8 @@ use super::models::{ChampionBuild, DataDragonCache};
 use super::service::get_recommended_build_with_filters_and_endpoints_with_dir;
 use super::service_helpers::FastSpellRecommendation;
 use crate::models::{
-    AppLocale, AramAugmentEntry, AramChampionRank, AramMode, ArenaTierListResponse, QUEUE_SOLO_DUO,
-    RankedTierListResponse,
+    AppLocale, AramAugmentEntry, AramChampionRank, AramMode, ArenaTierListResponse, QUEUE_ARAM,
+    QUEUE_ARAM_MAYHEM, QUEUE_SOLO_DUO, RankedTierListResponse,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -303,4 +303,26 @@ pub async fn get_arena_champion_build_service(
     let http_client = shared_http_client();
     let ddragon = get_or_init_ddragon_cache(http_client).await?;
     fetch_arena_champion_build(http_client, champion_id, patch, &ddragon).await
+}
+
+/// Maps an ARAM sub-mode to its corresponding Riot queue ID.
+pub const fn aram_mode_to_queue_id(mode: AramMode) -> i32 {
+    match mode {
+        AramMode::Aram => QUEUE_ARAM,
+        AramMode::AramMayhem => QUEUE_ARAM_MAYHEM,
+    }
+}
+
+/// Domain service entry point for fetching a read-only ARAM or ARAM Mayhem champion build preview.
+pub async fn get_aram_champion_build_service(
+    champion_id: i32,
+    mode: AramMode,
+    tier: Option<&str>,
+    region: Option<&str>,
+    patch: Option<&str>,
+) -> Result<ChampionBuild, String> {
+    let http_client = shared_http_client();
+    let queue_id = aram_mode_to_queue_id(mode);
+    get_recommended_build_with_filters(http_client, champion_id, queue_id, None, tier, region, patch)
+        .await
 }

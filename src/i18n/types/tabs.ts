@@ -120,5 +120,14 @@ export interface TabTranslations {
     fetchAugmentsError: string;
     noAugmentsFound: string;
     augmentPickRate: string;
+    classicDetailStatus: string;
+    classicDetailStatusFallback: string;
+    loadingBuild: string;
+    loadingMayhemBuild: string;
+    fetchBuildError: string;
+    mayhemTabAugments: string;
+    mayhemTabBuild: string;
+    mayhemPanelTabsAria: string;
+    mayhemBuildSubtitle: string;
   };
 }

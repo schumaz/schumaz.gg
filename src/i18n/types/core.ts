@@ -104,6 +104,7 @@ export interface CoreTranslations {
     hovering: string;
     backToTierListTitle: string;
     backToArenaTierListTitle: string;
+    backToAramTierListTitle: string;
     pickRate: string;
     top3Rate: string;
     firstPlaceRate: string;

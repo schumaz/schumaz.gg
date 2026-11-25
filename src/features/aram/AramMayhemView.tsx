@@ -1,16 +1,12 @@
 import { useTranslation } from "../../i18n";
-import { AramAugmentEntry, AramChampionRank, AramMode } from "../../types";
+import { AramAugmentEntry, AramChampionRank, AramMode, ChampionBuild, FlashKeyPreference, SpellMetadata } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 import { ListSkeleton, LoadingDots } from "../../components/ui/LoadingIndicators";
 import { SearchInput } from "../../components/ui/SearchInput";
-import {
-  AugmentRarityFilter,
-  getAugmentRarityInfo,
-  getAugmentTierClass,
-  getAugmentTierLabel,
-  getChampionTierClass,
-  getChampionTierLabel,
-} from "./aramHelpers";
+import { SkillOrderPopover } from "../../components/ui/SkillOrderPopover";
+import { AramMayhemPanel, AugmentRarityFilter, getChampionTierClass, getChampionTierLabel } from "./aramHelpers";
+import { AramMayhemAugmentsPanel } from "./AramMayhemAugmentsPanel";
+import { AramMayhemBuildPanel } from "./AramMayhemBuildPanel";
 
 interface AramMayhemViewProps {
   currentChampions: AramChampionRank[];
@@ -31,36 +27,27 @@ interface AramMayhemViewProps {
   augmentsError: string | null;
   currentAugments: AramAugmentEntry[];
   onRetryAugments: () => void;
+  activePanel?: AramMayhemPanel;
+  onSelectPanel?: (panel: AramMayhemPanel) => void;
+  mayhemBuild?: ChampionBuild | null;
+  mayhemBuildLoading?: boolean;
+  mayhemBuildError?: string | null;
+  mayhemOrderedSpells?: SpellMetadata[];
+  flashKey?: FlashKeyPreference;
+  mayhemBuildIndex?: number;
+  onSelectMayhemBuild?: (index: number) => void;
+  onRetryMayhemBuild?: () => void;
 }
 
 export function AramMayhemView({
-  currentChampions,
-  filteredMayhemChampions,
-  isLoadingList,
-  listError,
-  mayhemChampSearch,
-  onMayhemChampSearchChange,
-  selectedChampionKey,
-  selectedChampion,
-  onSelectChampion,
-  onRetryTierList,
-  rarityFilter,
-  onSelectRarityFilter,
-  augmentSearch,
-  onAugmentSearchChange,
-  augmentsLoading,
-  augmentsError,
-  currentAugments,
-  onRetryAugments,
+  currentChampions, filteredMayhemChampions, isLoadingList, listError, mayhemChampSearch,
+  onMayhemChampSearchChange, selectedChampionKey, selectedChampion, onSelectChampion, onRetryTierList,
+  rarityFilter, onSelectRarityFilter, augmentSearch, onAugmentSearchChange, augmentsLoading,
+  augmentsError, currentAugments, onRetryAugments, activePanel = "augments", onSelectPanel,
+  mayhemBuild = null, mayhemBuildLoading = false, mayhemBuildError = null,
+  mayhemOrderedSpells = [], flashKey, mayhemBuildIndex = 0, onSelectMayhemBuild, onRetryMayhemBuild,
 }: AramMayhemViewProps) {
   const { t } = useTranslation();
-
-  const rarityFilterOptions = [
-    { id: "all" as const, label: t("aram.rarityAll"), dot: "" },
-    { id: 1 as const, label: t("aram.raritySilver"), dot: "dot-silver" },
-    { id: 4 as const, label: t("aram.rarityGold"), dot: "dot-gold" },
-    { id: 8 as const, label: t("aram.rarityPrismatic"), dot: "dot-prismatic" },
-  ];
 
   return (
     <div className="aram-layout" data-testid="aram-mayhem-view">
@@ -141,7 +128,9 @@ export function AramMayhemView({
                   )}
                   <div className="aram-hero-meta">
                     <h3 className="aram-panel-title">{selectedChampion?.name ?? selectedChampionKey}</h3>
-                    <span className="aram-hero-sub">{t("aram.augmentsSubtitle")}</span>
+                    <span className="aram-hero-sub">
+                      {activePanel === "build" ? t("aram.mayhemBuildSubtitle") : t("aram.augmentsSubtitle")}
+                    </span>
                   </div>
                   {selectedChampion && (
                     <span className={`aram-tier-pill aram-hero-rank-pill ${getChampionTierClass(selectedChampion.tier)}`}>
@@ -150,83 +139,64 @@ export function AramMayhemView({
                   )}
                 </div>
 
-                <div className="aram-augments-controls">
-                  <div className="segmented-control aram-rarity-filter" role="group" aria-label={t("aram.filterRarityAria")}>
-                    {rarityFilterOptions.map((opt) => (
-                      <button
-                        key={String(opt.id)}
-                        type="button"
-                        className={`segment-btn ${rarityFilter === opt.id ? "active" : ""}`}
-                        onClick={() => onSelectRarityFilter(opt.id)}
-                      >
-                        {opt.dot && <span className={`aram-rarity-dot ${opt.dot}`} />}
-                        <span>{opt.label}</span>
-                      </button>
-                    ))}
+                <div className="aram-mayhem-panel-switch-row">
+                  <div className="segmented-control aram-mayhem-panel-switch" role="tablist" aria-label={t("aram.mayhemPanelTabsAria")}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activePanel === "augments"}
+                      className={`segment-btn ${activePanel === "augments" ? "active" : ""}`}
+                      data-testid="mayhem-tab-augments"
+                      onClick={() => onSelectPanel?.("augments")}
+                    >
+                      {t("aram.mayhemTabAugments")}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={activePanel === "build"}
+                      className={`segment-btn ${activePanel === "build" ? "active" : ""}`}
+                      data-testid="mayhem-tab-build"
+                      onClick={() => onSelectPanel?.("build")}
+                    >
+                      {t("aram.mayhemTabBuild")}
+                    </button>
                   </div>
 
-                  <SearchInput
-                    value={augmentSearch}
-                    onChange={onAugmentSearchChange}
-                    placeholder={t("aram.searchAugmentPlaceholder")}
-                    ariaLabel={t("aram.searchAugmentAria")}
-                    clearAriaLabel={t("aram.clearSearchAugmentAria")}
-                    className="aram-aug-search"
-                  />
+                  {activePanel === "build" && mayhemBuild?.skill_order && (
+                    <SkillOrderPopover
+                      skillOrder={mayhemBuild.skill_order}
+                      readOnly={true}
+                      resetKey={`mayhem-${selectedChampionKey}-${mayhemBuild.active_patch ?? ""}`}
+                    />
+                  )}
                 </div>
               </div>
 
-              <div className="aram-scroll-body" data-testid="aram-augments-list">
-                {augmentsLoading ? (
-                  <div className="loading-skeleton-shell" data-testid="aram-augments-loading">
-                    <div className="loading-banner">
-                      <div className="spinner aram-spinner" />
-                      <span>{t("aram.loadingAugments")}</span>
-                      <LoadingDots size="sm" testId="aram-augments-loading-dots" />
-                    </div>
-                    <ListSkeleton rows={5} variant="augments" testId="aram-augments-skeleton" />
-                  </div>
-                ) : augmentsError ? (
-                  <div className="aram-state-box">
-                    <span className="aram-error-text">{augmentsError}</span>
-                    <button type="button" className="aram-retry-btn" onClick={onRetryAugments}>
-                      {t("common.retry")}
-                    </button>
-                  </div>
-                ) : currentAugments.length === 0 ? (
-                  <div className="aram-state-box">
-                    <span>{t("aram.noAugmentsFound")}</span>
-                  </div>
-                ) : (
-                  currentAugments.map((aug) => {
-                    const rarityInfo = getAugmentRarityInfo(aug.rarity, t);
-                    return (
-                      <div key={aug.id} className="aram-augment-row">
-                        <div className={`aram-augment-icon-frame ${rarityInfo.className}`}>
-                          <img src={resolveCachedAssetUrl(aug.icon_url)} alt={aug.name} className="aram-augment-icon" loading="lazy" />
-                        </div>
-
-                        <span className={`aram-aug-tier-badge ${getAugmentTierClass(aug.tier)}`}>
-                          {getAugmentTierLabel(aug.tier)}
-                        </span>
-
-                        <div className="aram-augment-info">
-                          <div className="aram-augment-top">
-                            <strong className="aram-augment-name">{aug.name}</strong>
-                            <span className={`aram-rarity-tag ${rarityInfo.className}`}>{rarityInfo.label}</span>
-                            {(aug.popular ?? 0) > 0 && (
-                              <span className="aram-aug-pick">
-                                {t("aram.augmentPickRate", { rate: (aug.popular ?? 0).toFixed(1) })}
-                              </span>
-                            )}
-                          </div>
-                          {aug.desc && <p className="aram-augment-desc">{aug.desc}</p>}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              {activePanel === "augments" ? (
+                <AramMayhemAugmentsPanel
+                  rarityFilter={rarityFilter}
+                  onSelectRarityFilter={onSelectRarityFilter}
+                  augmentSearch={augmentSearch}
+                  onAugmentSearchChange={onAugmentSearchChange}
+                  augmentsLoading={augmentsLoading}
+                  augmentsError={augmentsError}
+                  currentAugments={currentAugments}
+                  onRetryAugments={onRetryAugments}
+                />
+              ) : (
+                <AramMayhemBuildPanel
+                  championName={selectedChampion?.name ?? selectedChampionKey}
+                  build={mayhemBuild}
+                  loading={mayhemBuildLoading}
+                  error={mayhemBuildError}
+                  orderedSpells={mayhemOrderedSpells}
+                  flashKey={flashKey}
+                  selectedBuildIndex={mayhemBuildIndex}
+                  onSelectBuild={(idx) => onSelectMayhemBuild?.(idx)}
+                  onRetryBuild={() => onRetryMayhemBuild?.()}
+                />
+              )}
             </>
           )}
         </section>

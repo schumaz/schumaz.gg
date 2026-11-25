@@ -173,6 +173,16 @@ export function defaultAppInvokeMock(cmd: string, args?: Record<string, unknown>
     }
     return Promise.resolve(mockAhriBuild);
   }
+  if (cmd === "get_aram_champion_build") {
+    const isMayhem = args?.mode === "aram_mayhem";
+    return Promise.resolve({
+      ...mockAhriBuild,
+      active_position: "",
+      active_tier: "all",
+      supports_runes: !isMayhem,
+      rune_pages: isMayhem ? [] : mockAhriBuild.rune_pages,
+    });
+  }
   if (cmd === "update_build_filters") {
     return Promise.resolve({
       ...mockAhriBuild,

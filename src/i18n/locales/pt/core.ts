@@ -91,6 +91,7 @@ export const ptCore: CoreTranslations = {
     hovering: "Selecionando (Hover)",
     backToTierListTitle: "Voltar para Tier List Ranqueada",
     backToArenaTierListTitle: "Voltar para Tier List da Arena",
+    backToAramTierListTitle: "Voltar para Ranking do ARAM",
     pickRate: "{rate}% Pick Rate",
     top3Rate: "{rate}% Top 3",
     firstPlaceRate: "{rate}% 1º Lugar",

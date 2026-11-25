@@ -131,6 +131,29 @@ export function AppTabsViewport({
         onSelectChampion={aram.selectChampion}
         onRetryTierList={aram.retryTierList}
         onRetryAugments={aram.retryAugments}
+        selectedClassicChampion={aram.selectedClassicChampion}
+        classicBuild={aram.classicBuild}
+        classicBuildLoading={aram.classicBuildLoading}
+        classicBuildError={aram.classicBuildError}
+        classicOrderedSpells={aram.classicOrderedSpells}
+        classicRunePageIndex={aram.classicRunePageIndex}
+        classicBuildIndex={aram.classicBuildIndex}
+        onSelectClassicChampion={aram.selectClassicChampion}
+        onBackToClassicList={aram.clearSelectedClassicChampion}
+        onClassicDetailFilterChange={aram.handleClassicDetailFilterChange}
+        onRetryClassicBuild={aram.retryClassicBuild}
+        onSelectClassicRunePage={aram.setClassicRunePageIndex}
+        onSelectClassicBuild={aram.setClassicBuildIndex}
+        mayhemPanel={aram.mayhemPanel}
+        onSelectMayhemPanel={aram.setMayhemPanel}
+        mayhemBuildsByChampion={aram.mayhemBuildsByChampion}
+        mayhemBuildLoading={aram.mayhemBuildLoading}
+        mayhemBuildError={aram.mayhemBuildError}
+        mayhemOrderedSpells={aram.mayhemOrderedSpells}
+        mayhemBuildIndex={aram.mayhemBuildIndex}
+        onSelectMayhemBuild={aram.setMayhemBuildIndex}
+        onRetryMayhemBuild={aram.retryMayhemBuild}
+        flashKey={preferences.flashKey}
       />
 
       <SettingsTab
