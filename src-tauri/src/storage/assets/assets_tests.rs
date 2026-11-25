@@ -171,3 +171,40 @@ async fn test_singleflight_coalesces_errors_and_allows_subsequent_retry() {
     mock_server.verify().await;
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn test_fetch_asset_retries_transient_503_and_caches_on_recovery() {
+    let dir = temp_assets_dir("retry_503");
+    let paths = AppPaths::from_root(dir.clone());
+    paths.ensure_dirs().unwrap();
+
+    let mock_server = MockServer::start().await;
+    let fake_png: Vec<u8> = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 4, 3, 2, 1];
+
+    Mock::given(method("GET"))
+        .and(path("/cdn/augments/Deft_small.png"))
+        .respond_with(ResponseTemplate::new(503))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/cdn/augments/Deft_small.png"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(fake_png.clone()))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = reqwest::Client::new();
+    let url = format!("{}/cdn/augments/Deft_small.png", mock_server.uri());
+    let (bytes, mime) = serve_cached_or_fetch_asset_with_policy(&paths, &client, &url, true)
+        .await
+        .unwrap();
+
+    assert_eq!(bytes, fake_png);
+    assert_eq!(mime, "image/png");
+    assert!(asset_cache_path(&paths, &url).exists());
+
+    mock_server.verify().await;
+    let _ = fs::remove_dir_all(&dir);
+}

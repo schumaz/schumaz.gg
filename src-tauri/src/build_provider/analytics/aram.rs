@@ -3,12 +3,14 @@ mod cache;
 pub mod html_extract;
 pub mod mcp_augments;
 mod parsers;
+mod tooltip_clean;
 
 pub use augments::*;
 pub use cache::*;
 pub use html_extract::*;
 pub use mcp_augments::*;
 pub use parsers::*;
+pub use tooltip_clean::*;
 
 use super::client::peek_latest_cached_opgg_version;
 use super::cooldown::send_analytics_request;

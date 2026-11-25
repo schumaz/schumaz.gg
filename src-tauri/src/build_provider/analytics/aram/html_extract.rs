@@ -136,7 +136,8 @@ pub fn sanitize_augment_placeholders(text: &str, locale: AppLocale) -> String {
             .replace("an extra ? ", "bonus ")
             .replace("dealing ? ", "dealing ")
             .replace("Score ? ", "Score ")
-            .replace(" by ?%", ""),
+            .replace(" by ?%", "")
+            .replace("1 plus ? ", "additional "),
         AppLocale::PtBr => text
             .replace("a cada ?s", "periodicamente")
             .replace("por ?s", "brevemente")

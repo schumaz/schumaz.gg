@@ -1,15 +1,17 @@
+#[path = "assets/fetcher.rs"]
+mod fetcher;
 #[path = "assets/singleflight.rs"]
 mod singleflight;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use bytes::Bytes;
 
+use self::fetcher::fetch_and_cache_asset;
 pub use self::singleflight::AssetSingleflight;
-use self::singleflight::{AssetSharedResult, FlightStep, global_singleflight};
-use super::{AppPaths, atomic_write, fnv1a_128_hex, touch_mtime};
+use self::singleflight::{FlightStep, global_singleflight};
+use super::{AppPaths, fnv1a_128_hex, touch_mtime};
 
 const ALLOWED_ASSET_PREFIXES: [&str; 2] = [
     "https://ddragon.leagueoflegends.com/",
@@ -178,55 +180,6 @@ fn read_cached_asset(cache_path: &Path, ext: &str) -> Option<(Vec<u8>, &'static 
     }
     let mime = mime_type_for_ext_or_bytes(ext, &bytes);
     Some((bytes, mime))
-}
-
-async fn fetch_and_cache_asset(
-    client: &reqwest::Client,
-    url: &str,
-    cache_path: &Path,
-    ext: &str,
-) -> AssetSharedResult {
-    crate::logging::metrics::record_cache_miss();
-    let started = Instant::now();
-    let res = client.get(url).send().await.map_err(|err| {
-        crate::logging::record_http_network_error_log(
-            "cdn",
-            started.elapsed().as_millis(),
-            &err.to_string(),
-        );
-        502u16
-    })?;
-    let status = res.status();
-    let code = status.as_u16();
-    crate::logging::metrics::record_http_status(code);
-    if !status.is_success() {
-        crate::logging::log_warn(
-            "storage.assets",
-            format!(
-                "event=asset_http_error target=cdn status={code} elapsed_ms={}",
-                started.elapsed().as_millis()
-            ),
-        );
-        return Err(code);
-    }
-
-    let bytes = res.bytes().await.map_err(|err| {
-        crate::logging::record_http_network_error_log(
-            "cdn",
-            started.elapsed().as_millis(),
-            &err.to_string(),
-        );
-        502u16
-    })?;
-    if bytes.is_empty() {
-        return Err(404);
-    }
-
-    if let Err(err) = atomic_write(cache_path, &bytes) {
-        crate::logging::log_warn("storage.assets", format!("event=asset_io_error err={err}"));
-    }
-    let mime = mime_type_for_ext_or_bytes(ext, &bytes);
-    Ok((bytes, mime))
 }
 
 pub async fn serve_cached_or_fetch_asset(

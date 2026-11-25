@@ -148,8 +148,10 @@ describe("P13.2 — Classic ARAM Build Explorer & ARAM Mayhem Build/Augments Tog
     await waitFor(() => expect(classicHook.result.current.tierLists.aram).toHaveLength(2));
 
     act(() => { classicHook.result.current.selectClassicChampion(mockAramChampions[0]); });
-    await waitFor(() => expect(buildSpy).toHaveBeenCalledWith(50, "aram", null, "global", null));
-    expect(classicHook.result.current.classicBuild?.champion_name).toBe("Ahri");
+    await waitFor(() => {
+      expect(buildSpy).toHaveBeenCalledWith(50, "aram", null, "global", null);
+      expect(classicHook.result.current.classicBuild?.champion_name).toBe("Ahri");
+    });
 
     act(() => { classicHook.result.current.handleClassicDetailFilterChange("tier", "diamond_plus"); });
     await waitFor(() => expect(buildSpy).toHaveBeenCalledWith(50, "aram", "diamond_plus", "global", null));
@@ -168,8 +170,10 @@ describe("P13.2 — Classic ARAM Build Explorer & ARAM Mayhem Build/Augments Tog
     expect(buildSpy).not.toHaveBeenCalled();
 
     await act(async () => { mayhemHook.result.current.setMayhemPanel("build"); });
-    await waitFor(() => expect(buildSpy).toHaveBeenCalledWith(103, "aram_mayhem", null, "global", null));
-    expect(mayhemHook.result.current.mayhemBuildsByChampion.ahri).toBeDefined();
+    await waitFor(() => {
+      expect(buildSpy).toHaveBeenCalledWith(103, "aram_mayhem", null, "global", null);
+      expect(mayhemHook.result.current.mayhemBuildsByChampion.ahri).toBeDefined();
+    });
 
     act(() => { mayhemHook.result.current.setMayhemPanel("augments"); });
     act(() => { mayhemHook.result.current.setMayhemPanel("build"); });
@@ -180,5 +184,48 @@ describe("P13.2 — Classic ARAM Build Explorer & ARAM Mayhem Build/Augments Tog
     expect(injectBuildSpy).not.toHaveBeenCalled();
     expect(injectSpellsSpy).not.toHaveBeenCalled();
     expect(updateFiltersSpy).not.toHaveBeenCalled();
+  });
+
+  it("retries failed ARAM Mayhem augment icons with backoff and falls back to initials", () => {
+    vi.useFakeTimers();
+    try {
+      const augmentsWithMissing = [
+        mockAhriAugments[2],
+        { ...mockAhriAugments[0], id: 9991, name: "Empty Icon", icon_url: "" },
+      ];
+      render(
+        <AramTab
+          {...baseAramTabProps}
+          savedMode="aram_mayhem"
+          tierLists={{ aram_mayhem: mockMayhemChampions }}
+          selectedChampionKey="ahri"
+          augmentsByChampion={{ ahri: augmentsWithMissing }}
+        />
+      );
+
+      expect(screen.getByTestId("aram-augment-icon-fallback")).toHaveTextContent("EM");
+      const getImg = () => screen.getByRole("img", { name: "Coice" });
+      expect(getImg()).toHaveAttribute("src", "https://example.com/recoil.png");
+
+      fireEvent.error(getImg());
+      expect(screen.queryByRole("img", { name: "Coice" })).not.toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(getImg()).toHaveAttribute("src", "https://example.com/recoil.png?retry=1");
+
+      fireEvent.error(getImg());
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(getImg()).toHaveAttribute("src", "https://example.com/recoil.png?retry=2");
+
+      fireEvent.error(getImg());
+      const fallbacks = screen.getAllByTestId("aram-augment-icon-fallback");
+      expect(fallbacks.map((el) => el.textContent)).toEqual(["CO", "EM"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

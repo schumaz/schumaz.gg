@@ -73,7 +73,7 @@ pub fn handle_schumaz_asset_protocol(uri_path: String, responder: tauri::UriSche
             return;
         };
 
-        let client = build_provider::shared_http_client();
+        let client = build_provider::shared_asset_http_client();
         match storage::serve_cached_or_fetch_asset(paths, client, &target_url).await {
             Ok((bytes, mime)) => {
                 let resp = tauri::http::Response::builder()

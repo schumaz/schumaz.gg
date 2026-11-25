@@ -794,6 +794,13 @@
   object-fit: contain;
 }
 
+.aram-icon-fallback {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  user-select: none;
+}
+
 .aram-aug-tier-badge {
   width: 24px;
   height: 24px;

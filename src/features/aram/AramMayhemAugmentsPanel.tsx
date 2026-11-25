@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../../i18n";
 import { AramAugmentEntry } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
@@ -9,6 +10,86 @@ import {
   getAugmentTierClass,
   getAugmentTierLabel,
 } from "./aramHelpers";
+
+const MAX_ICON_RETRIES = 2;
+const ICON_RETRY_DELAYS_MS = [400, 1000] as const;
+
+function getAugmentInitials(name: string): string {
+  return name.trim().slice(0, 2).toUpperCase() || "?";
+}
+
+interface AugmentIconProps {
+  iconUrl: string;
+  name: string;
+  rarityClassName: string;
+}
+
+function AugmentIcon({ iconUrl, name, rarityClassName }: AugmentIconProps) {
+  const [retryCount, setRetryCount] = useState(0);
+  const [isWaitingRetry, setIsWaitingRetry] = useState(false);
+  const [hasFailed, setHasFailed] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resolvedUrl = resolveCachedAssetUrl(iconUrl);
+
+  useEffect(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setRetryCount(0);
+    setIsWaitingRetry(false);
+    setHasFailed(false);
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [iconUrl]);
+
+  const handleError = () => {
+    if (retryCount < MAX_ICON_RETRIES) {
+      const delayMs = ICON_RETRY_DELAYS_MS[retryCount] ?? 1000;
+      setIsWaitingRetry(true);
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        setRetryCount((prev) => prev + 1);
+        setIsWaitingRetry(false);
+      }, delayMs);
+    } else {
+      setHasFailed(true);
+    }
+  };
+
+  const srcWithRetry =
+    retryCount === 0
+      ? resolvedUrl
+      : `${resolvedUrl}${resolvedUrl.includes("?") ? "&" : "?"}retry=${retryCount}`;
+
+  return (
+    <div className={`aram-augment-icon-frame ${rarityClassName}`}>
+      {!resolvedUrl || hasFailed ? (
+        <span className="aram-icon-fallback" data-testid="aram-augment-icon-fallback">
+          {getAugmentInitials(name)}
+        </span>
+      ) : isWaitingRetry ? (
+        <span className="aram-icon-fallback" aria-hidden="true" />
+      ) : (
+        <img
+          src={srcWithRetry}
+          alt={name}
+          className="aram-augment-icon"
+          loading="lazy"
+          onError={handleError}
+        />
+      )}
+    </div>
+  );
+}
 
 interface AramMayhemAugmentsPanelProps {
   rarityFilter: AugmentRarityFilter;
@@ -97,14 +178,11 @@ export function AramMayhemAugmentsPanel({
             const rarityInfo = getAugmentRarityInfo(aug.rarity, t);
             return (
               <div key={aug.id} className="aram-augment-row">
-                <div className={`aram-augment-icon-frame ${rarityInfo.className}`}>
-                  <img
-                    src={resolveCachedAssetUrl(aug.icon_url)}
-                    alt={aug.name}
-                    className="aram-augment-icon"
-                    loading="lazy"
-                  />
-                </div>
+                <AugmentIcon
+                  iconUrl={aug.icon_url}
+                  name={aug.name}
+                  rarityClassName={rarityInfo.className}
+                />
 
                 <span className={`aram-aug-tier-badge ${getAugmentTierClass(aug.tier)}`}>
                   {getAugmentTierLabel(aug.tier)}

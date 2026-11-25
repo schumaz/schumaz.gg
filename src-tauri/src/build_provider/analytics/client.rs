@@ -19,15 +19,36 @@ pub const OPGG_MCP_ENDPOINT: &str = "https://mcp-api.op.gg/mcp";
 pub const OPGG_REST_API_BASE: &str = "https://lol-api-champion.op.gg/api";
 
 static SHARED_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static SHARED_ASSET_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
-/// Returns a shared, connection-pooled `reqwest::Client` with bounded timeouts.
+/// Returns a shared, connection-pooled `reqwest::Client` with bounded timeouts and HTTP/2 keep-alives.
 pub fn shared_http_client() -> &'static reqwest::Client {
     SHARED_HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .pool_max_idle_per_host(8)
-            .connect_timeout(Duration::from_secs(3))
-            .timeout(Duration::from_secs(10))
-            .tcp_keepalive(Duration::from_secs(30))
+            .pool_idle_timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(4))
+            .timeout(Duration::from_secs(12))
+            .tcp_keepalive(Duration::from_secs(20))
+            .http2_keep_alive_interval(Duration::from_secs(15))
+            .http2_keep_alive_timeout(Duration::from_secs(5))
+            .http2_keep_alive_while_idle(true)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
+
+/// Returns a dedicated HTTP/1.1 `reqwest::Client` for CDN asset downloads to prevent HTTP/2
+/// multiplexing head-of-line stalls across concurrent image requests.
+pub fn shared_asset_http_client() -> &'static reqwest::Client {
+    SHARED_ASSET_HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .http1_only()
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(20))
+            .connect_timeout(Duration::from_secs(4))
+            .timeout(Duration::from_secs(8))
+            .tcp_keepalive(Duration::from_secs(20))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new())
     })

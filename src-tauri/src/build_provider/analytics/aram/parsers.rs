@@ -2,6 +2,7 @@ use super::html_extract::{
     clean_augment_description, clean_augment_description_with_context, decode_next_f_stream,
     extract_balanced_json_array, is_internal_augment_key, normalize_opgg_champion_key, round_pct,
 };
+use super::tooltip_clean::clean_augment_tooltip_with_context;
 use crate::build_provider::ddragon::{has_raw_riot_augment_markup, strip_riot_inline_markup};
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank};
@@ -66,6 +67,8 @@ pub(crate) struct RawMayhemAugmentStat {
     pub popular: f64,
     #[serde(default)]
     pub desc: Option<String>,
+    #[serde(default)]
+    pub tooltip: Option<String>,
 }
 
 pub(crate) fn sort_mayhem_augments(augments: &mut [AramAugmentEntry]) {
@@ -103,11 +106,20 @@ pub(crate) fn hydrate_mayhem_augments(
             let desc = if !meta_desc.is_empty() {
                 meta_desc
             } else {
-                clean_augment_description_with_context(
+                let from_desc = clean_augment_description_with_context(
                     item.desc.as_deref().unwrap_or(""),
                     locale,
                     meta.ability_slot.as_deref(),
-                )
+                );
+                if !from_desc.is_empty() {
+                    from_desc
+                } else {
+                    clean_augment_tooltip_with_context(
+                        item.tooltip.as_deref().unwrap_or(""),
+                        locale,
+                        meta.ability_slot.as_deref(),
+                    )
+                }
             };
 
             Some(AramAugmentEntry {

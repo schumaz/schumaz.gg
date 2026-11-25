@@ -121,10 +121,18 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
             "rarity": "kPrismatic",
             "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/MissingPing_small.png",
             "summaryDescription": ""
+        },
+        {
+            "id": 1154,
+            "nameTRA": "Urf's Champion",
+            "augmentNameId": "ARAM_Quest_UrfsChampion",
+            "rarity": "kPrismatic",
+            "augmentSmallIconPath": "/lol-game-data/assets/ASSETS/UX/Kiwi/Augments/Icons/Quest_UrfsChampion_small.png",
+            "summaryDescription": ""
         }
     ]);
 
-    let mut map = parse_cdragon_cherry_augments(&cherry_json);
+    let (mut map, api_names) = parse_cdragon_cherry_augments_with_api_names(&cherry_json);
     // Internal template 3176 (GoH_PentakillAug_Generic with blank nameTRA) is skipped; "???" is kept
     assert!(!map.contains_key(&3176));
     assert_eq!(map[&1424].name, "???");
@@ -154,11 +162,18 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
                 "name": "Scopiest Weapons",
                 "desc": "Gain @RangeIncrease@ Attack Range.",
                 "dataValues": { "MeleeRangeIncrease": [150.0], "RangedRangeIncrease": [90.0] }
+            },
+            {
+                "id": 154,
+                "name": "Quest: Urf's Champion",
+                "apiName": "Quest_UrfsChampion",
+                "desc": "Score @TakedownsNeeded@ takedowns.",
+                "dataValues": { "TakedownsNeeded": [18.0] }
             }
         ]
     });
 
-    supplement_arena_augment_descriptions(&mut map, &desc_json);
+    supplement_arena_augment_descriptions_with_api_names(&mut map, &api_names, &desc_json, AppLocale::EnUs);
     assert_eq!(map[&48].desc, "Recebe 25% de Cura e Escudo.");
     assert_eq!(map[&1037].desc, "Recebe 25% de Cura e Escudo.");
     // @spell3KeyBind@ -> E, propagated to ARAM Mayhem counterpart 1151 along with ability_slot
@@ -166,6 +181,8 @@ fn test_parse_cherry_augments_and_supplement_descriptions() {
     assert_eq!(map[&1151].ability_slot.as_deref(), Some("E"));
     // @RangeIncrease@ -> Melee/Ranged pair 150/90
     assert_eq!(map[&1115].desc, "Gain 150/90 Attack Range.");
+    // Quest: prefix & apiName fallback populates ARAM Mayhem counterpart 1154
+    assert_eq!(map[&1154].desc, "Score 18 takedowns.");
 }
 
 #[test]

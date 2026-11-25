@@ -198,6 +198,7 @@ fn parse_dsl_augment_tuple(
         performance,
         popular,
         desc,
+        tooltip: None,
     })
 }
 

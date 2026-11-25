@@ -296,3 +296,55 @@ async fn test_parser_skips_internal_key_and_cache_auto_refreshes_placeholder_ent
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn test_tooltip_fallback_populates_blank_desc_augments_and_strips_stat_trackers() {
+    use crate::build_provider::analytics::aram::clean_augment_tooltip_with_context;
+    let meta = |id: i32, name: &str| ArenaAugmentMetadata {
+        id,
+        name: name.to_string(),
+        desc: String::new(),
+        icon_url: format!("https://raw.communitydragon.org/latest/{id}.png"),
+        rarity: 4,
+        ability_slot: None,
+    };
+    let dd = DataDragonCache {
+        version: "16.23.1".to_string(),
+        arena_augments: HashMap::from([
+            (2096, meta(2096, "Lil' Extra Help")),
+            (1071, meta(1071, "Scopier Weapons")),
+            (3123, meta(3123, "Jeweled Bracelet")),
+            (2054, meta(2054, "Tripleshot")),
+            (3060, meta(3060, "One Hit Wonder")),
+            (1415, meta(1415, "Twin Fire")),
+            (1154, meta(1154, "Urf's Champion")),
+        ]),
+        ..Default::default()
+    };
+    let payload = concat!(
+        r#"[{"id":2096,"tier":0,"performance":83.1,"popular":5.3,"desc":"","tooltip":"Gain ? Attack Range and ? <attackSpeed>Attack Speed</attackSpeed> during your <font color='#F0C200'>?</font> duration."},"#,
+        r#"{"id":1071,"tier":0,"performance":82.8,"popular":4.8,"desc":"","tooltip":"Gain ? Attack Range."},"#,
+        r#"{"id":3123,"tier":2,"performance":75.0,"popular":0.9,"desc":"","tooltip":"<font color='#F0C200'>?</font> can <crit>Critically Strike</crit> for 45% increased damage.<br><br>Gain <crit>25% Critical Strike Chance</crit>.<br><br><rules>Damage Dealt to Champions: ?</rules>"},"#,
+        r#"{"id":2054,"tier":2,"performance":74.0,"popular":0.7,"desc":"","tooltip":"Your <font color='#F0C200'>?</font> targets 2 additional enemies.<br><br>Additional Targets Hit: ?<br><rules>Units take less damage from the same spell. </rules>"},"#,
+        r#"{"id":3060,"tier":2,"performance":70.5,"popular":0.5,"desc":"","tooltip":"<font color='#F0C200'>?</font>'s damage is increased by 75%.<br><br><rules>Bonus Damage: ?%</rules>."},"#,
+        r#"{"id":1415,"tier":2,"performance":77.3,"popular":0.4,"desc":"","tooltip":"On ability damage, fire 1 plus ? missiles that deal <magicDamage>? magic damage</magicDamage> each."},"#,
+        r#"{"id":1154,"tier":2,"performance":85.1,"popular":0.3,"desc":"","tooltip":"<font color='#F0C200'>QUEST:</font> Score ? takedowns.<br><br>REWARD: Golden Spatula<br><br>Takedowns: ?"}]"#,
+    );
+    let html = format!(
+        r#"<html><script>self.__next_f.push([1,{}])</script></html>"#,
+        serde_json::to_string(&format!(r#"6c:["$","$L6d",null,{{"data":{payload}}}]"#)).unwrap()
+    );
+    let out = parse_aram_mayhem_augments_html_for_locale(&html, &dd, AppLocale::EnUs).unwrap();
+    let by_id: HashMap<i32, String> = out.into_iter().map(|a| (a.id, a.desc)).collect();
+    assert_eq!(by_id[&2096], "Gain bonus Attack Range and bonus Attack Speed during your Ability duration.");
+    assert_eq!(by_id[&1071], "Gain bonus Attack Range.");
+    assert_eq!(by_id[&3123], "An Ability can Critically Strike for 45% increased damage. Gain 25% Critical Strike Chance.");
+    assert_eq!(by_id[&2054], "Your Ability targets 2 additional enemies. Units take less damage from the same spell.");
+    assert_eq!(by_id[&3060], "An Ability's damage is increased by 75%.");
+    assert_eq!(by_id[&1415], "On ability damage, fire additional missiles that deal magic damage each.");
+    assert_eq!(by_id[&1154], "QUEST: Score takedowns. REWARD: Golden Spatula");
+    assert_eq!(
+        clean_augment_tooltip_with_context("Recebe ? de Alcance e ? de Velocidade durante <font color='#F0C200'>?</font>.<br><br><rules>Dano causado a Campeões: ?</rules>", AppLocale::PtBr, None),
+        "Recebe bônus de Alcance e bônus de Velocidade durante uma habilidade."
+    );
+}
