@@ -67,9 +67,11 @@
 .arena-panel-title-row h2,
 .arena-synergies-header h2 {
   margin: 0;
-  font-size: 0.94rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: var(--title-card-size);
+  font-weight: var(--title-card-weight);
+  line-height: var(--title-card-lh);
+  letter-spacing: var(--title-card-tracking);
+  color: #ffffff;
 }
 
 .arena-count-pill {
@@ -141,23 +143,19 @@
 }
 
 .arena-augment-icon-frame.rarity-silver {
-  border-color: rgba(203, 213, 225, 0.45);
-  background: rgba(203, 213, 225, 0.08);
+  border-color: var(--rarity-silver-border);
+  background: var(--rarity-silver-bg);
 }
 
 .arena-augment-icon-frame.rarity-gold {
-  border-color: rgba(210, 179, 122, 0.78);
-  background: linear-gradient(
-    155deg,
-    rgba(235, 212, 168, 0.16),
-    rgba(9, 22, 26, 0.94) 55%,
-    rgba(162, 126, 70, 0.18)
-  );
+  border-color: var(--rarity-gold-border);
+  background: var(--rarity-gold-bg);
+  box-shadow: inset 0 0 0 1px rgba(254, 240, 138, 0.12);
 }
 
 .arena-augment-icon-frame.rarity-prismatic {
-  border-color: rgba(192, 132, 252, 0.58);
-  background: linear-gradient(135deg, rgba(244, 114, 182, 0.14), rgba(124, 58, 237, 0.18));
+  border-color: var(--rarity-prismatic-border);
+  background: var(--rarity-prismatic-bg);
 }
 
 .arena-augment-icon {

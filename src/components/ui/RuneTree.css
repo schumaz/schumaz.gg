@@ -27,9 +27,11 @@
 
 .runes-card-header h2 {
   margin: 0;
-  font-size: 0.98rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: var(--title-card-size);
+  font-weight: var(--title-card-weight);
+  line-height: var(--title-card-lh);
+  letter-spacing: var(--title-card-tracking);
+  color: #ffffff;
   white-space: nowrap;
 }
 
@@ -205,9 +207,10 @@
 
 .rune-subcard-header h3 {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--title-sub-size);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--title-sub-weight);
+  letter-spacing: var(--title-sub-tracking);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -215,10 +218,10 @@
 
 .rune-subcard-header h4 {
   margin: 0;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--accent-primary-hover);
-  letter-spacing: 0.01em;
+  font-size: var(--title-sub-size);
+  font-weight: var(--title-sub-weight);
+  color: var(--text-primary);
+  letter-spacing: var(--title-sub-tracking);
 }
 
 /* Keystone Highlight (Mirrors Core Trio Highlight) */

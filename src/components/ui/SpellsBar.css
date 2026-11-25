@@ -14,11 +14,10 @@
 }
 
 .spells-inline-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  font-size: var(--title-sub-size);
+  font-weight: var(--title-sub-weight);
+  letter-spacing: var(--title-sub-tracking);
+  color: var(--text-primary);
   white-space: nowrap;
   flex-shrink: 0;
 }

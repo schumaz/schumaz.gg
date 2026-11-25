@@ -24,7 +24,7 @@
   padding: 0 4px;
   font-size: clamp(1.35rem, 4.6vw, 3.25rem);
   font-weight: 800;
-  line-height: 1.02;
+  line-height: 1.12;
   letter-spacing: -0.035em;
   text-transform: uppercase;
   color: #ffffff;
@@ -41,10 +41,10 @@
 .settings-group-card h3 {
   margin-top: 0;
   margin-bottom: 8px;
-  font-size: 1.08rem;
-  color: var(--text-primary);
-  font-weight: 600;
-  letter-spacing: -0.2px;
+  font-size: 1.12rem;
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: -0.015em;
 }
 
 .settings-group-header {

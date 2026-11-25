@@ -262,9 +262,10 @@
 
 .ranked-lane-section-title {
   margin: 0;
-  font-size: 0.94rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
 }
 
 /* Tier Grouping (OP, Tier 1, Tier 2...) */

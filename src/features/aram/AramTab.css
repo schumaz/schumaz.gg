@@ -21,10 +21,11 @@
 
 .aram-chooser-title {
   margin: 0 0 6px 0;
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
+  font-size: clamp(2rem, 3.6vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1.16;
+  color: #ffffff;
+  letter-spacing: -0.03em;
 }
 
 .aram-chooser-subtitle {
@@ -119,9 +120,11 @@
 
 .aram-choice-name {
   margin: 0;
-  font-size: 1.08rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: var(--title-card-size);
+  font-weight: var(--title-card-weight);
+  line-height: var(--title-card-lh);
+  letter-spacing: var(--title-card-tracking);
+  color: #ffffff;
 }
 
 .aram-choice-desc {
@@ -548,10 +551,11 @@
   width: 100%;
   font-size: clamp(2.15rem, 4.1vw, 4.1rem);
   font-weight: 800;
-  line-height: 1.05;
-  padding-bottom: 2px;
+  line-height: 1.16;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.06em;
   letter-spacing: -0.035em;
-  color: var(--text-primary);
+  color: #ffffff;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -560,10 +564,12 @@
 
 .aram-panel-title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--text-primary);
+  font-size: clamp(1.45rem, 2.15vw, 1.85rem);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+  padding-bottom: 0.04em;
+  color: #ffffff;
 }
 
 .aram-scroll-body {
@@ -728,8 +734,7 @@
 }
 
 .aram-rarity-dot.dot-gold {
-  background: linear-gradient(135deg, #f3e6cb, #c8aa6e 55%, #8b6936);
-  box-shadow: 0 0 6px rgba(200, 170, 110, 0.5);
+  background: linear-gradient(135deg, #fde68a, #f5c451 55%, #d97706);
 }
 
 .aram-rarity-dot.dot-prismatic {
@@ -772,19 +777,19 @@
 }
 
 .aram-augment-icon-frame.rarity-silver {
-  border-color: rgba(203, 213, 225, 0.45);
-  background: rgba(203, 213, 225, 0.08);
+  border-color: var(--rarity-silver-border);
+  background: var(--rarity-silver-bg);
 }
 
 .aram-augment-icon-frame.rarity-gold {
-  border-color: rgba(210, 179, 122, 0.78);
-  background: linear-gradient(155deg, rgba(235, 212, 168, 0.16), rgba(9, 22, 26, 0.94) 55%, rgba(162, 126, 70, 0.18));
-  box-shadow: inset 0 0 0 1px rgba(240, 224, 190, 0.2), 0 0 10px rgba(200, 170, 110, 0.14);
+  border-color: var(--rarity-gold-border);
+  background: var(--rarity-gold-bg);
+  box-shadow: inset 0 0 0 1px rgba(254, 240, 138, 0.12);
 }
 
 .aram-augment-icon-frame.rarity-prismatic {
-  border-color: rgba(192, 132, 252, 0.58);
-  background: linear-gradient(135deg, rgba(244, 114, 182, 0.14), rgba(124, 58, 237, 0.18));
+  border-color: var(--rarity-prismatic-border);
+  background: var(--rarity-prismatic-bg);
 }
 
 .aram-augment-icon {
@@ -876,19 +881,21 @@
 }
 
 .aram-rarity-tag.rarity-silver {
-  background: rgba(203, 213, 225, 0.12);
-  color: #e2e8f0;
+  background: var(--rarity-silver-bg);
+  border-color: rgba(203, 213, 225, 0.35);
+  color: var(--rarity-silver-text);
 }
 
 .aram-rarity-tag.rarity-gold {
-  background: linear-gradient(180deg, rgba(229, 203, 160, 0.18), rgba(146, 112, 62, 0.18));
-  border: 1px solid rgba(200, 170, 110, 0.52);
-  color: #f0e0be;
+  background: var(--rarity-gold-tag-bg);
+  border: 1px solid rgba(245, 196, 81, 0.55);
+  color: var(--rarity-gold-text);
 }
 
 .aram-rarity-tag.rarity-prismatic {
-  background: rgba(168, 85, 247, 0.2);
-  color: #e9d5ff;
+  background: var(--rarity-prismatic-bg);
+  border-color: rgba(192, 132, 252, 0.45);
+  color: var(--rarity-prismatic-text);
 }
 
 .aram-rarity-tag.rarity-neutral {

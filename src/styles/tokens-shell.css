@@ -35,6 +35,35 @@
   --accent-warning: #fbbf24;
   --accent-danger: #f87171;
 
+  /* Centralized Editorial Title Scale (1rem = 14px root) */
+  --title-card-size: clamp(1.4rem, 1.95vw, 1.72rem);
+  --title-card-weight: 800;
+  --title-card-lh: 1.15;
+  --title-card-tracking: -0.028em;
+
+  --title-sub-size: 0.9rem;
+  --title-sub-weight: 700;
+  --title-sub-tracking: -0.015em;
+
+  /* Crisp Augment Rarity Surfaces (Shared Across ARAM Mayhem & Arena, Zero Blur) */
+  --rarity-silver-bg: linear-gradient(145deg, rgba(226, 232, 240, 0.16), rgba(148, 163, 184, 0.1));
+  --rarity-silver-border: rgba(203, 213, 225, 0.52);
+  --rarity-silver-text: #e2e8f0;
+
+  --rarity-gold-bg: linear-gradient(145deg, rgba(251, 191, 36, 0.22), rgba(217, 119, 6, 0.15));
+  --rarity-gold-border: rgba(245, 196, 81, 0.72);
+  --rarity-gold-tag-bg: linear-gradient(145deg, rgba(251, 191, 36, 0.2), rgba(217, 119, 6, 0.14));
+  --rarity-gold-text: #fde68a;
+
+  --rarity-prismatic-bg: linear-gradient(
+    145deg,
+    rgba(244, 114, 182, 0.18),
+    rgba(139, 92, 246, 0.2),
+    rgba(56, 189, 248, 0.14)
+  );
+  --rarity-prismatic-border: rgba(192, 132, 252, 0.64);
+  --rarity-prismatic-text: #e9d5ff;
+
   /* Centralized Status Pill Tokens (consistent across all tabs) */
   --status-badge-blur: 16px;
   --status-badge-glass-bg: rgba(19, 20, 26, 0.48);

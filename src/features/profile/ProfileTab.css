@@ -321,9 +321,11 @@
   margin: 0;
   font-size: clamp(2.3rem, 4.6vw, 4.4rem);
   font-weight: 800;
-  line-height: 0.94;
+  line-height: 1.16;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.06em;
   letter-spacing: -0.035em;
-  color: var(--text-primary);
+  color: #ffffff;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -406,25 +408,25 @@
 }
 
 .ranked-queue-label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.45px;
-  font-size: 0.64rem;
-  line-height: 1.1;
+  font-size: 0.74rem;
+  line-height: 1.15;
 }
 
 .ranked-tier-text {
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 0.84rem;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.94rem;
   line-height: 1.2;
   white-space: nowrap;
 }
 
 .ranked-lp-meta {
   color: var(--text-secondary);
-  font-size: 0.69rem;
+  font-size: 0.76rem;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -552,14 +554,19 @@
 .profile-card-header h3,
 .profile-matches-header h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: var(--title-card-size);
+  font-weight: var(--title-card-weight);
+  line-height: var(--title-card-lh);
+  letter-spacing: var(--title-card-tracking);
+  color: #ffffff;
+  min-width: 0;
 }
 
 .profile-card-subtitle {
-  font-size: 0.76rem;
-  color: var(--text-muted);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Top 3 Masteries */
@@ -652,8 +659,8 @@
 }
 
 .mastery-champ-name {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 0.94rem;
+  font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -770,15 +777,22 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  font-size: 0.74rem;
-  line-height: 1.25;
+  font-size: 0.8rem;
+  line-height: 1.28;
+}
+
+.highlighted-champ-text strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .highlighted-label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
-  font-size: 0.65rem;
-  letter-spacing: 0.4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.35px;
 }
 
 .highlighted-sub {
@@ -795,11 +809,10 @@
 }
 
 .recent-streak-label {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  font-weight: 600;
+  font-size: var(--title-sub-size);
+  color: var(--text-primary);
+  letter-spacing: var(--title-sub-tracking);
+  font-weight: var(--title-sub-weight);
 }
 
 .recent-streak-pills {
@@ -997,7 +1010,7 @@
 }
 
 .match-result-tag {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -1011,7 +1024,8 @@
 }
 
 .match-champ-name {
-  font-size: 0.88rem;
+  font-size: 0.94rem;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
@@ -1020,7 +1034,7 @@
   border-radius: 9999px;
   background-color: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border-subtle);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -1028,8 +1042,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.74rem;
-  color: var(--text-muted);
+  font-size: 0.77rem;
+  color: var(--text-secondary);
 }
 
 .match-multikill-pill {
@@ -1050,7 +1064,7 @@
 }
 
 .match-kda-score {
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1061,7 +1075,7 @@
 }
 
 .match-kda-ratio {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -1121,13 +1135,13 @@
 }
 
 .match-detail-stat span {
-  font-size: 0.68rem;
-  color: var(--text-muted);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
 .match-detail-stat strong {
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   color: var(--text-primary);
 }
 

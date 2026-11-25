@@ -220,10 +220,11 @@
   margin: 0;
   font-size: clamp(2.65rem, 5.05vw, 4.4rem);
   font-weight: 800;
-  line-height: 1.05;
-  padding-bottom: 2px;
+  line-height: 1.16;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.06em;
   letter-spacing: -0.035em;
-  color: var(--text-primary);
+  color: #ffffff;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

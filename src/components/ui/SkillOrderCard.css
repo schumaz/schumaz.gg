@@ -27,9 +27,11 @@
 
 .skill-order-header h2 {
   margin: 0;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-size: var(--title-card-size);
+  font-weight: var(--title-card-weight);
+  line-height: var(--title-card-lh);
+  letter-spacing: var(--title-card-tracking);
+  color: #ffffff;
   white-space: nowrap;
 }
 
