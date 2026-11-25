@@ -11,6 +11,7 @@ export type {
   AramMode,
   ArenaAugmentEntry,
   ArenaAugmentEntry_Serialize,
+  ArenaAugmentMetadata,
   ArenaChampionEntry,
   ArenaChampionEntry_Serialize,
   ArenaSynergyEntry,

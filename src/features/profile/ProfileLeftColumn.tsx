@@ -127,17 +127,19 @@ export function ProfileLeftColumn({
             <div className="recent-streak-block" data-testid="recent-streak">
               <span className="recent-streak-label">{t("profile.recentStreak")}</span>
               <div className="recent-streak-pills">
-                {filteredMatches.map((m) => (
-                  <span
-                    key={m.game_id}
-                    className={`streak-pill ${m.win ? "win" : "loss"}`}
-                    title={`${m.champion_name} (${m.kills}/${m.deaths}/${m.assists}) — ${
-                      m.win ? t("profile.victory") : t("profile.defeat")
-                    }`}
-                  >
-                    {m.win ? t("profile.winShort") : t("profile.lossShort")}
-                  </span>
-                ))}
+                {filteredMatches
+                  .filter((m) => !m.remake)
+                  .map((m) => (
+                    <span
+                      key={m.game_id}
+                      className={`streak-pill ${m.win ? "win" : "loss"}`}
+                      title={`${m.champion_name} (${m.kills}/${m.deaths}/${m.assists}) — ${
+                        m.win ? t("profile.victory") : t("profile.defeat")
+                      }`}
+                    >
+                      {m.win ? t("profile.winShort") : t("profile.lossShort")}
+                    </span>
+                  ))}
               </div>
             </div>
           </>

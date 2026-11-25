@@ -3,10 +3,13 @@ use crate::lcu_connector::LcuConnection;
 use crate::models::{CachedProfileResult, DataDragonCache, PlayerProfile};
 
 use super::cache::{
-    collect_matches_item_metadata, get_cached_profile_for_last_summoner,
-    get_cached_profile_for_summoner_id, save_profile_to_dir,
+    get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
 };
 use super::masteries_parser::parse_top_masteries;
+use super::match_metadata::{
+    collect_matches_augment_metadata, collect_matches_item_metadata, collect_matches_rune_metadata,
+    collect_matches_spell_metadata,
+};
 use super::matches_parser::parse_recent_matches_for_locale;
 use super::ranked_parser::parse_ranked_stats_for_locale;
 use super::skins::{
@@ -96,6 +99,10 @@ pub async fn load_player_profile_with_cache(
         .map(|val| parse_recent_matches_for_locale(val, summoner.summoner_id, &cache, 10, locale))
         .unwrap_or_default();
     let item_metadata = collect_matches_item_metadata(&recent_matches, &cache.items);
+    let rune_metadata = collect_matches_rune_metadata(&recent_matches, &cache.runes);
+    let spell_metadata = collect_matches_spell_metadata(&recent_matches, &cache, locale);
+    let augment_metadata =
+        collect_matches_augment_metadata(&recent_matches, &cache.arena_augments);
 
     let profile_icon_url = if !cache.version.is_empty() {
         format!(
@@ -117,6 +124,9 @@ pub async fn load_player_profile_with_cache(
         top_masteries,
         recent_matches,
         item_metadata,
+        rune_metadata,
+        spell_metadata,
+        augment_metadata,
     };
 
     if let Some(paths) = crate::storage::global_paths() {

@@ -26,6 +26,7 @@ export interface TabTranslations {
     recentStreak: string;
     victory: string;
     defeat: string;
+    remake: string;
     noMatchesFilter: string;
     topMasteriesTitle: string;
     topMasteriesSubtitle: string;
@@ -37,9 +38,15 @@ export interface TabTranslations {
     allModes: string;
     spell1Alt: string;
     spell2Alt: string;
+    keystoneAlt: string;
+    secondaryTreeAlt: string;
+    runesAria: string;
+    augmentsAria: string;
+    augmentFallback: string;
     perfectKda: string;
     kdaRatio: string;
     finalItemsAria: string;
+    trinketAria: string;
     detailLevel: string;
     detailDamage: string;
     detailGold: string;

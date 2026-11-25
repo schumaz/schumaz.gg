@@ -9,7 +9,8 @@ use super::super::skins::{
 };
 use super::*;
 use crate::models::{
-    ChampionMetadata, ItemMetadata, RankedQueueStats, RecentMatchInfo, SummonerInfo,
+    ArenaAugmentMetadata, ChampionMetadata, ItemMetadata, RankedQueueStats, RecentMatchInfo,
+    RuneMetadata, SpellMetadata, SummonerInfo,
 };
 
 fn sample_cache() -> DataDragonCache {
@@ -36,11 +37,95 @@ fn sample_cache() -> DataDragonCache {
             plaintext: "Massively increases Ability Power".to_string(),
         },
     );
+    items.insert(
+        3340,
+        ItemMetadata {
+            id: 3340,
+            name: "Stealth Ward".to_string(),
+            gold_total: 0,
+            stats: vec![],
+            plaintext: "Places an invisible ward.".to_string(),
+        },
+    );
+
+    let mut runes = HashMap::new();
+    runes.insert(
+        8112,
+        RuneMetadata {
+            id: 8112,
+            key: "Electrocute".to_string(),
+            name: "Electrocute".to_string(),
+            icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/Domination/Electrocute/Electrocute.png".to_string(),
+            short_desc: "Burst damage on 3 hits.".to_string(),
+        },
+    );
+    runes.insert(
+        8100,
+        RuneMetadata {
+            id: 8100,
+            key: "Domination".to_string(),
+            name: "Domination".to_string(),
+            icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png".to_string(),
+            short_desc: String::new(),
+        },
+    );
+    runes.insert(
+        8200,
+        RuneMetadata {
+            id: 8200,
+            key: "Sorcery".to_string(),
+            name: "Sorcery".to_string(),
+            icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7202_Sorcery.png".to_string(),
+            short_desc: String::new(),
+        },
+    );
+
+    let mut spells = HashMap::new();
+    spells.insert(
+        4,
+        SpellMetadata {
+            id: 4,
+            name: "Flash".to_string(),
+            icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/SummonerFlash.png"
+                .to_string(),
+            description: "Teleports your champion.".to_string(),
+            cooldown_secs: Some(300),
+            ..Default::default()
+        },
+    );
+    spells.insert(
+        14,
+        SpellMetadata {
+            id: 14,
+            name: "Ignite".to_string(),
+            icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/SummonerDot.png"
+                .to_string(),
+            description: "Ignites target enemy.".to_string(),
+            cooldown_secs: Some(180),
+            ..Default::default()
+        },
+    );
+
+    let mut arena_augments = HashMap::new();
+    arena_augments.insert(
+        501,
+        ArenaAugmentMetadata {
+            id: 501,
+            name: "Eureka".to_string(),
+            desc: "Gain Ability Haste equal to AP.".to_string(),
+            icon_url: "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/ux/cherry/augments/icons/eureka_small.png".to_string(),
+            rarity: 8,
+            ability_slot: None,
+        },
+    );
 
     DataDragonCache {
         version: "16.22.1".to_string(),
         champions,
+        runes,
+        spells,
         items,
+        arena_augments,
         ..Default::default()
     }
 }
@@ -129,14 +214,34 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
             losses: 8,
         }],
         top_masteries: vec![],
-        recent_matches: vec![RecentMatchInfo {
-            game_id: 42,
-            queue_id: 420,
-            champion_id: 103,
-            item_ids: vec![3089, 0, 0, 0, 0, 0],
-            ..Default::default()
-        }],
+        recent_matches: vec![
+            RecentMatchInfo {
+                game_id: 42,
+                queue_id: 420,
+                champion_id: 103,
+                spell1_id: 4,
+                spell2_id: 14,
+                primary_rune_id: 8112,
+                primary_style_id: 8100,
+                sub_style_id: 8200,
+                item_ids: vec![3089, 0, 0, 0, 0, 0],
+                trinket_id: 3340,
+                ..Default::default()
+            },
+            RecentMatchInfo {
+                game_id: 43,
+                queue_id: 1700,
+                game_mode_key: "arena".to_string(),
+                champion_id: 103,
+                arena_placement: Some(1),
+                augment_ids: vec![501],
+                ..Default::default()
+            },
+        ],
         item_metadata: HashMap::new(),
+        rune_metadata: HashMap::new(),
+        spell_metadata: HashMap::new(),
+        augment_metadata: HashMap::new(),
     };
 
     save_profile_to_dir(&profile_dir, &profile, "16.22.1").unwrap();
@@ -147,7 +252,7 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
     let mut loaded_stale = load_profile_from_dir(&profile_dir, 55501, now + 400).unwrap();
     assert!(loaded_stale.is_stale);
 
-    // Relocalize cached profile to en_US -> rehydrates localized item tooltip metadata
+    // Relocalize cached profile to en_US -> rehydrates item (incl. trinket), rune, spell & augment metadata
     let dd = sample_cache();
     relocalize_player_profile(&mut loaded_stale.profile, AppLocale::EnUs, Some(&dd));
     assert_eq!(loaded_stale.profile.ranked_stats[0].tier_label, "Emerald");
@@ -158,6 +263,41 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
             .get(&3089)
             .map(|m| m.name.as_str()),
         Some("Rabadon's Deathcap")
+    );
+    assert_eq!(
+        loaded_stale
+            .profile
+            .item_metadata
+            .get(&3340)
+            .map(|m| m.name.as_str()),
+        Some("Stealth Ward")
+    );
+    assert_eq!(
+        loaded_stale
+            .profile
+            .rune_metadata
+            .get(&8112)
+            .map(|m| m.name.as_str()),
+        Some("Electrocute")
+    );
+    assert!(!loaded_stale.profile.recent_matches[0]
+        .primary_rune_icon_url
+        .is_empty());
+    assert_eq!(
+        loaded_stale
+            .profile
+            .spell_metadata
+            .get(&14)
+            .map(|m| m.name.as_str()),
+        Some("Ignite")
+    );
+    assert_eq!(
+        loaded_stale
+            .profile
+            .augment_metadata
+            .get(&501)
+            .map(|m| m.name.as_str()),
+        Some("Eureka")
     );
 
     // Still valid after 25h (within 48h TTL)

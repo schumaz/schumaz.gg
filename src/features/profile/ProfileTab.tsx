@@ -155,6 +155,9 @@ export function ProfileTab({
               onSelectMode={handleSelectMode}
               glassBlurStyle={glassBlurStyle}
               itemMetadata={profile?.item_metadata}
+              runeMetadata={profile?.rune_metadata}
+              spellMetadata={profile?.spell_metadata}
+              augmentMetadata={profile?.augment_metadata}
             />
           </div>
         </div>

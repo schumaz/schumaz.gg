@@ -311,6 +311,39 @@ export type ArenaAugmentEntry_Serialize = {
 	pick_rate: number | null,
 };
 
+/**  Localized Arena (`CHERRY` / 3x6) augment catalog entry from `cherry-augments.json`. */
+export type ArenaAugmentMetadata = ArenaAugmentMetadata_Serialize | ArenaAugmentMetadata_Deserialize;
+
+/**  Localized Arena (`CHERRY` / 3x6) augment catalog entry from `cherry-augments.json`. */
+export type ArenaAugmentMetadata_Deserialize = {
+	id: number,
+	name: string,
+	desc?: string,
+	icon_url?: string,
+	/**  Canonical rarity matching OP.GG (`1` = Silver, `4` = Gold, `8` = Prismatic). */
+	rarity?: number,
+	/**
+	 *  Optional fixed ability slot (`"Q"`, `"W"`, `"E"`, `"R"`) derived from Riot's
+	 *  `augmentNameId` or `@spellNKeyBind@` tokens when known.
+	 */
+	ability_slot?: string | null,
+};
+
+/**  Localized Arena (`CHERRY` / 3x6) augment catalog entry from `cherry-augments.json`. */
+export type ArenaAugmentMetadata_Serialize = {
+	id: number,
+	name: string,
+	desc: string,
+	icon_url: string,
+	/**  Canonical rarity matching OP.GG (`1` = Silver, `4` = Gold, `8` = Prismatic). */
+	rarity: number,
+	/**
+	 *  Optional fixed ability slot (`"Q"`, `"W"`, `"E"`, `"R"`) derived from Riot's
+	 *  `augmentNameId` or `@spellNKeyBind@` tokens when known.
+	 */
+	ability_slot?: string,
+};
+
 /**  Ranked champion entry in the Arena (`CHERRY` / 3x6) tier list. */
 export type ArenaChampionEntry = ArenaChampionEntry_Serialize | ArenaChampionEntry_Deserialize;
 
@@ -892,8 +925,11 @@ export type PlayerProfile_Deserialize = {
 	background_splash_fallback_url: string,
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
-	recent_matches: RecentMatchInfo[],
+	recent_matches: RecentMatchInfo_Deserialize[],
 	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
+	rune_metadata?: { [key in number]: RuneMetadata_Deserialize },
+	spell_metadata?: { [key in number]: SpellMetadata_Deserialize },
+	augment_metadata?: { [key in number]: ArenaAugmentMetadata_Deserialize },
 };
 
 /**  Aggregated player profile payload for the Profile tab. */
@@ -906,8 +942,11 @@ export type PlayerProfile_Serialize = {
 	background_splash_fallback_url: string,
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
-	recent_matches: RecentMatchInfo[],
+	recent_matches: RecentMatchInfo_Serialize[],
 	item_metadata: { [key in number]: ItemMetadata_Serialize },
+	rune_metadata: { [key in number]: RuneMetadata_Serialize },
+	spell_metadata: { [key in number]: SpellMetadata_Serialize },
+	augment_metadata: { [key in number]: ArenaAugmentMetadata_Serialize },
 };
 
 export type ProfileAppearanceSettings = {
@@ -989,7 +1028,10 @@ export type RankedTierListResponse_Serialize = {
 };
 
 /**  Individual recent match entry from LCU match history (Practice Tool strictly excluded). */
-export type RecentMatchInfo = {
+export type RecentMatchInfo = RecentMatchInfo_Serialize | RecentMatchInfo_Deserialize;
+
+/**  Individual recent match entry from LCU match history (Practice Tool strictly excluded). */
+export type RecentMatchInfo_Deserialize = {
 	game_id: number,
 	queue_id: number,
 	game_mode_key: string,
@@ -998,6 +1040,8 @@ export type RecentMatchInfo = {
 	champion_name: string,
 	champion_icon_url: string,
 	win: boolean,
+	remake?: boolean,
+	arena_placement?: number | null,
 	kills: number,
 	deaths: number,
 	assists: number,
@@ -1008,8 +1052,61 @@ export type RecentMatchInfo = {
 	spell1_icon_url: string,
 	spell2_id: number,
 	spell2_icon_url: string,
+	primary_rune_id?: number,
+	primary_rune_icon_url?: string,
+	primary_style_id?: number,
+	primary_style_icon_url?: string,
+	sub_style_id?: number,
+	sub_style_icon_url?: string,
+	augment_ids?: number[],
 	item_ids: number[],
 	item_icon_urls: string[],
+	trinket_id?: number,
+	trinket_icon_url?: string,
+	gold_earned: number,
+	total_damage_dealt_to_champions: number,
+	vision_score: number,
+	wards_placed: number,
+	champ_level: number,
+	double_kills: number,
+	triple_kills: number,
+	quadra_kills: number,
+	penta_kills: number,
+};
+
+/**  Individual recent match entry from LCU match history (Practice Tool strictly excluded). */
+export type RecentMatchInfo_Serialize = {
+	game_id: number,
+	queue_id: number,
+	game_mode_key: string,
+	game_mode_label: string,
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	win: boolean,
+	remake: boolean,
+	arena_placement: number | null,
+	kills: number,
+	deaths: number,
+	assists: number,
+	cs: number,
+	game_duration_secs: number,
+	game_creation_ms: number,
+	spell1_id: number,
+	spell1_icon_url: string,
+	spell2_id: number,
+	spell2_icon_url: string,
+	primary_rune_id: number,
+	primary_rune_icon_url: string,
+	primary_style_id: number,
+	primary_style_icon_url: string,
+	sub_style_id: number,
+	sub_style_icon_url: string,
+	augment_ids: number[],
+	item_ids: number[],
+	item_icon_urls: string[],
+	trinket_id: number,
+	trinket_icon_url: string,
 	gold_earned: number,
 	total_damage_dealt_to_champions: number,
 	vision_score: number,

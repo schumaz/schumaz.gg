@@ -1,10 +1,14 @@
 import { CSSProperties, useState } from "react";
 import { RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
-import { resolveCachedAssetUrl } from "../../utils/assets";
-import { ItemMetadataMap } from "../../components/ui";
-import { MatchItemsGrid } from "./MatchItemsGrid";
-import { AvailableModeItem, formatDuration, getMultiKillBadge } from "./profileHelpers";
+import {
+  AugmentMetadataMap,
+  ItemMetadataMap,
+  RuneMetadataMap,
+  SpellMetadataMap,
+} from "../../components/ui";
+import { MatchRowSummary } from "./MatchRowSummary";
+import { AvailableModeItem } from "./profileHelpers";
 
 interface ProfileMatchesCardProps {
   validMatches: RecentMatchInfo[];
@@ -14,6 +18,9 @@ interface ProfileMatchesCardProps {
   onSelectMode: (mode: string) => void;
   glassBlurStyle: CSSProperties;
   itemMetadata?: ItemMetadataMap;
+  runeMetadata?: RuneMetadataMap;
+  spellMetadata?: SpellMetadataMap;
+  augmentMetadata?: AugmentMetadataMap;
 }
 
 export function ProfileMatchesCard({
@@ -24,8 +31,11 @@ export function ProfileMatchesCard({
   onSelectMode,
   glassBlurStyle,
   itemMetadata,
+  runeMetadata,
+  spellMetadata,
+  augmentMetadata,
 }: ProfileMatchesCardProps) {
-  const { t, formatCompactNumber, formatRelativeTime } = useTranslation();
+  const { t, formatCompactNumber } = useTranslation();
   const [expandedGameId, setExpandedGameId] = useState<number | null>(null);
 
   return (
@@ -76,22 +86,14 @@ export function ProfileMatchesCard({
           {filteredMatches.length > 0 ? (
             filteredMatches.map((match) => {
               const isExpanded = expandedGameId === match.game_id;
-              const multiKill = getMultiKillBadge(match);
               const mins = Math.max(1, match.game_duration_secs / 60);
               const csPerMin = (match.cs / mins).toFixed(1);
-              const kdaText =
-                match.deaths === 0
-                  ? t("profile.perfectKda")
-                  : t("profile.kdaRatio", {
-                      ratio: ((match.kills + match.assists) / match.deaths).toFixed(2),
-                    });
+              const resultClass = match.remake ? "remake" : match.win ? "win" : "loss";
 
               return (
                 <div
                   key={match.game_id}
-                  className={`match-card ${match.win ? "win" : "loss"} ${
-                    isExpanded ? "expanded" : ""
-                  }`}
+                  className={`match-card ${resultClass} ${isExpanded ? "expanded" : ""}`}
                   data-testid={`match-item-${match.game_id}`}
                 >
                   <button
@@ -100,73 +102,12 @@ export function ProfileMatchesCard({
                     onClick={() => setExpandedGameId(isExpanded ? null : match.game_id)}
                     aria-expanded={isExpanded}
                   >
-                    <div className="match-champ-col">
-                      {match.champion_icon_url ? (
-                        <div className="dd-icon-frame match-champ-frame">
-                          <img
-                            src={resolveCachedAssetUrl(match.champion_icon_url)}
-                            alt={match.champion_name}
-                            className="match-champ-icon"
-                          />
-                        </div>
-                      ) : (
-                        <div className="match-champ-placeholder">
-                          {match.champion_name.charAt(0)}
-                        </div>
-                      )}
-                      <div className="match-spells-col">
-                        {match.spell1_icon_url && (
-                          <div className="dd-icon-frame match-spell-frame">
-                            <img
-                              src={resolveCachedAssetUrl(match.spell1_icon_url)}
-                              alt={t("profile.spell1Alt")}
-                              className="match-spell-icon"
-                            />
-                          </div>
-                        )}
-                        {match.spell2_icon_url && (
-                          <div className="dd-icon-frame match-spell-frame">
-                            <img
-                              src={resolveCachedAssetUrl(match.spell2_icon_url)}
-                              alt={t("profile.spell2Alt")}
-                              className="match-spell-icon"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="match-main-info">
-                      <div className="match-top-line">
-                        <span className={`match-result-tag ${match.win ? "win" : "loss"}`}>
-                          {match.win ? t("profile.victory") : t("profile.defeat")}
-                        </span>
-                        <strong className="match-champ-name">{match.champion_name}</strong>
-                        <span className="match-mode-pill">{match.game_mode_label}</span>
-                      </div>
-                      <div className="match-sub-line">
-                        <span>{formatDuration(match.game_duration_secs)}</span>
-                        {match.game_creation_ms > 0 && (
-                          <span>· {formatRelativeTime(match.game_creation_ms)}</span>
-                        )}
-                        {multiKill && <span className="match-multikill-pill">{multiKill}</span>}
-                      </div>
-                    </div>
-
-                    <div className="match-kda-col">
-                      <span className="match-kda-score">
-                        {match.kills} / <span className="deaths">{match.deaths}</span> /{" "}
-                        {match.assists}
-                      </span>
-                      <span className="match-kda-ratio">
-                        {kdaText} · {match.cs} CS
-                      </span>
-                    </div>
-
-                    <MatchItemsGrid
-                      itemIds={match.item_ids}
-                      itemIconUrls={match.item_icon_urls}
+                    <MatchRowSummary
+                      match={match}
                       itemMetadata={itemMetadata}
+                      runeMetadata={runeMetadata}
+                      spellMetadata={spellMetadata}
+                      augmentMetadata={augmentMetadata}
                     />
                   </button>
 

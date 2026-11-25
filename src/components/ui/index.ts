@@ -10,6 +10,7 @@ export * from "./NavigationDock";
 export * from "./BuildSelector";
 export * from "./Tooltip";
 export * from "./BuildTooltips";
+export * from "./MatchTooltips";
 export * from "./SpellsBar";
 export * from "./SkillOrderCard";
 export * from "./SkillOrderPopover";

@@ -1,4 +1,4 @@
-import { PlayerProfile, RecentMatchInfo } from "../../types";
+import { AppLocale, PlayerProfile, RecentMatchInfo } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 
 const CDRAGON_RANKED_EMBLEM_BASE =
@@ -100,9 +100,26 @@ export function computeAvailableModes(validMatches: RecentMatchInfo[]): Availabl
   return Array.from(modeMap.values());
 }
 
+export function formatArenaPlacement(placement: number, locale: AppLocale): string {
+  if (locale === "pt_BR") {
+    return `${placement}º`;
+  }
+  if (placement === 1) return "1st";
+  if (placement === 2) return "2nd";
+  if (placement === 3) return "3rd";
+  return `${placement}th`;
+}
+
+export function getArenaPlacementTone(placement: number): "gold" | "top" | "bottom" {
+  if (placement === 1) return "gold";
+  if (placement <= 4) return "top";
+  return "bottom";
+}
+
 export function computeWinLossStats(filteredMatches: RecentMatchInfo[]): WinLossStats {
-  const total = filteredMatches.length;
-  const wins = filteredMatches.filter((m) => m.win).length;
+  const counted = filteredMatches.filter((m) => !m.remake);
+  const total = counted.length;
+  const wins = counted.filter((m) => m.win).length;
   const losses = total - wins;
   const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
   return { total, wins, losses, winRate };
@@ -111,9 +128,10 @@ export function computeWinLossStats(filteredMatches: RecentMatchInfo[]): WinLoss
 export function computeHighlightedChampion(
   filteredMatches: RecentMatchInfo[]
 ): HighlightedChampion | null {
-  if (filteredMatches.length === 0) return null;
+  const counted = filteredMatches.filter((m) => !m.remake);
+  if (counted.length === 0) return null;
   const byChamp = new Map<number, HighlightedChampion>();
-  for (const m of filteredMatches) {
+  for (const m of counted) {
     const kda = m.deaths === 0 ? m.kills + m.assists : (m.kills + m.assists) / m.deaths;
     const cur = byChamp.get(m.champion_id);
     if (cur) {

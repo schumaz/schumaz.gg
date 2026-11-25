@@ -145,6 +145,33 @@
   border: 1px solid rgba(124, 58, 237, 0.35);
 }
 
+.rich-tooltip-rarity {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+}
+
+.rich-tooltip-rarity.rarity-silver {
+  background: var(--rarity-silver-bg);
+  border-color: var(--rarity-silver-border);
+  color: var(--rarity-silver-text);
+}
+
+.rich-tooltip-rarity.rarity-gold {
+  background: var(--rarity-gold-tag-bg);
+  border-color: var(--rarity-gold-border);
+  color: var(--rarity-gold-text);
+}
+
+.rich-tooltip-rarity.rarity-prismatic {
+  background: var(--rarity-prismatic-bg);
+  border-color: var(--rarity-prismatic-border);
+  color: var(--rarity-prismatic-text);
+}
+
 .rich-tooltip-subtitle {
   font-size: 0.7rem;
   font-weight: 600;

@@ -1,6 +1,10 @@
 use crate::build_provider::ddragon::resolve_spell_metadata_for_locale;
 use crate::models::{AppLocale, DataDragonCache, MAP_ARENA, RecentMatchInfo};
 
+use super::match_metadata::{
+    extract_arena_placement, extract_match_augments, extract_match_runes, extract_match_trinket,
+    is_remake_match,
+};
 use super::queue_mapper::map_queue_mode_for_locale;
 
 /// Returns true when an LCU match history entry is Practice Tool and must be strictly excluded.
@@ -166,6 +170,16 @@ pub fn parse_recent_matches_for_locale(
                     .get("neutralMinionsKilled")
                     .and_then(|v| v.as_i64())
                     .unwrap_or(0);
+            let game_duration_secs = game
+                .get("gameDuration")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let remake = is_remake_match(stats, game_duration_secs, kills, deaths, assists);
+            let arena_placement = extract_arena_placement(stats, &game_mode_key);
+            let runes = extract_match_runes(stats, cache);
+            let augment_ids =
+                extract_match_augments(stats, queue_id, &game_mode_key, runes.primary_rune_id);
+            let (trinket_id, trinket_icon_url) = extract_match_trinket(stats, &cache.version);
 
             Some(RecentMatchInfo {
                 game_id,
@@ -176,14 +190,13 @@ pub fn parse_recent_matches_for_locale(
                 champion_name,
                 champion_icon_url,
                 win: stats.get("win").and_then(|v| v.as_bool()).unwrap_or(false),
+                remake,
+                arena_placement,
                 kills,
                 deaths,
                 assists,
                 cs: minions as i32,
-                game_duration_secs: game
-                    .get("gameDuration")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0),
+                game_duration_secs,
                 game_creation_ms: game
                     .get("gameCreation")
                     .and_then(|v| v.as_i64())
@@ -192,8 +205,17 @@ pub fn parse_recent_matches_for_locale(
                 spell1_icon_url,
                 spell2_id,
                 spell2_icon_url,
+                primary_rune_id: runes.primary_rune_id,
+                primary_rune_icon_url: runes.primary_rune_icon_url,
+                primary_style_id: runes.primary_style_id,
+                primary_style_icon_url: runes.primary_style_icon_url,
+                sub_style_id: runes.sub_style_id,
+                sub_style_icon_url: runes.sub_style_icon_url,
+                augment_ids,
                 item_ids,
                 item_icon_urls,
+                trinket_id,
+                trinket_icon_url,
                 gold_earned: stats
                     .get("goldEarned")
                     .and_then(|v| v.as_i64())

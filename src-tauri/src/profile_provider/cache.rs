@@ -1,11 +1,12 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::build_provider;
-use crate::models::{
-    AppLocale, CachedProfileResult, DataDragonCache, ItemMetadata, PlayerProfile, RecentMatchInfo,
-};
+use crate::models::{AppLocale, CachedProfileResult, DataDragonCache, PlayerProfile};
 
+use super::match_metadata::{
+    collect_matches_augment_metadata, collect_matches_item_metadata, collect_matches_rune_metadata,
+    collect_matches_spell_metadata, resolve_allowed_rune_icon,
+};
 use super::queue_mapper::map_queue_mode_for_locale;
 use super::ranked_parser::translate_ranked_tier_for_locale;
 use super::skins::{
@@ -53,27 +54,8 @@ pub fn load_profile_from_dir(
     })
 }
 
-/// Collects deduplicated DataDragon item metadata for all non-zero item IDs in `matches`.
-pub fn collect_matches_item_metadata(
-    matches: &[RecentMatchInfo],
-    items_catalog: &HashMap<i32, ItemMetadata>,
-) -> HashMap<i32, ItemMetadata> {
-    let mut resolved = HashMap::new();
-    for m in matches {
-        for &item_id in &m.item_ids {
-            if item_id > 0
-                && !resolved.contains_key(&item_id)
-                && let Some(meta) = items_catalog.get(&item_id)
-            {
-                resolved.insert(item_id, meta.clone());
-            }
-        }
-    }
-    resolved
-}
-
 /// Re-localizes cached ranked tier labels, queue mode labels, champion names,
-/// item tooltip metadata, and cached skin name in-memory when switching UI language without waiting on LCU.
+/// item/rune/spell/augment tooltip metadata, and cached skin name in-memory when switching UI language without waiting on LCU.
 pub fn relocalize_player_profile(
     profile: &mut PlayerProfile,
     locale: AppLocale,
@@ -102,6 +84,29 @@ pub fn relocalize_player_profile(
         if !cache.items.is_empty() {
             profile.item_metadata =
                 collect_matches_item_metadata(&profile.recent_matches, &cache.items);
+        }
+        if !cache.runes.is_empty() {
+            for m in &mut profile.recent_matches {
+                if m.primary_rune_icon_url.is_empty() && m.primary_rune_id > 0 {
+                    m.primary_rune_icon_url = resolve_allowed_rune_icon(cache, m.primary_rune_id);
+                }
+                if m.primary_style_icon_url.is_empty() && m.primary_style_id > 0 {
+                    m.primary_style_icon_url = resolve_allowed_rune_icon(cache, m.primary_style_id);
+                }
+                if m.sub_style_icon_url.is_empty() && m.sub_style_id > 0 {
+                    m.sub_style_icon_url = resolve_allowed_rune_icon(cache, m.sub_style_id);
+                }
+            }
+            profile.rune_metadata =
+                collect_matches_rune_metadata(&profile.recent_matches, &cache.runes);
+        }
+        if !cache.spells.is_empty() {
+            profile.spell_metadata =
+                collect_matches_spell_metadata(&profile.recent_matches, cache, locale);
+        }
+        if !cache.arena_augments.is_empty() {
+            profile.augment_metadata =
+                collect_matches_augment_metadata(&profile.recent_matches, &cache.arena_augments);
         }
     }
 

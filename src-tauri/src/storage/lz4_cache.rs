@@ -5,7 +5,7 @@ use std::path::Path;
 
 use super::paths::{atomic_write, now_unix_secs, touch_mtime};
 
-pub const CACHE_SCHEMA_VERSION: u32 = 9;
+pub const CACHE_SCHEMA_VERSION: u32 = 10;
 pub const OPGG_CACHE_TTL_SECS: u64 = 48 * 3600;
 /// Shorter disk TTL (3h) for patch-version lists (`versions_{region}.lz4` and `arena/versions.lz4`)
 /// so app restarts detect new patches quickly (< 500 bytes) and invalidate stale builds immediately.
