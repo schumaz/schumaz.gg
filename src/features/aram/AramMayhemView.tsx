@@ -100,7 +100,7 @@ export function AramMayhemView({
                 >
                   <span className="aram-rank-num">#{champ.rank}</span>
                   <div className="dd-icon-frame aram-champ-frame">
-                    <img src={resolveCachedAssetUrl(champ.icon_url)} alt={champ.name} className="aram-champ-avatar" loading="lazy" />
+                    <img src={resolveCachedAssetUrl(champ.icon_url)} alt={champ.name} className="aram-champ-avatar" loading="lazy" decoding="async" />
                   </div>
                   <span className="aram-champ-name">{champ.name}</span>
                   <span className={`aram-tier-pill ${getChampionTierClass(champ.tier)}`}>

@@ -163,6 +163,9 @@ impl WsActorDriver for LiveWsActorDriver<'_> {
     async fn on_lcu_disconnected(&self) {
         clear_active_session(self.ctx, false).await;
         self.ctx.last_gameflow_phase.lock().await.clear();
+        if super::reconcile_state::set_in_game_phase_active(false) {
+            crate::app_bootstrap::sync_main_webview_power_state(&self.ctx.app_handle);
+        }
     }
 }
 

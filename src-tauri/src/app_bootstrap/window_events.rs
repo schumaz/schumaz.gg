@@ -1,6 +1,6 @@
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
 };
 use std::time::Duration;
 
@@ -9,23 +9,32 @@ use tauri_specta::Event;
 
 use crate::{models, storage};
 
+use super::webview_power::{
+    UNSET_POWER_POLICY, apply_webview_power_policy_if_changed, evaluate_webview_power_policy,
+    is_window_minimized_or_hidden,
+};
+
 const WIN32_MINIMIZED_COORD_THRESHOLD: i32 = -30_000;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WindowRuntimeState {
-    pub was_paused: Arc<AtomicBool>,
+    pub was_minimized: Arc<AtomicBool>,
     pub restoring_window: Arc<AtomicBool>,
     pub window_tracker: Arc<Mutex<storage::WindowSettings>>,
     pub window_save_seq: Arc<AtomicU64>,
+    pub last_power_policy: Arc<AtomicU8>,
 }
 
-/// Returns true when the main window should pause UI animations (minimized, hidden, or unfocused).
-pub fn should_pause_window_animations(
-    is_minimized: bool,
-    is_visible: bool,
-    is_focused: bool,
-) -> bool {
-    is_minimized || !is_visible || !is_focused
+impl Default for WindowRuntimeState {
+    fn default() -> Self {
+        Self {
+            was_minimized: Arc::new(AtomicBool::new(false)),
+            restoring_window: Arc::new(AtomicBool::new(false)),
+            window_tracker: Arc::new(Mutex::new(storage::WindowSettings::default())),
+            window_save_seq: Arc::new(AtomicU64::new(0)),
+            last_power_policy: Arc::new(AtomicU8::new(UNSET_POWER_POLICY)),
+        }
+    }
 }
 
 /// Returns true when closing the main window should terminate the application process.
@@ -159,10 +168,23 @@ pub fn handle_window_event(
             tauri::WindowEvent::Focused(focused) => *focused,
             _ => window.is_focused().unwrap_or(true),
         };
-        let paused = should_pause_window_animations(is_minimized, is_visible, is_focused);
-        let prev = state.was_paused.swap(paused, Ordering::SeqCst);
-        if prev != paused {
-            let _ = models::WindowMinimizedChanged(paused).emit(window.app_handle());
+        let minimized = is_window_minimized_or_hidden(is_minimized, is_visible);
+        let prev = state.was_minimized.swap(minimized, Ordering::SeqCst);
+        if prev != minimized {
+            let _ = models::WindowMinimizedChanged(minimized).emit(window.app_handle());
+        }
+        if let Some(webview_win) = window.app_handle().get_webview_window("main") {
+            let policy = evaluate_webview_power_policy(
+                is_minimized,
+                is_visible,
+                is_focused,
+                crate::ws_listener::is_in_game_phase_active(),
+            );
+            apply_webview_power_policy_if_changed(
+                &webview_win,
+                &state.last_power_policy,
+                policy,
+            );
         }
     }
 
@@ -209,12 +231,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_should_pause_window_animations_when_minimized_hidden_or_unfocused() {
-        assert!(!should_pause_window_animations(false, true, true));
-        assert!(should_pause_window_animations(true, true, true));
-        assert!(should_pause_window_animations(false, false, true));
-        assert!(should_pause_window_animations(false, true, false));
-        assert!(should_pause_window_animations(true, false, false));
+    fn test_is_window_minimized_or_hidden_preserves_unfocused_visible_window() {
+        assert!(!is_window_minimized_or_hidden(false, true));
+        assert!(is_window_minimized_or_hidden(true, true));
+        assert!(is_window_minimized_or_hidden(false, false));
+        assert!(is_window_minimized_or_hidden(true, false));
     }
 
     #[test]

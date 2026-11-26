@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { ActiveTab } from "./types";
 import type { useAppUpdater } from "./hooks/useAppUpdater";
 import { SettingsTab, type usePreferences } from "./features/settings";
@@ -35,6 +36,21 @@ export function AppTabsViewport({
   onSelectTab,
 }: AppTabsViewportProps) {
   const { locale, preferences, navigationState, updateNavigationState } = prefs;
+  const prevTabRef = useRef<ActiveTab>(activeTab);
+  const [fadingTab, setFadingTab] = useState<ActiveTab | null>(null);
+
+  useEffect(() => {
+    const prevTab = prevTabRef.current;
+    if (prevTab === activeTab) {
+      return;
+    }
+    prevTabRef.current = activeTab;
+    setFadingTab(prevTab);
+    const timer = window.setTimeout(() => {
+      setFadingTab((current) => (current === prevTab ? null : current));
+    }, 240);
+    return () => window.clearTimeout(timer);
+  }, [activeTab]);
 
   const handleOpenChampionBuild = (target: RankedChampionShortcut) => {
     ranked.openChampionShortcut(target);
@@ -42,7 +58,11 @@ export function AppTabsViewport({
   };
 
   return (
-    <div className="tabs-viewport" aria-hidden={isBooting || undefined}>
+    <div
+      className="tabs-viewport"
+      data-fading-tab={fadingTab ?? undefined}
+      aria-hidden={isBooting || undefined}
+    >
       <ProfileTab
         summoner={lcu.summoner}
         profile={playerProfile.profile}

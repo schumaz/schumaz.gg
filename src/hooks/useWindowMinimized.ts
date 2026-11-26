@@ -1,5 +1,18 @@
 import { useEffect, useState } from "react";
+import { isInGamePhase } from "../features/champ-select/lcuBuildActions";
 import { windowIpc, type UnlistenFn } from "../services/ipc";
+
+export type WindowGraphicsMode = "focused" | "unfocused" | "zero-gpu";
+
+export interface WindowGraphicsState {
+  mode: WindowGraphicsMode;
+  isMinimizedOrHidden: boolean;
+  isWindowUnfocused: boolean;
+  isInGame: boolean;
+  isZeroGpu: boolean;
+  animationsPaused: boolean;
+  shellClassName: string;
+}
 
 function getDocumentHidden(): boolean {
   if (typeof document === "undefined") return false;
@@ -14,7 +27,26 @@ function getWindowUnfocused(): boolean {
   return false;
 }
 
-export function useWindowMinimized(): boolean {
+export function resolveWindowGraphicsMode(input: {
+  isDocumentHidden: boolean;
+  isWindowMinimized: boolean;
+  isWindowUnfocused: boolean;
+  gameflowPhase?: string;
+}): WindowGraphicsMode {
+  if (
+    input.isDocumentHidden ||
+    input.isWindowMinimized ||
+    isInGamePhase(input.gameflowPhase ?? "")
+  ) {
+    return "zero-gpu";
+  }
+  if (input.isWindowUnfocused) {
+    return "unfocused";
+  }
+  return "focused";
+}
+
+export function useWindowGraphicsMode(gameflowPhase = ""): WindowGraphicsState {
   const [isDocumentHidden, setIsDocumentHidden] = useState<boolean>(getDocumentHidden);
   const [isWindowUnfocused, setIsWindowUnfocused] = useState<boolean>(getWindowUnfocused);
   const [isWindowMinimized, setIsWindowMinimized] = useState<boolean>(false);
@@ -80,5 +112,27 @@ export function useWindowMinimized(): boolean {
     };
   }, []);
 
-  return isDocumentHidden || isWindowUnfocused || isWindowMinimized;
+  const isMinimizedOrHidden = isDocumentHidden || isWindowMinimized;
+  const isInGame = isInGamePhase(gameflowPhase);
+  const mode = resolveWindowGraphicsMode({
+    isDocumentHidden,
+    isWindowMinimized,
+    isWindowUnfocused,
+    gameflowPhase,
+  });
+
+  return {
+    mode,
+    isMinimizedOrHidden,
+    isWindowUnfocused,
+    isInGame,
+    isZeroGpu: mode === "zero-gpu",
+    animationsPaused: mode !== "focused",
+    shellClassName:
+      mode === "zero-gpu" ? "app-minimized" : mode === "unfocused" ? "app-unfocused" : "",
+  };
+}
+
+export function useWindowMinimized(gameflowPhase = ""): boolean {
+  return useWindowGraphicsMode(gameflowPhase).isZeroGpu;
 }

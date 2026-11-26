@@ -12,6 +12,8 @@ const ALLOWED_ASSET_PREFIXES = [
 ] as const;
 
 const VALID_ASSET_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg", "gif"]);
+const MAX_ASSET_URL_CACHE_SIZE = 2048;
+const tauriAssetUrlCache = new Map<string, string>();
 
 export function isAllowedAssetUrl(url: string): boolean {
   const trimmed = url.trim();
@@ -63,5 +65,18 @@ export function resolveCachedAssetUrl(url: string | null | undefined, forceTauri
   if (!useTauri) {
     return trimmed;
   }
-  return assetsIpc.convertAssetFileSrc(buildAssetSegment(trimmed), SCHUMAZ_ASSET_PROTOCOL);
+  if (forceTauri === undefined) {
+    const cached = tauriAssetUrlCache.get(trimmed);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+  const resolved = assetsIpc.convertAssetFileSrc(buildAssetSegment(trimmed), SCHUMAZ_ASSET_PROTOCOL);
+  if (forceTauri === undefined) {
+    if (tauriAssetUrlCache.size >= MAX_ASSET_URL_CACHE_SIZE) {
+      tauriAssetUrlCache.clear();
+    }
+    tauriAssetUrlCache.set(trimmed, resolved);
+  }
+  return resolved;
 }

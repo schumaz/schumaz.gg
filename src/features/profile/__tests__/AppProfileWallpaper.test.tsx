@@ -83,7 +83,7 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
     expect(screen.getByTestId("top-masteries-card").style.backdropFilter).toBe("blur(3.2px)");
 
     fireEvent.click(screen.getByRole("button", { name: /^configurações$/i }));
-    expect(screen.queryByTestId("profile-wallpaper")).not.toBeInTheDocument();
+    expect(screen.getByTestId("profile-wallpaper")).toHaveClass("is-hidden");
 
     fireEvent.click(screen.getByTestId("profile-blur-value"));
     const numInput = screen.getByTestId("profile-blur-input");
@@ -93,7 +93,10 @@ describe("App — Profile Wallpaper, Blur & Tab Visibility", () => {
     expect(screen.getByTestId("profile-blur-value")).toHaveTextContent("100%");
 
     fireEvent.click(screen.getByRole("button", { name: /^perfil$/i }));
-    const wpImgAfter = screen.getByTestId("profile-wallpaper").querySelector("img")!;
+    const wpBackdropAfter = screen.getByTestId("profile-wallpaper");
+    expect(wpBackdropAfter).not.toHaveClass("is-hidden");
+    const wpImgAfter = wpBackdropAfter.querySelector("img")!;
+    expect(wpImgAfter).toBe(wpImg);
     expect(wpImgAfter.style.filter).toContain("blur(1px)");
     expect(screen.getByTestId("view-profile").style.getPropertyValue("--profile-ui-blur")).toBe("32px");
     expect(screen.getByTestId("top-masteries-card").style.backdropFilter).toBe("blur(32px)");

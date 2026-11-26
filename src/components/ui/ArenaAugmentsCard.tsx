@@ -115,6 +115,7 @@ export function ArenaAugmentsCard({
                       alt={aug.name}
                       className="arena-augment-icon"
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = "none";
                       }}

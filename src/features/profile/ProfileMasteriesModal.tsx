@@ -188,6 +188,8 @@ export function ProfileMasteriesModal({
                             src={resolveCachedAssetUrl(mastery.champion_icon_url)}
                             alt={mastery.champion_name}
                             className="mastery-champ-icon"
+                            loading="lazy"
+                            decoding="async"
                           />
                         </div>
                       ) : (

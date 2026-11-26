@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::AtomicI32;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use super::coordinator::ChampSelectCoordinator;
@@ -62,6 +62,15 @@ static SHARED_ACTIVE_QUEUE_ID: OnceLock<Arc<AtomicI32>> = OnceLock::new();
 static SHARED_COORDINATOR: OnceLock<ChampSelectCoordinator> = OnceLock::new();
 static SHARED_LAST_GAMEFLOW_PHASE: OnceLock<Arc<tokio::sync::Mutex<String>>> = OnceLock::new();
 static SHARED_POLL_LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
+static SHARED_IN_GAME_PHASE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+pub fn is_in_game_phase_active() -> bool {
+    SHARED_IN_GAME_PHASE_ACTIVE.load(Ordering::SeqCst)
+}
+
+pub(crate) fn set_in_game_phase_active(active: bool) -> bool {
+    SHARED_IN_GAME_PHASE_ACTIVE.swap(active, Ordering::SeqCst)
+}
 
 pub fn shared_session_state() -> Arc<tokio::sync::Mutex<ChampSelectSessionState>> {
     Arc::clone(

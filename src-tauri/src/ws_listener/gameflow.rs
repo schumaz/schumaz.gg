@@ -86,6 +86,10 @@ pub(crate) async fn process_gameflow_phase_update(
             format!("event=phase_changed from={from_label} to={next_phase}"),
         );
         let in_game_now = is_in_game_phase(&next_phase);
+        let prev_in_game = super::reconcile_state::set_in_game_phase_active(in_game_now);
+        if prev_in_game != in_game_now {
+            crate::app_bootstrap::sync_main_webview_power_state(handle);
+        }
         let _ = models::GameflowPhaseChanged(next_phase).emit(handle);
         if in_game_now {
             tokio::spawn(super::lobby_actions::sync_swiftplay_assigned_champion_on_match_start(

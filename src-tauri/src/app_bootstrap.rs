@@ -1,12 +1,16 @@
 pub mod prewarm;
 pub mod tray;
+pub mod webview_power;
 pub mod window_events;
 pub mod window_factory;
 
 pub use tray::refresh_tray_locale;
+pub use webview_power::{
+    WindowGraphicsTier, is_window_minimized_or_hidden, resolve_window_graphics_tier,
+    sync_main_webview_power_state,
+};
 pub use window_events::{
     WindowRuntimeState, focus_main_window, handle_window_event, request_taskbar_attention,
-    should_pause_window_animations,
 };
 pub use window_factory::{
     AUTOSTART_LAUNCH_ARG, AppLifecycleState, allow_app_exit, is_autostart_launch_args,

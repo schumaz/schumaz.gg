@@ -443,6 +443,32 @@ img {
   display: none !important;
 }
 
+/* Park non-fading inactive tabs so Blink/Skia skip layout, paint, and compositor layers */
+.tabs-viewport:not([data-fading-tab="profile"]) > [data-testid="view-profile"].inactive-tab,
+.tabs-viewport:not([data-fading-tab="runes"]) > [data-testid="view-runes"].inactive-tab,
+.tabs-viewport:not([data-fading-tab="ranked"]) > [data-testid="view-ranked"].inactive-tab,
+.tabs-viewport:not([data-fading-tab="arena"]) > [data-testid="view-arena"].inactive-tab,
+.tabs-viewport:not([data-fading-tab="aram"]) > [data-testid="view-aram"].inactive-tab,
+.tabs-viewport:not([data-fading-tab="settings"]) > [data-testid="view-settings"].inactive-tab {
+  content-visibility: hidden;
+  contain-intrinsic-size: 0 600px;
+  transform: none;
+}
+
+/* Skip layout/paint/rasterization work for offscreen scrollable tier-list and mastery rows */
+.ranked-champ-row,
+.arena-champ-row,
+.aram-classic-row,
+.aram-mayhem-champ-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+
+.mastery-catalog-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 76px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tab-content,
   .tab-content.active-tab,
@@ -468,13 +494,33 @@ img {
   }
 }
 
-/* Pause & drop all animations, compositor hints, and blur surfaces while minimized */
+/* Mode 2: Visible without focus (side-by-side) — keep glass, transitions, and loading feedback intact,
+   while pausing purely decorative ambient glows */
+.app-unfocused .dot-orange.dot-pulsing,
+.app-unfocused .dot-orange.dot-pulsing::after,
+.app-unfocused .idle-radar-ring,
+.app-unfocused .startup-icon-halo,
+.app-unfocused .startup-progress-fill::after {
+  animation-play-state: paused !important;
+  will-change: auto !important;
+}
+
+.app-unfocused .dot-orange.dot-pulsing::after,
+.app-unfocused .idle-radar-ring {
+  display: none !important;
+}
+
+/* Mode 3: Minimized, hidden, or in-game (Zero-GPU) — drop 100% of animations, filters, blur, and hints */
+.app-minimized,
 .app-minimized *,
 .app-minimized *::before,
 .app-minimized *::after {
   animation: none !important;
   transition: none !important;
   will-change: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
 }
 
 .app-minimized .dot-orange.dot-pulsing::after,
@@ -483,20 +529,11 @@ img {
 .app-minimized .loading-bar-fill,
 .app-minimized .skeleton-block::after,
 .app-minimized .startup-icon-halo,
-.app-minimized .startup-progress-fill::after {
+.app-minimized .startup-progress-fill::after,
+.app-minimized .profile-wallpaper-backdrop {
   display: none !important;
 }
 
-.app-minimized .status-badge,
-.app-minimized .update-pill,
-.app-minimized .floating-dock,
-.app-minimized .profile-hero-card,
-.app-minimized .profile-section-card,
-.app-minimized .profile-matches-card,
-.app-minimized .ranked-lane-section-header,
-.app-minimized .card,
-.app-minimized .settings-modal-backdrop,
-.app-minimized .language-onboarding-backdrop,
 .gpu-effects-disabled .status-badge,
 .gpu-effects-disabled .update-pill,
 .gpu-effects-disabled .floating-dock,

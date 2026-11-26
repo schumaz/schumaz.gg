@@ -153,6 +153,25 @@ pub fn show_or_create_main_window(app_handle: &tauri::AppHandle) -> Result<(), S
         }
         let _ = window.show();
         let _ = window.set_focus();
+        if let Some(window_state) = app_handle.try_state::<WindowRuntimeState>() {
+            if window_state.was_minimized.swap(false, Ordering::SeqCst) {
+                let _ = <crate::models::WindowMinimizedChanged as tauri_specta::Event>::emit(
+                    &crate::models::WindowMinimizedChanged(false),
+                    app_handle,
+                );
+            }
+            let policy = super::webview_power::evaluate_webview_power_policy(
+                false,
+                true,
+                true,
+                crate::ws_listener::is_in_game_phase_active(),
+            );
+            super::webview_power::apply_webview_power_policy_if_changed(
+                &window,
+                &window_state.last_power_policy,
+                policy,
+            );
+        }
         return Ok(());
     }
 
@@ -160,6 +179,7 @@ pub fn show_or_create_main_window(app_handle: &tauri::AppHandle) -> Result<(), S
         .cloned()
         .ok_or_else(|| "Storage paths are not initialized".to_string())?;
     let settings = storage::get_global_settings();
+    let hw_accel = settings.graphics.hardware_acceleration;
     let window_state = app_handle
         .try_state::<WindowRuntimeState>()
         .map(|s| s.inner().clone())
@@ -177,7 +197,11 @@ pub fn show_or_create_main_window(app_handle: &tauri::AppHandle) -> Result<(), S
         .ok_or_else(|| "Main window configuration missing".to_string())?;
 
     window_state.restoring_window.store(true, Ordering::SeqCst);
-    window_state.was_paused.store(false, Ordering::SeqCst);
+    window_state.was_minimized.store(false, Ordering::SeqCst);
+    window_state.last_power_policy.store(
+        super::webview_power::UNSET_POWER_POLICY,
+        Ordering::SeqCst,
+    );
 
     window_config.width = bounds.width;
     window_config.height = bounds.height;
@@ -186,15 +210,17 @@ pub fn show_or_create_main_window(app_handle: &tauri::AppHandle) -> Result<(), S
     window_config.center = bounds.x.is_none() || bounds.y.is_none();
     window_config.maximized = false;
     window_config.visible = false;
-    window_config.additional_browser_args = Some(storage::browser_args_for_hardware_acceleration(
-        settings.graphics.hardware_acceleration,
-    ));
+    window_config.additional_browser_args =
+        Some(storage::browser_args_for_hardware_acceleration(hw_accel));
 
     let build_result = tauri::WebviewWindowBuilder::from_config(app_handle, &window_config)
         .and_then(|builder| builder.data_directory(paths.webview_dir).build());
 
     match build_result {
         Ok(window) => {
+            if let Some(graphics) = app_handle.try_state::<storage::GraphicsState>() {
+                graphics.mark_webview_created(hw_accel);
+            }
             apply_validated_window_bounds(&window, &bounds);
             if let Ok(mut guard) = window_state.window_tracker.lock() {
                 guard.window_width = bounds.width;
@@ -210,6 +236,17 @@ pub fn show_or_create_main_window(app_handle: &tauri::AppHandle) -> Result<(), S
             }
             window_state.restoring_window.store(false, Ordering::SeqCst);
             let _ = window.set_focus();
+            let policy = super::webview_power::evaluate_webview_power_policy(
+                false,
+                true,
+                true,
+                crate::ws_listener::is_in_game_phase_active(),
+            );
+            super::webview_power::apply_webview_power_policy_if_changed(
+                &window,
+                &window_state.last_power_policy,
+                policy,
+            );
             Ok(())
         }
         Err(err) => {

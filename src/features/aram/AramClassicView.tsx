@@ -94,6 +94,7 @@ export function AramClassicView({
                     alt={champ.name}
                     className="aram-champ-avatar"
                     loading="lazy"
+                    decoding="async"
                   />
                 </div>
                 <span className="aram-champ-name">{champ.name}</span>

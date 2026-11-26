@@ -11,7 +11,8 @@ pub mod updater;
 pub mod ws_listener;
 
 pub use app_bootstrap::{
-    focus_main_window, request_taskbar_attention, should_pause_window_animations,
+    WindowGraphicsTier, focus_main_window, is_window_minimized_or_hidden,
+    request_taskbar_attention, resolve_window_graphics_tier,
 };
 
 use specta_typescript::Typescript;

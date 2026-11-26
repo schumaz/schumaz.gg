@@ -84,6 +84,7 @@ function AugmentIcon({ iconUrl, name, rarityClassName }: AugmentIconProps) {
           alt={name}
           className="aram-augment-icon"
           loading="lazy"
+          decoding="async"
           onError={handleError}
         />
       )}

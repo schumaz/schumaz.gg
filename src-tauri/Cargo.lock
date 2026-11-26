@@ -3816,6 +3816,8 @@ dependencies = [
  "tauri-specta",
  "tokio",
  "tungstenite",
+ "webview2-com",
+ "windows-core 0.62.2",
  "winreg",
  "wiremock",
 ]

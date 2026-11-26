@@ -6,7 +6,7 @@ import { injectorIpc } from "./services/ipc";
 import { I18nProvider } from "./i18n";
 import { useAppBootstrap } from "./hooks/useAppBootstrap";
 import { useAppUpdater } from "./hooks/useAppUpdater";
-import { useWindowMinimized } from "./hooks/useWindowMinimized";
+import { useWindowGraphicsMode } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
 import {
@@ -37,7 +37,6 @@ export interface AppProps {
 
 function App({ forceStartupLoading }: AppProps = {}) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
-  const isAppMinimized = useWindowMinimized();
   const patchChangeHandlersRef = useRef<Array<() => void>>([]);
 
   const handleFlashKeyChange = (newFlashKey: FlashKeyPreference) => {
@@ -74,6 +73,8 @@ function App({ forceStartupLoading }: AppProps = {}) {
     locale,
     localeReady: prefs.preferencesReady,
   });
+
+  const graphics = useWindowGraphicsMode(lcu.gameflowPhase);
 
   const updater = useAppUpdater({
     enabled: import.meta.env.MODE !== "test",
@@ -172,7 +173,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
       <main
         className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
           profileBlurOff ? "profile-blur-off" : ""
-        } ${isAppMinimized ? "app-minimized" : ""} ${
+        } ${graphics.shellClassName} ${
           !prefs.hardwareAcceleration ? "gpu-effects-disabled" : ""
         }`}
         style={activeTab === "profile" ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties) : undefined}
@@ -212,7 +213,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
           onRankedClick={handleRankedDockClick}
           onArenaClick={handleArenaDockClick}
           onAramClick={handleAramDockClick}
-          animationsPaused={isAppMinimized || !prefs.hardwareAcceleration || boot.isBooting}
+          animationsPaused={graphics.animationsPaused || !prefs.hardwareAcceleration || boot.isBooting}
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 

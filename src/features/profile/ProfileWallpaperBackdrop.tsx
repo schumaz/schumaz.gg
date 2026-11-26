@@ -29,23 +29,27 @@ export function ProfileWallpaperBackdrop({
   const resolvedActiveSplashUrl = resolveCachedAssetUrl(activeSplashUrl);
   const displaySummoner = summoner ?? profile?.summoner ?? null;
 
-  const showFullScreenWallpaper =
-    activeTab === "profile" &&
+  const hasValidWallpaper =
     Boolean(displaySummoner) &&
     wallpaperVisible &&
     Boolean(resolvedActiveSplashUrl) &&
     !splashBroken;
 
-  if (!showFullScreenWallpaper) {
+  if (!hasValidWallpaper) {
     return null;
   }
 
   return (
-    <div className="profile-wallpaper-backdrop" data-testid="profile-wallpaper">
+    <div
+      className={`profile-wallpaper-backdrop${activeTab === "profile" ? "" : " is-hidden"}`}
+      data-testid="profile-wallpaper"
+      aria-hidden="true"
+    >
       <img
         src={resolvedActiveSplashUrl}
         alt=""
         aria-hidden="true"
+        decoding="async"
         className="profile-wallpaper-img"
         style={{ filter: "blur(1px) saturate(1.05)" }}
         onError={() => {

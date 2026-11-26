@@ -71,11 +71,13 @@
   }
 }
 
+.app-unfocused .dock-beam-wrap,
 .app-minimized .dock-beam-wrap,
 .gpu-effects-disabled .dock-beam-wrap {
   display: none !important;
 }
 
+.app-unfocused .dock-beam-glow,
 .app-minimized .dock-beam-glow,
 .gpu-effects-disabled .dock-beam-glow {
   animation: none !important;
