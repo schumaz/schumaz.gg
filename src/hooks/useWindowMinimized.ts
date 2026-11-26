@@ -67,28 +67,75 @@ export function useWindowGraphicsMode(gameflowPhase = ""): WindowGraphicsState {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    let active = true;
+    let receivedFocusEvent = false;
+    let unlistenFocus: UnlistenFn | undefined;
+
     const handleBlur = () => {
+      receivedFocusEvent = true;
       setIsWindowUnfocused(true);
     };
 
     const handleFocus = () => {
+      receivedFocusEvent = true;
       setIsWindowUnfocused(false);
     };
 
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
+
+    windowIpc
+      .isWindowFocused()
+      .then((focused) => {
+        if (active && !receivedFocusEvent && focused !== null) {
+          setIsWindowUnfocused(!focused);
+        }
+      })
+      .catch(() => {});
+
+    windowIpc
+      .onWindowFocusChanged((focused) => {
+        receivedFocusEvent = true;
+        if (active) {
+          setIsWindowUnfocused(!focused);
+        }
+      })
+      .then((fn) => {
+        if (active) {
+          unlistenFocus = fn;
+        } else {
+          fn();
+        }
+      })
+      .catch(() => {});
+
     return () => {
+      active = false;
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
+      if (unlistenFocus) {
+        unlistenFocus();
+      }
     };
   }, []);
 
   useEffect(() => {
     let active = true;
+    let receivedMinimizedEvent = false;
     let unlisten: UnlistenFn | undefined;
 
     windowIpc
+      .isWindowMinimized()
+      .then((minimized) => {
+        if (active && !receivedMinimizedEvent && minimized !== null) {
+          setIsWindowMinimized(Boolean(minimized));
+        }
+      })
+      .catch(() => {});
+
+    windowIpc
       .onWindowMinimizedChanged((minimized) => {
+        receivedMinimizedEvent = true;
         if (active) {
           setIsWindowMinimized(Boolean(minimized));
         }

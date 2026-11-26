@@ -55,17 +55,20 @@ pub const fn resolve_window_graphics_tier(
 /// Computes the native WebView2 visibility, suspension, and memory target policy.
 /// `TrySuspend` is requested only when minimized/hidden during an active match so side-by-side
 /// windows and normal desktop browsing keep live updates intact.
+/// `low_memory_target` is reserved for minimized/hidden/in-game states so visible side-by-side
+/// windows do not thrash GPU/renderer caches on focus loss.
 pub const fn evaluate_webview_power_policy(
     is_minimized: bool,
     is_visible: bool,
     is_focused: bool,
     is_in_game: bool,
 ) -> WebviewPowerPolicy {
+    let _ = is_focused;
     let minimized_or_hidden = is_window_minimized_or_hidden(is_minimized, is_visible);
     WebviewPowerPolicy {
         controller_visible: !minimized_or_hidden,
         should_suspend: minimized_or_hidden && is_in_game,
-        low_memory_target: minimized_or_hidden || !is_focused || is_in_game,
+        low_memory_target: minimized_or_hidden || is_in_game,
     }
 }
 
@@ -146,7 +149,10 @@ fn apply_platform_webview_power(
         }
 
         if policy.should_suspend {
-            if let Err(err) = unsafe { controller.SetIsVisible(false) } {
+            let mut is_visible = BOOL::default();
+            let needs_hide = unsafe { controller.IsVisible(&mut is_visible) }.is_err()
+                || is_visible.as_bool();
+            if needs_hide && let Err(err) = unsafe { controller.SetIsVisible(false) } {
                 crate::logging::log_debug(
                     "app.webview_power",
                     format!("event=set_invisible_failed err={err}"),
@@ -215,9 +221,19 @@ fn apply_platform_webview_power(
             }
         } else {
             if let Ok(webview3) = core.cast::<ICoreWebView2_3>() {
-                let _ = unsafe { webview3.Resume() };
+                let mut is_suspended = BOOL::default();
+                if unsafe { webview3.IsSuspended(&mut is_suspended) }.is_ok()
+                    && is_suspended.as_bool()
+                {
+                    let _ = unsafe { webview3.Resume() };
+                }
             }
-            let _ = unsafe { controller.SetIsVisible(policy.controller_visible) };
+            let mut is_visible = BOOL::default();
+            let needs_vis_update = unsafe { controller.IsVisible(&mut is_visible) }.is_err()
+                || is_visible.as_bool() != policy.controller_visible;
+            if needs_vis_update {
+                let _ = unsafe { controller.SetIsVisible(policy.controller_visible) };
+            }
         }
     }) {
         crate::logging::log_debug(
@@ -280,7 +296,7 @@ mod tests {
             WebviewPowerPolicy {
                 controller_visible: true,
                 should_suspend: false,
-                low_memory_target: true,
+                low_memory_target: false,
             }
         );
         assert_eq!(

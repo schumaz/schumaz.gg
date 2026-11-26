@@ -49,6 +49,41 @@ export const windowIpc = {
     });
   },
 
+  async isWindowFocused(): Promise<boolean | null> {
+    if (!isTauriWindowAvailable()) {
+      return null;
+    }
+    try {
+      return await getCurrentWindow().isFocused();
+    } catch {
+      return null;
+    }
+  },
+
+  async isWindowMinimized(): Promise<boolean | null> {
+    if (!isTauriWindowAvailable()) {
+      return null;
+    }
+    try {
+      return await getCurrentWindow().isMinimized();
+    } catch {
+      return null;
+    }
+  },
+
+  async onWindowFocusChanged(handler: (focused: boolean) => void): Promise<UnlistenFn> {
+    if (!isTauriWindowAvailable()) {
+      return () => {};
+    }
+    try {
+      return await getCurrentWindow().onFocusChanged(({ payload }) => {
+        handler(Boolean(payload));
+      });
+    } catch {
+      return () => {};
+    }
+  },
+
   async isWindowMaximized(): Promise<boolean> {
     if (!isTauriWindowAvailable()) {
       return false;

@@ -8,6 +8,10 @@ import {
 } from "../hooks/useWindowMinimized";
 
 const listeners: Record<string, (event: { payload: boolean }) => void> = {};
+const mockIsFocused = vi.fn(async () => true);
+const mockIsMinimized = vi.fn(async () => false);
+const mockFocusUnlisten = vi.fn();
+let focusChangedHandler: ((event: { payload: boolean }) => void) | undefined;
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockImplementation((event: string, cb: (payload: { payload: boolean }) => void) => {
@@ -15,6 +19,20 @@ vi.mock("@tauri-apps/api/event", () => ({
     return Promise.resolve(() => {
       delete listeners[event];
     });
+  }),
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    isFocused: () => mockIsFocused(),
+    isMinimized: () => mockIsMinimized(),
+    onFocusChanged: vi.fn().mockImplementation((cb: (event: { payload: boolean }) => void) => {
+      focusChangedHandler = cb;
+      return Promise.resolve(() => {
+        focusChangedHandler = undefined;
+        mockFocusUnlisten();
+      });
+    }),
   }),
 }));
 
@@ -35,6 +53,11 @@ describe("useWindowGraphicsMode, useWindowMinimized, and NavigationDock animatio
 
   beforeEach(() => {
     Object.keys(listeners).forEach((k) => delete listeners[k]);
+    focusChangedHandler = undefined;
+    mockIsFocused.mockReset().mockResolvedValue(true);
+    mockIsMinimized.mockReset().mockResolvedValue(false);
+    mockFocusUnlisten.mockReset();
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       get: () => "visible",
@@ -43,6 +66,7 @@ describe("useWindowGraphicsMode, useWindowMinimized, and NavigationDock animatio
   });
 
   afterEach(() => {
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     if (originalVisibilityDescriptor) {
       Object.defineProperty(document, "visibilityState", originalVisibilityDescriptor);
     } else {
@@ -155,5 +179,37 @@ describe("useWindowGraphicsMode, useWindowMinimized, and NavigationDock animatio
     );
     expect(container.querySelector(".dock-beam-wrap")).not.toBeInTheDocument();
     expect(container.querySelector(".dock-beam-glow")).not.toBeInTheDocument();
+  });
+
+  it("syncs unfocused mode from native Tauri onFocusChanged and initial isFocused state", async () => {
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockIsFocused.mockResolvedValueOnce(false);
+    mockIsMinimized.mockResolvedValueOnce(false);
+
+    const { result, unmount } = renderHook(() => useWindowGraphicsMode("Lobby"));
+
+    await waitFor(() => {
+      expect(result.current.mode).toBe("unfocused");
+    });
+    expect(result.current.animationsPaused).toBe(true);
+    expect(result.current.shellClassName).toBe("app-unfocused");
+    expect(focusChangedHandler).toBeDefined();
+
+    act(() => {
+      focusChangedHandler?.({ payload: true });
+    });
+    expect(result.current.mode).toBe("focused");
+    expect(result.current.animationsPaused).toBe(false);
+    expect(result.current.shellClassName).toBe("");
+
+    act(() => {
+      focusChangedHandler?.({ payload: false });
+    });
+    expect(result.current.mode).toBe("unfocused");
+    expect(result.current.animationsPaused).toBe(true);
+    expect(result.current.shellClassName).toBe("app-unfocused");
+
+    unmount();
+    expect(mockFocusUnlisten).toHaveBeenCalledTimes(1);
   });
 });

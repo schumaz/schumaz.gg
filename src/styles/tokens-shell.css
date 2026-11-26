@@ -494,19 +494,26 @@ img {
   }
 }
 
-/* Mode 2: Visible without focus (side-by-side) — keep glass, transitions, and loading feedback intact,
-   while pausing purely decorative ambient glows */
+/* Mode 2: Visible without focus (side-by-side) — keep glass surfaces and UI transitions intact,
+   while stopping all infinite CSS animations so Chromium's GPU/VSync compositor drops to 0 FPS */
 .app-unfocused .dot-orange.dot-pulsing,
 .app-unfocused .dot-orange.dot-pulsing::after,
 .app-unfocused .idle-radar-ring,
+.app-unfocused .idle-spinner-trail,
+.app-unfocused .idle-spinner-beam,
+.app-unfocused .spinner,
+.app-unfocused .loading-dot,
+.app-unfocused .loading-bar-fill,
+.app-unfocused .skeleton-block::after,
 .app-unfocused .startup-icon-halo,
 .app-unfocused .startup-progress-fill::after {
-  animation-play-state: paused !important;
+  animation: none !important;
   will-change: auto !important;
 }
 
 .app-unfocused .dot-orange.dot-pulsing::after,
-.app-unfocused .idle-radar-ring {
+.app-unfocused .idle-radar-ring,
+.app-unfocused .startup-icon-halo {
   display: none !important;
 }
 
