@@ -27,9 +27,7 @@ describe("ProfileTab Component", () => {
     expect(screen.getByText("schumaz.gg · Perfil")).toBeInTheDocument();
     expect(container.querySelector(".idle-card")).not.toHaveAttribute("style");
     expect(waiting.querySelector(".idle-radar-ring")).toBeInTheDocument();
-    const dots = screen.getByTestId("profile-waiting-client-dots");
-    expect(dots).toHaveAttribute("aria-hidden", "true");
-    expect(dots.querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(screen.queryByTestId("profile-waiting-client-dots")).not.toBeInTheDocument();
   });
 
   it("renders summoner icon, level, ranked stats with crest icons on the right, top 3 masteries, 10 matches, and omits wallpaper skin name text", () => {

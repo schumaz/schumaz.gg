@@ -33,12 +33,10 @@ describe("StatusDock", () => {
       screen.getByText("Aguardando cliente do LoL")
     ).toBeInTheDocument();
 
-    const orangeDot = container.querySelector(".dot-orange.dot-pulsing");
+    const orangeDot = container.querySelector(".dot.dot-orange");
     expect(orangeDot).toBeInTheDocument();
-
-    const dots = screen.getByTestId("status-waiting-dots");
-    expect(dots).toHaveAttribute("aria-hidden", "true");
-    expect(dots.querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(container.querySelector(".dot-pulsing")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("status-waiting-dots")).not.toBeInTheDocument();
   });
 
   it("renders clean connected status without player nick, tagLine, or summoner level", () => {

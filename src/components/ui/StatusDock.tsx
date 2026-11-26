@@ -4,7 +4,6 @@ import type { AppUpdateState } from "../../hooks/useAppUpdater";
 import { useTranslation } from "../../i18n";
 import { isTauriWindowAvailable, windowIpc } from "../../services/ipc/window.ipc";
 import type { SummonerInfo } from "../../types";
-import { LoadingDots } from "./LoadingIndicators";
 
 interface StatusDockProps {
   summoner: SummonerInfo | null;
@@ -101,9 +100,8 @@ export function StatusDock({
           </div>
         ) : (
           <div className="status-badge disconnected" data-testid="status-disconnected">
-            <span className="dot dot-orange dot-pulsing"></span>
+            <span className="dot dot-orange"></span>
             <span>{t("status.waiting")}</span>
-            <LoadingDots variant="warning" size="sm" testId="status-waiting-dots" />
           </div>
         )}
 

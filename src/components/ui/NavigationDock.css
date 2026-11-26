@@ -1,96 +1,51 @@
 /* ============================================================
-   NavigationDock — Rotating Conic Border Beam (GPU-Composited)
+   NavigationDock — Static Amethyst Gradient Rim (Zero-CPU)
    ============================================================ */
 
 .floating-dock {
   position: relative;
   contain: layout style;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(34, 24, 58, 0.9) 0%,
+      rgba(19, 20, 26, 0.88) 50%,
+      rgba(36, 24, 62, 0.9) 100%
+    ) padding-box,
+    linear-gradient(
+      135deg,
+      rgba(192, 132, 252, 0.6) 0%,
+      rgba(124, 58, 237, 0.34) 50%,
+      rgba(167, 139, 250, 0.62) 100%
+    ) border-box;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.62),
+    0 0 18px rgba(124, 58, 237, 0.2),
+    inset 0 1px 0 rgba(221, 214, 254, 0.14);
+}
+
+.floating-dock:hover {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(40, 27, 68, 0.92) 0%,
+      rgba(21, 21, 30, 0.9) 50%,
+      rgba(42, 27, 72, 0.92) 100%
+    ) padding-box,
+    linear-gradient(
+      135deg,
+      rgba(216, 180, 254, 0.72) 0%,
+      rgba(139, 92, 246, 0.45) 50%,
+      rgba(192, 132, 252, 0.75) 100%
+    ) border-box;
+  box-shadow:
+    0 8px 26px rgba(0, 0, 0, 0.64),
+    0 0 22px rgba(124, 58, 237, 0.28),
+    inset 0 1px 0 rgba(221, 214, 254, 0.2);
 }
 
 .dock-btn {
   position: relative;
   z-index: 1;
-}
-
-.dock-beam-wrap {
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.92;
-  contain: layout style paint;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  transition: opacity 0.25s ease;
-}
-
-.floating-dock:hover .dock-beam-wrap {
-  opacity: 1;
-}
-
-.dock-beam-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 2px;
-  overflow: hidden;
-  contain: strict;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-}
-
-.dock-beam-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 220%;
-  aspect-ratio: 1;
-  transform: translate3d(-50%, -50%, 0) rotate(0deg);
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg 255deg,
-    rgba(124, 58, 237, 0.55) 295deg,
-    rgba(167, 139, 250, 0.92) 332deg,
-    rgba(221, 214, 254, 0.98) 350deg,
-    transparent 360deg
-  );
-  animation: dockBeamOrbit 6.5s linear infinite;
-  will-change: transform;
-  backface-visibility: hidden;
-}
-
-@keyframes dockBeamOrbit {
-  0% {
-    transform: translate3d(-50%, -50%, 0) rotate(0deg);
-  }
-  100% {
-    transform: translate3d(-50%, -50%, 0) rotate(360deg);
-  }
-}
-
-.app-unfocused .dock-beam-wrap,
-.app-minimized .dock-beam-wrap,
-.gpu-effects-disabled .dock-beam-wrap {
-  display: none !important;
-}
-
-.app-unfocused .dock-beam-glow,
-.app-minimized .dock-beam-glow,
-.gpu-effects-disabled .dock-beam-glow {
-  animation: none !important;
-  will-change: auto !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dock-beam-wrap {
-    display: none;
-  }
-
-  .dock-beam-glow {
-    animation: none !important;
-    will-change: auto !important;
-  }
 }

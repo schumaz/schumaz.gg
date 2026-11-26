@@ -167,16 +167,11 @@ describe("useWindowGraphicsMode, useWindowMinimized, and NavigationDock animatio
     ).toBe("unfocused");
   });
 
-  it("does not render dock beam animation nodes when animationsPaused is true", () => {
-    const { container, rerender } = render(
-      <NavigationDock activeTab="profile" onTabChange={vi.fn()} animationsPaused={false} />
+  it("renders NavigationDock with static styling and zero dock beam animation nodes", () => {
+    const { container } = render(
+      <NavigationDock activeTab="profile" onTabChange={vi.fn()} />
     );
-    expect(container.querySelector(".dock-beam-wrap")).toBeInTheDocument();
-    expect(container.querySelector(".dock-beam-glow")).toBeInTheDocument();
-
-    rerender(
-      <NavigationDock activeTab="profile" onTabChange={vi.fn()} animationsPaused={true} />
-    );
+    expect(container.querySelector(".floating-dock")).toBeInTheDocument();
     expect(container.querySelector(".dock-beam-wrap")).not.toBeInTheDocument();
     expect(container.querySelector(".dock-beam-glow")).not.toBeInTheDocument();
   });

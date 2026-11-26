@@ -213,7 +213,6 @@ function App({ forceStartupLoading }: AppProps = {}) {
           onRankedClick={handleRankedDockClick}
           onArenaClick={handleArenaDockClick}
           onAramClick={handleAramDockClick}
-          animationsPaused={graphics.animationsPaused || !prefs.hardwareAcceleration || boot.isBooting}
           aramIconSrc={resolveCachedAssetUrl(ARAM_DOCK_ICON_URL)}
         />
 

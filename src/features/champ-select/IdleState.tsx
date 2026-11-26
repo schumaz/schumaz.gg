@@ -80,13 +80,15 @@ export function IdleIsland({
         <h2 className="idle-title">{title}</h2>
         <p className="card-desc idle-desc">{description}</p>
 
-        <div className="idle-activity-row" aria-hidden="true">
-          <LoadingDots
-            variant="accent"
-            size="md"
-            testId={testId ? `${testId}-dots` : "idle-waiting-dots"}
-          />
-        </div>
+        {isLoading && (
+          <div className="idle-activity-row" aria-hidden="true">
+            <LoadingDots
+              variant="accent"
+              size="md"
+              testId={testId ? `${testId}-dots` : "idle-waiting-dots"}
+            />
+          </div>
+        )}
 
         {errorMsg && (
           <div className="alert alert-error idle-alert" role="alert">

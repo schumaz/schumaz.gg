@@ -11,6 +11,7 @@ describe("IdleState & IdleIsland loading perimeter ring", () => {
     const waiting = screen.getByTestId("runes-waiting-champ");
     expect(waiting.querySelector(".idle-radar-ring")).toBeInTheDocument();
     expect(waiting.querySelector(".idle-spinner-ring")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("runes-waiting-champ-dots")).not.toBeInTheDocument();
   });
 
   it("renders loading build state with concentric SVG rounded-rect perimeter trail", () => {
@@ -66,6 +67,12 @@ describe("IdleState & IdleIsland loading perimeter ring", () => {
     )?.[0];
     expect(spinnerRingRule).toBeDefined();
     expect(spinnerRingRule).not.toMatch(/animation\s*:\s*spin/);
+
+    const waitingRingRule = champSelectCss.match(
+      /\.idle-icon-box\.is-waiting \.idle-radar-ring\s*\{[^}]*\}/
+    )?.[0];
+    expect(waitingRingRule).toBeDefined();
+    expect(waitingRingRule).not.toMatch(/animation\s*:/);
 
     expect(champSelectCss).toContain("idleSpinnerTrailOrbit");
     expect(champSelectCss).toContain("idleSpinnerBeamOrbit");

@@ -126,8 +126,8 @@
   position: absolute;
   inset: -4px;
   border-radius: 21px;
-  border: 1.5px solid rgba(167, 139, 250, 0.5);
-  animation: idleRadarPulse 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  border: 1.5px solid rgba(167, 139, 250, 0.32);
+  opacity: 0.72;
   pointer-events: none;
 }
 

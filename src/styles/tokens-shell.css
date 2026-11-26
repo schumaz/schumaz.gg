@@ -359,22 +359,7 @@ img {
 
 .dot-orange {
   background-color: var(--accent-warning);
-  box-shadow: 0 0 8px rgba(255, 159, 10, 0.4);
-}
-
-.dot-orange.dot-pulsing {
-  position: relative;
-  animation: statusDotPulse 2s ease-in-out infinite;
-}
-
-.dot-orange.dot-pulsing::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(251, 191, 36, 0.55);
-  animation: statusDotRing 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-  pointer-events: none;
+  box-shadow: 0 0 8px rgba(255, 159, 10, 0.52);
 }
 
 /* Workspace Central Area & Seamless Crossfade Viewport */
@@ -435,8 +420,6 @@ img {
   -webkit-backdrop-filter: none !important;
 }
 
-.tab-content.inactive-tab .dot-orange.dot-pulsing::after,
-.tab-content.inactive-tab .idle-radar-ring,
 .tab-content.inactive-tab .idle-spinner-ring,
 .tab-content.inactive-tab .loading-bar-fill,
 .tab-content.inactive-tab .skeleton-block::after {
@@ -479,9 +462,6 @@ img {
   .language-onboarding-card,
   .language-flag-card,
   .language-continue-btn,
-  .dot-orange.dot-pulsing,
-  .dot-orange.dot-pulsing::after,
-  .idle-radar-ring,
   .idle-spinner-ring,
   .idle-spinner-trail,
   .idle-spinner-beam,
@@ -496,9 +476,6 @@ img {
 
 /* Mode 2: Visible without focus (side-by-side) — keep glass surfaces and UI transitions intact,
    while stopping all infinite CSS animations so Chromium's GPU/VSync compositor drops to 0 FPS */
-.app-unfocused .dot-orange.dot-pulsing,
-.app-unfocused .dot-orange.dot-pulsing::after,
-.app-unfocused .idle-radar-ring,
 .app-unfocused .idle-spinner-trail,
 .app-unfocused .idle-spinner-beam,
 .app-unfocused .spinner,
@@ -511,8 +488,6 @@ img {
   will-change: auto !important;
 }
 
-.app-unfocused .dot-orange.dot-pulsing::after,
-.app-unfocused .idle-radar-ring,
 .app-unfocused .startup-icon-halo {
   display: none !important;
 }
@@ -530,8 +505,6 @@ img {
   filter: none !important;
 }
 
-.app-minimized .dot-orange.dot-pulsing::after,
-.app-minimized .idle-radar-ring,
 .app-minimized .idle-spinner-ring,
 .app-minimized .loading-bar-fill,
 .app-minimized .skeleton-block::after,
@@ -561,9 +534,6 @@ img {
   will-change: auto !important;
 }
 
-.gpu-effects-disabled .dot-orange.dot-pulsing,
-.gpu-effects-disabled .dot-orange.dot-pulsing::after,
-.gpu-effects-disabled .idle-radar-ring,
 .gpu-effects-disabled .idle-spinner-ring,
 .gpu-effects-disabled .idle-spinner-trail,
 .gpu-effects-disabled .idle-spinner-beam,
@@ -578,8 +548,6 @@ img {
   filter: none !important;
 }
 
-.gpu-effects-disabled .dot-orange.dot-pulsing::after,
-.gpu-effects-disabled .idle-radar-ring,
 .gpu-effects-disabled .startup-icon-halo {
   display: none !important;
 }

@@ -11,7 +11,6 @@ interface NavigationDockProps {
   onRankedClick?: () => void;
   onArenaClick?: () => void;
   onAramClick?: () => void;
-  animationsPaused?: boolean;
   aramIconSrc?: string;
 }
 
@@ -21,20 +20,12 @@ export function NavigationDock({
   onRankedClick,
   onArenaClick,
   onAramClick,
-  animationsPaused = false,
   aramIconSrc = ARAM_DOCK_ICON_URL,
 }: NavigationDockProps) {
   const { t } = useTranslation();
 
   return (
     <nav className="floating-dock" aria-label={t("nav.ariaLabel")}>
-      {!animationsPaused && (
-        <span className="dock-beam-wrap" aria-hidden="true">
-          <span className="dock-beam-ring">
-            <span className="dock-beam-glow" />
-          </span>
-        </span>
-      )}
 
       <button
         type="button"

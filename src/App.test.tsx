@@ -53,7 +53,7 @@ describe("App Component", () => {
     });
     const runesWaiting = screen.getByTestId("runes-waiting-champ");
     expect(runesWaiting.querySelector(".idle-radar-ring")).toBeInTheDocument();
-    expect(screen.getByTestId("runes-waiting-champ-dots").querySelectorAll(".loading-dot")).toHaveLength(3);
+    expect(screen.queryByTestId("runes-waiting-champ-dots")).not.toBeInTheDocument();
     expect(screen.queryByText(/Estrutura dos Conjuntos de Itens na Loja/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("item-blocks")).not.toBeInTheDocument();
 
