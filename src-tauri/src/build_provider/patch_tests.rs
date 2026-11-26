@@ -208,3 +208,67 @@ fn test_extract_patch_trend_timestamps_validates_version_and_handles_zero_game_n
     assert_eq!(res_low.effective_patch, "16.22");
     assert!(res_low.fallback_applied);
 }
+
+#[test]
+fn test_parse_iso8601_preserves_timezone_offsets_with_fractional_seconds() {
+    let expected = 1_794_059_969;
+    for ts in [
+        "2026-11-07T13:59:29Z",
+        "2026-11-07T22:59:29+09:00",
+        "2026-11-07T22:59:29.123+09:00",
+        "2026-11-07T22:59:29.123456+0900",
+        "2026-11-07T13:59:29.999Z",
+        "2026-11-07T10:59:29.500-03:00",
+    ] {
+        assert_eq!(parse_iso8601_to_unix(ts), Some(expected), "failed for {ts}");
+    }
+
+    let versions = vec!["16.23".to_string(), "16.22".to_string()];
+    let res = resolve_effective_patch(
+        &versions,
+        Some("2026-11-07T22:59:29.123+09:00"),
+        None,
+        Some(200),
+        expected + 10 * 3600,
+        None,
+        true,
+    );
+    assert_eq!(res.effective_patch, "16.22");
+    assert!(res.fallback_applied);
+    assert_eq!(res.remaining_hours, Some(38));
+    assert_eq!(res.remaining_seconds, Some(38 * 3600));
+}
+
+#[test]
+fn test_parse_iso8601_civil_boundaries_and_rejects_non_ascii_or_malformed() {
+    assert_eq!(parse_iso8601_to_unix("1970-01-01T00:00:00Z"), Some(0));
+    assert_eq!(parse_iso8601_to_unix("1969-12-31T23:59:59Z"), None);
+    assert_eq!(
+        parse_iso8601_to_unix("1969-12-31T23:59:59-01:00"),
+        Some(3599)
+    );
+    assert_eq!(
+        parse_iso8601_to_unix("2000-02-29T00:00:00Z"),
+        Some(11_016 * 86_400)
+    );
+
+    for invalid in [
+        "2026-02-29T00:00:00Z",
+        "2100-02-29T00:00:00Z",
+        "2026–11–07T22:59:29Z",
+        "éééééééééééééééééééé",
+        "🔥2026-11-07T22:59:29Z",
+        "2026-11-07T22:59:29.Z",
+        "2026-11-07T22:59:29.",
+        "2026-11-07T22:59:29+25:00",
+        "2026-11-07T22:59:29+09:60",
+        "2026-11-07T22:59:29garbage",
+        "+202-11-07T22:59:29Z",
+    ] {
+        assert_eq!(
+            parse_iso8601_to_unix(invalid),
+            None,
+            "expected None for {invalid}"
+        );
+    }
+}

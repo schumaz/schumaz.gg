@@ -75,58 +75,102 @@ pub fn extract_patch_trend_timestamps<'a>(
     }
 }
 
-/// Parses an ISO 8601 timestamp string (e.g. "2026-11-07T22:59:29+09:00" or "2026-11-07T22:59:29Z")
-/// into a Unix epoch timestamp (seconds).
-pub fn parse_iso8601_to_unix(iso_str: &str) -> Option<u64> {
-    if iso_str.len() < 19 {
+fn parse_ascii_uint(bytes: &[u8]) -> Option<u32> {
+    if bytes.is_empty() || !bytes.iter().all(u8::is_ascii_digit) {
         return None;
     }
-    let year: i32 = iso_str[0..4].parse().ok()?;
-    let month: u32 = iso_str[5..7].parse().ok()?;
-    let day: u32 = iso_str[8..10].parse().ok()?;
-    let hour: u32 = iso_str[11..13].parse().ok()?;
-    let min: u32 = iso_str[14..16].parse().ok()?;
-    let sec: u32 = iso_str[17..19].parse().ok()?;
+    let mut acc: u32 = 0;
+    for &b in bytes {
+        acc = acc.checked_mul(10)?.checked_add(u32::from(b - b'0'))?;
+    }
+    Some(acc)
+}
 
-    let mut offset_secs: i64 = 0;
-    if iso_str.len() > 19 {
-        let rest = &iso_str[19..];
-        if rest.starts_with('+') || rest.starts_with('-') {
-            let sign = if rest.starts_with('-') { -1 } else { 1 };
-            let off_str = &rest[1..];
-            let parts: Vec<&str> = off_str.split(':').collect();
-            if !parts.is_empty() {
-                let off_h: i64 = parts[0].parse().unwrap_or(0);
-                let off_m: i64 = parts.get(1).and_then(|m| m.parse().ok()).unwrap_or(0);
-                offset_secs = sign * (off_h * 3600 + off_m * 60);
-            }
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) { 29 } else { 28 },
+        _ => 0,
+    }
+}
+
+fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let y = year - i64::from(month <= 2);
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400) as u64;
+    let (m, d) = (u64::from(month), u64::from(day));
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe as i64 - 719_468
+}
+
+fn parse_iso8601_offset(mut rest: &[u8]) -> Option<i64> {
+    if let Some(after_dot) = rest.strip_prefix(b".").or_else(|| rest.strip_prefix(b",")) {
+        let frac_digits = after_dot.iter().take_while(|b| b.is_ascii_digit()).count();
+        if frac_digits == 0 {
+            return None;
         }
+        rest = &after_dot[frac_digits..];
     }
 
-    let days_before_month = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    match rest {
+        b"" | b"Z" | b"z" => Some(0),
+        [sign_byte @ (b'+' | b'-'), digits @ ..] => {
+            let sign: i64 = if *sign_byte == b'-' { -1 } else { 1 };
+            let (off_h, off_m) = match digits {
+                [h1, h2, b':', m1, m2] | [h1, h2, m1, m2] => (
+                    parse_ascii_uint(&[*h1, *h2])?,
+                    parse_ascii_uint(&[*m1, *m2])?,
+                ),
+                [h1, h2] => (parse_ascii_uint(&[*h1, *h2])?, 0),
+                _ => return None,
+            };
+            if off_h > 23 || off_m > 59 {
+                return None;
+            }
+            Some(sign * (i64::from(off_h) * 3600 + i64::from(off_m) * 60))
+        }
+        _ => None,
+    }
+}
+
+/// Parses an ISO 8601 timestamp string (e.g. "2026-11-07T22:59:29+09:00",
+/// "2026-11-07T22:59:29.123+09:00", or "2026-11-07T22:59:29Z") into a Unix epoch timestamp (seconds).
+pub fn parse_iso8601_to_unix(iso_str: &str) -> Option<u64> {
+    let iso = iso_str.trim();
+    if !iso.is_ascii() || iso.len() < 19 {
+        return None;
+    }
+    let b = iso.as_bytes();
+    if b[4] != b'-'
+        || b[7] != b'-'
+        || !matches!(b[10], b'T' | b't' | b' ')
+        || b[13] != b':'
+        || b[16] != b':'
+    {
         return None;
     }
 
-    let is_leap = |y: i32| (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    let year = parse_ascii_uint(&b[0..4])? as i32;
+    let month = parse_ascii_uint(&b[5..7])?;
+    let day = parse_ascii_uint(&b[8..10])?;
+    let hour = parse_ascii_uint(&b[11..13])?;
+    let min = parse_ascii_uint(&b[14..16])?;
+    let sec = parse_ascii_uint(&b[17..19])?;
 
-    let mut total_days: i64 = 0;
-    for y in 1970..year {
-        total_days += if is_leap(y) { 366 } else { 365 };
+    let max_day = days_in_month(year, month);
+    if max_day == 0 || !(1..=max_day).contains(&day) || hour > 23 || min > 59 || sec > 59 {
+        return None;
     }
-    total_days += days_before_month[(month - 1) as usize] as i64;
-    if month > 2 && is_leap(year) {
-        total_days += 1;
-    }
-    total_days += (day - 1) as i64;
 
+    let offset_secs = parse_iso8601_offset(&b[19..])?;
+    let total_days = days_from_civil(i64::from(year), month, day);
     let total_secs_utc =
-        total_days * 86400 + (hour as i64) * 3600 + (min as i64) * 60 + (sec as i64) - offset_secs;
-    if total_secs_utc >= 0 {
-        Some(total_secs_utc as u64)
-    } else {
-        None
-    }
+        total_days * 86_400 + i64::from(hour) * 3_600 + i64::from(min) * 60 + i64::from(sec)
+            - offset_secs;
+
+    u64::try_from(total_secs_utc).ok()
 }
 
 fn fallback_result(prev_patch: &str, age_secs: Option<u64>) -> PatchSelectionResult {

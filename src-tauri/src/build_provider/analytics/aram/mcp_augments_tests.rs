@@ -254,3 +254,24 @@ async fn test_fetch_aram_mayhem_augments_mcp_locale_cache_isolation() {
         ("Recoil", "Extra damage.")
     );
 }
+
+#[test]
+fn test_parse_mcp_augments_dsl_handles_unquoted_multibyte_utf8_safely() {
+    let dsl = "Descrição em pt_BR — çãé 증강 🔥 \
+        çAugment(9999,\"Identificador inválido\",3,50.0,0.1) \
+        NãoAugment(9998,\"Prefixo alfanumérico\",3,50.0,0.1) \
+        —Augment(1074,\"Dano çãé em área\",3,79.754,0.224) \
+        🔥Augment(2062,\"증강 설명 (15%)\",4,91.2,0.15) \
+        Texto final çãé — Augment(3075,\"Incompleto çãé";
+
+    let parsed = parse_mcp_augments_dsl(dsl);
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(
+        (parsed[0].id, parsed[0].desc.as_deref()),
+        (1074, Some("Dano çãé em área"))
+    );
+    assert_eq!(
+        (parsed[1].id, parsed[1].desc.as_deref()),
+        (2062, Some("증강 설명 (15%)"))
+    );
+}

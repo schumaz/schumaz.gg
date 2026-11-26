@@ -113,40 +113,40 @@ fn parse_augment_class_fields(text: &str) -> Vec<String> {
 }
 
 fn split_dsl_args(args_slice: &str) -> Vec<&str> {
-    let bytes = args_slice.as_bytes();
     let mut parts = Vec::new();
     let (mut start, mut paren_depth, mut bracket_depth) = (0usize, 0usize, 0usize);
     let (mut in_string, mut escaped) = (false, false);
 
-    for (i, &b) in bytes.iter().enumerate() {
+    for (i, ch) in args_slice.char_indices() {
         if in_string {
             if escaped {
                 escaped = false;
-            } else if b == b'\\' {
+            } else if ch == '\\' {
                 escaped = true;
-            } else if b == b'"' {
+            } else if ch == '"' {
                 in_string = false;
             }
             continue;
         }
-        match b {
-            b'"' => in_string = true,
-            b'(' => paren_depth += 1,
-            b')' => paren_depth = paren_depth.saturating_sub(1),
-            b'[' => bracket_depth += 1,
-            b']' => bracket_depth = bracket_depth.saturating_sub(1),
-            b',' if paren_depth == 0 && bracket_depth == 0 => {
-                parts.push(args_slice[start..i].trim());
-                start = i + 1;
+        match ch {
+            '"' => in_string = true,
+            '(' => paren_depth += 1,
+            ')' => paren_depth = paren_depth.saturating_sub(1),
+            '[' => bracket_depth += 1,
+            ']' => bracket_depth = bracket_depth.saturating_sub(1),
+            ',' if paren_depth == 0 && bracket_depth == 0 => {
+                if let Some(part) = args_slice.get(start..i) {
+                    parts.push(part.trim());
+                }
+                start = i + ch.len_utf8();
             }
             _ => {}
         }
     }
-    if start <= args_slice.len() {
-        let tail = args_slice[start..].trim();
-        if !tail.is_empty() || !parts.is_empty() {
-            parts.push(tail);
-        }
+    if let Some(tail) = args_slice.get(start..).map(str::trim)
+        && (!tail.is_empty() || !parts.is_empty())
+    {
+        parts.push(tail);
     }
     parts
 }
@@ -202,67 +202,84 @@ fn parse_dsl_augment_tuple(
     })
 }
 
+fn find_dsl_closing_paren_offset(rest: &str) -> Option<usize> {
+    let (mut depth, mut in_str, mut escaped) = (1usize, false, false);
+    for (idx, ch) in rest.char_indices() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_str = true,
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 pub(crate) fn parse_mcp_augments_dsl(text: &str) -> Vec<RawMayhemAugmentStat> {
-    const PREFIX: &str = "Augment(";
+    const PREFIX: &[u8] = b"Augment(";
     let header_fields = parse_augment_class_fields(text);
     let bytes = text.as_bytes();
     let mut out = Vec::new();
-    let (mut cursor, mut in_string, mut escaped) = (0usize, false, false);
+    let (mut cursor, mut in_string, mut escaped, mut prev_char) =
+        (0usize, false, false, None::<char>);
 
-    while cursor < bytes.len() {
+    while let Some(ch) = text.get(cursor..).and_then(|s| s.chars().next()) {
         if in_string {
             if escaped {
                 escaped = false;
-            } else if bytes[cursor] == b'\\' {
+            } else if ch == '\\' {
                 escaped = true;
-            } else if bytes[cursor] == b'"' {
+            } else if ch == '"' {
                 in_string = false;
             }
-            cursor += 1;
+            prev_char = Some(ch);
+            cursor += ch.len_utf8();
             continue;
         }
-        if bytes[cursor] == b'"' {
+        if ch == '"' {
             in_string = true;
-            cursor += 1;
+            prev_char = Some(ch);
+            cursor += ch.len_utf8();
             continue;
         }
-        let boundary_ok = cursor == 0
-            || (!bytes[cursor - 1].is_ascii_alphanumeric() && bytes[cursor - 1] != b'_');
-        if boundary_ok && text[cursor..].starts_with(PREFIX) {
-            let args_start = cursor + PREFIX.len();
-            let (mut i, mut depth, mut arg_in_str, mut arg_escaped) =
-                (args_start, 1usize, false, false);
-            while i < bytes.len() && depth > 0 {
-                let b = bytes[i];
-                if arg_in_str {
-                    if arg_escaped {
-                        arg_escaped = false;
-                    } else if b == b'\\' {
-                        arg_escaped = true;
-                    } else if b == b'"' {
-                        arg_in_str = false;
-                    }
-                } else {
-                    match b {
-                        b'"' => arg_in_str = true,
-                        b'(' => depth += 1,
-                        b')' => depth = depth.saturating_sub(1),
-                        _ => {}
-                    }
-                }
-                i += 1;
-            }
-            if depth == 0 && i > args_start {
-                let args = split_dsl_args(&text[args_start..i - 1]);
+        let boundary_ok = prev_char.is_none_or(|prev| !prev.is_alphanumeric() && prev != '_');
+        if boundary_ok
+            && text.is_char_boundary(cursor)
+            && bytes
+                .get(cursor..)
+                .is_some_and(|slice| slice.starts_with(PREFIX))
+            && let Some(rest) = text.get(cursor + PREFIX.len()..)
+        {
+            let Some(close_rel) = find_dsl_closing_paren_offset(rest) else {
+                break;
+            };
+            if let Some(args_slice) = rest.get(..close_rel) {
+                let args = split_dsl_args(args_slice);
                 if let Some(stat) = parse_dsl_augment_tuple(&args, &header_fields) {
                     out.push(stat);
                 }
-                cursor = i;
-                continue;
             }
-            break;
+            cursor += PREFIX.len() + close_rel + 1;
+            prev_char = Some(')');
+            continue;
         }
-        cursor += 1;
+        prev_char = Some(ch);
+        cursor += ch.len_utf8();
     }
     out
 }
