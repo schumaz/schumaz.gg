@@ -8,6 +8,8 @@ use super::lz4_cache::{CACHE_SCHEMA_VERSION, read_lz4_envelope_header};
 use super::paths::AppPaths;
 
 pub const GC_MAX_INACTIVE_SECS: u64 = 7 * 24 * 3600;
+/// Minimum age before orphan `.tmp` files are deleted, preventing races with active `atomic_write`s.
+pub const GC_TMP_MIN_AGE_SECS: u64 = 5 * 60;
 /// Maximum total disk footprint allowed for `Cache\assets\` (1 GiB).
 pub const ASSET_CACHE_MAX_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -139,7 +141,12 @@ pub fn run_garbage_collector_with_asset_quota(
             .and_then(|e| e.to_str())
             .is_some_and(|e| e.eq_ignore_ascii_case("tmp"));
         if is_tmp {
-            if fs::remove_file(&path).is_ok() {
+            let is_stale_tmp = fs::metadata(&path)
+                .ok()
+                .and_then(|meta| meta.modified().ok())
+                .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+                .is_some_and(|dur| now_unix.saturating_sub(dur.as_secs()) >= GC_TMP_MIN_AGE_SECS);
+            if is_stale_tmp && fs::remove_file(&path).is_ok() {
                 stats.removed_tmp_files += 1;
             }
             continue;

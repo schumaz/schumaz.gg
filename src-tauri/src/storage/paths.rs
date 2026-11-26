@@ -3,9 +3,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
+pub const LAZY_TOUCH_MTIME_INTERVAL_SECS: u64 = 12 * 3600;
+const ATOMIC_RENAME_RETRY_DELAYS_MS: [u64; 4] = [5, 15, 35, 75];
 static TEMP_FILE_SEQ: AtomicU64 = AtomicU64::new(1);
 static GLOBAL_APP_PATHS: OnceLock<AppPaths> = OnceLock::new();
 
@@ -164,7 +166,38 @@ pub fn sanitize_key_component(raw: &str) -> String {
     }
 }
 
-/// Atomically writes `bytes` to `path` via a unique `.tmp` sibling file followed by `rename`.
+pub(super) fn is_retryable_rename_error(err: &std::io::Error) -> bool {
+    matches!(err.raw_os_error(), Some(5 | 32))
+}
+
+pub(super) fn rename_with_retry<F>(
+    tmp_path: &Path,
+    dst_path: &Path,
+    mut rename_fn: F,
+) -> std::io::Result<()>
+where
+    F: FnMut(&Path, &Path) -> std::io::Result<()>,
+{
+    let mut attempt = 0;
+    loop {
+        match rename_fn(tmp_path, dst_path) {
+            Ok(()) => return Ok(()),
+            Err(err) => {
+                if is_retryable_rename_error(&err)
+                    && let Some(&delay_ms) = ATOMIC_RENAME_RETRY_DELAYS_MS.get(attempt)
+                {
+                    std::thread::sleep(Duration::from_millis(delay_ms));
+                    attempt += 1;
+                    continue;
+                }
+                return Err(err);
+            }
+        }
+    }
+}
+
+/// Atomically writes `bytes` to `path` via a unique `.tmp` sibling file followed by `rename`,
+/// retrying briefly on transient Windows access/sharing locks (`os error 5` / `32`).
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -189,7 +222,7 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         let _ = file.flush();
     }
 
-    if let Err(e) = fs::rename(&tmp_path, path) {
+    if let Err(e) = rename_with_retry(&tmp_path, path, |src, dst| fs::rename(src, dst)) {
         let _ = fs::remove_file(&tmp_path);
         return Err(format!(
             "Failed to rename {} to {}: {e}",
@@ -201,10 +234,29 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Updates the file's modification timestamp (`mtime`) without relying on NTFS `atime`.
-pub fn touch_mtime(path: &Path) {
+/// Returns `true` when `modified` is at least `LAZY_TOUCH_MTIME_INTERVAL_SECS` (12h) older than `now`.
+pub fn should_touch_mtime(modified: SystemTime, now: SystemTime) -> bool {
+    now.duration_since(modified)
+        .is_ok_and(|age| age.as_secs() >= LAZY_TOUCH_MTIME_INTERVAL_SECS)
+}
+
+pub(super) fn force_touch_mtime_at(path: &Path, now: SystemTime) {
     if let Ok(file) = fs::OpenOptions::new().write(true).open(path) {
-        let _ = file.set_modified(SystemTime::now());
+        let _ = file.set_modified(now);
+    }
+}
+
+/// Lazily updates the file's modification timestamp (`mtime`) at most once per 12h.
+pub fn touch_mtime(path: &Path) {
+    let Ok(meta) = fs::metadata(path) else {
+        return;
+    };
+    let Ok(modified) = meta.modified() else {
+        return;
+    };
+    let now = SystemTime::now();
+    if should_touch_mtime(modified, now) {
+        force_touch_mtime_at(path, now);
     }
 }
 
@@ -214,57 +266,5 @@ pub(super) fn next_test_seq() -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_app_paths_centralizes_config_cache_logs_and_webview_under_root() {
-        let root = std::env::temp_dir().join(format!(
-            "schumazgg_paths_test_{}_{}",
-            std::process::id(),
-            next_test_seq()
-        ));
-        let _ = fs::remove_dir_all(&root);
-
-        let paths = AppPaths::from_root(root.clone());
-        assert_eq!(paths.root, root);
-        assert_eq!(paths.config_dir, root.join("Config"));
-        assert_eq!(paths.cache_dir, root.join("Cache"));
-        assert_eq!(paths.logs_dir, root.join("Logs"));
-        assert_eq!(paths.webview_dir, root.join("WebView"));
-        assert_eq!(paths.ddragon_dir, root.join("Cache").join("ddragon"));
-        assert_eq!(paths.opgg_dir, root.join("Cache").join("opgg"));
-        assert_eq!(
-            paths.opgg_arena_dir,
-            root.join("Cache").join("opgg").join("arena")
-        );
-        assert_eq!(paths.profile_dir, root.join("Cache").join("profile"));
-        assert_eq!(paths.assets_dir, root.join("Cache").join("assets"));
-        assert_eq!(
-            paths.user_settings_ini_path(),
-            root.join("Config").join("UserSettings.ini")
-        );
-        assert_eq!(
-            paths.log_file_path(),
-            root.join("Logs").join("schumazgg.log")
-        );
-        assert_eq!(
-            paths.lcu_lockfile_cache_path(),
-            root.join("Config").join("lcu_lockfile_path.txt")
-        );
-        assert!(!paths.logs_dir.starts_with(&paths.cache_dir));
-
-        paths.ensure_dirs().unwrap();
-        assert!(paths.config_dir.is_dir());
-        assert!(paths.cache_dir.is_dir());
-        assert!(paths.logs_dir.is_dir());
-        assert!(paths.webview_dir.is_dir());
-        assert!(paths.ddragon_dir.is_dir());
-        assert!(paths.opgg_dir.is_dir());
-        assert!(paths.opgg_arena_dir.is_dir());
-        assert!(paths.profile_dir.is_dir());
-        assert!(paths.assets_dir.is_dir());
-
-        let _ = fs::remove_dir_all(&root);
-    }
-}
+#[path = "paths_tests.rs"]
+mod tests;

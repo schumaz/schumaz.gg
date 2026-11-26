@@ -11,7 +11,8 @@ use super::match_metadata::{
 use super::queue_mapper::map_queue_mode_for_locale;
 use super::ranked_parser::translate_ranked_tier_for_locale;
 use super::skins::{
-    lookup_cached_skin_name, prewarm_skins_from_dir, resolve_background_splash_urls_for_locale,
+    ensure_skins_hydrated_from_dir, lookup_cached_skin_name,
+    resolve_background_splash_urls_for_locale,
 };
 
 pub fn profile_cache_file_path(dir: &Path, summoner_id: u64) -> PathBuf {
@@ -145,7 +146,7 @@ pub fn get_cached_profile_for_summoner_id(
     locale: AppLocale,
 ) -> Option<CachedProfileResult> {
     let paths = crate::storage::global_paths()?;
-    prewarm_skins_from_dir(&paths.ddragon_dir, locale);
+    ensure_skins_hydrated_from_dir(&paths.ddragon_dir, locale);
     let now = crate::storage::now_unix_secs();
     let mut cached = load_profile_from_dir(&paths.profile_dir, summoner_id, now)?;
     let dd_cache = build_provider::get_ddragon_cache_store()

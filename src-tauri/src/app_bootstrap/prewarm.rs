@@ -15,36 +15,46 @@ fn spawn_prewarm_task(
 ) {
     tauri::async_runtime::spawn(async move {
         let started_at = Instant::now();
-        let ddragon_opt = build_provider::ddragon::prewarm_ddragon_from_disk(active_locale);
-        bootstrap_state.update(&app_handle, "ddragon_disk", 40, false, false);
+        let disk_app = app_handle.clone();
+        let disk_bootstrap = bootstrap_state.clone();
+        let disk_paths = paths.clone();
+        let disk_settings = settings;
+        let ddragon_opt = tokio::task::spawn_blocking(move || {
+            let ddragon_opt = build_provider::ddragon::prewarm_ddragon_from_disk(active_locale);
+            disk_bootstrap.update(&disk_app, "ddragon_disk", 40, false, false);
 
-        profile_provider::prewarm_skins_from_disk(active_locale);
-        let _ = profile_provider::get_cached_profile_for_last_summoner(active_locale);
-        bootstrap_state.update(&app_handle, "profile_disk", 60, false, false);
+            profile_provider::prewarm_skins_from_disk(active_locale);
+            let _ = profile_provider::get_cached_profile_for_last_summoner(active_locale);
+            disk_bootstrap.update(&disk_app, "profile_disk", 60, false, false);
 
-        if let Some(ref dd) = ddragon_opt {
-            build_provider::analytics::ranked::prewarm_ranked_tier_list_from_dir(
-                &paths.opgg_ranked_dir,
-                &settings.navigation.ranked_filter_region,
-                &settings.navigation.ranked_filter_tier,
-                settings.navigation.ranked_filter_patch.as_deref(),
-                settings.automation.patch_48h_protection,
-                active_locale,
-                dd,
-            );
-            build_provider::analytics::arena::prewarm_arena_tier_list_from_dir(
-                &paths.opgg_arena_dir,
-                settings.automation.patch_48h_protection,
-                active_locale,
-                dd,
-            );
-            build_provider::analytics::aram::prewarm_aram_tier_lists_from_dir(
-                &paths.opgg_aram_dir,
-                active_locale,
-                dd,
-            );
-        }
-        bootstrap_state.update(&app_handle, "tier_lists_disk", 80, true, false);
+            if let Some(ref dd) = ddragon_opt {
+                build_provider::analytics::ranked::prewarm_ranked_tier_list_from_dir(
+                    &disk_paths.opgg_ranked_dir,
+                    &disk_settings.navigation.ranked_filter_region,
+                    &disk_settings.navigation.ranked_filter_tier,
+                    disk_settings.navigation.ranked_filter_patch.as_deref(),
+                    disk_settings.automation.patch_48h_protection,
+                    active_locale,
+                    dd,
+                );
+                build_provider::analytics::arena::prewarm_arena_tier_list_from_dir(
+                    &disk_paths.opgg_arena_dir,
+                    disk_settings.automation.patch_48h_protection,
+                    active_locale,
+                    dd,
+                );
+                build_provider::analytics::aram::prewarm_aram_tier_lists_from_dir(
+                    &disk_paths.opgg_aram_dir,
+                    active_locale,
+                    dd,
+                );
+            }
+            disk_bootstrap.update(&disk_app, "tier_lists_disk", 80, true, false);
+            ddragon_opt
+        })
+        .await
+        .ok()
+        .flatten();
 
         let client = build_provider::shared_http_client();
         let (ddragon_refresh_res, opgg_versions) = tokio::join!(
@@ -52,16 +62,22 @@ fn spawn_prewarm_task(
             build_provider::fetch_opgg_versions(client, "global"),
         );
 
-        let current_ddragon_version = ddragon_refresh_res
+        let gc_paths = paths.clone();
+        let gc_opgg_versions = opgg_versions.clone();
+        let gc_ddragon_version = ddragon_refresh_res
             .as_ref()
             .ok()
-            .map(|d| d.version.as_str());
-        let gc_stats = storage::run_garbage_collector(
-            &paths,
-            &opgg_versions,
-            current_ddragon_version,
-            storage::now_unix_secs(),
-        );
+            .map(|d| d.version.clone());
+        let gc_stats = tokio::task::spawn_blocking(move || {
+            storage::run_garbage_collector(
+                &gc_paths,
+                &gc_opgg_versions,
+                gc_ddragon_version.as_deref(),
+                storage::now_unix_secs(),
+            )
+        })
+        .await
+        .unwrap_or_default();
         let ddragon_ver = ddragon_refresh_res
             .as_ref()
             .map(|d| d.version.as_str())

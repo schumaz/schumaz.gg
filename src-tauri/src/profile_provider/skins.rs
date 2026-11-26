@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
@@ -8,9 +8,14 @@ use crate::models::{AppLocale, DataDragonCache};
 
 static SKIN_NAME_CACHE: OnceLock<RwLock<HashMap<AppLocale, HashMap<i32, String>>>> =
     OnceLock::new();
+static HYDRATED_SKIN_DIRS: OnceLock<RwLock<HashSet<(PathBuf, AppLocale)>>> = OnceLock::new();
 
 pub(crate) fn skin_cache() -> &'static RwLock<HashMap<AppLocale, HashMap<i32, String>>> {
     SKIN_NAME_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn hydrated_skin_dirs() -> &'static RwLock<HashSet<(PathBuf, AppLocale)>> {
+    HYDRATED_SKIN_DIRS.get_or_init(|| RwLock::new(HashSet::new()))
 }
 
 pub fn skins_file_path(dir: &Path, locale: AppLocale) -> PathBuf {
@@ -19,17 +24,42 @@ pub fn skins_file_path(dir: &Path, locale: AppLocale) -> PathBuf {
 
 pub fn prewarm_skins_from_dir(dir: &Path, locale: AppLocale) -> usize {
     let path = skins_file_path(dir, locale);
-    let Some(env) = crate::storage::read_lz4_envelope::<HashMap<i32, String>>(&path) else {
-        return 0;
-    };
-    let count = env.payload.len();
+    let loaded =
+        crate::storage::read_lz4_envelope::<HashMap<i32, String>>(&path).map(|env| env.payload);
+    let count = loaded.as_ref().map_or(0, HashMap::len);
     if let Ok(mut guard) = skin_cache().write() {
         let entry = guard.entry(locale).or_default();
-        for (k, v) in env.payload {
-            entry.entry(k).or_insert(v);
+        if let Some(payload) = loaded {
+            for (k, v) in payload {
+                entry.entry(k).or_insert(v);
+            }
         }
     }
+    if let Ok(mut dirs) = hydrated_skin_dirs().write() {
+        dirs.insert((dir.to_path_buf(), locale));
+    }
     count
+}
+
+fn is_skins_hydrated_for_dir(dir: &Path, locale: AppLocale) -> bool {
+    let cache_has_locale = skin_cache()
+        .read()
+        .ok()
+        .is_some_and(|g| g.contains_key(&locale));
+    cache_has_locale
+        && hydrated_skin_dirs()
+            .read()
+            .ok()
+            .is_some_and(|s| s.contains(&(dir.to_path_buf(), locale)))
+}
+
+/// Hydrates `skins_{locale}.lz4` from `dir` into RAM at most once per `(dir, locale)`
+/// while `locale` remains present in `SKIN_NAME_CACHE`.
+pub fn ensure_skins_hydrated_from_dir(dir: &Path, locale: AppLocale) {
+    if is_skins_hydrated_for_dir(dir, locale) {
+        return;
+    }
+    let _ = prewarm_skins_from_dir(dir, locale);
 }
 
 pub fn prewarm_skins_from_disk(locale: AppLocale) -> usize {
@@ -158,7 +188,13 @@ pub async fn fetch_skin_name_for_locale_with_base(
     }
 
     if let Some(dir) = disk_dir {
-        prewarm_skins_from_dir(dir, locale);
+        if !is_skins_hydrated_for_dir(dir, locale) {
+            let dir_buf = dir.to_path_buf();
+            let _ = tokio::task::spawn_blocking(move || {
+                ensure_skins_hydrated_from_dir(&dir_buf, locale);
+            })
+            .await;
+        }
         if let Some(cached) = lookup_cached_skin_name(locale, background_skin_id) {
             return Some(cached);
         }
@@ -214,7 +250,12 @@ pub async fn fetch_skin_name_for_locale_with_base(
             .insert(background_skin_id, formatted.clone());
     }
     if let Some(dir) = disk_dir {
-        save_skins_map_to_dir(dir, locale, version);
+        let dir_buf = dir.to_path_buf();
+        let ver = version.to_string();
+        let _ = tokio::task::spawn_blocking(move || {
+            save_skins_map_to_dir(&dir_buf, locale, &ver);
+        })
+        .await;
     }
 
     Some(formatted)

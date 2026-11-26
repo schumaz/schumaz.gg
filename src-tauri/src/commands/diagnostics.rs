@@ -18,7 +18,6 @@ pub async fn get_diagnostic_summary(
     graphics: State<'_, GraphicsState>,
 ) -> Result<DiagnosticSummary, String> {
     let app_version = app_handle.package_info().version.to_string();
-    let is_portable = updater::detect_is_portable(&app_handle);
     let settings = storage::get_global_settings();
     let active_locale = settings.general.language.unwrap_or_default();
     let gpu_status = graphics.status();
@@ -36,6 +35,7 @@ pub async fn get_diagnostic_summary(
         .or_else(|| storage::global_paths().map(AppPaths::log_file_path));
 
     tokio::task::spawn_blocking(move || {
+        let is_portable = updater::detect_is_portable(&app_handle);
         let input = DiagnosticInput {
             app_version,
             is_portable,
@@ -62,18 +62,22 @@ pub async fn get_diagnostic_summary(
 /// directly from the Rust backend without expanding frontend Tauri capabilities.
 #[tauri::command]
 #[specta::specta]
-pub fn open_logs_folder(app_handle: AppHandle) -> Result<(), String> {
-    let logs_dir = match storage::global_paths() {
-        Some(paths) => paths.logs_dir.clone(),
-        None => AppPaths::resolve_from_app(&app_handle)?.logs_dir,
-    };
-    std::fs::create_dir_all(&logs_dir)
-        .map_err(|e| format!("Failed to ensure logs directory: {e}"))?;
+pub async fn open_logs_folder(app_handle: AppHandle) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let logs_dir = match storage::global_paths() {
+            Some(paths) => paths.logs_dir.clone(),
+            None => AppPaths::resolve_from_app(&app_handle)?.logs_dir,
+        };
+        std::fs::create_dir_all(&logs_dir)
+            .map_err(|e| format!("Failed to ensure logs directory: {e}"))?;
 
-    logging::flush_logs();
+        logging::flush_logs();
 
-    app_handle
-        .opener()
-        .open_path(logs_dir.to_string_lossy().to_string(), None::<&str>)
-        .map_err(|e| format!("Failed to open logs folder: {e}"))
+        app_handle
+            .opener()
+            .open_path(logs_dir.to_string_lossy().to_string(), None::<&str>)
+            .map_err(|e| format!("Failed to open logs folder: {e}"))
+    })
+    .await
+    .map_err(|e| format!("Failed to open logs folder: {e}"))?
 }

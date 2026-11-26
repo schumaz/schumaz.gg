@@ -4,14 +4,17 @@ mod fetcher;
 mod singleflight;
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use bytes::Bytes;
 
 use self::fetcher::fetch_and_cache_asset;
 pub use self::singleflight::AssetSingleflight;
 use self::singleflight::{FlightStep, global_singleflight};
-use super::{AppPaths, fnv1a_128_hex, touch_mtime};
+use super::paths::{force_touch_mtime_at, should_touch_mtime};
+use super::{AppPaths, fnv1a_128_hex};
 
 const ALLOWED_ASSET_PREFIXES: [&str; 2] = [
     "https://ddragon.leagueoflegends.com/",
@@ -170,16 +173,34 @@ pub fn mime_type_for_ext_or_bytes(ext: &str, bytes: &[u8]) -> &'static str {
     }
 }
 
-fn read_cached_asset(cache_path: &Path, ext: &str) -> Option<(Vec<u8>, &'static str)> {
-    if !cache_path.exists() {
-        return None;
-    }
-    let bytes = fs::read(cache_path).ok()?;
+fn read_cached_asset_and_touch(cache_path: &Path, ext: &str) -> Option<(Vec<u8>, &'static str)> {
+    let mut file = fs::File::open(cache_path).ok()?;
+    let meta = file.metadata().ok();
+    let cap = meta.as_ref().map(|m| m.len() as usize).unwrap_or(0);
+    let mut bytes = Vec::with_capacity(cap);
+    file.read_to_end(&mut bytes).ok()?;
+    drop(file);
     if bytes.is_empty() {
         return None;
     }
+    if let Some(modified) = meta.and_then(|m| m.modified().ok()) {
+        let now = SystemTime::now();
+        if should_touch_mtime(modified, now) {
+            force_touch_mtime_at(cache_path, now);
+        }
+    }
     let mime = mime_type_for_ext_or_bytes(ext, &bytes);
     Some((bytes, mime))
+}
+
+async fn read_cached_asset_async(
+    cache_path: PathBuf,
+    ext: &'static str,
+) -> Option<(Vec<u8>, &'static str)> {
+    tokio::task::spawn_blocking(move || read_cached_asset_and_touch(&cache_path, ext))
+        .await
+        .ok()
+        .flatten()
 }
 
 pub async fn serve_cached_or_fetch_asset(
@@ -238,9 +259,8 @@ async fn serve_cached_or_fetch_asset_internal(
     let ext = extract_asset_extension(url);
     let cache_path = asset_cache_path(paths, url);
 
-    if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+    if let Some((bytes, mime)) = read_cached_asset_async(cache_path.clone(), ext).await {
         crate::logging::metrics::record_cache_disk_hit();
-        touch_mtime(&cache_path);
         return Ok((bytes, mime));
     }
 
@@ -263,16 +283,14 @@ async fn serve_cached_or_fetch_asset_internal(
                         break;
                     }
                 }
-                if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+                if let Some((bytes, mime)) = read_cached_asset_async(cache_path.clone(), ext).await {
                     crate::logging::metrics::record_cache_disk_hit();
-                    touch_mtime(&cache_path);
                     return Ok((bytes, mime));
                 }
             }
             FlightStep::Lead(guard) => {
-                if let Some((bytes, mime)) = read_cached_asset(&cache_path, ext) {
+                if let Some((bytes, mime)) = read_cached_asset_async(cache_path.clone(), ext).await {
                     crate::logging::metrics::record_cache_disk_hit();
-                    touch_mtime(&cache_path);
                     guard.complete(Ok((Bytes::from(bytes.clone()), mime)));
                     return Ok((bytes, mime));
                 }

@@ -27,8 +27,15 @@ pub async fn get_active_champ_select_snapshot(
 /// Tauri command to return the cached profile for the last known summoner in 0ms (even before LCU connects).
 #[tauri::command]
 #[specta::specta]
-pub fn get_cached_player_profile(summoner_id: Option<u64>) -> Option<models::CachedProfileResult> {
-    profile_provider::get_cached_profile_for_active_locale(summoner_id)
+pub async fn get_cached_player_profile(
+    summoner_id: Option<u64>,
+) -> Option<models::CachedProfileResult> {
+    tokio::task::spawn_blocking(move || {
+        profile_provider::get_cached_profile_for_active_locale(summoner_id)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 /// Tauri command to fetch aggregated player profile (wallpaper, ranked stats, top 3 masteries, 10 matches).

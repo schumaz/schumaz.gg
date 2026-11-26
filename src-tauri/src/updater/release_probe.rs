@@ -115,7 +115,10 @@ pub async fn probe_latest_release_url(
 /// Evaluates the 24h persisted cooldown and, when due (or `manual`), performs a lightweight
 /// `HEAD /releases/latest` probe before allowing `tauri-plugin-updater` to fetch `latest.json`.
 pub async fn probe_for_app_update(app: &tauri::AppHandle, manual: bool) -> UpdateProbeResult {
-    let is_portable = detect_is_portable(app);
+    let app_for_portable = app.clone();
+    let is_portable = tokio::task::spawn_blocking(move || detect_is_portable(&app_for_portable))
+        .await
+        .unwrap_or_else(|_| detect_is_portable(app));
     let current_version = app.package_info().version.to_string();
     let last_check = storage::get_last_update_check_epoch_secs();
     let now = unix_now_secs();
@@ -154,7 +157,7 @@ pub async fn probe_for_app_update(app: &tauri::AppHandle, manual: bool) -> Updat
 
     match probe_latest_release_url(client, GITHUB_RELEASES_LATEST_URL, &current_version).await {
         Ok(ReleaseProbeOutcome::UpToDate) => {
-            let recorded = persist_check_timestamp(now).or(last_check);
+            let recorded = persist_check_timestamp_async(now).await.or(last_check);
             logging::log_info(
                 "updater",
                 format!(
@@ -173,7 +176,7 @@ pub async fn probe_for_app_update(app: &tauri::AppHandle, manual: bool) -> Updat
         Ok(ReleaseProbeOutcome::UpdateAvailable(remote_version)) => {
             // Portable finishes here without touching latest.json; NSIS persists after plugin check() succeeds.
             let recorded = if is_portable {
-                persist_check_timestamp(now).or(last_check)
+                persist_check_timestamp_async(now).await.or(last_check)
             } else {
                 last_check
             };
@@ -221,6 +224,13 @@ fn persist_check_timestamp(now: u64) -> Option<u64> {
             None
         }
     }
+}
+
+async fn persist_check_timestamp_async(now: u64) -> Option<u64> {
+    tokio::task::spawn_blocking(move || persist_check_timestamp(now))
+        .await
+        .ok()
+        .flatten()
 }
 
 /// Persists the current Unix timestamp as the last completed update check in `UserSettings.ini`.

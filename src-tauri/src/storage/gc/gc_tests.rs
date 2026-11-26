@@ -27,11 +27,15 @@ fn test_garbage_collector_cleans_tmp_old_patches_corrupt_and_inactive_files() {
     let paths = temp_test_paths("gc");
     let now = now_unix_secs();
 
-    // 1. Orphan .tmp files
+    // 1. Orphan .tmp files (> 5m old are removed; recent in-flight .tmp files stay untouched)
     let tmp_cfg = paths.config_dir.join("UserSettings.ini.123.tmp");
     let tmp_cache = paths.opgg_builds_dir.join("build.lz4.456.tmp");
+    let recent_tmp = paths.opgg_builds_dir.join("active_write.lz4.789.tmp");
     atomic_write(&tmp_cfg, b"tmp").unwrap();
     atomic_write(&tmp_cache, b"tmp").unwrap();
+    atomic_write(&recent_tmp, b"in-flight").unwrap();
+    set_mtime_secs_ago(&tmp_cfg, GC_TMP_MIN_AGE_SECS + 60);
+    set_mtime_secs_ago(&tmp_cache, GC_TMP_MIN_AGE_SECS + 60);
 
     // 2. Old patch build file (patch 16.19 not in active ["16.22", "16.21"])
     let old_patch_file = paths.opgg_builds_dir.join("old_patch.lz4");
@@ -70,6 +74,7 @@ fn test_garbage_collector_cleans_tmp_old_patches_corrupt_and_inactive_files() {
     assert_eq!(stats.removed_over_quota_files, 0);
     assert!(!tmp_cfg.exists());
     assert!(!tmp_cache.exists());
+    assert!(recent_tmp.exists());
     assert!(!old_patch_file.exists());
     assert!(active_patch_file.exists());
     assert!(!corrupt_file.exists());

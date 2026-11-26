@@ -48,13 +48,19 @@ pub async fn inject_item_build(
 #[tauri::command]
 #[specta::specta]
 pub async fn sync_user_preferences(preferences: models::UserPreferences) {
-    lcu_injector::sync_user_preferences_service(preferences);
+    let _ = tokio::task::spawn_blocking(move || {
+        lcu_injector::sync_user_preferences_service(preferences);
+    })
+    .await;
 }
 
 /// Tauri command to update the active backend locale (`pt_BR` | `en_US`), persist to `UserSettings.ini`, and pre-warm DataDragon cache.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_locale(app_handle: tauri::AppHandle, locale: models::AppLocale) {
-    lcu_injector::set_locale_service(locale);
+    let _ = tokio::task::spawn_blocking(move || {
+        lcu_injector::set_locale_service(locale);
+    })
+    .await;
     app_bootstrap::refresh_tray_locale(&app_handle, locale);
 }

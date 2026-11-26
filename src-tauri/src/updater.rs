@@ -14,7 +14,10 @@ pub use release_probe::{
 };
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use tauri::Manager;
+
+static IS_PORTABLE_CACHE: OnceLock<bool> = OnceLock::new();
 
 use crate::models::AppDistributionInfo;
 use crate::storage;
@@ -132,24 +135,27 @@ fn read_windows_uninstall_entry() -> Option<WindowsUninstallEntry> {
     None
 }
 
-/// Detects whether the current process is running as a standalone portable executable.
+/// Detects whether the current process is running as a standalone portable executable,
+/// caching the Windows registry check once per process lifetime.
 pub fn detect_is_portable(app: &tauri::AppHandle) -> bool {
-    let feature_portable = cfg!(feature = "portable");
-    let exe_path = std::env::current_exe().ok();
-    let local_app_data: Option<PathBuf> = app
-        .path()
-        .local_data_dir()
-        .ok()
-        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from));
-    let uninstall_entry = read_windows_uninstall_entry();
+    *IS_PORTABLE_CACHE.get_or_init(|| {
+        let feature_portable = cfg!(feature = "portable");
+        let exe_path = std::env::current_exe().ok();
+        let local_app_data: Option<PathBuf> = app
+            .path()
+            .local_data_dir()
+            .ok()
+            .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from));
+        let uninstall_entry = read_windows_uninstall_entry();
 
-    evaluate_portable_mode(
-        feature_portable,
-        cfg!(windows),
-        exe_path.as_deref(),
-        local_app_data.as_deref(),
-        uninstall_entry.as_ref(),
-    )
+        evaluate_portable_mode(
+            feature_portable,
+            cfg!(windows),
+            exe_path.as_deref(),
+            local_app_data.as_deref(),
+            uninstall_entry.as_ref(),
+        )
+    })
 }
 
 /// Collects runtime distribution metadata for the frontend updater flow.

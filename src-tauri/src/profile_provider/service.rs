@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::build_provider;
 use crate::lcu_connector::{
     DEFAULT_MATCH_HISTORY_PAGE_SIZE, LcuConnection, MAX_MATCH_HISTORY_PAGE_SIZE,
@@ -26,13 +28,13 @@ use super::skins::{
 async fn resolve_ddragon_cache_for_locale(
     http_client: &reqwest::Client,
     locale: AppLocale,
-) -> DataDragonCache {
+) -> Arc<DataDragonCache> {
     match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
-        Ok(c) => c.as_ref().clone(),
-        Err(_) => DataDragonCache {
+        Ok(c) => c,
+        Err(_) => Arc::new(DataDragonCache {
             version: build_provider::latest_cached_ddragon_version().unwrap_or_default(),
             ..Default::default()
-        },
+        }),
     }
 }
 
@@ -46,22 +48,34 @@ pub async fn load_player_profile_with_cache(
     let (summoner, puuid) = conn.get_current_summoner_with_puuid().await?;
     let http_client = build_provider::shared_http_client();
 
-    if summoner.summoner_id > 0 {
-        let current_last = crate::storage::get_global_settings()
-            .navigation
-            .last_summoner_id;
-        if current_last != Some(summoner.summoner_id) {
-            let _ = crate::storage::update_global_settings(|s| {
-                s.navigation.last_summoner_id = Some(summoner.summoner_id);
-            });
+    let summoner_id = summoner.summoner_id;
+    let cached_fresh = tokio::task::spawn_blocking(move || {
+        if summoner_id > 0 {
+            let current_last = crate::storage::get_global_settings()
+                .navigation
+                .last_summoner_id;
+            if current_last != Some(summoner_id) {
+                let _ = crate::storage::update_global_settings(|s| {
+                    s.navigation.last_summoner_id = Some(summoner_id);
+                });
+            }
         }
-    }
 
-    if !force_refresh
-        && let Some(cached) = get_cached_profile_for_summoner_id(summoner.summoner_id, locale)
-        && !cached.is_stale
-    {
-        return Ok(cached.profile);
+        if !force_refresh
+            && let Some(cached) = get_cached_profile_for_summoner_id(summoner_id, locale)
+            && !cached.is_stale
+        {
+            Some(cached.profile)
+        } else {
+            None
+        }
+    })
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(profile) = cached_fresh {
+        return Ok(profile);
     }
 
     let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
@@ -156,7 +170,13 @@ pub async fn load_player_profile_with_cache(
     };
 
     if let Some(paths) = crate::storage::global_paths() {
-        let _ = save_profile_to_dir(&paths.profile_dir, &profile, &cache.version);
+        let profile_dir = paths.profile_dir.clone();
+        let version = cache.version.clone();
+        let profile_snapshot = profile.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let _ = save_profile_to_dir(&profile_dir, &profile_snapshot, &version);
+        })
+        .await;
     }
 
     Ok(profile)

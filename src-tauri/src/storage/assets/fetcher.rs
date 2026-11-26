@@ -70,11 +70,26 @@ pub(super) async fn fetch_and_cache_asset(
         match try_fetch_asset_once(client, url).await {
             Ok((bytes, code)) => {
                 crate::logging::metrics::record_http_status(code);
-                if let Err(err) = atomic_write(cache_path, &bytes) {
-                    crate::logging::log_warn(
-                        "storage.assets",
-                        format!("event=asset_io_error err={err}"),
-                    );
+                let path_buf = cache_path.to_path_buf();
+                let bytes_for_write = bytes.clone();
+                let write_res = tokio::task::spawn_blocking(move || {
+                    atomic_write(&path_buf, &bytes_for_write)
+                })
+                .await;
+                match write_res {
+                    Ok(Ok(())) => {}
+                    Ok(Err(err)) => {
+                        crate::logging::log_warn(
+                            "storage.assets",
+                            format!("event=asset_io_error err={err}"),
+                        );
+                    }
+                    Err(err) => {
+                        crate::logging::log_warn(
+                            "storage.assets",
+                            format!("event=asset_io_error err={err}"),
+                        );
+                    }
                 }
                 let mime = mime_type_for_ext_or_bytes(ext, &bytes);
                 return Ok((bytes, mime));
