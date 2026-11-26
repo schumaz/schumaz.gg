@@ -2,9 +2,10 @@ use super::injection_state::{
     AppliedInjectionState, SafetyInjectionSink, log_injection_outcome, plan_safety_injection,
     resolve_injection_spell_pair_from_raw,
 };
+use super::item_sets::sync_item_sets_with_store;
 use super::payloads::{
-    build_item_sets_payload, build_rune_page_payload, build_rune_page_payload_from_parts,
-    build_spells_payload, find_first_deletable_page_id, find_schumaz_page_id,
+    build_rune_page_payload, build_rune_page_payload_from_parts, build_spells_payload,
+    find_first_deletable_page_id, find_schumaz_page_id,
 };
 use super::preferences::{FlashKeyPreference, UserPreferences, get_user_preferences};
 use super::selections::set_selected_rune_page;
@@ -186,14 +187,14 @@ pub async fn inject_spells(
     .await
 }
 
-/// Injects custom item sets for the summoner into the game client shop.
+/// Injects custom item sets for the summoner into the game client shop,
+/// preserving player-created sets and skipping unchanged PUTs.
 pub async fn inject_item_sets(
     conn: &crate::lcu_connector::LcuConnection,
     summoner_id: u64,
     build: &ChampionBuild,
 ) -> Result<(), String> {
-    let payload = build_item_sets_payload(summoner_id, build);
-    conn.put_item_sets(summoner_id, &payload).await?;
+    sync_item_sets_with_store(conn, summoner_id, &[build]).await?;
     Ok(())
 }
 

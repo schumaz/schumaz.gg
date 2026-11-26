@@ -2,8 +2,8 @@ use super::injection::{
     format_injection_report_message, inject_runes,
 };
 use super::injection_state::{log_injection_outcome, resolve_injection_spell_pair};
+use super::item_sets::sync_item_sets_with_store;
 use super::lobby_payloads::{LobbySlotPatch, patch_lobby_player_slots_value};
-use super::payloads::build_multi_item_sets_payload;
 use super::preferences::{UserPreferences, get_user_preferences};
 use super::selections::get_champion_selections;
 use crate::build_provider::ChampionBuild;
@@ -47,14 +47,15 @@ impl LobbyInjectionSink for LcuConnection {
     }
 }
 
-/// Injects combined item sets for multiple champion builds in a single LCU PUT call.
+/// Injects combined item sets for multiple champion builds in a single LCU PUT call,
+/// preserving player-created sets and skipping unchanged PUTs.
 pub async fn inject_multi_item_sets(
     conn: &LcuConnection,
     summoner_id: u64,
     builds: &[&ChampionBuild],
 ) -> Result<(), String> {
-    let payload = build_multi_item_sets_payload(summoner_id, builds);
-    conn.put_item_sets(summoner_id, &payload).await
+    sync_item_sets_with_store(conn, summoner_id, builds).await?;
+    Ok(())
 }
 
 async fn fetch_current_player_slots(conn: &LcuConnection) -> Result<serde_json::Value, String> {

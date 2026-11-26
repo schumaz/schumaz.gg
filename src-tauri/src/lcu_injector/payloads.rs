@@ -172,12 +172,9 @@ fn build_single_item_set(build: &ChampionBuild) -> (serde_json::Value, bool) {
     (set, !is_empty)
 }
 
-/// Builds a combined item sets payload containing one item set per distinct champion build
-/// (used in Swiftplay/Quickplay lobbies so both Primary and Secondary champions are present in shop).
-pub fn build_multi_item_sets_payload(
-    summoner_id: u64,
-    builds: &[&ChampionBuild],
-) -> serde_json::Value {
+/// Builds managed `" | schumaz.gg"` item set entries for distinct champion builds,
+/// deduplicated by `champion_id`.
+pub(super) fn build_managed_item_sets(builds: &[&ChampionBuild]) -> Vec<serde_json::Value> {
     let mut seen_champs = std::collections::HashSet::new();
     let mut item_sets = Vec::new();
     let single = builds.len() == 1;
@@ -191,6 +188,17 @@ pub fn build_multi_item_sets_payload(
             item_sets.push(set);
         }
     }
+
+    item_sets
+}
+
+/// Builds a combined item sets payload containing one item set per distinct champion build
+/// (used in Swiftplay/Quickplay lobbies so both Primary and Secondary champions are present in shop).
+pub fn build_multi_item_sets_payload(
+    summoner_id: u64,
+    builds: &[&ChampionBuild],
+) -> serde_json::Value {
+    let item_sets = build_managed_item_sets(builds);
 
     json!({
         "accountId": summoner_id,

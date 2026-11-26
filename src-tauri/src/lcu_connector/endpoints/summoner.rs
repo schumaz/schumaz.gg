@@ -1,3 +1,4 @@
+use super::is_lcu_error_payload;
 use crate::lcu_connector::client::LcuConnection;
 use crate::models::SummonerInfo;
 
@@ -27,14 +28,6 @@ pub fn build_match_history_page_endpoint(beg_index: u32, end_index: u32) -> Stri
 /// Builds the LCU full match details endpoint for a specific `game_id`.
 pub fn build_match_details_endpoint(game_id: u64) -> String {
     format!("{MATCH_DETAILS_ENDPOINT_PREFIX}/{game_id}")
-}
-
-fn is_lcu_error_payload(val: &serde_json::Value) -> bool {
-    val.get("errorCode").is_some()
-        || val
-            .get("httpStatus")
-            .and_then(|s| s.as_i64())
-            .is_some_and(|s| s >= 400)
 }
 
 /// Pure parser function to extract summoner information from a raw JSON string.

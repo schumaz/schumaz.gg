@@ -84,14 +84,39 @@ impl LcuConnection {
         Err(last_err)
     }
 
+    /// Fetches custom item sets via GET /lol-item-sets/v1/item-sets/{summoner_id}/sets.
+    pub async fn get_item_sets(&self, summoner_id: u64) -> Result<serde_json::Value, String> {
+        let endpoint = build_item_sets_endpoint(summoner_id);
+        let val = self.get_json_required(&endpoint, "item sets").await?;
+        if super::is_lcu_error_payload(&val) {
+            let status = val
+                .get("httpStatus")
+                .and_then(|s| s.as_i64())
+                .unwrap_or(0);
+            let code = val
+                .get("errorCode")
+                .and_then(|c| c.as_str())
+                .unwrap_or("UNKNOWN");
+            return Err(format!(
+                "LCU returned an error payload for item sets (status={status}, code={code})"
+            ));
+        }
+        Ok(val)
+    }
+
     /// Updates custom item sets via PUT /lol-item-sets/v1/item-sets/{summoner_id}/sets.
     pub async fn put_item_sets(
         &self,
         summoner_id: u64,
         payload: &serde_json::Value,
     ) -> Result<(), String> {
-        let endpoint = format!("/lol-item-sets/v1/item-sets/{}/sets", summoner_id);
+        let endpoint = build_item_sets_endpoint(summoner_id);
         self.put_json_ignoring_eof(&endpoint, payload, "Error putting item sets")
             .await
     }
+}
+
+/// Builds the LCU item sets endpoint for a given `summoner_id`.
+pub fn build_item_sets_endpoint(summoner_id: u64) -> String {
+    format!("/lol-item-sets/v1/item-sets/{}/sets", summoner_id)
 }

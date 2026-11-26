@@ -10,7 +10,7 @@
 - `GET /lol-champ-select/v1/session` → sessão do draft/lobby
 - `PATCH /lol-champ-select/v1/session/my-selection` → `{ spell1Id, spell2Id }` (retentar em `404` durante transição)
 - `GET/POST /lol-perks/v1/pages`, `PUT/DELETE /lol-perks/v1/pages/{id}` → página `"%Champ% | schumaz.gg"`
-- `PUT /lol-item-sets/v1/item-sets/{summonerId}/sets` → conjuntos de itens na loja
+- `GET / PUT /lol-item-sets/v1/item-sets/{summonerId}/sets` → lê e atualiza conjuntos de itens na loja mantendo intactos conjuntos manuais sem `" | schumaz.gg"` e pulando `PUT` quando idêntico
 - `GET /lol-objectives/v1/ready` → prontidão do módulo de objetivos (`boolean`)
 - `GET /lol-objectives/v1/objectives/{lol,tft,jade}` → categorias e grupos de objetivos com `missions[]` (`id`, `isNew`, `viewed`, `status`, `startTime`, `endTime` — atenção: TFT usa epoch em segundos, LoL em milissegundos)
 - `GET /lol-missions/v1/missions` e `GET /lol-missions/v1/series` → listas planas de `PlayerMissionDTO` e séries (filtrar por campos estruturais `status`, `isNew`, `viewed`, `displayType`, `display.locations`, sem depender de nomes)
