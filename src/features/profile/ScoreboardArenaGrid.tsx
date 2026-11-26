@@ -1,6 +1,10 @@
 import { MatchScoreboardDetail } from "../../types";
 import { useTranslation } from "../../i18n";
-import { formatArenaPlacement, getArenaPlacementTone } from "./profileHelpers";
+import {
+  formatArenaPlacement,
+  getArenaPlacementTone,
+  type ProfileChampionTarget,
+} from "./profileHelpers";
 import {
   ScoreboardChampCell,
   ScoreboardDamageBar,
@@ -11,9 +15,13 @@ import { ScoreboardAugmentsStrip } from "./ScoreboardLoadoutCell";
 
 interface ScoreboardArenaGridProps {
   scoreboard: MatchScoreboardDetail;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
 }
 
-export function ScoreboardArenaGrid({ scoreboard }: ScoreboardArenaGridProps) {
+export function ScoreboardArenaGrid({
+  scoreboard,
+  onOpenChampionBuild,
+}: ScoreboardArenaGridProps) {
   const { t, locale, formatCompactNumber } = useTranslation();
   const arenaTeams = scoreboard.arena_teams ?? [];
 
@@ -53,8 +61,14 @@ export function ScoreboardArenaGrid({ scoreboard }: ScoreboardArenaGridProps) {
                   data-testid={`scoreboard-player-${p.participant_id}`}
                 >
                   <div className="sb-arena-identity">
-                    <ScoreboardChampCell participant={p} />
-                    <ScoreboardPlayerName participant={p} />
+                    <ScoreboardChampCell
+                      participant={p}
+                      onOpenChampionBuild={onOpenChampionBuild}
+                    />
+                    <ScoreboardPlayerName
+                      participant={p}
+                      onOpenChampionBuild={onOpenChampionBuild}
+                    />
                   </div>
 
                   <div className="sb-kda-cell">

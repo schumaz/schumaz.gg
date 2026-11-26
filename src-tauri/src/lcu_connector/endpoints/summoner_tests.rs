@@ -121,3 +121,29 @@ fn test_build_match_details_endpoint_formats_game_id() {
         "/lol-match-history/v1/games/5500123456"
     );
 }
+
+#[test]
+fn test_build_champion_mastery_endpoints_prioritizes_full_catalog_before_top3() {
+    let with_puuid = build_champion_mastery_endpoints(12345, Some("  test-puuid  "));
+    assert_eq!(
+        with_puuid,
+        vec![
+            "/lol-champion-mastery/v1/local-player/champion-masteries",
+            "/lol-champion-mastery/v1/test-puuid/champion-masteries",
+            "/lol-champion-mastery/v1/test-puuid/champion-mastery",
+            "/lol-champion-mastery/v1/local-player/champion-mastery",
+            "/lol-collections/v1/inventories/12345/champion-mastery",
+            "/lol-collections/v1/inventories/test-puuid/champion-mastery",
+            "/lol-collections/v1/inventories/12345/champion-mastery/top?limit=3",
+        ]
+    );
+
+    let without_ids = build_champion_mastery_endpoints(0, Some("   "));
+    assert_eq!(
+        without_ids,
+        vec![
+            "/lol-champion-mastery/v1/local-player/champion-masteries",
+            "/lol-champion-mastery/v1/local-player/champion-mastery",
+        ]
+    );
+}

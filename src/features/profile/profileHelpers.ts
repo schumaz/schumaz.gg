@@ -1,4 +1,4 @@
-import { AppLocale, PlayerProfile, RecentMatchInfo } from "../../types";
+import { AppLocale, ChampionMasteryInfo, PlayerProfile, RecentMatchInfo } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 
 const CDRAGON_RANKED_EMBLEM_BASE =
@@ -68,6 +68,20 @@ export interface HighlightedChampion {
   games: number;
   wins: number;
   kdaSum: number;
+}
+
+export interface ProfileChampionTarget {
+  championId: number;
+  championName: string;
+  championIconUrl: string;
+}
+
+export type MasterySortKey = "points" | "level" | "recent" | "name";
+
+export interface MasterySummaryStats {
+  totalLevel: number;
+  totalPoints: number;
+  championCount: number;
 }
 
 export function filterValidMatchList(matches: RecentMatchInfo[]): RecentMatchInfo[] {
@@ -156,4 +170,74 @@ export function computeHighlightedChampion(
     (a, b) => b.games - a.games || b.wins - a.wins || b.kdaSum - a.kdaSum
   );
   return sorted[0] ?? null;
+}
+
+export function resolveAllMasteries(profile: PlayerProfile | null): ChampionMasteryInfo[] {
+  if (!profile) return [];
+  if (profile.all_masteries && profile.all_masteries.length > 0) {
+    return profile.all_masteries;
+  }
+  return profile.top_masteries ?? [];
+}
+
+export function computeMasterySummary(masteries: ChampionMasteryInfo[]): MasterySummaryStats {
+  let totalLevel = 0;
+  let totalPoints = 0;
+  for (const m of masteries) {
+    totalLevel += m.champion_level;
+    totalPoints += m.champion_points;
+  }
+  return {
+    totalLevel,
+    totalPoints,
+    championCount: masteries.length,
+  };
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+export function filterAndSortMasteries(
+  masteries: ChampionMasteryInfo[],
+  query: string,
+  sortBy: MasterySortKey,
+  locale: AppLocale
+): ChampionMasteryInfo[] {
+  const normalizedQuery = normalizeSearchText(query);
+  const filtered = normalizedQuery
+    ? masteries.filter((m) => normalizeSearchText(m.champion_name).includes(normalizedQuery))
+    : [...masteries];
+  const collatorLocale = locale === "pt_BR" ? "pt-BR" : "en-US";
+
+  return filtered.sort((a, b) => {
+    const byName = a.champion_name.localeCompare(b.champion_name, collatorLocale);
+    if (sortBy === "level") {
+      return b.champion_level - a.champion_level || b.champion_points - a.champion_points || byName;
+    }
+    if (sortBy === "recent") {
+      return (
+        (b.last_play_time_ms ?? 0) - (a.last_play_time_ms ?? 0) ||
+        b.champion_points - a.champion_points ||
+        byName
+      );
+    }
+    if (sortBy === "name") {
+      return byName || b.champion_points - a.champion_points;
+    }
+    return b.champion_points - a.champion_points || b.champion_level - a.champion_level || byName;
+  });
+}
+
+export function computeMasteryProgressPercent(mastery: ChampionMasteryInfo): number | null {
+  const untilNext = mastery.champion_points_until_next_level ?? 0;
+  const sinceLast = mastery.champion_points_since_last_level ?? 0;
+  if (untilNext <= 0) return null;
+  const span = sinceLast + untilNext;
+  if (span <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((sinceLast / span) * 100)));
 }

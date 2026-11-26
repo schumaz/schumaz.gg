@@ -8,9 +8,12 @@ import {
   computeHighlightedChampion,
   computeWinLossStats,
   filterValidMatchList,
+  type ProfileChampionTarget,
+  resolveAllMasteries,
 } from "./profileHelpers";
 import { ProfileHeroCard } from "./ProfileHeroCard";
 import { ProfileLeftColumn } from "./ProfileLeftColumn";
+import { ProfileMasteriesModal } from "./ProfileMasteriesModal";
 import { ProfileMatchesCard } from "./ProfileMatchesCard";
 import { useMatchHistoryPagination } from "./useMatchHistoryPagination";
 
@@ -25,6 +28,7 @@ interface ProfileTabProps {
   isActive?: boolean;
   savedModeFilter?: string;
   onModeFilterChange?: (mode: string) => void;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
 }
 
 const PROFILE_IDLE_ICON = (
@@ -54,10 +58,12 @@ export function ProfileTab({
   isActive = true,
   savedModeFilter,
   onModeFilterChange,
+  onOpenChampionBuild,
 }: ProfileTabProps) {
   const { t } = useTranslation();
   const [selectedMode, setSelectedMode] = useState<string>(savedModeFilter || "all");
   const [refreshCount, setRefreshCount] = useState(0);
+  const [masteriesModalOpen, setMasteriesModalOpen] = useState(false);
 
   useEffect(() => {
     if (savedModeFilter) {
@@ -71,6 +77,18 @@ export function ProfileTab({
   };
 
   const displaySummoner = summoner ?? profile?.summoner ?? null;
+  const allMasteries = useMemo(() => resolveAllMasteries(profile), [profile]);
+
+  useEffect(() => {
+    setMasteriesModalOpen(false);
+  }, [isActive, displaySummoner?.summonerId]);
+
+  const handleOpenChampionBuild = onOpenChampionBuild
+    ? (target: ProfileChampionTarget) => {
+        setMasteriesModalOpen(false);
+        onOpenChampionBuild(target);
+      }
+    : undefined;
   const pagination = useMatchHistoryPagination(
     profile,
     displaySummoner?.summonerId ?? null,
@@ -169,6 +187,9 @@ export function ProfileTab({
               winLossStats={winLossStats}
               highlightedChampion={highlightedChampion}
               glassBlurStyle={glassBlurStyle}
+              allMasteriesCount={allMasteries.length}
+              onOpenAllMasteries={() => setMasteriesModalOpen(true)}
+              onOpenChampionBuild={handleOpenChampionBuild}
             />
 
             <ProfileMatchesCard
@@ -188,9 +209,20 @@ export function ProfileTab({
               isLoadingMore={pagination.isLoadingMore}
               loadMoreError={pagination.loadMoreError}
               onLoadMore={pagination.loadMore}
+              onOpenChampionBuild={handleOpenChampionBuild}
               resetKey={matchesResetKey}
             />
           </div>
+
+          {masteriesModalOpen && allMasteries.length > 0 && (
+            <ProfileMasteriesModal
+              masteries={allMasteries}
+              onClose={() => setMasteriesModalOpen(false)}
+              onSelectChampion={
+                handleOpenChampionBuild ?? (() => setMasteriesModalOpen(false))
+              }
+            />
+          )}
         </div>
       )}
     </div>

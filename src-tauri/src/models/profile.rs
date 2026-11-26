@@ -18,7 +18,7 @@ pub struct RankedQueueStats {
     pub losses: i32,
 }
 
-/// Top champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`.
+/// Champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
 pub struct ChampionMasteryInfo {
     pub champion_id: i32,
@@ -26,6 +26,16 @@ pub struct ChampionMasteryInfo {
     pub champion_icon_url: String,
     pub champion_level: u32,
     pub champion_points: u64,
+    #[serde(default)]
+    pub last_play_time_ms: i64,
+    #[serde(default)]
+    pub champion_points_since_last_level: u64,
+    #[serde(default)]
+    pub champion_points_until_next_level: u64,
+    #[serde(default)]
+    pub tokens_earned: u32,
+    #[serde(default)]
+    pub mark_required_for_next_level: u32,
 }
 
 /// Individual recent match entry from LCU match history (Practice Tool strictly excluded).
@@ -95,6 +105,8 @@ pub struct PlayerProfile {
     pub background_splash_fallback_url: String,
     pub ranked_stats: Vec<RankedQueueStats>,
     pub top_masteries: Vec<ChampionMasteryInfo>,
+    #[serde(default)]
+    pub all_masteries: Vec<ChampionMasteryInfo>,
     pub recent_matches: Vec<RecentMatchInfo>,
     #[serde(default)]
     pub history_next_beg_index: u32,

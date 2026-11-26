@@ -203,6 +203,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
           aram={aram}
           updater={updater}
           onInvertSpells={handleInvertSpells}
+          onSelectTab={setActiveTab}
         />
 
         <NavigationDock

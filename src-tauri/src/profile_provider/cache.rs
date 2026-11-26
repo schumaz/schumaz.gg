@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::build_provider;
 use crate::models::{AppLocale, CachedProfileResult, DataDragonCache, PlayerProfile};
 
+use super::masteries_parser::localized_unknown_champion_name;
 use super::match_metadata::{
     collect_matches_augment_metadata, collect_matches_item_metadata, collect_matches_rune_metadata,
     collect_matches_spell_metadata, resolve_allowed_rune_icon,
@@ -75,12 +76,25 @@ pub fn relocalize_player_profile(
         }
     }
 
-    if let Some(cache) = ddragon {
-        for mastery in &mut profile.top_masteries {
-            if let Some(champ) = cache.champions.get(&mastery.champion_id) {
-                mastery.champion_name = champ.display_name.clone();
+    for mastery in profile
+        .top_masteries
+        .iter_mut()
+        .chain(profile.all_masteries.iter_mut())
+    {
+        if let Some(champ) = ddragon.and_then(|c| c.champions.get(&mastery.champion_id)) {
+            mastery.champion_name = champ.display_name.clone();
+            if mastery.champion_icon_url.is_empty() && !champ.icon_url.is_empty() {
+                mastery.champion_icon_url = champ.icon_url.clone();
             }
+        } else if mastery.champion_name.is_empty()
+            || mastery.champion_name.starts_with("Campeão ")
+            || mastery.champion_name.starts_with("Champion ")
+        {
+            mastery.champion_name = localized_unknown_champion_name(mastery.champion_id, locale);
         }
+    }
+
+    if let Some(cache) = ddragon {
         if !cache.items.is_empty() {
             profile.item_metadata =
                 collect_matches_item_metadata(&profile.recent_matches, &cache.items);

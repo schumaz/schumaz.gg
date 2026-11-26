@@ -64,6 +64,37 @@ pub fn parse_summoner_value(value: &serde_json::Value) -> Result<SummonerInfo, S
     Ok(info)
 }
 
+/// Builds prioritized LCU mastery endpoints, putting full-catalog endpoints first and `top?limit=3` strictly last.
+pub fn build_champion_mastery_endpoints(summoner_id: u64, puuid: Option<&str>) -> Vec<String> {
+    let puuid_trimmed = puuid.map(str::trim).filter(|p| !p.is_empty());
+    let mut endpoints = vec![CHAMPION_MASTERIES_ENDPOINT.to_string()];
+
+    if let Some(p) = puuid_trimmed {
+        endpoints.push(format!("/lol-champion-mastery/v1/{p}/champion-masteries"));
+        endpoints.push(format!("/lol-champion-mastery/v1/{p}/champion-mastery"));
+    }
+
+    endpoints.push("/lol-champion-mastery/v1/local-player/champion-mastery".to_string());
+
+    if summoner_id > 0 {
+        endpoints.push(format!(
+            "/lol-collections/v1/inventories/{summoner_id}/champion-mastery"
+        ));
+    }
+
+    if let Some(p) = puuid_trimmed {
+        endpoints.push(format!("/lol-collections/v1/inventories/{p}/champion-mastery"));
+    }
+
+    if summoner_id > 0 {
+        endpoints.push(format!(
+            "/lol-collections/v1/inventories/{summoner_id}/champion-mastery/top?limit=3"
+        ));
+    }
+
+    endpoints
+}
+
 impl LcuConnection {
     /// Fetches the current summoner info via GET /lol-summoner/v1/current-summoner.
     pub async fn get_current_summoner(&self) -> Result<SummonerInfo, String> {
@@ -100,30 +131,7 @@ impl LcuConnection {
         summoner_id: u64,
         puuid: Option<&str>,
     ) -> Result<serde_json::Value, String> {
-        let mut endpoints = vec![
-            format!(
-                "/lol-collections/v1/inventories/{}/champion-mastery",
-                summoner_id
-            ),
-            format!(
-                "/lol-collections/v1/inventories/{}/champion-mastery/top?limit=3",
-                summoner_id
-            ),
-            "/lol-champion-mastery/v1/local-player/champion-mastery".to_string(),
-            CHAMPION_MASTERIES_ENDPOINT.to_string(),
-        ];
-
-        if let Some(p) = puuid
-            && !p.is_empty()
-        {
-            endpoints.push(format!(
-                "/lol-collections/v1/inventories/{}/champion-mastery",
-                p
-            ));
-            endpoints.push(format!("/lol-champion-mastery/v1/{}/champion-masteries", p));
-            endpoints.push(format!("/lol-champion-mastery/v1/{}/champion-mastery", p));
-        }
-
+        let endpoints = build_champion_mastery_endpoints(summoner_id, puuid);
         let mut fallback_valid: Option<serde_json::Value> = None;
 
         for ep in endpoints {
@@ -132,12 +140,7 @@ impl LcuConnection {
                 .get::<Option<serde_json::Value>>(&ep)
                 .await
             {
-                let is_lcu_err = val.get("errorCode").is_some()
-                    || val
-                        .get("httpStatus")
-                        .and_then(|s| s.as_i64())
-                        .is_some_and(|s| s >= 400);
-                if is_lcu_err {
+                if is_lcu_error_payload(&val) {
                     continue;
                 }
 

@@ -1,5 +1,6 @@
 import { MatchScoreboardDetail } from "../../types";
 import { useTranslation } from "../../i18n";
+import type { ProfileChampionTarget } from "./profileHelpers";
 import {
   ScoreboardChampCell,
   ScoreboardDamageBar,
@@ -10,9 +11,13 @@ import { ScoreboardLoadoutCell } from "./ScoreboardLoadoutCell";
 
 interface ScoreboardTeamTableProps {
   scoreboard: MatchScoreboardDetail;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
 }
 
-export function ScoreboardTeamTable({ scoreboard }: ScoreboardTeamTableProps) {
+export function ScoreboardTeamTable({
+  scoreboard,
+  onOpenChampionBuild,
+}: ScoreboardTeamTableProps) {
   const { t, formatCompactNumber } = useTranslation();
   const mins = Math.max(1, scoreboard.game_duration_secs / 60);
   const isSrMode = !scoreboard.game_mode_key.startsWith("aram");
@@ -95,14 +100,20 @@ export function ScoreboardTeamTable({ scoreboard }: ScoreboardTeamTableProps) {
                     data-testid={`scoreboard-player-${p.participant_id}`}
                   >
                     <div className="sb-player-identity">
-                      <ScoreboardChampCell participant={p} />
+                      <ScoreboardChampCell
+                        participant={p}
+                        onOpenChampionBuild={onOpenChampionBuild}
+                      />
                       <ScoreboardLoadoutCell
                         participant={p}
                         runeMetadata={scoreboard.rune_metadata}
                         spellMetadata={scoreboard.spell_metadata}
                         augmentMetadata={scoreboard.augment_metadata}
                       />
-                      <ScoreboardPlayerName participant={p} />
+                      <ScoreboardPlayerName
+                        participant={p}
+                        onOpenChampionBuild={onOpenChampionBuild}
+                      />
                     </div>
 
                     <div className="sb-kda-cell">

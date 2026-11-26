@@ -9,8 +9,8 @@ use super::super::skins::{
 };
 use super::*;
 use crate::models::{
-    ArenaAugmentMetadata, ChampionMetadata, ItemMetadata, RankedQueueStats, RecentMatchInfo,
-    RuneMetadata, SpellMetadata, SummonerInfo,
+    ArenaAugmentMetadata, ChampionMasteryInfo, ChampionMetadata, ItemMetadata, RankedQueueStats,
+    RecentMatchInfo, RuneMetadata, SpellMetadata, SummonerInfo,
 };
 
 fn sample_cache() -> DataDragonCache {
@@ -213,7 +213,24 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
             wins: 10,
             losses: 8,
         }],
-        top_masteries: vec![],
+        top_masteries: vec![ChampionMasteryInfo {
+            champion_id: 103, champion_name: "Ahri".to_string(), champion_icon_url: String::new(),
+            champion_level: 25, champion_points: 450000, last_play_time_ms: 1732500000000,
+            champion_points_since_last_level: 15000, champion_points_until_next_level: 5000,
+            tokens_earned: 2, mark_required_for_next_level: 3,
+        }],
+        all_masteries: vec![
+            ChampionMasteryInfo {
+                champion_id: 103, champion_name: "Ahri".to_string(), champion_icon_url: String::new(),
+                champion_level: 25, champion_points: 450000, last_play_time_ms: 1732500000000,
+                champion_points_since_last_level: 15000, champion_points_until_next_level: 5000,
+                tokens_earned: 2, mark_required_for_next_level: 3,
+            },
+            ChampionMasteryInfo {
+                champion_id: 9999, champion_name: "Campeão 9999".to_string(), champion_icon_url: String::new(),
+                champion_level: 4, champion_points: 12000, ..Default::default()
+            },
+        ],
         recent_matches: vec![
             RecentMatchInfo {
                 game_id: 42,
@@ -256,10 +273,14 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
     let mut loaded_stale = load_profile_from_dir(&profile_dir, 55501, now + 400).unwrap();
     assert!(loaded_stale.is_stale);
 
-    // Relocalize cached profile to en_US -> rehydrates item (incl. trinket), rune, spell & augment metadata
+    // Relocalize cached profile to en_US -> rehydrates item (incl. trinket), rune, spell, augment & mastery metadata
     let dd = sample_cache();
     relocalize_player_profile(&mut loaded_stale.profile, AppLocale::EnUs, Some(&dd));
     assert_eq!(loaded_stale.profile.ranked_stats[0].tier_label, "Emerald");
+    assert_eq!(loaded_stale.profile.all_masteries.len(), 2);
+    assert_eq!(loaded_stale.profile.all_masteries[0].tokens_earned, 2);
+    assert!(!loaded_stale.profile.all_masteries[0].champion_icon_url.is_empty());
+    assert_eq!(loaded_stale.profile.all_masteries[1].champion_name, "Champion 9999");
     assert_eq!(
         loaded_stale
             .profile

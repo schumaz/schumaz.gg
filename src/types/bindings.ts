@@ -649,13 +649,35 @@ export type ChampionBuild_Serialize = {
 	lane_matchups: LaneMatchupsSummary_Serialize | null,
 };
 
-/**  Top champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
-export type ChampionMasteryInfo = {
+/**  Champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
+export type ChampionMasteryInfo = ChampionMasteryInfo_Serialize | ChampionMasteryInfo_Deserialize;
+
+/**  Champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
+export type ChampionMasteryInfo_Deserialize = {
 	champion_id: number,
 	champion_name: string,
 	champion_icon_url: string,
 	champion_level: number,
 	champion_points: number,
+	last_play_time_ms?: number,
+	champion_points_since_last_level?: number,
+	champion_points_until_next_level?: number,
+	tokens_earned?: number,
+	mark_required_for_next_level?: number,
+};
+
+/**  Champion mastery entry from `/lol-champion-mastery/v1/local-player/champion-masteries`. */
+export type ChampionMasteryInfo_Serialize = {
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	champion_level: number,
+	champion_points: number,
+	last_play_time_ms: number,
+	champion_points_since_last_level: number,
+	champion_points_until_next_level: number,
+	tokens_earned: number,
+	mark_required_for_next_level: number,
 };
 
 /**  Sanitized local diagnostic snapshot exported for troubleshooting without external telemetry. */
@@ -996,7 +1018,8 @@ export type PlayerProfile_Deserialize = {
 	background_splash_url: string,
 	background_splash_fallback_url: string,
 	ranked_stats: RankedQueueStats[],
-	top_masteries: ChampionMasteryInfo[],
+	top_masteries: ChampionMasteryInfo_Deserialize[],
+	all_masteries?: ChampionMasteryInfo_Deserialize[],
 	recent_matches: RecentMatchInfo_Deserialize[],
 	history_next_beg_index?: number,
 	history_has_more?: boolean,
@@ -1015,7 +1038,8 @@ export type PlayerProfile_Serialize = {
 	background_splash_url: string,
 	background_splash_fallback_url: string,
 	ranked_stats: RankedQueueStats[],
-	top_masteries: ChampionMasteryInfo[],
+	top_masteries: ChampionMasteryInfo_Serialize[],
+	all_masteries: ChampionMasteryInfo_Serialize[],
 	recent_matches: RecentMatchInfo_Serialize[],
 	history_next_beg_index: number,
 	history_has_more: boolean,

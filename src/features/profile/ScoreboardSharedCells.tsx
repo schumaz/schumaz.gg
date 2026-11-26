@@ -7,10 +7,18 @@ import {
   lookupItemMetadata,
   Tooltip,
 } from "../../components/ui";
+import type { ProfileChampionTarget } from "./profileHelpers";
 
-export function ScoreboardChampCell({ participant }: { participant: ScoreboardParticipant }) {
-  return (
-    <div className="sb-champ-cell">
+export function ScoreboardChampCell({
+  participant,
+  onOpenChampionBuild,
+}: {
+  participant: ScoreboardParticipant;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
+}) {
+  const { t } = useTranslation();
+  const content = (
+    <>
       {participant.champion_icon_url ? (
         <div className="dd-icon-frame sb-champ-frame">
           <img
@@ -23,11 +31,40 @@ export function ScoreboardChampCell({ participant }: { participant: ScoreboardPa
         <div className="sb-champ-placeholder">{participant.champion_name.charAt(0)}</div>
       )}
       <span className="sb-level-badge">{participant.champ_level}</span>
-    </div>
+    </>
   );
+
+  if (onOpenChampionBuild && participant.champion_id > 0) {
+    return (
+      <button
+        type="button"
+        className="sb-champ-cell sb-champ-btn"
+        data-testid={`scoreboard-champ-btn-${participant.participant_id}`}
+        aria-label={t("profile.openRankedBuildAria", { name: participant.champion_name })}
+        title={t("profile.openRankedBuildAria", { name: participant.champion_name })}
+        onClick={() =>
+          onOpenChampionBuild({
+            championId: participant.champion_id,
+            championName: participant.champion_name,
+            championIconUrl: participant.champion_icon_url,
+          })
+        }
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className="sb-champ-cell">{content}</div>;
 }
 
-export function ScoreboardPlayerName({ participant }: { participant: ScoreboardParticipant }) {
+export function ScoreboardPlayerName({
+  participant,
+  onOpenChampionBuild,
+}: {
+  participant: ScoreboardParticipant;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
+}) {
   const { t } = useTranslation();
   const fullName = participant.riot_id_tag
     ? `${participant.riot_id_name}#${participant.riot_id_tag}`
@@ -40,7 +77,25 @@ export function ScoreboardPlayerName({ participant }: { participant: ScoreboardP
         {participant.riot_id_tag && <span className="sb-riot-tag">#{participant.riot_id_tag}</span>}
       </span>
       <div className="sb-player-sub">
-        <span>{participant.champion_name}</span>
+        {onOpenChampionBuild && participant.champion_id > 0 ? (
+          <button
+            type="button"
+            className="sb-champ-name-btn"
+            aria-label={t("profile.openRankedBuildAria", { name: participant.champion_name })}
+            title={t("profile.openRankedBuildAria", { name: participant.champion_name })}
+            onClick={() =>
+              onOpenChampionBuild({
+                championId: participant.champion_id,
+                championName: participant.champion_name,
+                championIconUrl: participant.champion_icon_url,
+              })
+            }
+          >
+            {participant.champion_name}
+          </button>
+        ) : (
+          <span>{participant.champion_name}</span>
+        )}
         {participant.is_local_player && (
           <span className="sb-local-badge">{t("profile.localPlayerBadge")}</span>
         )}

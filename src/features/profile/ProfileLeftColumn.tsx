@@ -2,7 +2,11 @@ import { CSSProperties } from "react";
 import { PlayerProfile, RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
-import { HighlightedChampion, WinLossStats } from "./profileHelpers";
+import {
+  HighlightedChampion,
+  type ProfileChampionTarget,
+  WinLossStats,
+} from "./profileHelpers";
 
 interface ProfileLeftColumnProps {
   profile: PlayerProfile | null;
@@ -10,6 +14,9 @@ interface ProfileLeftColumnProps {
   winLossStats: WinLossStats;
   highlightedChampion: HighlightedChampion | null;
   glassBlurStyle: CSSProperties;
+  allMasteriesCount?: number;
+  onOpenAllMasteries?: () => void;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
 }
 
 export function ProfileLeftColumn({
@@ -18,6 +25,9 @@ export function ProfileLeftColumn({
   winLossStats,
   highlightedChampion,
   glassBlurStyle,
+  allMasteriesCount,
+  onOpenAllMasteries,
+  onOpenChampionBuild,
 }: ProfileLeftColumnProps) {
   const { t, formatNumber } = useTranslation();
 
@@ -156,16 +166,48 @@ export function ProfileLeftColumn({
       >
         <div className="profile-card-header">
           <h3>{t("profile.topMasteriesTitle")}</h3>
-          <span className="profile-card-subtitle">{t("profile.topMasteriesSubtitle")}</span>
+          {onOpenAllMasteries && (allMasteriesCount ?? profile?.top_masteries.length ?? 0) > 0 ? (
+            <button
+              type="button"
+              className="mastery-view-all-btn"
+              data-testid="view-all-masteries-btn"
+              onClick={onOpenAllMasteries}
+            >
+              {t("profile.viewAllMasteries", {
+                count: allMasteriesCount ?? profile?.top_masteries.length ?? 0,
+              })}
+            </button>
+          ) : (
+            <span className="profile-card-subtitle">{t("profile.topMasteriesSubtitle")}</span>
+          )}
         </div>
 
         {profile && profile.top_masteries.length > 0 ? (
           <div className="mastery-list">
             {profile.top_masteries.map((mastery, idx) => (
-              <div
+              <button
                 key={mastery.champion_id}
-                className="mastery-row"
+                type="button"
+                className={`mastery-row mastery-row-btn${onOpenChampionBuild ? " is-clickable" : ""}`}
                 data-testid={`mastery-item-${idx + 1}`}
+                disabled={!onOpenChampionBuild}
+                aria-label={
+                  onOpenChampionBuild
+                    ? t("profile.openRankedBuildAria", { name: mastery.champion_name })
+                    : undefined
+                }
+                title={
+                  onOpenChampionBuild
+                    ? t("profile.openRankedBuildAria", { name: mastery.champion_name })
+                    : undefined
+                }
+                onClick={() =>
+                  onOpenChampionBuild?.({
+                    championId: mastery.champion_id,
+                    championName: mastery.champion_name,
+                    championIconUrl: mastery.champion_icon_url,
+                  })
+                }
               >
                 <span className={`mastery-rank rank-${idx + 1}`}>#{idx + 1}</span>
                 {mastery.champion_icon_url ? (
@@ -192,7 +234,7 @@ export function ProfileLeftColumn({
                 <span className="mastery-level-pill">
                   {t("profile.levelPrefix", { level: mastery.champion_level })}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         ) : (

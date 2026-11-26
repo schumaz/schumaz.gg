@@ -1,5 +1,6 @@
 import { RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
+import type { ProfileChampionTarget } from "./profileHelpers";
 import { ScoreboardEntryState } from "./useMatchScoreboard";
 import { ScoreboardArenaGrid } from "./ScoreboardArenaGrid";
 import { ScoreboardTeamTable } from "./ScoreboardTeamTable";
@@ -9,6 +10,7 @@ interface MatchScoreboardDrawerProps {
   entry: ScoreboardEntryState;
   isLcuConnected: boolean;
   onRetry: () => void;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
 }
 
 function MatchIndividualSummary({ match }: { match: RecentMatchInfo }) {
@@ -72,6 +74,7 @@ export function MatchScoreboardDrawer({
   entry,
   isLcuConnected,
   onRetry,
+  onOpenChampionBuild,
 }: MatchScoreboardDrawerProps) {
   const { t } = useTranslation();
   const arenaTeams = entry.status === "ready" ? (entry.data.arena_teams ?? []) : [];
@@ -90,9 +93,15 @@ export function MatchScoreboardDrawer({
 
       {entry.status === "ready" && hasReadyTeams ? (
         entry.data.is_arena ? (
-          <ScoreboardArenaGrid scoreboard={entry.data} />
+          <ScoreboardArenaGrid
+            scoreboard={entry.data}
+            onOpenChampionBuild={onOpenChampionBuild}
+          />
         ) : (
-          <ScoreboardTeamTable scoreboard={entry.data} />
+          <ScoreboardTeamTable
+            scoreboard={entry.data}
+            onOpenChampionBuild={onOpenChampionBuild}
+          />
         )
       ) : entry.status === "loading" || entry.status === "idle" ? (
         isLcuConnected ? (

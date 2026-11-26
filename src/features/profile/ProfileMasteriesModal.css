@@ -1,0 +1,295 @@
+/* Full Champion Mastery Catalog Modal (Portal on document.body) */
+.masteries-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: rgba(7, 8, 12, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: settingsModalBackdropIn 200ms ease-out forwards;
+}
+
+.masteries-modal-dialog {
+  width: 100%;
+  max-width: 920px;
+  height: min(640px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+  margin: 0;
+  padding: 18px 20px;
+  background-color: #13141a;
+  border: 1px solid var(--border-highlight);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(124, 58, 237, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  animation: settingsModalDialogIn 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.masteries-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.masteries-modal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.masteries-modal-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.masteries-modal-subtitle {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.masteries-modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--border-subtle);
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.masteries-modal-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-highlight);
+  color: #ffffff;
+}
+
+.masteries-modal-close-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.masteries-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.masteries-summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
+.masteries-summary-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.masteries-summary-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.masteries-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.masteries-search-box {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.masteries-sort-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.masteries-sort-btn {
+  padding: 6px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.77rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.masteries-sort-btn:hover:not(.active) {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.masteries-sort-btn.active {
+  background-color: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: #ffffff;
+}
+
+.masteries-sort-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.masteries-catalog-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.masteries-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 9px;
+}
+
+.mastery-catalog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.12s ease;
+}
+
+.mastery-catalog-card:hover {
+  border-color: var(--accent-border);
+  background-color: var(--bg-card-hover);
+}
+
+.mastery-catalog-card:active {
+  transform: scale(0.99);
+}
+
+.mastery-catalog-card:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.mastery-catalog-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mastery-catalog-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mastery-catalog-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mastery-catalog-card:hover .mastery-catalog-name {
+  color: var(--accent-primary-hover);
+}
+
+.mastery-catalog-points {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.mastery-catalog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.mastery-catalog-marks {
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background-color: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: var(--accent-warning);
+  font-weight: 600;
+}
+
+.mastery-progress-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.mastery-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-primary-hover));
+}
+
+.masteries-empty-state {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .masteries-modal-backdrop,
+  .masteries-modal-dialog {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .masteries-summary-strip {
+    grid-template-columns: 1fr;
+  }
+}

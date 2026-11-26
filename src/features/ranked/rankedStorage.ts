@@ -23,6 +23,57 @@ export const DEFAULT_RANKED_FILTERS: RankedFilters = {
 };
 
 export const VALID_LANES = new Set<string>(["all", "top", "jungle", "mid", "adc", "support"]);
+const VALID_DETAIL_LANES = new Set<string>(["top", "jungle", "mid", "adc", "support"]);
+
+export interface RankedChampionShortcut {
+  championId: number;
+  championName: string;
+  championIconUrl: string;
+}
+
+export interface ResolvedRankedShortcut {
+  entry: RankedChampionEntry;
+  positionOverride: RankedLane | null;
+}
+
+export function extractValidRankedLane(pos?: string | null): RankedLane | null {
+  const normalized = pos?.trim().toLowerCase() ?? "";
+  return VALID_DETAIL_LANES.has(normalized) ? (normalized as RankedLane) : null;
+}
+
+export function resolveRankedShortcutEntry(
+  shortcut: RankedChampionShortcut,
+  tierData: RankedTierListResponse | null
+): ResolvedRankedShortcut {
+  const matches = (tierData?.champions ?? []).filter((c) => c.id === shortcut.championId);
+  if (matches.length > 0) {
+    const primary = [...matches].sort(
+      (a, b) =>
+        (b.role_rate ?? -1) - (a.role_rate ?? -1) ||
+        (a.overall_rank || Number.MAX_SAFE_INTEGER) - (b.overall_rank || Number.MAX_SAFE_INTEGER) ||
+        (a.rank || Number.MAX_SAFE_INTEGER) - (b.rank || Number.MAX_SAFE_INTEGER)
+    )[0];
+    return { entry: primary, positionOverride: primary.lane };
+  }
+
+  return {
+    entry: {
+      id: shortcut.championId,
+      key: String(shortcut.championId),
+      name: shortcut.championName.trim() || `#${shortcut.championId}`,
+      icon_url: shortcut.championIconUrl || "",
+      lane: "mid",
+      tier: 4,
+      rank: 0,
+      overall_rank: 0,
+      win_rate: null,
+      pick_rate: null,
+      ban_rate: null,
+      role_rate: null,
+    },
+    positionOverride: null,
+  };
+}
 
 export interface UseRankedPersistenceOptions {
   iniBacked?: boolean;

@@ -279,6 +279,45 @@
   flex-shrink: 0;
 }
 
+.sb-champ-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  border-radius: 7px;
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.sb-champ-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 1.5px var(--accent-primary-hover);
+}
+
+.sb-champ-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.sb-champ-name-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  text-align: left;
+  transition: color 0.14s ease;
+}
+
+.sb-champ-name-btn:hover,
+.sb-champ-name-btn:focus-visible {
+  color: var(--accent-primary-hover);
+  text-decoration: underline;
+}
+
 .sb-champ-frame {
   width: 26px;
   height: 26px;

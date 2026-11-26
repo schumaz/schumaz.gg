@@ -5,7 +5,7 @@ import { ProfileTab, type usePlayerProfile } from "./features/profile";
 import { ChampSelectTab, type useLcuEvents } from "./features/champ-select";
 import { AramTab, type useAram } from "./features/aram";
 import { ArenaTab, type useArena } from "./features/arena";
-import { RankedTab, type useRanked } from "./features/ranked";
+import { RankedTab, type RankedChampionShortcut, type useRanked } from "./features/ranked";
 
 export interface AppTabsViewportProps {
   activeTab: ActiveTab;
@@ -18,6 +18,7 @@ export interface AppTabsViewportProps {
   aram: ReturnType<typeof useAram>;
   updater: ReturnType<typeof useAppUpdater>;
   onInvertSpells: () => void;
+  onSelectTab: (tab: ActiveTab) => void;
 }
 
 export function AppTabsViewport({
@@ -31,8 +32,14 @@ export function AppTabsViewport({
   aram,
   updater,
   onInvertSpells,
+  onSelectTab,
 }: AppTabsViewportProps) {
   const { locale, preferences, navigationState, updateNavigationState } = prefs;
+
+  const handleOpenChampionBuild = (target: RankedChampionShortcut) => {
+    ranked.openChampionShortcut(target);
+    onSelectTab("ranked");
+  };
 
   return (
     <div className="tabs-viewport" aria-hidden={isBooting || undefined}>
@@ -47,6 +54,7 @@ export function AppTabsViewport({
         isActive={activeTab === "profile"}
         savedModeFilter={navigationState?.profileMatchModeFilter}
         onModeFilterChange={(mode) => updateNavigationState({ profileMatchModeFilter: mode })}
+        onOpenChampionBuild={handleOpenChampionBuild}
       />
 
       <ChampSelectTab

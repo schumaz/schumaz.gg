@@ -10,7 +10,7 @@ use crate::models::{
 use super::cache::{
     get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
 };
-use super::masteries_parser::parse_top_masteries;
+use super::masteries_parser::parse_all_masteries_for_locale;
 use super::match_metadata::{
     collect_matches_augment_metadata, collect_matches_item_metadata, collect_matches_rune_metadata,
     collect_matches_spell_metadata,
@@ -101,10 +101,11 @@ pub async fn load_player_profile_with_cache(
         .map(|val| parse_ranked_stats_for_locale(val, locale))
         .unwrap_or_else(|_| parse_ranked_stats_for_locale(&serde_json::Value::Null, locale));
 
-    let top_masteries = masteries_res
+    let all_masteries = masteries_res
         .as_ref()
-        .map(|val| parse_top_masteries(val, &cache, 3))
+        .map(|val| parse_all_masteries_for_locale(val, &cache, locale))
         .unwrap_or_default();
+    let top_masteries = all_masteries.iter().take(3).cloned().collect();
 
     let initial_page = history_res
         .as_ref()
@@ -144,6 +145,7 @@ pub async fn load_player_profile_with_cache(
         background_splash_fallback_url,
         ranked_stats,
         top_masteries,
+        all_masteries,
         recent_matches,
         history_next_beg_index: initial_page.next_beg_index,
         history_has_more: initial_page.has_more,

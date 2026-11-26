@@ -682,6 +682,55 @@
   font-weight: 700;
 }
 
+.mastery-view-all-btn {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--accent-border);
+  background-color: var(--accent-subtle);
+  color: var(--accent-primary-hover);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  outline: none;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.mastery-view-all-btn:hover {
+  background-color: rgba(124, 58, 237, 0.28);
+  border-color: var(--accent-primary-hover);
+  color: #ffffff;
+}
+
+.mastery-view-all-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.mastery-row-btn {
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+  outline: none;
+}
+
+.mastery-row-btn.is-clickable {
+  cursor: pointer;
+}
+
+.mastery-row-btn:disabled {
+  cursor: default;
+}
+
+.mastery-row-btn.is-clickable:hover .mastery-champ-name {
+  color: var(--accent-primary-hover);
+}
+
+.mastery-row-btn.is-clickable:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 /* Win/Loss SVG Donut & Metrics */
 .winloss-overview {
   display: flex;

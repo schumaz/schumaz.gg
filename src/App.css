@@ -11,6 +11,7 @@
 @import "./components/ui/Tooltip.css";
 @import "./features/settings/SettingsTab.css";
 @import "./features/profile/ProfileTab.css";
+@import "./features/profile/ProfileMasteriesModal.css";
 @import "./features/profile/MatchScoreboard.css";
 @import "./features/aram/AramTab.css";
 @import "./styles/loading-skeleton.css";

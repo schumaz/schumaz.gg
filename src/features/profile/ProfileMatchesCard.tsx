@@ -10,7 +10,7 @@ import {
 } from "../../components/ui";
 import { MatchRowSummary } from "./MatchRowSummary";
 import { MatchScoreboardDrawer } from "./MatchScoreboardDrawer";
-import { AvailableModeItem } from "./profileHelpers";
+import { AvailableModeItem, type ProfileChampionTarget } from "./profileHelpers";
 import { useMatchScoreboard } from "./useMatchScoreboard";
 
 interface ProfileMatchesCardProps {
@@ -30,6 +30,7 @@ interface ProfileMatchesCardProps {
   isLoadingMore?: boolean;
   loadMoreError?: string | null;
   onLoadMore?: () => void;
+  onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
   resetKey?: unknown;
 }
 
@@ -50,6 +51,7 @@ export function ProfileMatchesCard({
   isLoadingMore = false,
   loadMoreError = null,
   onLoadMore,
+  onOpenChampionBuild,
   resetKey,
 }: ProfileMatchesCardProps) {
   const { t, locale } = useTranslation();
@@ -143,6 +145,7 @@ export function ProfileMatchesCard({
                       entry={scoreboard.getEntry(match.game_id)}
                       isLcuConnected={isLcuConnected}
                       onRetry={() => scoreboard.retryScoreboard(match.game_id)}
+                      onOpenChampionBuild={onOpenChampionBuild}
                     />
                   )}
                 </div>
