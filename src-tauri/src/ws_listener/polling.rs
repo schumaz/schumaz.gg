@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 
+use super::actor::try_probe_snapshot_via_actor;
 use super::extract::{WsSessionTransition, evaluate_ws_event};
 use super::gameflow::process_gameflow_phase_update;
 use super::reconcile_state::{
@@ -10,8 +11,7 @@ use super::reconcile_state::{
 use super::session_handler::{
     handle_session_transition, process_session_timer, should_defer_initial_inject_to_finalization,
 };
-use super::subscription::{WsListenerCtx, clear_active_session, spawn_configured_ws};
-use super::ws_client::LcuWsHandle;
+use super::subscription::{WsListenerCtx, clear_active_session};
 use crate::models::ActiveChampSelectSnapshot;
 
 const IDLE_FALLBACK_POLL_MS: u64 = 4000;
@@ -209,7 +209,7 @@ pub(crate) async fn poll_lcu_session_with_gateway<G, S>(
     }
 }
 
-async fn poll_lcu_session_once_locked(ctx: &WsListenerCtx) {
+pub(crate) async fn poll_lcu_session_once_locked(ctx: &WsListenerCtx) {
     let Ok(conn) = crate::lcu_connector::LcuConnection::connect() else { return };
     let (gateway, sink) = (LiveLcuPollGateway { conn }, LiveLcuPollSink { ctx });
     poll_lcu_session_with_gateway(
@@ -218,15 +218,8 @@ async fn poll_lcu_session_once_locked(ctx: &WsListenerCtx) {
     .await;
 }
 
-/// Runs a single serialized LCU gameflow + Champ Select probe, syncing `last_gameflow_phase`
-/// and dispatching any active Champ Select transition + finalization timer.
-pub(crate) async fn poll_lcu_session_once(ctx: &WsListenerCtx) {
-    let _poll_guard = ctx.poll_lock.lock().await;
-    poll_lcu_session_once_locked(ctx).await;
-}
-
 /// Returns the consolidated bootstrap snapshot of gameflow phase, active Champ Select payload,
-/// and compatible cached build. Probes LCU on demand via `poll_lcu_session_once` if the backend
+/// and compatible cached build. Probes LCU on demand via the FIFO actor if the backend
 /// has not yet observed a gameflow phase or is in `ChampSelect` without a cached payload.
 pub async fn get_active_champ_select_snapshot(
     app_handle: &tauri::AppHandle,
@@ -239,7 +232,7 @@ pub async fn get_active_champ_select_snapshot(
         should_probe_lcu_for_snapshot(&phase, &state)
     };
 
-    if needs_probe {
+    if needs_probe && !try_probe_snapshot_via_actor().await {
         let _poll_guard = ctx.poll_lock.lock().await;
         let still_needs_probe = {
             let phase = ctx.last_gameflow_phase.lock().await;
@@ -254,85 +247,6 @@ pub async fn get_active_champ_select_snapshot(
     let phase = ctx.last_gameflow_phase.lock().await.clone();
     let state = ctx.session_state.lock().await;
     build_active_champ_select_snapshot(&phase, &state)
-}
-
-async fn run_fallback_poll_loop(ctx: WsListenerCtx) {
-    let mut conn_rx = crate::lcu_connector::subscribe_lcu_connection();
-    let mut needs_immediate_poll = true;
-
-    loop {
-        if !*conn_rx.borrow() {
-            needs_immediate_poll = true;
-            clear_active_session(&ctx, false).await;
-            ctx.last_gameflow_phase.lock().await.clear();
-            if conn_rx.changed().await.is_err() {
-                break;
-            }
-            continue;
-        }
-
-        let current_phase = ctx.last_gameflow_phase.lock().await.clone();
-        let has_active_session = ctx.session_state.lock().await.last_payload.is_some();
-
-        if let Some(poll_interval) =
-            resolve_next_poll_delay(needs_immediate_poll, &current_phase, has_active_session)
-        {
-            tokio::select! {
-                _ = tokio::time::sleep(poll_interval) => {}
-                changed = conn_rx.changed() => {
-                    if changed.is_err() { break; }
-                    if *conn_rx.borrow() { needs_immediate_poll = true; }
-                    continue;
-                }
-            }
-        } else {
-            needs_immediate_poll = false;
-        }
-
-        if !*conn_rx.borrow() {
-            continue;
-        }
-
-        poll_lcu_session_once(&ctx).await;
-    }
-}
-
-/// Starts the WebSocket listener and adaptive fallback polling task coordinated with `lcu_monitor`.
-pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
-    let ctx = WsListenerCtx::for_app(app_handle);
-
-    tokio::spawn(run_fallback_poll_loop(ctx.clone()));
-
-    let mut conn_rx = crate::lcu_connector::subscribe_lcu_connection();
-    let mut active_ws: Option<LcuWsHandle> = None;
-
-    loop {
-        if !*conn_rx.borrow() {
-            if let Some(ws) = active_ws.take() {
-                ws.abort();
-            }
-            if conn_rx.changed().await.is_err() {
-                break;
-            }
-            continue;
-        }
-
-        if active_ws.as_ref().is_none_or(LcuWsHandle::is_finished) {
-            active_ws = Some(spawn_configured_ws(&ctx));
-        }
-
-        tokio::select! {
-            changed = conn_rx.changed() => {
-                if changed.is_err() {
-                    if let Some(ws) = active_ws.take() {
-                        ws.abort();
-                    }
-                    break;
-                }
-            }
-            _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-        }
-    }
 }
 
 #[cfg(test)]

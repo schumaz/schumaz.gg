@@ -50,6 +50,9 @@ export function useLcuEvents(
   const buildRef = useRef<ChampionBuild | null>(null);
   const champSelectRef = useRef<ChampSelectedPayload | null>(null);
   const latestFetchSeqRef = useRef(0);
+  const activeLoadingSeqRef = useRef(0);
+  const lobbySlotSeqRef = useRef(0);
+  const expectedLobbySlotRef = useRef<number | null>(null);
   const prevSyncedChampRef = useRef<number | null>(null);
   const gameflowPhaseRef = useRef<string>("");
   const hasAutoNavigatedRef = useRef<boolean>(false);
@@ -58,19 +61,20 @@ export function useLcuEvents(
   const activeLocaleRef = useRef<AppLocale>(activeLocale);
   const prevLocaleRef = useRef<AppLocale | null>(localeReady ? activeLocale : null);
 
+  const resetSelections = () => {
+    setSelectedSpellPairIndex(0);
+    setSelectedRunePageIndex(0);
+    setSelectedBuildIndex(0);
+  };
+
   useEffect(() => {
     onChampionPulledRef.current = options?.onChampionPulled;
     onMatchEndedRef.current = options?.onMatchEnded;
     activeLocaleRef.current = activeLocale;
   }, [options?.onChampionPulled, options?.onMatchEnded, activeLocale]);
 
-  useEffect(() => {
-    buildRef.current = build;
-  }, [build]);
-
-  useEffect(() => {
-    champSelectRef.current = champSelect;
-  }, [champSelect]);
+  useEffect(() => { buildRef.current = build; }, [build]);
+  useEffect(() => { champSelectRef.current = champSelect; }, [champSelect]);
 
   useEffect(() => {
     const displayedId = champSelect?.champion_id ?? build?.champion_id ?? null;
@@ -90,6 +94,8 @@ export function useLcuEvents(
       return;
     }
     const fetchSeq = ++latestFetchSeqRef.current;
+    const loadingSeq = ++activeLoadingSeqRef.current;
+    resetSelections();
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -105,7 +111,7 @@ export function useLcuEvents(
       }
     } catch (err: unknown) {
       console.error("Failed to update build filters:", err);
-      if (latestFetchSeqRef.current === fetchSeq) {
+      if (latestFetchSeqRef.current === fetchSeq || activeLoadingSeqRef.current === loadingSeq) {
         setErrorMsg(
           typeof err === "string"
             ? err
@@ -113,7 +119,10 @@ export function useLcuEvents(
         );
       }
     } finally {
-      if (latestFetchSeqRef.current === fetchSeq) setLoading(false);
+      if (activeLoadingSeqRef.current === loadingSeq) {
+        activeLoadingSeqRef.current += 1;
+        setLoading(false);
+      }
     }
   };
 
@@ -141,22 +150,11 @@ export function useLcuEvents(
   useEffect(() => {
     let active = true;
     const subscription = subscribeToLcuEvents({
-      activeChampIdRef,
-      buildRef,
-      latestFetchSeqRef,
-      hasAutoNavigatedRef,
-      gameflowPhaseRef,
-      onChampionPulledRef,
-      onMatchEndedRef,
-      setSummoner,
-      setChampSelect,
-      setBuild,
-      setGameflowPhase,
-      setSpellsInverted,
-      setSelectedSpellPairIndex,
-      setSelectedRunePageIndex,
-      setSelectedBuildIndex,
-      setErrorMsg,
+      activeChampIdRef, buildRef, latestFetchSeqRef, activeLoadingSeqRef,
+      lobbySlotSeqRef, expectedLobbySlotRef, hasAutoNavigatedRef, gameflowPhaseRef,
+      onChampionPulledRef, onMatchEndedRef, setSummoner, setChampSelect, setBuild,
+      setGameflowPhase, setSpellsInverted, setSelectedSpellPairIndex,
+      setSelectedRunePageIndex, setSelectedBuildIndex, setLoading, setErrorMsg,
     });
 
     const bootstrapLcu = async () => {
@@ -180,11 +178,7 @@ export function useLcuEvents(
     };
 
     void bootstrapLcu();
-
-    return () => {
-      active = false;
-      subscription.unlisten();
-    };
+    return () => { active = false; subscription.unlisten(); };
   }, []);
 
   const isArena = isArenaBuildContext(build, champSelect);
@@ -217,14 +211,28 @@ export function useLcuEvents(
     await injectItemBuildAction(build, champSelect, index);
   };
   const handleSelectLobbySlot = async (slotIndex: number) => {
+    const slotSeq = ++lobbySlotSeqRef.current;
+    expectedLobbySlotRef.current = slotIndex;
+    latestFetchSeqRef.current += 1;
+    activeLoadingSeqRef.current += 1;
+    setLoading(false);
+    setErrorMsg(null);
     const snap = await selectLobbyPreselectSlotAction(slotIndex).catch(() => null);
+    if (lobbySlotSeqRef.current !== slotSeq) return;
+    expectedLobbySlotRef.current = null;
     if (!snap?.champ_selected) return;
+    if (champSelectRef.current !== null && !champSelectRef.current.is_lobby_preselect) return;
     const next = snap.champ_selected;
-    const changed = activeChampIdRef.current !== next.champion_id;
+    const changed = (activeChampIdRef.current ?? buildRef.current?.champion_id ?? null) !== next.champion_id;
     activeChampIdRef.current = next.champion_id;
+    champSelectRef.current = next;
     setChampSelect(next);
-    if (changed) { setSpellsInverted(false); setSelectedSpellPairIndex(0); setSelectedRunePageIndex(0); setSelectedBuildIndex(0); }
-    if (snap.build && snap.build.champion_id === next.champion_id) { buildRef.current = snap.build; setBuild(snap.build); }
+    if (changed) { setSpellsInverted(false); resetSelections(); }
+    if (snap.build && snap.build.champion_id === next.champion_id) {
+      latestFetchSeqRef.current += 1;
+      buildRef.current = snap.build;
+      setBuild(snap.build);
+    }
   };
 
   return {

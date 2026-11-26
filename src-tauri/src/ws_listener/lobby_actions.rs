@@ -46,6 +46,16 @@ pub async fn select_lobby_preselect_slot_service(
     };
 
     let build = if let Some(b) = cached_build {
+        let still_active_slot = {
+            let guard = state_ref.lock().await;
+            guard
+                .last_payload
+                .as_ref()
+                .is_some_and(|p| p.is_lobby_preselect && p.active_slot_index == Some(slot_index))
+        };
+        if !still_active_slot {
+            return Ok(None);
+        }
         b
     } else {
         let client = crate::build_provider::shared_http_client();
@@ -59,14 +69,22 @@ pub async fn select_lobby_preselect_slot_service(
             None,
         )
         .await?;
-        let mut guard = state_ref.lock().await;
-        if guard
-            .last_payload
-            .as_ref()
-            .is_some_and(|p| p.is_lobby_preselect && p.active_slot_index == Some(slot_index))
-        {
-            guard.lobby_builds.insert(slot_index, fetched.clone());
-            guard.last_build = Some(fetched.clone());
+        let still_active_slot = {
+            let mut guard = state_ref.lock().await;
+            if guard
+                .last_payload
+                .as_ref()
+                .is_some_and(|p| p.is_lobby_preselect && p.active_slot_index == Some(slot_index))
+            {
+                guard.lobby_builds.insert(slot_index, fetched.clone());
+                guard.last_build = Some(fetched.clone());
+                true
+            } else {
+                false
+            }
+        };
+        if !still_active_slot {
+            return Ok(None);
         }
         fetched
     };

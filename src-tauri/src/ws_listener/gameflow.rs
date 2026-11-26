@@ -95,6 +95,7 @@ pub(crate) async fn process_gameflow_phase_update(
     }
 
     if emit_match_ended {
+        crate::lcu_injector::clear_champion_selections();
         {
             let state_ref = super::reconcile_state::shared_session_state();
             let mut guard = state_ref.lock().await;

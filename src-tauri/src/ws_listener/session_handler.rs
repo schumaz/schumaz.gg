@@ -4,16 +4,14 @@ use tauri_specta::Event as SpectaEvent;
 
 use super::coordinator::ChampSelectCoordinator;
 use super::extract::{
-    ChampSelectedPayload, FINALIZATION_SAFETY_WINDOW_MS, FinalizationAction, QUEUE_ARAM,
-    QUEUE_ARAM_MAYHEM, QUEUE_PRACTICE_TOOL, QUEUE_SOLO_DUO, QueueMode, WsSessionTransition,
-    evaluate_finalization_window, extract_champ_select_timer, is_arena_queue,
+    ChampSelectedPayload, FINALIZATION_SAFETY_WINDOW_MS, FinalizationAction, QueueMode,
+    WsSessionTransition, evaluate_finalization_window, extract_champ_select_timer,
     queue_supports_spells, should_emit_champ_select, should_request_lock_in_attention,
 };
 use super::gameflow::{log_champ_select_change, sync_gameflow_phase_before_champ_select_end};
 use super::reconcile::{LiveLcuReconcileGateway, TauriReconcileEmitter, reconcile_final_session};
 use super::reconcile_state::{
-    ChampSelectSessionState, record_filter_updated_build, resolve_effective_build_position,
-    resolve_effective_build_queue_id,
+    ChampSelectSessionState, resolve_effective_build_position, resolve_effective_build_queue_id,
 };
 use crate::lcu_injector::AppliedInjectionState;
 use crate::{logging, models};
@@ -145,9 +143,14 @@ async fn run_champ_select_build_and_inject(
         if !prefs.auto_inject_spells {
             return false;
         }
-        crate::lcu_injector::inject_spells_pair(
+        let _spell_inject_guard = spell_seq_guard.lock_injection().await;
+        if !spell_seq_guard.is_current(my_seq) {
+            return false;
+        }
+        crate::lcu_injector::inject_spells_pair_for_queue(
             &spell_conn,
             fast.champion_id,
+            Some(q_id),
             fast.spell1_id,
             fast.spell2_id,
             fast.is_jungle,
@@ -165,6 +168,7 @@ async fn run_champ_select_build_and_inject(
     let (summoner_opt, spells_already_injected, build_res) =
         tokio::join!(summoner_fut, fast_spell_fut, build_fut);
 
+    let _inject_guard = seq_guard.lock_injection().await;
     if !seq_guard.is_current(my_seq) {
         return;
     }
@@ -190,9 +194,10 @@ async fn run_champ_select_build_and_inject(
         return;
     }
 
-    let report = crate::lcu_injector::inject_champion_build_with_options(
+    let report = crate::lcu_injector::inject_champion_build_with_options_for_queue(
         &conn,
         summoner.summoner_id,
+        Some(q_id),
         &build,
         spells_already_injected,
     )
@@ -231,11 +236,12 @@ pub(crate) async fn handle_session_transition(
                         state_guard.last_payload.as_ref(),
                         &payload,
                     );
-                    let champion_changed = state_guard
-                        .last_payload
-                        .as_ref()
-                        .is_some_and(|prev| prev.champion_id != payload.champion_id);
-                    if champion_changed {
+                    let selection_scope_changed = state_guard.last_payload.as_ref().is_some_and(|prev| {
+                        prev.champion_id != payload.champion_id
+                            || resolve_effective_build_queue_id(prev)
+                                != resolve_effective_build_queue_id(&payload)
+                    });
+                    if selection_scope_changed {
                         crate::lcu_injector::clear_champion_selections();
                         coordinator.cancel_pending().await;
                     }
@@ -274,6 +280,7 @@ pub(crate) async fn handle_session_transition(
         WsSessionTransition::Ended => {
             coordinator.cancel_pending().await;
             coordinator.cancel_finalization_timer().await;
+            crate::lcu_injector::clear_champion_selections();
             let had_session = {
                 let mut state_guard = state_ref.lock().await;
                 let was_active = state_guard.last_payload.is_some();
@@ -289,46 +296,4 @@ pub(crate) async fn handle_session_transition(
         }
         WsSessionTransition::NoChampionSelected => {}
     }
-}
-
-/// Refreshes the build with updated user filters, emits the build event, and re-injects if LCU is active.
-pub async fn update_build_filters_and_reinject(
-    champion_id: i32,
-    queue_id: Option<i32>,
-    position: Option<String>,
-    tier: Option<String>,
-    region: Option<String>,
-    patch: Option<String>,
-    app_handle: &tauri::AppHandle,
-) -> Result<crate::build_provider::ChampionBuild, String> {
-    let http_client = crate::build_provider::shared_http_client();
-    let q_id = crate::models::canonical_build_queue_id(queue_id.unwrap_or(QUEUE_SOLO_DUO));
-    let no_position_mode = q_id == QUEUE_ARAM || q_id == QUEUE_ARAM_MAYHEM || is_arena_queue(q_id);
-    let effective_position = if no_position_mode { None } else { position.as_deref() };
-
-    let build = crate::build_provider::get_recommended_build_with_filters(
-        http_client, champion_id, q_id, effective_position, tier.as_deref(), region.as_deref(), patch.as_deref(),
-    )
-    .await?;
-
-    let _ = models::RecommendedBuild(build.clone()).emit(app_handle);
-
-    if super::lobby_actions::reinject_active_lobby_filter_update(champion_id, &build, app_handle)
-        .await
-    {
-        return Ok(build);
-    }
-
-    if let Ok(conn) = crate::lcu_connector::LcuConnection::connect()
-        && let Ok(summoner) = conn.get_current_summoner().await
-    {
-        let report =
-            crate::lcu_injector::inject_champion_build(&conn, summoner.summoner_id, &build).await;
-        let effective_q = if q_id == 0 || q_id == QUEUE_PRACTICE_TOOL { QUEUE_SOLO_DUO } else { q_id };
-        let applied = AppliedInjectionState::from_report(effective_q, &build, &report);
-        record_filter_updated_build(build.clone(), applied).await;
-        let _ = models::BuildInjected(report).emit(app_handle);
-    }
-
-    Ok(build)
 }

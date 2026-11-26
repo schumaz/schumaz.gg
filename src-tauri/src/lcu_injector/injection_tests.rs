@@ -3,7 +3,7 @@ use crate::build_provider::{ItemBlock, ItemBlockKind, RunePageOption};
 use crate::lcu_injector::{
     FlashKeyPreference, TEST_SELECTIONS_LOCK, build_item_sets_payload, build_rune_page_payload,
     build_spells_payload, clear_champion_selections, resolve_injection_spell_pair,
-    set_selected_rune_page, set_selected_spell_pair,
+    resolve_injection_spell_pair_for_queue, set_selected_rune_page, set_selected_spell_pair,
 };
 use crate::models::AppLocale;
 use std::sync::Mutex;
@@ -29,12 +29,13 @@ impl SafetyInjectionSink for MockInjectionSink {
     async fn inject_spells_for_build(
         &self,
         build: &ChampionBuild,
+        queue_id: Option<i32>,
         flash_key: FlashKeyPreference,
     ) -> Result<(), String> {
         if self.fail_spells {
             return Err("transient spell patch failure".to_string());
         }
-        let pair = resolve_injection_spell_pair(build, flash_key);
+        let pair = resolve_injection_spell_pair_for_queue(build, queue_id, flash_key);
         let _ = build_spells_payload(pair.0, pair.1)?;
         self.spell_pairs
             .lock()

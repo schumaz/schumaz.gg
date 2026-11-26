@@ -13,6 +13,17 @@ import {
   QUEUE_ID_ARENA,
 } from "../../components/ui/queueContext";
 
+export function isInGamePhase(phase: string): boolean {
+  return phase === "GameStart" || phase === "InProgress" || phase === "Reconnect";
+}
+
+export function isSpellsLockedPhase(phase: string, isLobbyPreselect?: boolean): boolean {
+  return (
+    isInGamePhase(phase) ||
+    (Boolean(isLobbyPreselect) && (phase === "Matchmaking" || phase === "ReadyCheck"))
+  );
+}
+
 export function resolveChampSelectBuildContext(
   champSelect: ChampSelectedPayload | null,
   currentBuild: ChampionBuild

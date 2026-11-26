@@ -6,24 +6,25 @@ import {
   SummonerInfo,
 } from "../../types";
 import { buildIpc, lcuIpc, type UnlistenFn } from "../../services/ipc";
-import { fetchRecommendedPayloadBuild } from "./lcuBuildActions";
-import { hydrateActiveChampSelectSnapshot } from "./lcuSnapshotHydration";
+import {
+  fetchRecommendedPayloadBuild,
+  isInGamePhase,
+  isSpellsLockedPhase,
+} from "./lcuBuildActions";
+import {
+  applyChampSelectReconciledPayload,
+  hydrateActiveChampSelectSnapshot,
+} from "./lcuSnapshotHydration";
 
-export function isInGamePhase(phase: string): boolean {
-  return phase === "GameStart" || phase === "InProgress" || phase === "Reconnect";
-}
-
-export function isSpellsLockedPhase(phase: string, isLobbyPreselect?: boolean): boolean {
-  return (
-    isInGamePhase(phase) ||
-    (Boolean(isLobbyPreselect) && (phase === "Matchmaking" || phase === "ReadyCheck"))
-  );
-}
+export { isInGamePhase, isSpellsLockedPhase };
 
 export interface LcuListenersContext {
   activeChampIdRef: MutableRefObject<number | null>;
   buildRef: MutableRefObject<ChampionBuild | null>;
   latestFetchSeqRef: MutableRefObject<number>;
+  activeLoadingSeqRef: MutableRefObject<number>;
+  lobbySlotSeqRef: MutableRefObject<number>;
+  expectedLobbySlotRef: MutableRefObject<number | null>;
   hasAutoNavigatedRef: MutableRefObject<boolean>;
   gameflowPhaseRef: MutableRefObject<string>;
   onChampionPulledRef: MutableRefObject<(() => void) | undefined>;
@@ -36,6 +37,7 @@ export interface LcuListenersContext {
   setSelectedSpellPairIndex: Dispatch<SetStateAction<number>>;
   setSelectedRunePageIndex: Dispatch<SetStateAction<number>>;
   setSelectedBuildIndex: Dispatch<SetStateAction<number>>;
+  setLoading: Dispatch<SetStateAction<boolean>>;
   setErrorMsg: Dispatch<SetStateAction<string | null>>;
 }
 
@@ -67,11 +69,23 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionH
     ctx.setSelectedBuildIndex(0);
   };
 
+  const cancelActiveLoading = () => {
+    ctx.activeLoadingSeqRef.current += 1;
+    ctx.setLoading(false);
+  };
+
+  const invalidateLobbySlotSeq = () => {
+    ctx.lobbySlotSeqRef.current += 1;
+    ctx.expectedLobbySlotRef.current = null;
+  };
+
   const clearSessionState = () => {
     ctx.activeChampIdRef.current = null;
     ctx.buildRef.current = null;
     ctx.latestFetchSeqRef.current += 1;
     ctx.hasAutoNavigatedRef.current = false;
+    cancelActiveLoading();
+    invalidateLobbySlotSeq();
     ctx.setChampSelect(null);
     ctx.setBuild(null);
     ctx.setSpellsInverted(false);
@@ -120,24 +134,31 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionH
     }),
     lcuIpc.onChampSelected(async (payload) => {
       liveSessionEventSeq += 1;
+      const prevChampId = ctx.activeChampIdRef.current ?? ctx.buildRef.current?.champion_id ?? null;
       ctx.activeChampIdRef.current = payload.champion_id;
       const fetchSeq = ++ctx.latestFetchSeqRef.current;
-      ctx.setChampSelect((prev) => {
-        if (prev?.champion_id !== payload.champion_id) {
-          ctx.setSpellsInverted(false);
-          resetBuildSelections();
-        }
-        return payload;
-      });
-      if (payload.is_lobby_preselect) {
-        return;
+      if (
+        !payload.is_lobby_preselect ||
+        (ctx.expectedLobbySlotRef.current !== null &&
+          payload.active_slot_index !== ctx.expectedLobbySlotRef.current)
+      ) {
+        invalidateLobbySlotSeq();
       }
+      if (prevChampId !== payload.champion_id) {
+        cancelActiveLoading();
+        ctx.setSpellsInverted(false);
+        resetBuildSelections();
+      }
+      ctx.setChampSelect(payload);
+      if (payload.is_lobby_preselect) return;
       await fetchBuildForPayload(payload, fetchSeq);
     }),
     lcuIpc.onChampSelectEnded(() => {
       liveSessionEventSeq += 1;
       ctx.activeChampIdRef.current = null;
       ctx.latestFetchSeqRef.current += 1;
+      invalidateLobbySlotSeq();
+      cancelActiveLoading();
       if (!isInGamePhase(ctx.gameflowPhaseRef.current)) clearSessionState();
     }),
     buildIpc.onRecommendedBuild((payload) => {
@@ -148,6 +169,7 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionH
         return;
       }
       ctx.latestFetchSeqRef.current += 1;
+      cancelActiveLoading();
       ctx.buildRef.current = payload;
       ctx.setBuild((prev) => {
         if (prev?.champion_id !== payload.champion_id) resetBuildSelections();
@@ -157,37 +179,14 @@ export function subscribeToLcuEvents(ctx: LcuListenersContext): LcuSubscriptionH
     }),
     lcuIpc.onChampSelectReconciled(async (payload) => {
       liveSessionEventSeq += 1;
-      const { champ_selected, build: reconciledBuild } = payload;
-      const currentDisplayedChampId =
-        ctx.activeChampIdRef.current ?? ctx.buildRef.current?.champion_id ?? null;
-      const champDiverged = currentDisplayedChampId !== champ_selected.champion_id;
-      ctx.activeChampIdRef.current = champ_selected.champion_id;
-
-      if (champDiverged) {
-        const fetchSeq = ++ctx.latestFetchSeqRef.current;
-        ctx.setSpellsInverted(false);
-        resetBuildSelections();
-        ctx.setChampSelect(champ_selected);
-        if (reconciledBuild && reconciledBuild.champion_id === champ_selected.champion_id) {
-          ctx.buildRef.current = reconciledBuild;
-          ctx.setBuild(reconciledBuild);
-          notifyChampionPulledOnce();
-        } else {
-          await fetchBuildForPayload(champ_selected, fetchSeq);
-        }
-        return;
-      }
-
-      ctx.setChampSelect(champ_selected);
-      if (
-        reconciledBuild &&
-        reconciledBuild.champion_id === champ_selected.champion_id &&
-        (!ctx.buildRef.current || ctx.buildRef.current.champion_id !== champ_selected.champion_id)
-      ) {
-        ctx.buildRef.current = reconciledBuild;
-        ctx.setBuild(reconciledBuild);
-        notifyChampionPulledOnce();
-      }
+      await applyChampSelectReconciledPayload(payload, {
+        ctx,
+        cancelActiveLoading,
+        invalidateLobbySlotSeq,
+        resetBuildSelections,
+        notifyChampionPulledOnce,
+        fetchBuildForPayload,
+      });
     }),
     lcuIpc.onGameflowPhaseChanged((phase) => {
       livePhaseEventSeq += 1;

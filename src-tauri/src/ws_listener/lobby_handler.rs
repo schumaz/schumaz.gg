@@ -114,39 +114,45 @@ async fn run_lobby_preselect_build_and_inject(
     let active_build = active_build.clone();
 
     {
-        let mut guard = ctx.session_state.lock().await;
-        if ctx.coordinator.is_current(my_seq) {
-            for (slot_idx, build) in &slot_builds {
-                guard.lobby_builds.insert(*slot_idx, build.clone());
-            }
-            guard.last_build = Some(active_build.clone());
+        let _inject_guard = ctx.coordinator.lock_injection().await;
+        if !ctx.coordinator.is_current(my_seq) {
+            return;
         }
-    }
+        {
+            let mut guard = ctx.session_state.lock().await;
+            if ctx.coordinator.is_current(my_seq) {
+                for (slot_idx, build) in &slot_builds {
+                    guard.lobby_builds.insert(*slot_idx, build.clone());
+                }
+                guard.last_build = Some(active_build.clone());
+            }
+        }
 
-    let _ = models::RecommendedBuild(active_build).emit(&ctx.app_handle);
+        let _ = models::RecommendedBuild(active_build).emit(&ctx.app_handle);
 
-    let Ok(conn) = LcuConnection::connect() else {
-        return;
-    };
-    let Ok(summoner) = conn.get_current_summoner().await else {
-        return;
-    };
-    if !ctx.coordinator.is_current(my_seq) {
-        return;
-    }
+        let Ok(conn) = LcuConnection::connect() else {
+            return;
+        };
+        let Ok(summoner) = conn.get_current_summoner().await else {
+            return;
+        };
+        if !ctx.coordinator.is_current(my_seq) {
+            return;
+        }
 
-    let phase = ctx.last_gameflow_phase.lock().await.clone();
-    let report = lcu_injector::inject_lobby_preselect_builds(
-        &conn,
-        summoner.summoner_id,
-        active_slot_idx,
-        &slot_builds,
-        is_lobby_phase_editable(&phase),
-    )
-    .await;
+        let phase = ctx.last_gameflow_phase.lock().await.clone();
+        let report = lcu_injector::inject_lobby_preselect_builds(
+            &conn,
+            summoner.summoner_id,
+            active_slot_idx,
+            &slot_builds,
+            is_lobby_phase_editable(&phase),
+        )
+        .await;
 
-    if ctx.coordinator.is_current(my_seq) {
-        let _ = models::BuildInjected(report).emit(&ctx.app_handle);
+        if ctx.coordinator.is_current(my_seq) {
+            let _ = models::BuildInjected(report).emit(&ctx.app_handle);
+        }
     }
 }
 

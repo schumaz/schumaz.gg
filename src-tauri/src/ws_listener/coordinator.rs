@@ -15,6 +15,7 @@ pub struct ChampSelectCoordinator {
     selection_seq: Arc<AtomicU64>,
     active_inject_task: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
     finalization_timer: Arc<tokio::sync::Mutex<FinalizationTimerSlot>>,
+    inject_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl ChampSelectCoordinator {
@@ -25,6 +26,19 @@ impl ChampSelectCoordinator {
 
     pub(crate) fn is_current(&self, seq: u64) -> bool {
         self.selection_seq.load(Ordering::SeqCst) == seq
+    }
+
+    pub(crate) async fn claim_next_seq(&self) -> u64 {
+        let seq = self.selection_seq.fetch_add(1, Ordering::SeqCst) + 1;
+        let mut guard = self.active_inject_task.lock().await;
+        if let Some(prev_handle) = guard.take() {
+            prev_handle.abort();
+        }
+        seq
+    }
+
+    pub(crate) async fn lock_injection(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.inject_lock.lock().await
     }
 
     pub(crate) async fn cancel_pending(&self) {

@@ -94,3 +94,38 @@ async fn test_safety_reinject_arena_skips_runes_and_spells_and_injects_only_item
     build_with_spells.supports_spells = true;
     assert!(!applied_pt.matches_expected(350, QUEUE_ARENA, &build_with_spells, &prefs_pt));
 }
+
+#[tokio::test]
+async fn test_safety_reinject_aram_ignores_stale_ranked_teleport_selection() {
+    use crate::lcu_injector::set_selected_spell_pair;
+    use crate::models::QUEUE_ARAM;
+
+    let _test_guard = TEST_SELECTIONS_LOCK.lock().await;
+    clear_champion_selections();
+
+    // User selected Teleport (12) + Flash (4) on Ahri (103) in Ranked previously
+    set_selected_spell_pair(103, 4, 12);
+
+    let aram_build = ChampionBuild {
+        champion_id: 103,
+        champion_name: "Ahri".to_string(),
+        primary_style_id: 8100,
+        sub_style_id: 8200,
+        selected_perk_ids: vec![8112, 8126, 8138, 8106, 8226, 8210, 5008, 5008, 5001],
+        spell1_id: 4,
+        spell2_id: 32,
+        supports_runes: true,
+        supports_spells: true,
+        ..Default::default()
+    };
+
+    let prefs = UserPreferences::default();
+    let sink = MockInjectionSink::default();
+    let (report, _) =
+        safety_reinject_build_with_sink(&sink, 999, QUEUE_ARAM, &aram_build, &prefs).await;
+
+    assert!(report.spells_injected);
+    assert_eq!(sink.spell_pairs.lock().unwrap().as_slice(), &[(4, 32)]);
+
+    clear_champion_selections();
+}

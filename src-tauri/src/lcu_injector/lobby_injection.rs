@@ -1,7 +1,7 @@
 use super::injection::{
     format_injection_report_message, inject_runes,
 };
-use super::injection_state::{log_injection_outcome, resolve_injection_spell_pair};
+use super::injection_state::{log_injection_outcome, resolve_injection_spell_pair_for_queue};
 use super::item_sets::sync_item_sets_with_store;
 use super::lobby_payloads::{LobbySlotPatch, patch_lobby_player_slots_value};
 use super::preferences::{UserPreferences, get_user_preferences};
@@ -147,6 +147,12 @@ pub async fn inject_lobby_preselect_with_sink(
         };
     };
 
+    let active_q = crate::ws_listener::shared_active_queue_id().load(Ordering::Relaxed);
+    let effective_q = if active_q != 0 {
+        active_q
+    } else {
+        crate::models::QUEUE_SWIFTPLAY
+    };
     let patches: Vec<LobbySlotPatch> = slot_builds
         .iter()
         .map(|(slot_idx, build)| {
@@ -156,7 +162,11 @@ pub async fn inject_lobby_preselect_with_sink(
                 None
             };
             let spells = if prefs.auto_inject_spells && build.supports_spells {
-                Some(resolve_injection_spell_pair(build, prefs.flash_key))
+                Some(resolve_injection_spell_pair_for_queue(
+                    build,
+                    Some(effective_q),
+                    prefs.flash_key,
+                ))
             } else {
                 None
             };

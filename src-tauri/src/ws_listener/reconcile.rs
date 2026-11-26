@@ -144,6 +144,7 @@ impl FinalReconcileGateway for LiveLcuReconcileGateway {
         queue_id: i32,
         build: &ChampionBuild,
     ) -> (InjectionReport, AppliedInjectionState) {
+        let _inject_guard = self.coordinator.lock_injection().await;
         crate::lcu_injector::safety_reinject_build(&self.conn, summoner_id, queue_id, build).await
     }
 
@@ -175,6 +176,7 @@ where
     let session_opt = gateway.get_champ_select_session().await?;
     let Some(session_json) = session_opt else {
         gateway.cancel_pending_tasks().await;
+        gateway.clear_selections();
         let had_session = {
             let mut guard = state_ref.lock().await;
             let was_active = guard.last_payload.is_some();

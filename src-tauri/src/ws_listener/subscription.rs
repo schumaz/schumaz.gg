@@ -1,35 +1,19 @@
-use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::time::Duration;
 use tauri_specta::Event as SpectaEvent;
+use tokio::sync::mpsc::UnboundedSender;
 
+use super::actor::{LcuEventActorMsg, register_shared_actor_sender, run_lcu_event_actor};
 use super::coordinator::ChampSelectCoordinator;
-use super::extract::{WsSessionTransition, evaluate_ws_event};
-use super::gameflow::{process_gameflow_phase_update, sync_gameflow_phase_before_champ_select_end};
+use super::gameflow::sync_gameflow_phase_before_champ_select_end;
+use super::polling::resolve_next_poll_delay;
 use super::reconcile_state::{
     ChampSelectSessionState, shared_active_queue_id, shared_coordinator,
     shared_last_gameflow_phase, shared_poll_lock, shared_reconcile_lock, shared_session_state,
 };
-use super::session_handler::{
-    handle_session_transition, process_session_timer, should_defer_initial_inject_to_finalization,
-};
 use super::ws_client::{LcuWsEvent, LcuWsHandle, WsEventCallback, endpoint_to_json_api_topic};
 use crate::{logging, models};
-
-/// Spawns an async task from synchronous WebSocket callback threads
-/// onto the captured Tokio runtime, falling back to `tauri::async_runtime` if needed.
-fn spawn_on_runtime<F>(rt_handle: Option<&tokio::runtime::Handle>, future: F)
-where
-    F: Future<Output = ()> + Send + 'static,
-{
-    if let Some(handle) = rt_handle {
-        handle.spawn(future);
-    } else if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        handle.spawn(future);
-    } else {
-        tauri::async_runtime::spawn(future);
-    }
-}
 
 #[derive(Clone)]
 pub(crate) struct WsListenerCtx {
@@ -61,6 +45,7 @@ impl WsListenerCtx {
 pub(super) async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) {
     ctx.coordinator.cancel_pending().await;
     ctx.coordinator.cancel_finalization_timer().await;
+    crate::lcu_injector::clear_champion_selections();
     let had_session = {
         let mut state_guard = ctx.session_state.lock().await;
         let was_active = state_guard.last_payload.is_some();
@@ -76,105 +61,39 @@ pub(super) async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) 
     }
 }
 
-pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWsHandle {
+pub(super) fn spawn_configured_ws(actor_tx: &UnboundedSender<LcuEventActorMsg>) -> LcuWsHandle {
     let rt_handle = tokio::runtime::Handle::try_current().ok();
     let mut subscriptions: Vec<(String, WsEventCallback)> = Vec::with_capacity(9);
 
-    let ws_ctx = ctx.clone();
-    let session_rt = rt_handle.clone();
+    let champ_tx = actor_tx.clone();
     subscriptions.push((
         endpoint_to_json_api_topic(crate::lcu_connector::CHAMP_SELECT_SESSION_ENDPOINT),
         Arc::new(move |event: &LcuWsEvent| {
-            let ctx = ws_ctx.clone();
-            let event_type = event.event_type.clone();
-            let data = event.data.clone();
-
-            spawn_on_runtime(session_rt.as_ref(), async move {
-                let mut current_q = ctx.active_queue_id.load(Ordering::Relaxed);
-                if current_q <= 0 {
-                    let maybe_fetched = match crate::lcu_connector::LcuConnection::connect() {
-                        Ok(conn) => conn.get_current_queue_id().await.ok(),
-                        Err(_) => None,
-                    };
-                    if let Some(fetched_q) = maybe_fetched {
-                        ctx.active_queue_id.store(fetched_q, Ordering::Relaxed);
-                        current_q = fetched_q;
-                    }
-                }
-
-                let transition = evaluate_ws_event(&event_type, &data, current_q);
-                let is_active = matches!(transition, WsSessionTransition::Active(_));
-                if is_active && ctx.last_gameflow_phase.lock().await.is_empty() {
-                    process_gameflow_phase_update(
-                        &ctx.app_handle,
-                        &ctx.last_gameflow_phase,
-                        "ChampSelect".to_string(),
-                    )
-                    .await;
-                }
-
-                let defer_initial_inject = matches!(
-                    &transition,
-                    WsSessionTransition::Active(payload)
-                        if should_defer_initial_inject_to_finalization(payload, &data)
-                );
-
-                handle_session_transition(
-                    &ctx.app_handle,
-                    transition,
-                    &ctx.session_state,
-                    &ctx.active_queue_id,
-                    &ctx.coordinator,
-                    &ctx.last_gameflow_phase,
-                    defer_initial_inject,
-                )
-                .await;
-
-                if is_active {
-                    process_session_timer(
-                        &ctx.app_handle,
-                        &data,
-                        &ctx.session_state,
-                        &ctx.reconcile_lock,
-                        &ctx.active_queue_id,
-                        &ctx.coordinator,
-                    )
-                    .await;
-                }
+            let _ = champ_tx.send(LcuEventActorMsg::WsChampSelect {
+                event_type: event.event_type.clone(),
+                data: event.data.clone(),
             });
         }),
     ));
 
-    let phase_handle = ctx.app_handle.clone();
-    let phase_state = Arc::clone(&ctx.last_gameflow_phase);
-    let phase_rt = rt_handle.clone();
+    let phase_tx = actor_tx.clone();
     subscriptions.push((
         endpoint_to_json_api_topic(crate::lcu_connector::GAMEFLOW_PHASE_ENDPOINT),
         Arc::new(move |event: &LcuWsEvent| {
-            let handle = phase_handle.clone();
-            let state = Arc::clone(&phase_state);
-            let next_phase = event.data.as_str().unwrap_or("").to_string();
-
-            if next_phase.is_empty() {
-                return;
+            let next_phase = event.data.as_str().unwrap_or("").trim().to_string();
+            if !next_phase.is_empty() {
+                let _ = phase_tx.send(LcuEventActorMsg::WsGameflowPhase { phase: next_phase });
             }
-
-            spawn_on_runtime(phase_rt.as_ref(), async move {
-                process_gameflow_phase_update(&handle, &state, next_phase).await;
-            });
         }),
     ));
 
-    let lobby_ctx = ctx.clone();
-    let lobby_rt = rt_handle.clone();
+    let lobby_tx = actor_tx.clone();
     subscriptions.push((
         endpoint_to_json_api_topic(crate::lcu_connector::LOBBY_ENDPOINT),
         Arc::new(move |event: &LcuWsEvent| {
-            let ctx = lobby_ctx.clone();
-            let event_type = event.event_type.clone();
-            let data = event.data.clone();
-            spawn_on_runtime(lobby_rt.as_ref(), async move {
-                super::lobby_handler::handle_lobby_ws_payload(&ctx, &event_type, &data).await;
+            let _ = lobby_tx.send(LcuEventActorMsg::WsLobby {
+                event_type: event.event_type.clone(),
+                data: event.data.clone(),
             });
         }),
     ));
@@ -202,23 +121,139 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWsHandle {
     ws
 }
 
+async fn run_fallback_poll_loop(
+    ctx: WsListenerCtx,
+    actor_tx: UnboundedSender<LcuEventActorMsg>,
+) {
+    let mut conn_rx = crate::lcu_connector::subscribe_lcu_connection();
+    let mut needs_immediate_poll = true;
+
+    loop {
+        if !*conn_rx.borrow() {
+            needs_immediate_poll = true;
+            let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+            if actor_tx
+                .send(LcuEventActorMsg::LcuDisconnected { done: done_tx })
+                .is_ok()
+            {
+                let _ = done_rx.await;
+            } else {
+                clear_active_session(&ctx, false).await;
+                ctx.last_gameflow_phase.lock().await.clear();
+            }
+            if conn_rx.changed().await.is_err() {
+                break;
+            }
+            continue;
+        }
+
+        let current_phase = ctx.last_gameflow_phase.lock().await.clone();
+        let has_active_session = ctx.session_state.lock().await.last_payload.is_some();
+
+        if let Some(poll_interval) =
+            resolve_next_poll_delay(needs_immediate_poll, &current_phase, has_active_session)
+        {
+            tokio::select! {
+                _ = tokio::time::sleep(poll_interval) => {}
+                changed = conn_rx.changed() => {
+                    if changed.is_err() { break; }
+                    if *conn_rx.borrow() { needs_immediate_poll = true; }
+                    continue;
+                }
+            }
+        } else {
+            needs_immediate_poll = false;
+        }
+
+        if !*conn_rx.borrow() {
+            continue;
+        }
+
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        if actor_tx
+            .send(LcuEventActorMsg::FallbackPoll { done: done_tx })
+            .is_ok()
+        {
+            let _ = done_rx.await;
+        }
+    }
+}
+
+/// Starts the WebSocket listener, sequential FIFO event actor, and adaptive fallback polling task.
+pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
+    let ctx = WsListenerCtx::for_app(app_handle);
+    let (actor_tx, actor_rx) = tokio::sync::mpsc::unbounded_channel();
+    register_shared_actor_sender(actor_tx.clone());
+
+    tokio::spawn(run_lcu_event_actor(ctx.clone(), actor_rx));
+    tokio::spawn(run_fallback_poll_loop(ctx.clone(), actor_tx.clone()));
+
+    let mut conn_rx = crate::lcu_connector::subscribe_lcu_connection();
+    let mut active_ws: Option<LcuWsHandle> = None;
+
+    loop {
+        if !*conn_rx.borrow() {
+            if let Some(ws) = active_ws.take() {
+                ws.abort();
+            }
+            if conn_rx.changed().await.is_err() {
+                break;
+            }
+            continue;
+        }
+
+        if active_ws.as_ref().is_none_or(LcuWsHandle::is_finished) {
+            active_ws = Some(spawn_configured_ws(&actor_tx));
+        }
+
+        tokio::select! {
+            changed = conn_rx.changed() => {
+                if changed.is_err() {
+                    if let Some(ws) = active_ws.take() {
+                        ws.abort();
+                    }
+                    break;
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_spawn_on_runtime_succeeds_from_non_tokio_thread() {
-        let rt_handle = tokio::runtime::Handle::current();
-        let (tx, rx) = tokio::sync::oneshot::channel();
+    async fn test_actor_enqueue_from_non_tokio_thread_preserves_fifo_order() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
         std::thread::spawn(move || {
-            spawn_on_runtime(Some(&rt_handle), async move {
-                let _ = tx.send(42);
-            });
+            tx.send(LcuEventActorMsg::WsChampSelect {
+                event_type: "Update".to_string(),
+                data: serde_json::json!({ "championId": 103 }),
+            })
+            .unwrap();
+            tx.send(LcuEventActorMsg::WsChampSelect {
+                event_type: "Delete".to_string(),
+                data: serde_json::Value::Null,
+            })
+            .unwrap();
         })
         .join()
-        .expect("worker thread should not panic without active Tokio TLS context");
+        .expect("worker thread should enqueue without active Tokio TLS context");
 
-        assert_eq!(rx.await.expect("spawned task should complete"), 42);
+        match rx.recv().await {
+            Some(LcuEventActorMsg::WsChampSelect { event_type, .. }) => {
+                assert_eq!(event_type, "Update");
+            }
+            _ => panic!("expected first FIFO event to be Update"),
+        }
+        match rx.recv().await {
+            Some(LcuEventActorMsg::WsChampSelect { event_type, .. }) => {
+                assert_eq!(event_type, "Delete");
+            }
+            _ => panic!("expected second FIFO event to be Delete"),
+        }
     }
 }
