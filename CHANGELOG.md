@@ -5,6 +5,22 @@ All notable changes to **schumaz.gg** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-11-26
+
+### English
+
+Patch release fixing vertical clipping of the **Recent form** (`W`/`L`) streak badges on the **Profile** tab at `1280×720` and smaller window heights.
+
+#### Fixed
+- **Profile Recent Form Vertical Clipping (`ProfileTab.css`)**: Prevented vertical flex-shrinking on `[data-testid="winloss-chart-card"]`, `.recent-streak-block`, and `.streak-pill`, bounded `.profile-split-grid` to `grid-template-rows: minmax(0, 1fr)` on desktop (resetting to `auto` at `<= 860px`), and refined left-column vertical spacing so all 10 `W`/`L` badges remain 100% visible without clipping while keeping clean column-only scrolling when needed.
+
+### Português (BR)
+
+Release de correção eliminando o corte vertical dos badges `V`/`D` de **Sequência recente** (*Recent form*) na aba **Perfil** em `1280×720` e alturas menores de janela.
+
+#### Corrigido
+- **Corte Vertical da Sequência Recente no Perfil (`ProfileTab.css`)**: Impedido o encolhimento vertical em `[data-testid="winloss-chart-card"]`, `.recent-streak-block` e `.streak-pill`, limitado `.profile-split-grid` com `grid-template-rows: minmax(0, 1fr)` no desktop (resetando para `auto` em `<= 860px`) e ajustados os espaçamentos verticais da coluna esquerda para manter todos os 10 badges `V`/`D` 100% visíveis sem corte e com rolagem limpa apenas na coluna quando necessário.
+
 ## [0.5.0] - 2026-11-26
 
 ### English

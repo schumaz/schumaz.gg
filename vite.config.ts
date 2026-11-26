@@ -13,6 +13,9 @@ export default defineConfig(() => ({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/setupTests.ts",
+    css: {
+      include: [/\?raw$/],
+    },
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

@@ -491,6 +491,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 0.92fr 1.38fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   overflow: visible;
 }
@@ -508,8 +509,8 @@
   align-self: stretch;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 10px 12px 10px;
-  margin: -8px -6px -12px -10px;
+  padding: 6px 10px 8px 10px;
+  margin: -6px -6px -8px -10px;
 }
 
 .profile-col-right {
@@ -522,6 +523,10 @@
   background: rgba(19, 20, 26, 0.38);
   backdrop-filter: blur(var(--profile-ui-blur, 16px));
   -webkit-backdrop-filter: blur(var(--profile-ui-blur, 16px));
+}
+
+.profile-section-card {
+  padding: 14px 16px;
 }
 
 .profile-layout .mastery-row,
@@ -548,7 +553,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .profile-card-header h3,
@@ -580,7 +585,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .mastery-row {
@@ -588,7 +593,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border-radius: 12px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -732,15 +737,21 @@
 }
 
 /* Win/Loss SVG Donut & Metrics */
+[data-testid="winloss-chart-card"] {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .winloss-overview {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .winloss-donut-wrap {
-  width: 100px;
-  height: 100px;
+  width: 96px;
+  height: 96px;
   flex-shrink: 0;
 }
 
@@ -767,7 +778,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .winloss-stat-line {
@@ -798,8 +809,8 @@
 }
 
 .highlighted-champ-box {
-  margin-top: 4px;
-  padding: 6px 8px;
+  margin-top: 2px;
+  padding: 5px 8px;
   border-radius: 10px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -849,16 +860,18 @@
 }
 
 .recent-streak-block {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .recent-streak-label {
   font-size: var(--title-sub-size);
+  line-height: 1.25;
   color: var(--text-primary);
   letter-spacing: var(--title-sub-tracking);
   font-weight: var(--title-sub-weight);
@@ -873,12 +886,14 @@
 .streak-pill {
   width: 22px;
   height: 22px;
+  flex-shrink: 0;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 0.72rem;
   font-weight: 700;
+  line-height: 1;
 }
 
 .streak-pill.win {
@@ -1426,7 +1441,9 @@
     overflow-y: auto;
   }
   .profile-split-grid {
+    flex: 1 0 auto;
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     overflow: visible;
   }
   .profile-col,
