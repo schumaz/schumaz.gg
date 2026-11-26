@@ -144,17 +144,25 @@ describe("P14.1 Task 2 — Incremental Match History Pagination", () => {
     const pendingPromise = new Promise<MatchHistoryPage>((res) => {
       resolvePending = res;
     });
-    vi.mocked(invoke)
-      .mockResolvedValueOnce({
-        matches: [makeMatch(801)],
-        next_beg_index: 20,
-        has_more: true,
-        item_metadata: {},
-        rune_metadata: {},
-        spell_metadata: {},
-        augment_metadata: {},
-      })
-      .mockImplementationOnce(() => pendingPromise);
+    let pageCalls = 0;
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_player_match_history_page") {
+        pageCalls += 1;
+        if (pageCalls === 1) {
+          return Promise.resolve({
+            matches: [makeMatch(801)],
+            next_beg_index: 20,
+            has_more: true,
+            item_metadata: {},
+            rune_metadata: {},
+            spell_metadata: {},
+            augment_metadata: {},
+          });
+        }
+        return pendingPromise;
+      }
+      return Promise.reject("offline");
+    });
 
     const onRefresh = vi.fn();
     const profile1 = makeProfile([makeMatch(800)], 10, true);

@@ -2,7 +2,10 @@ use crate::build_provider;
 use crate::lcu_connector::{
     DEFAULT_MATCH_HISTORY_PAGE_SIZE, LcuConnection, MAX_MATCH_HISTORY_PAGE_SIZE,
 };
-use crate::models::{AppLocale, CachedProfileResult, DataDragonCache, MatchHistoryPage, PlayerProfile};
+use crate::models::{
+    AppLocale, CachedProfileResult, DataDragonCache, MatchHistoryPage, MatchScoreboardDetail,
+    PlayerProfile,
+};
 
 use super::cache::{
     get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
@@ -14,6 +17,7 @@ use super::match_metadata::{
 };
 use super::matches_parser::parse_match_history_page_for_locale;
 use super::ranked_parser::parse_ranked_stats_for_locale;
+use super::scoreboard_parser::parse_match_scoreboard_detail_for_locale;
 use super::skins::{
     extract_background_skin_id, fetch_skin_name_for_locale,
     resolve_background_splash_urls_for_locale,
@@ -249,6 +253,36 @@ pub async fn fetch_live_match_history_page(
 ) -> Result<MatchHistoryPage, String> {
     let conn = LcuConnection::connect()?;
     load_match_history_page(&conn, beg_index, count).await
+}
+
+/// Fetches and parses full match scoreboard details (`/lol-match-history/v1/games/{gameId}`) from LCU.
+pub async fn load_match_scoreboard_detail(
+    conn: &LcuConnection,
+    game_id: u64,
+) -> Result<MatchScoreboardDetail, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    let ((summoner, puuid), game_json) = tokio::try_join!(
+        conn.get_current_summoner_with_puuid(),
+        conn.get_match_details(game_id)
+    )?;
+
+    let http_client = build_provider::shared_http_client();
+    let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
+    parse_match_scoreboard_detail_for_locale(
+        &game_json,
+        summoner.summoner_id,
+        puuid.as_deref(),
+        &cache,
+        locale,
+    )
+}
+
+/// Connects to the local LCU and returns the full match scoreboard for `game_id`.
+pub async fn fetch_live_match_scoreboard_detail(
+    game_id: u64,
+) -> Result<MatchScoreboardDetail, String> {
+    let conn = LcuConnection::connect()?;
+    load_match_scoreboard_detail(&conn, game_id).await
 }
 
 #[cfg(test)]

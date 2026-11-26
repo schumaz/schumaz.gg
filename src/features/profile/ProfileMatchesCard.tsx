@@ -9,7 +9,9 @@ import {
   SpellMetadataMap,
 } from "../../components/ui";
 import { MatchRowSummary } from "./MatchRowSummary";
+import { MatchScoreboardDrawer } from "./MatchScoreboardDrawer";
 import { AvailableModeItem } from "./profileHelpers";
+import { useMatchScoreboard } from "./useMatchScoreboard";
 
 interface ProfileMatchesCardProps {
   validMatches: RecentMatchInfo[];
@@ -22,6 +24,7 @@ interface ProfileMatchesCardProps {
   runeMetadata?: RuneMetadataMap;
   spellMetadata?: SpellMetadataMap;
   augmentMetadata?: AugmentMetadataMap;
+  isLcuConnected?: boolean;
   hasMore?: boolean;
   canLoadMore?: boolean;
   isLoadingMore?: boolean;
@@ -41,6 +44,7 @@ export function ProfileMatchesCard({
   runeMetadata,
   spellMetadata,
   augmentMetadata,
+  isLcuConnected = true,
   hasMore = false,
   canLoadMore = false,
   isLoadingMore = false,
@@ -48,12 +52,19 @@ export function ProfileMatchesCard({
   onLoadMore,
   resetKey,
 }: ProfileMatchesCardProps) {
-  const { t, formatCompactNumber } = useTranslation();
+  const { t, locale } = useTranslation();
   const [expandedGameId, setExpandedGameId] = useState<number | null>(null);
+  const scoreboard = useMatchScoreboard(isLcuConnected, resetKey, locale);
 
   useEffect(() => {
     setExpandedGameId(null);
   }, [resetKey]);
+
+  useEffect(() => {
+    if (expandedGameId !== null) {
+      scoreboard.loadScoreboard(expandedGameId);
+    }
+  }, [expandedGameId, isLcuConnected, scoreboard.loadScoreboard]);
 
   return (
     <div className="profile-col profile-col-right">
@@ -103,8 +114,6 @@ export function ProfileMatchesCard({
           {filteredMatches.length > 0 ? (
             filteredMatches.map((match) => {
               const isExpanded = expandedGameId === match.game_id;
-              const mins = Math.max(1, match.game_duration_secs / 60);
-              const csPerMin = (match.cs / mins).toFixed(1);
               const resultClass = match.remake ? "remake" : match.win ? "win" : "loss";
 
               return (
@@ -129,36 +138,12 @@ export function ProfileMatchesCard({
                   </button>
 
                   {isExpanded && (
-                    <div
-                      className="match-details-drawer"
-                      data-testid={`match-details-${match.game_id}`}
-                    >
-                      <div className="match-detail-stat">
-                        <span>{t("profile.detailLevel")}</span>
-                        <strong>{match.champ_level}</strong>
-                      </div>
-                      <div className="match-detail-stat">
-                        <span>{t("profile.detailDamage")}</span>
-                        <strong>
-                          {formatCompactNumber(match.total_damage_dealt_to_champions)}
-                        </strong>
-                      </div>
-                      <div className="match-detail-stat">
-                        <span>{t("profile.detailGold")}</span>
-                        <strong>{formatCompactNumber(match.gold_earned)}</strong>
-                      </div>
-                      <div className="match-detail-stat">
-                        <span>{t("profile.detailVision")}</span>
-                        <strong>
-                          {match.vision_score} (
-                          {t("profile.wardsPlacedShort", { count: match.wards_placed })})
-                        </strong>
-                      </div>
-                      <div className="match-detail-stat">
-                        <span>{t("profile.detailCsPerMin")}</span>
-                        <strong>{csPerMin}</strong>
-                      </div>
-                    </div>
+                    <MatchScoreboardDrawer
+                      match={match}
+                      entry={scoreboard.getEntry(match.game_id)}
+                      isLcuConnected={isLcuConnected}
+                      onRetry={() => scoreboard.retryScoreboard(match.game_id)}
+                    />
                   )}
                 </div>
               );

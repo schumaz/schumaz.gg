@@ -1,0 +1,161 @@
+import { MatchScoreboardDetail, ScoreboardParticipant } from "../../../types";
+
+export function makeScoreboardParticipant(
+  overrides: Partial<ScoreboardParticipant> = {}
+): ScoreboardParticipant {
+  return {
+    participant_id: 1,
+    team_id: 100,
+    subteam_id: 0,
+    arena_placement: null,
+    is_local_player: false,
+    riot_id_name: "Player",
+    riot_id_tag: "BR1",
+    champion_id: 103,
+    champion_name: "Ahri",
+    champion_icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/champion/Ahri.png",
+    champ_level: 16,
+    win: true,
+    kills: 8,
+    deaths: 2,
+    assists: 10,
+    kp_percent: 75,
+    cs: 210,
+    gold_earned: 14500,
+    total_damage_dealt_to_champions: 30000,
+    vision_score: 26,
+    wards_placed: 9,
+    control_wards_bought: 2,
+    spell1_id: 4,
+    spell1_icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/SummonerFlash.png",
+    spell2_id: 14,
+    spell2_icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/spell/SummonerDot.png",
+    primary_rune_id: 8112,
+    primary_rune_icon_url:
+      "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/Domination/Electrocute/Electrocute.png",
+    primary_style_id: 8100,
+    primary_style_icon_url:
+      "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png",
+    sub_style_id: 8200,
+    sub_style_icon_url:
+      "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7202_Sorcery.png",
+    augment_ids: [],
+    item_ids: [6655, 0, 0, 0, 0, 0],
+    item_icon_urls: [
+      "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/item/6655.png",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ],
+    trinket_id: 3340,
+    trinket_icon_url: "https://ddragon.leagueoflegends.com/cdn/16.22.1/img/item/3340.png",
+    ...overrides,
+  };
+}
+
+export function make5v5ScoreboardDetail(gameId = 1000): MatchScoreboardDetail {
+  return {
+    game_id: gameId,
+    queue_id: 420,
+    map_id: 11,
+    game_mode_key: "ranked_solo",
+    game_mode_label: "Solo/Duo",
+    game_duration_secs: 1800,
+    game_creation_ms: 1_700_000_000_000,
+    is_arena: false,
+    remake: false,
+    max_damage_dealt_to_champions: 40000,
+    teams: [
+      {
+        team_id: 100,
+        win: true,
+        total_kills: 24,
+        total_deaths: 12,
+        total_assists: 30,
+        total_gold: 62000,
+        towers: 8,
+        dragons: 3,
+        barons: 1,
+        heralds: 1,
+        voidgrubs: 3,
+        inhibitors: 1,
+        participants: [
+          makeScoreboardParticipant({
+            participant_id: 1,
+            team_id: 100,
+            is_local_player: true,
+            riot_id_name: "Schuma",
+            riot_id_tag: "BR1",
+            total_damage_dealt_to_champions: 40000,
+          }),
+        ],
+      },
+      {
+        team_id: 200,
+        win: false,
+        total_kills: 12,
+        total_deaths: 24,
+        total_assists: 14,
+        total_gold: 49000,
+        towers: 2,
+        dragons: 1,
+        barons: 0,
+        heralds: 0,
+        voidgrubs: 0,
+        inhibitors: 0,
+        participants: [
+          makeScoreboardParticipant({
+            participant_id: 6,
+            team_id: 200,
+            win: false,
+            riot_id_name: "Zed Bot",
+            riot_id_tag: "",
+            champion_id: 238,
+            champion_name: "Zed",
+            total_damage_dealt_to_champions: 20000,
+            kp_percent: 50,
+          }),
+        ],
+      },
+    ],
+    arena_teams: [],
+    item_metadata: {
+      6655: {
+        id: 6655,
+        name: "Companheiro de Luden",
+        gold_total: 2750,
+        stats: ["100 AP"],
+        plaintext: "Burst",
+      },
+      3340: {
+        id: 3340,
+        name: "Sentinela Invisível",
+        gold_total: 0,
+        stats: [],
+        plaintext: "Ward",
+      },
+    },
+    rune_metadata: {
+      8112: {
+        id: 8112,
+        key: "Electrocute",
+        name: "Eletrocutar",
+        icon_url: "",
+        short_desc: "3 hits",
+      },
+    },
+    spell_metadata: {
+      4: {
+        id: 4,
+        name: "Flash",
+        icon_url: "",
+        modes: [],
+        description: "Blink",
+        cooldown_secs: 300,
+      },
+    },
+    augment_metadata: {},
+  };
+}

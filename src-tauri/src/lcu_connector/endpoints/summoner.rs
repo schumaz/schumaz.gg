@@ -13,6 +13,7 @@ pub const MATCH_HISTORY_ENDPOINT: &str =
     "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=9";
 pub const MATCH_HISTORY_FALLBACK_ENDPOINT: &str =
     "/lol-match-history/v1/products/lol/current-summoner/matches";
+pub const MATCH_DETAILS_ENDPOINT_PREFIX: &str = "/lol-match-history/v1/games";
 
 /// Builds the LCU match history endpoint query for an inclusive `[beg_index..=end_index]` window.
 pub fn build_match_history_page_endpoint(beg_index: u32, end_index: u32) -> String {
@@ -21,6 +22,11 @@ pub fn build_match_history_page_endpoint(beg_index: u32, end_index: u32) -> Stri
         "{}?begIndex={}&endIndex={}",
         MATCH_HISTORY_FALLBACK_ENDPOINT, beg_index, normalized_end
     )
+}
+
+/// Builds the LCU full match details endpoint for a specific `game_id`.
+pub fn build_match_details_endpoint(game_id: u64) -> String {
+    format!("{MATCH_DETAILS_ENDPOINT_PREFIX}/{game_id}")
 }
 
 fn is_lcu_error_payload(val: &serde_json::Value) -> bool {
@@ -205,6 +211,19 @@ impl LcuConnection {
     pub async fn get_match_history(&self) -> Result<serde_json::Value, String> {
         self.get_match_history_page(0, DEFAULT_MATCH_HISTORY_PAGE_SIZE - 1)
             .await
+    }
+
+    /// Fetches full participant and team details for a specific match via GET /lol-match-history/v1/games/{gameId}.
+    pub async fn get_match_details(&self, game_id: u64) -> Result<serde_json::Value, String> {
+        if game_id == 0 {
+            return Err("Invalid match gameId".to_string());
+        }
+        let endpoint = build_match_details_endpoint(game_id);
+        let val = self.get_json_required(&endpoint, "match details").await?;
+        if is_lcu_error_payload(&val) {
+            return Err(format!("LCU returned an error payload for match {game_id}"));
+        }
+        Ok(val)
     }
 }
 

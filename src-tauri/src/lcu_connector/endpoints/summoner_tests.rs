@@ -113,3 +113,11 @@ fn test_build_match_history_page_endpoint_builds_inclusive_windows_and_clamps() 
         "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=15&endIndex=15"
     );
 }
+
+#[test]
+fn test_build_match_details_endpoint_formats_game_id() {
+    assert_eq!(
+        build_match_details_endpoint(5500123456),
+        "/lol-match-history/v1/games/5500123456"
+    );
+}

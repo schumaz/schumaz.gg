@@ -135,23 +135,131 @@ pub fn extract_match_augments(
     ids
 }
 
+/// Resolves summoner spell icon URL from `DataDragonCache` or built-in standard spell catalog
+/// strictly when the URL passes the asset allowlist.
+pub fn resolve_allowed_spell_icon(
+    cache: &DataDragonCache,
+    spell_id: i32,
+    locale: AppLocale,
+) -> String {
+    if spell_id <= 0 {
+        return String::new();
+    }
+    if let Some(url) = cache
+        .spells
+        .get(&spell_id)
+        .map(|meta| meta.icon_url.trim())
+        .filter(|url| !url.is_empty() && is_allowed_asset_url(url))
+    {
+        return url.to_string();
+    }
+    if KNOWN_STANDARD_SPELL_IDS.contains(&spell_id) {
+        let fallback = get_spell_metadata_for_locale(&cache.version, spell_id, locale);
+        let url = fallback.icon_url.trim();
+        if !url.is_empty() && is_allowed_asset_url(url) {
+            return url.to_string();
+        }
+    }
+    String::new()
+}
+
+/// Collects deduplicated DataDragon item metadata for an arbitrary stream of item IDs.
+pub fn collect_item_metadata_from_ids<I>(
+    ids: I,
+    items_catalog: &HashMap<i32, ItemMetadata>,
+) -> HashMap<i32, ItemMetadata>
+where
+    I: IntoIterator<Item = i32>,
+{
+    let mut resolved = HashMap::new();
+    for item_id in ids {
+        if item_id > 0
+            && !resolved.contains_key(&item_id)
+            && let Some(meta) = items_catalog.get(&item_id)
+        {
+            resolved.insert(item_id, meta.clone());
+        }
+    }
+    resolved
+}
+
+/// Collects deduplicated DataDragon rune/style metadata for an arbitrary stream of rune/style IDs.
+pub fn collect_rune_metadata_from_ids<I>(
+    ids: I,
+    runes_catalog: &HashMap<i32, RuneMetadata>,
+) -> HashMap<i32, RuneMetadata>
+where
+    I: IntoIterator<Item = i32>,
+{
+    let mut resolved = HashMap::new();
+    for rune_id in ids {
+        if rune_id > 0
+            && !resolved.contains_key(&rune_id)
+            && let Some(meta) = runes_catalog.get(&rune_id)
+        {
+            resolved.insert(rune_id, meta.clone());
+        }
+    }
+    resolved
+}
+
+/// Collects deduplicated summoner spell metadata for an arbitrary stream of spell IDs.
+pub fn collect_spell_metadata_from_ids<I>(
+    ids: I,
+    cache: &DataDragonCache,
+    locale: AppLocale,
+) -> HashMap<i32, SpellMetadata>
+where
+    I: IntoIterator<Item = i32>,
+{
+    let mut resolved = HashMap::new();
+    for spell_id in ids {
+        if spell_id <= 0 || resolved.contains_key(&spell_id) {
+            continue;
+        }
+        if let Some(meta) = cache.spells.get(&spell_id) {
+            resolved.insert(spell_id, meta.clone());
+        } else if KNOWN_STANDARD_SPELL_IDS.contains(&spell_id) {
+            resolved.insert(
+                spell_id,
+                get_spell_metadata_for_locale(&cache.version, spell_id, locale),
+            );
+        }
+    }
+    resolved
+}
+
+/// Collects deduplicated localized Arena/Mayhem augment metadata for an arbitrary stream of augment IDs.
+pub fn collect_augment_metadata_from_ids<I>(
+    ids: I,
+    augments_catalog: &HashMap<i32, ArenaAugmentMetadata>,
+) -> HashMap<i32, ArenaAugmentMetadata>
+where
+    I: IntoIterator<Item = i32>,
+{
+    let mut resolved = HashMap::new();
+    for aug_id in ids {
+        if aug_id > 0
+            && !resolved.contains_key(&aug_id)
+            && let Some(meta) = augments_catalog.get(&aug_id)
+        {
+            resolved.insert(aug_id, meta.clone());
+        }
+    }
+    resolved
+}
+
 /// Collects deduplicated DataDragon item metadata for all non-zero items and trinkets in `matches`.
 pub fn collect_matches_item_metadata(
     matches: &[RecentMatchInfo],
     items_catalog: &HashMap<i32, ItemMetadata>,
 ) -> HashMap<i32, ItemMetadata> {
-    let mut resolved = HashMap::new();
-    for m in matches {
-        for item_id in m.item_ids.iter().copied().chain(std::iter::once(m.trinket_id)) {
-            if item_id > 0
-                && !resolved.contains_key(&item_id)
-                && let Some(meta) = items_catalog.get(&item_id)
-            {
-                resolved.insert(item_id, meta.clone());
-            }
-        }
-    }
-    resolved
+    collect_item_metadata_from_ids(
+        matches
+            .iter()
+            .flat_map(|m| m.item_ids.iter().copied().chain(std::iter::once(m.trinket_id))),
+        items_catalog,
+    )
 }
 
 /// Collects deduplicated DataDragon rune/style metadata for all positive rune IDs in `matches`.
@@ -159,18 +267,12 @@ pub fn collect_matches_rune_metadata(
     matches: &[RecentMatchInfo],
     runes_catalog: &HashMap<i32, RuneMetadata>,
 ) -> HashMap<i32, RuneMetadata> {
-    let mut resolved = HashMap::new();
-    for m in matches {
-        for rune_id in [m.primary_rune_id, m.primary_style_id, m.sub_style_id] {
-            if rune_id > 0
-                && !resolved.contains_key(&rune_id)
-                && let Some(meta) = runes_catalog.get(&rune_id)
-            {
-                resolved.insert(rune_id, meta.clone());
-            }
-        }
-    }
-    resolved
+    collect_rune_metadata_from_ids(
+        matches
+            .iter()
+            .flat_map(|m| [m.primary_rune_id, m.primary_style_id, m.sub_style_id]),
+        runes_catalog,
+    )
 }
 
 /// Collects deduplicated summoner spell metadata for all positive spell IDs in `matches`.
@@ -181,23 +283,11 @@ pub fn collect_matches_spell_metadata(
     cache: &DataDragonCache,
     locale: AppLocale,
 ) -> HashMap<i32, SpellMetadata> {
-    let mut resolved = HashMap::new();
-    for m in matches {
-        for spell_id in [m.spell1_id, m.spell2_id] {
-            if spell_id <= 0 || resolved.contains_key(&spell_id) {
-                continue;
-            }
-            if let Some(meta) = cache.spells.get(&spell_id) {
-                resolved.insert(spell_id, meta.clone());
-            } else if KNOWN_STANDARD_SPELL_IDS.contains(&spell_id) {
-                resolved.insert(
-                    spell_id,
-                    get_spell_metadata_for_locale(&cache.version, spell_id, locale),
-                );
-            }
-        }
-    }
-    resolved
+    collect_spell_metadata_from_ids(
+        matches.iter().flat_map(|m| [m.spell1_id, m.spell2_id]),
+        cache,
+        locale,
+    )
 }
 
 /// Collects deduplicated localized Arena/Mayhem augment metadata for all positive augment IDs in `matches`.
@@ -205,16 +295,8 @@ pub fn collect_matches_augment_metadata(
     matches: &[RecentMatchInfo],
     augments_catalog: &HashMap<i32, ArenaAugmentMetadata>,
 ) -> HashMap<i32, ArenaAugmentMetadata> {
-    let mut resolved = HashMap::new();
-    for m in matches {
-        for &aug_id in &m.augment_ids {
-            if aug_id > 0
-                && !resolved.contains_key(&aug_id)
-                && let Some(meta) = augments_catalog.get(&aug_id)
-            {
-                resolved.insert(aug_id, meta.clone());
-            }
-        }
-    }
-    resolved
+    collect_augment_metadata_from_ids(
+        matches.iter().flat_map(|m| m.augment_ids.iter().copied()),
+        augments_catalog,
+    )
 }

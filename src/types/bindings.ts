@@ -27,6 +27,8 @@ export const commands = {
 	getPlayerProfile: (forceRefresh: boolean | null) => __TAURI_INVOKE<PlayerProfile_Serialize | null>("get_player_profile", { forceRefresh }),
 	/**  Tauri command to fetch an incremental match history page (`beg_index..=beg_index+count-1`) from LCU. */
 	getPlayerMatchHistoryPage: (begIndex: number, count: number | null) => __TAURI_INVOKE<MatchHistoryPage_Serialize>("get_player_match_history_page", { begIndex, count }),
+	/**  Tauri command to fetch the full on-demand scoreboard for a single match (`5v5` or `Arena`). */
+	getMatchScoreboardDetail: (gameId: number) => __TAURI_INVOKE<MatchScoreboardDetail_Serialize>("get_match_scoreboard_detail", { gameId }),
 	/**
 	 *  Syncs the champion ID currently displayed in the frontend UI to backend session state
 	 *  so final Champ Select reconciliation can detect UI/backend divergence.
@@ -883,6 +885,49 @@ export type MatchHistoryPage_Serialize = {
 	augment_metadata: { [key in number]: ArenaAugmentMetadata_Serialize },
 };
 
+/**  Full on-demand match scoreboard returned by `get_match_scoreboard_detail`. */
+export type MatchScoreboardDetail = MatchScoreboardDetail_Serialize | MatchScoreboardDetail_Deserialize;
+
+/**  Full on-demand match scoreboard returned by `get_match_scoreboard_detail`. */
+export type MatchScoreboardDetail_Deserialize = {
+	game_id: number,
+	queue_id: number,
+	map_id: number,
+	game_mode_key: string,
+	game_mode_label: string,
+	game_duration_secs: number,
+	game_creation_ms: number,
+	is_arena: boolean,
+	remake?: boolean,
+	max_damage_dealt_to_champions: number,
+	teams?: ScoreboardTeamSummary_Deserialize[],
+	arena_teams?: ScoreboardArenaTeam_Deserialize[],
+	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
+	rune_metadata?: { [key in number]: RuneMetadata_Deserialize },
+	spell_metadata?: { [key in number]: SpellMetadata_Deserialize },
+	augment_metadata?: { [key in number]: ArenaAugmentMetadata_Deserialize },
+};
+
+/**  Full on-demand match scoreboard returned by `get_match_scoreboard_detail`. */
+export type MatchScoreboardDetail_Serialize = {
+	game_id: number,
+	queue_id: number,
+	map_id: number,
+	game_mode_key: string,
+	game_mode_label: string,
+	game_duration_secs: number,
+	game_creation_ms: number,
+	is_arena: boolean,
+	remake: boolean,
+	max_damage_dealt_to_champions: number,
+	teams: ScoreboardTeamSummary_Serialize[],
+	arena_teams: ScoreboardArenaTeam_Serialize[],
+	item_metadata: { [key in number]: ItemMetadata_Serialize },
+	rune_metadata: { [key in number]: RuneMetadata_Serialize },
+	spell_metadata: { [key in number]: SpellMetadata_Serialize },
+	augment_metadata: { [key in number]: ArenaAugmentMetadata_Serialize },
+};
+
 export type NavigationState = NavigationState_Serialize | NavigationState_Deserialize;
 
 export type NavigationStatePatch = NavigationStatePatch_Serialize | NavigationStatePatch_Deserialize;
@@ -1207,6 +1252,155 @@ export type RunePageOption_Serialize = {
 	sub_style_name: string,
 	sub_style_icon_url: string,
 	perks: RuneMetadata_Serialize[],
+};
+
+/**  Aggregated Arena duo summary (`1st`..`8th` placement) inside a match scoreboard. */
+export type ScoreboardArenaTeam = ScoreboardArenaTeam_Serialize | ScoreboardArenaTeam_Deserialize;
+
+/**  Aggregated Arena duo summary (`1st`..`8th` placement) inside a match scoreboard. */
+export type ScoreboardArenaTeam_Deserialize = {
+	subteam_id: number,
+	placement: number,
+	win: boolean,
+	total_kills: number,
+	total_deaths: number,
+	total_assists: number,
+	total_damage: number,
+	participants: ScoreboardParticipant_Deserialize[],
+};
+
+/**  Aggregated Arena duo summary (`1st`..`8th` placement) inside a match scoreboard. */
+export type ScoreboardArenaTeam_Serialize = {
+	subteam_id: number,
+	placement: number,
+	win: boolean,
+	total_kills: number,
+	total_deaths: number,
+	total_assists: number,
+	total_damage: number,
+	participants: ScoreboardParticipant_Serialize[],
+};
+
+/**  Full scoreboard participant row parsed from `/lol-match-history/v1/games/{gameId}`. */
+export type ScoreboardParticipant = ScoreboardParticipant_Serialize | ScoreboardParticipant_Deserialize;
+
+/**  Full scoreboard participant row parsed from `/lol-match-history/v1/games/{gameId}`. */
+export type ScoreboardParticipant_Deserialize = {
+	participant_id: number,
+	team_id: number,
+	subteam_id?: number,
+	arena_placement?: number | null,
+	is_local_player: boolean,
+	riot_id_name: string,
+	riot_id_tag?: string,
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	champ_level: number,
+	win: boolean,
+	kills: number,
+	deaths: number,
+	assists: number,
+	kp_percent: number,
+	cs: number,
+	gold_earned: number,
+	total_damage_dealt_to_champions: number,
+	vision_score: number,
+	wards_placed: number,
+	control_wards_bought?: number,
+	spell1_id: number,
+	spell1_icon_url: string,
+	spell2_id: number,
+	spell2_icon_url: string,
+	primary_rune_id?: number,
+	primary_rune_icon_url?: string,
+	primary_style_id?: number,
+	primary_style_icon_url?: string,
+	sub_style_id?: number,
+	sub_style_icon_url?: string,
+	augment_ids?: number[],
+	item_ids: number[],
+	item_icon_urls: string[],
+	trinket_id?: number,
+	trinket_icon_url?: string,
+};
+
+/**  Full scoreboard participant row parsed from `/lol-match-history/v1/games/{gameId}`. */
+export type ScoreboardParticipant_Serialize = {
+	participant_id: number,
+	team_id: number,
+	subteam_id: number,
+	arena_placement: number | null,
+	is_local_player: boolean,
+	riot_id_name: string,
+	riot_id_tag: string,
+	champion_id: number,
+	champion_name: string,
+	champion_icon_url: string,
+	champ_level: number,
+	win: boolean,
+	kills: number,
+	deaths: number,
+	assists: number,
+	kp_percent: number,
+	cs: number,
+	gold_earned: number,
+	total_damage_dealt_to_champions: number,
+	vision_score: number,
+	wards_placed: number,
+	control_wards_bought: number,
+	spell1_id: number,
+	spell1_icon_url: string,
+	spell2_id: number,
+	spell2_icon_url: string,
+	primary_rune_id: number,
+	primary_rune_icon_url: string,
+	primary_style_id: number,
+	primary_style_icon_url: string,
+	sub_style_id: number,
+	sub_style_icon_url: string,
+	augment_ids: number[],
+	item_ids: number[],
+	item_icon_urls: string[],
+	trinket_id: number,
+	trinket_icon_url: string,
+};
+
+/**  Aggregated 5v5 / ARAM team summary (`100` Blue vs `200` Red) inside a match scoreboard. */
+export type ScoreboardTeamSummary = ScoreboardTeamSummary_Serialize | ScoreboardTeamSummary_Deserialize;
+
+/**  Aggregated 5v5 / ARAM team summary (`100` Blue vs `200` Red) inside a match scoreboard. */
+export type ScoreboardTeamSummary_Deserialize = {
+	team_id: number,
+	win: boolean,
+	total_kills: number,
+	total_deaths: number,
+	total_assists: number,
+	total_gold: number,
+	towers: number,
+	dragons: number,
+	barons: number,
+	heralds: number,
+	voidgrubs?: number,
+	inhibitors: number,
+	participants: ScoreboardParticipant_Deserialize[],
+};
+
+/**  Aggregated 5v5 / ARAM team summary (`100` Blue vs `200` Red) inside a match scoreboard. */
+export type ScoreboardTeamSummary_Serialize = {
+	team_id: number,
+	win: boolean,
+	total_kills: number,
+	total_deaths: number,
+	total_assists: number,
+	total_gold: number,
+	towers: number,
+	dragons: number,
+	barons: number,
+	heralds: number,
+	voidgrubs: number,
+	inhibitors: number,
+	participants: ScoreboardParticipant_Serialize[],
 };
 
 /**  Recommended skill maxing priority (e.g. `Q > E > W`) and level-by-level leveling order (`1..=18`). */

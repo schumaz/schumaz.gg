@@ -182,6 +182,7 @@ export function ProfileTab({
               runeMetadata={pagination.runeMetadata}
               spellMetadata={pagination.spellMetadata}
               augmentMetadata={pagination.augmentMetadata}
+              isLcuConnected={summoner !== null}
               hasMore={pagination.hasMore}
               canLoadMore={pagination.canLoadMore && !loading}
               isLoadingMore={pagination.isLoadingMore}

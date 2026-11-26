@@ -3,6 +3,7 @@ import {
   events,
   type CachedProfileResult,
   type MatchHistoryPage,
+  type MatchScoreboardDetail,
   type PlayerProfile,
 } from "../../types/bindings";
 import type { UnlistenFn } from "./lcu.ipc";
@@ -24,6 +25,10 @@ export const profileIpc = {
     count: number | null = 10
   ): Promise<MatchHistoryPage> {
     return commands.getPlayerMatchHistoryPage(begIndex, count);
+  },
+
+  async getMatchScoreboardDetail(gameId: number): Promise<MatchScoreboardDetail> {
+    return commands.getMatchScoreboardDetail(gameId);
   },
 
   async onProfileRefreshRequested(handler: () => void): Promise<UnlistenFn> {

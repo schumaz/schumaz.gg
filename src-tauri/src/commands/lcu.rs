@@ -51,6 +51,15 @@ pub async fn get_player_match_history_page(
     profile_provider::fetch_live_match_history_page(beg_index, count).await
 }
 
+/// Tauri command to fetch the full on-demand scoreboard for a single match (`5v5` or `Arena`).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_match_scoreboard_detail(
+    game_id: u64,
+) -> Result<models::MatchScoreboardDetail, String> {
+    profile_provider::fetch_live_match_scoreboard_detail(game_id).await
+}
+
 /// Syncs the champion ID currently displayed in the frontend UI to backend session state
 /// so final Champ Select reconciliation can detect UI/backend divergence.
 #[tauri::command]
