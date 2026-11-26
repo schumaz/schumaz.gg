@@ -11,7 +11,10 @@ pub mod monitor;
 
 pub use crate::models::{LcuStatus, SummonerInfo};
 pub use client::{ConnectedLcuClient, DefaultRequestClient, LcuConnection};
-pub use discovery::{invalidate_lcu_credentials, shared_request_client};
+pub use discovery::{
+    LcuCredentials, get_cached_lcu_credentials, get_cached_or_discover_lcu_credentials,
+    invalidate_lcu_credentials, lcu_tls_client_config, shared_request_client,
+};
 pub use endpoints::*;
 pub use missions_parser::*;
 pub use missions_runner::*;

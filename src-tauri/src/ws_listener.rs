@@ -12,6 +12,7 @@ pub mod reconcile;
 pub mod reconcile_state;
 pub mod session_handler;
 mod subscription;
+mod ws_client;
 
 pub use coordinator::*;
 pub use extract::*;

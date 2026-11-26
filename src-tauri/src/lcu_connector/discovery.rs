@@ -1,14 +1,28 @@
 use std::ffi::OsStr;
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::SocketAddrV4;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use http::HeaderValue;
 use irelia::rest::LcuClient;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::pem::PemObject;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 use crate::lcu_connector::client::{ConnectedLcuClient, DefaultRequestClient};
 use crate::logging;
+use crate::storage;
+
+mod manifests;
+mod parsers;
+
+#[cfg(test)]
+use parsers::{build_lcu_credentials, extract_credentials_from_cmd, parse_lockfile_contents};
+#[cfg(test)]
+use std::net::Ipv4Addr;
+
+#[cfg(test)]
+mod discovery_tests;
 
 #[cfg(target_os = "windows")]
 const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
@@ -16,25 +30,27 @@ const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
 const CLIENT_PROCESS_NAME: &str = "LeagueClientUx";
 
 #[cfg(target_os = "windows")]
-const GAME_PROCESS_NAME: &str = "League of Legends.exe";
+const LOCKFILE_OWNER_PROCESS_NAME: &str = "LeagueClient.exe";
 #[cfg(not(target_os = "windows"))]
-const GAME_PROCESS_NAME: &str = "League of Legends";
+const LOCKFILE_OWNER_PROCESS_NAME: &str = "LeagueClient";
 
-const BASE64_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const RIOT_GAMES_CA_PEM: &[u8] = include_bytes!("riotgames.pem");
 
-#[derive(Clone, Debug)]
-struct CachedLcuCredentials {
-    addr: SocketAddrV4,
-    auth_header: HeaderValue,
+/// Cached connection credentials shared between the LCU REST client and WebSocket listener.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LcuCredentials {
+    pub addr: SocketAddrV4,
+    pub auth_header: HeaderValue,
 }
 
 static SHARED_REQUEST_CLIENT: OnceLock<DefaultRequestClient> = OnceLock::new();
-static CACHED_CREDENTIALS: OnceLock<RwLock<Option<CachedLcuCredentials>>> = OnceLock::new();
+static LCU_TLS_CONFIG: OnceLock<Result<Arc<rustls::ClientConfig>, String>> = OnceLock::new();
+static CACHED_CREDENTIALS: OnceLock<RwLock<Option<LcuCredentials>>> = OnceLock::new();
 static LAST_LOCKFILE_PATH: OnceLock<RwLock<Option<PathBuf>>> = OnceLock::new();
 static PROCESS_SYSTEM: OnceLock<Mutex<System>> = OnceLock::new();
 static LAST_DISCOVERY_ERROR: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
-fn credentials_cache() -> &'static RwLock<Option<CachedLcuCredentials>> {
+fn credentials_cache() -> &'static RwLock<Option<LcuCredentials>> {
     CACHED_CREDENTIALS.get_or_init(|| RwLock::new(None))
 }
 
@@ -44,6 +60,12 @@ fn lockfile_path_cache() -> &'static RwLock<Option<PathBuf>> {
 
 fn process_system() -> &'static Mutex<System> {
     PROCESS_SYSTEM.get_or_init(|| Mutex::new(System::new()))
+}
+
+fn ensure_rustls_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
 }
 
 fn set_discovery_error_state(reason: Option<&str>) {
@@ -64,11 +86,58 @@ fn set_discovery_error_state(reason: Option<&str>) {
 /// Returns the process-wide HTTP/TLS client shared across all LCU REST requests.
 pub fn shared_request_client() -> &'static DefaultRequestClient {
     SHARED_REQUEST_CLIENT.get_or_init(|| {
-        if rustls::crypto::CryptoProvider::get_default().is_none() {
-            let _ = rustls::crypto::ring::default_provider().install_default();
-        }
+        ensure_rustls_provider();
         irelia::requests::new()
     })
+}
+
+/// Returns the memoized `rustls::ClientConfig` trusting Riot Games' local LCU root CA.
+pub fn lcu_tls_client_config() -> Result<Arc<rustls::ClientConfig>, String> {
+    LCU_TLS_CONFIG
+        .get_or_init(|| {
+            ensure_rustls_provider();
+            let cert = CertificateDer::from_pem_slice(RIOT_GAMES_CA_PEM)
+                .map_err(|err| format!("Failed to parse Riot CA PEM: {err}"))?;
+            let mut roots = rustls::RootCertStore::empty();
+            roots
+                .add(cert)
+                .map_err(|err| format!("Failed to load Riot CA root certificate: {err}"))?;
+            Ok(Arc::new(
+                rustls::ClientConfig::builder()
+                    .with_root_certificates(roots)
+                    .with_no_client_auth(),
+            ))
+        })
+        .clone()
+}
+
+/// Returns currently cached LCU credentials without triggering discovery.
+pub fn get_cached_lcu_credentials() -> Option<LcuCredentials> {
+    credentials_cache().read().ok()?.clone()
+}
+
+/// Returns cached LCU credentials or discovers and caches them via lockfile-first resolution.
+pub fn get_cached_or_discover_lcu_credentials() -> Result<LcuCredentials, String> {
+    if let Some(cached) = get_cached_lcu_credentials() {
+        return Ok(cached);
+    }
+
+    let discovered = match discover_lcu_credentials() {
+        Ok(creds) => {
+            set_discovery_error_state(None);
+            creds
+        }
+        Err(err) => {
+            set_discovery_error_state(Some(&err));
+            return Err(err);
+        }
+    };
+
+    if let Ok(mut guard) = credentials_cache().write() {
+        *guard = Some(discovered.clone());
+    }
+
+    Ok(discovered)
 }
 
 /// Clears cached LCU port and auth header so the next connection re-discovers credentials.
@@ -97,249 +166,142 @@ pub(super) fn maybe_invalidate_on_error(err: &irelia::requests::Error) {
 }
 
 pub(super) fn connect_lcu_client() -> Result<ConnectedLcuClient, String> {
-    if let Ok(guard) = credentials_cache().read()
-        && let Some(cached) = guard.as_ref()
-    {
-        return Ok(LcuClient::new_with_credentials_with_request_client(
-            cached.addr,
-            cached.auth_header.clone(),
-            shared_request_client(),
-        ));
-    }
-
-    let discovered = match discover_lcu_credentials() {
-        Ok(creds) => {
-            set_discovery_error_state(None);
-            creds
-        }
-        Err(err) => {
-            set_discovery_error_state(Some(&err));
-            return Err(err);
-        }
-    };
-    if let Ok(mut guard) = credentials_cache().write() {
-        *guard = Some(discovered.clone());
-    }
-
+    let creds = get_cached_or_discover_lcu_credentials()?;
     Ok(LcuClient::new_with_credentials_with_request_client(
-        discovered.addr,
-        discovered.auth_header,
+        creds.addr,
+        creds.auth_header,
         shared_request_client(),
     ))
 }
 
-fn encode_base64(input: &[u8]) -> String {
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
-        let triple = (b0 << 16) | (b1 << 8) | b2;
+fn lockfile_path_from_client_exe(exe_path: &Path) -> Option<PathBuf> {
+    Some(exe_path.parent()?.join("lockfile"))
+}
 
-        out.push(BASE64_TABLE[((triple >> 18) & 0x3F) as usize] as char);
-        out.push(BASE64_TABLE[((triple >> 12) & 0x3F) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            BASE64_TABLE[((triple >> 6) & 0x3F) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            BASE64_TABLE[(triple & 0x3F) as usize] as char
-        } else {
-            '='
-        });
+pub(super) fn is_client_ux_process_name(name: &OsStr) -> bool {
+    name.to_str()
+        .is_some_and(|s| s.eq_ignore_ascii_case(CLIENT_PROCESS_NAME))
+}
+
+pub(super) fn is_valid_lockfile_pid_process(name: &OsStr) -> bool {
+    name.to_str().is_some_and(|s| {
+        s.eq_ignore_ascii_case(LOCKFILE_OWNER_PROCESS_NAME)
+            || s.eq_ignore_ascii_case(CLIENT_PROCESS_NAME)
+    })
+}
+
+fn load_cached_lockfile_path() -> Option<PathBuf> {
+    if let Ok(guard) = lockfile_path_cache().read()
+        && let Some(path) = guard.as_ref()
+    {
+        return Some(path.clone());
     }
-    out
-}
 
-pub(crate) fn build_lcu_credentials(
-    port: u16,
-    auth_token: &str,
-) -> Result<(SocketAddrV4, HeaderValue), String> {
-    let raw_auth = format!("riot:{}", auth_token.trim());
-    let encoded = format!("Basic {}", encode_base64(raw_auth.as_bytes()));
-    let auth_header = HeaderValue::from_str(&encoded)
-        .map_err(|err| format!("Invalid LCU auth header: {}", err))?;
-    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-    Ok((addr, auth_header))
-}
-
-pub(crate) fn parse_lockfile_contents(contents: &str) -> Option<(u32, u16, String)> {
-    let mut parts = contents.trim().split(':');
-    let _proc_name = parts.next()?;
-    let pid = parts.next()?.trim().parse::<u32>().ok()?;
-    let port = parts.next()?.trim().parse::<u16>().ok()?;
-    let token = parts.next()?.trim();
-    if token.is_empty() {
-        return None;
+    let disk_cache_file = storage::global_paths().map(storage::AppPaths::lcu_lockfile_cache_path)?;
+    let persisted = manifests::read_persisted_lockfile_path(&disk_cache_file)?;
+    if let Ok(mut guard) = lockfile_path_cache().write() {
+        *guard = Some(persisted.clone());
     }
-    Some((pid, port, token.to_string()))
+    Some(persisted)
 }
 
-pub(crate) fn extract_credentials_from_cmd(cmd: &[std::ffi::OsString]) -> Option<(u16, String)> {
-    let mut port: Option<u16> = None;
-    let mut token: Option<String> = None;
+fn remember_valid_lockfile_path(path: &Path) {
+    let next_key = manifests::normalize_path_key(path);
+    let already_cached = lockfile_path_cache()
+        .read()
+        .ok()
+        .and_then(|g| g.as_ref().map(|p| manifests::normalize_path_key(p)))
+        .is_some_and(|cur_key| cur_key == next_key);
 
-    for arg in cmd {
-        let Some(s) = arg.to_str() else {
-            continue;
-        };
-        if port.is_none()
-            && let Some(raw_port) = s.strip_prefix("--app-port=")
-        {
-            port = raw_port.trim().parse::<u16>().ok();
+    if !already_cached {
+        if let Ok(mut guard) = lockfile_path_cache().write() {
+            *guard = Some(path.to_path_buf());
         }
-        if token.is_none()
-            && let Some(raw_token) = s.strip_prefix("--remoting-auth-token=")
-        {
-            let trimmed = raw_token.trim();
-            if !trimmed.is_empty() {
-                token = Some(trimmed.to_string());
-            }
-        }
-        if port.is_some() && token.is_some() {
-            break;
+        if let Some(paths) = storage::global_paths() {
+            manifests::persist_lockfile_path(&paths.lcu_lockfile_cache_path(), path);
         }
     }
-
-    Some((port?, token?))
 }
 
-fn lockfile_path_from_exe(exe_path: &Path, is_client: bool) -> Option<PathBuf> {
-    let mut dir = exe_path.parent()?;
-    if !is_client {
-        dir = dir.parent()?;
-    }
-    Some(dir.join("lockfile"))
-}
-
-fn read_lockfile_credentials(path: &Path) -> Option<(u32, u16, String)> {
-    let contents = std::fs::read_to_string(path).ok()?;
-    parse_lockfile_contents(&contents)
-}
-
-fn is_league_process_name(name: &OsStr) -> Option<bool> {
-    if name == OsStr::new(CLIENT_PROCESS_NAME) {
-        Some(true)
-    } else if name == OsStr::new(GAME_PROCESS_NAME) {
-        Some(false)
-    } else {
-        None
-    }
-}
-
-fn try_discover_from_cached_lockfile(system: &mut System) -> Option<CachedLcuCredentials> {
-    let path = lockfile_path_cache().read().ok()?.clone()?;
-    let (pid_num, port, token) = read_lockfile_credentials(&path)?;
+pub(super) fn try_discover_from_lockfile_path(
+    system: &mut System,
+    path: &Path,
+) -> Option<LcuCredentials> {
+    let (pid_num, port, token) = parsers::read_lockfile_credentials(path)?;
     let pid = Pid::from_u32(pid_num);
 
     // Verify the PID from lockfile is actually alive using name-only query (zero OpenProcess/PEB).
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[pid]),
-        false,
+        true,
         ProcessRefreshKind::nothing(),
     );
     let proc = system.process(pid)?;
-    is_league_process_name(proc.name())?;
+    if !is_valid_lockfile_pid_process(proc.name()) {
+        return None;
+    }
 
-    let (addr, auth_header) = build_lcu_credentials(port, &token).ok()?;
-    Some(CachedLcuCredentials { addr, auth_header })
+    let (addr, auth_header) = parsers::build_lcu_credentials(port, &token).ok()?;
+    remember_valid_lockfile_path(path);
+    Some(LcuCredentials { addr, auth_header })
 }
 
-fn discover_lcu_credentials() -> Result<CachedLcuCredentials, String> {
+fn discover_lcu_credentials() -> Result<LcuCredentials, String> {
     let mut system = process_system()
         .lock()
         .map_err(|_| "LCU discovery lock poisoned".to_string())?;
 
-    if let Some(creds) = try_discover_from_cached_lockfile(&mut system) {
+    let cached_path = load_cached_lockfile_path();
+    if let Some(ref path) = cached_path
+        && let Some(creds) = try_discover_from_lockfile_path(&mut system, path)
+    {
         return Ok(creds);
+    }
+
+    for candidate in manifests::collect_manifest_lockfile_candidates(cached_path.as_deref()) {
+        if let Some(creds) = try_discover_from_lockfile_path(&mut system, &candidate) {
+            return Ok(creds);
+        }
     }
 
     system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
 
-    let matched = system.processes().iter().find_map(|(pid, proc)| {
-        is_league_process_name(proc.name()).map(|is_client| (*pid, is_client))
-    });
-
-    let Some((pid, is_client)) = matched else {
+    let Some(pid) = system
+        .processes()
+        .iter()
+        .find_map(|(pid, proc)| is_client_ux_process_name(proc.name()).then_some(*pid))
+    else {
         return Err("LCU process is not running".to_string());
     };
 
-    let detail_kind = ProcessRefreshKind::nothing()
-        .with_exe(UpdateKind::Always)
-        .with_cmd(UpdateKind::Always);
-    system.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), false, detail_kind);
+    let exe_kind = ProcessRefreshKind::nothing().with_exe(UpdateKind::Always);
+    system.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), true, exe_kind);
+
+    let lf_path = system
+        .process(pid)
+        .and_then(|p| p.exe())
+        .and_then(lockfile_path_from_client_exe);
+
+    if let Some(ref path) = lf_path
+        && let Some(creds) = try_discover_from_lockfile_path(&mut system, path)
+    {
+        return Ok(creds);
+    }
+
+    let cmd_kind = ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always);
+    system.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), true, cmd_kind);
 
     let process = system
         .process(pid)
         .ok_or_else(|| "LCU process exited during discovery".to_string())?;
 
-    if let Some(exe) = process.exe()
-        && let Some(lf_path) = lockfile_path_from_exe(exe, is_client)
-        && let Ok(mut guard) = lockfile_path_cache().write()
-    {
-        *guard = Some(lf_path);
+    let (port, token) = parsers::extract_credentials_from_cmd(process.cmd())
+        .ok_or_else(|| "LCU port/auth token not found in process cmd or lockfile".to_string())?;
+
+    if let Some(ref path) = lf_path {
+        remember_valid_lockfile_path(path);
     }
 
-    let (port, token) = if is_client {
-        extract_credentials_from_cmd(process.cmd())
-            .or_else(|| {
-                let exe = process.exe()?;
-                let lf_path = lockfile_path_from_exe(exe, true)?;
-                let (_, port, token) = read_lockfile_credentials(&lf_path)?;
-                Some((port, token))
-            })
-            .ok_or_else(|| "LCU port/auth token not found in process cmd or lockfile".to_string())?
-    } else {
-        let exe = process
-            .exe()
-            .ok_or_else(|| "LCU game executable path not found".to_string())?;
-        let lf_path = lockfile_path_from_exe(exe, false)
-            .ok_or_else(|| "LCU lockfile path could not be resolved".to_string())?;
-        let (_, port, token) = read_lockfile_credentials(&lf_path)
-            .ok_or_else(|| "LCU lockfile could not be read".to_string())?;
-        (port, token)
-    };
-
-    let (addr, auth_header) = build_lcu_credentials(port, &token)?;
-    Ok(CachedLcuCredentials { addr, auth_header })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::OsString;
-
-    #[test]
-    fn test_parse_lockfile_contents_valid_and_invalid() {
-        assert_eq!(
-            parse_lockfile_contents("LeagueClient:12345:54321:superSecretToken:https"),
-            Some((12345, 54321, "superSecretToken".to_string()))
-        );
-        assert_eq!(
-            parse_lockfile_contents("LeagueClient:bad:54321:tok:https"),
-            None
-        );
-        assert_eq!(parse_lockfile_contents("LeagueClient:1:54321::https"), None);
-    }
-
-    #[test]
-    fn test_extract_credentials_from_cmd() {
-        let args = vec![
-            OsString::from("LeagueClientUx.exe"),
-            OsString::from("--remoting-auth-token=abc123token"),
-            OsString::from("--app-port=61234"),
-        ];
-        assert_eq!(
-            extract_credentials_from_cmd(&args),
-            Some((61234, "abc123token".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_build_lcu_credentials_encodes_basic_auth() {
-        let (addr, header) = build_lcu_credentials(54321, "token").unwrap();
-        assert_eq!(addr, SocketAddrV4::new(Ipv4Addr::LOCALHOST, 54321));
-        assert_eq!(header.to_str().unwrap(), "Basic cmlvdDp0b2tlbg==");
-    }
+    let (addr, auth_header) = parsers::build_lcu_credentials(port, &token)?;
+    Ok(LcuCredentials { addr, auth_header })
 }

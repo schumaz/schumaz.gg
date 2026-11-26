@@ -1,4 +1,3 @@
-use irelia::ws::LcuWebSocket;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
@@ -12,6 +11,7 @@ use super::session_handler::{
     handle_session_transition, process_session_timer, should_defer_initial_inject_to_finalization,
 };
 use super::subscription::{WsListenerCtx, clear_active_session, spawn_configured_ws};
+use super::ws_client::LcuWsHandle;
 use crate::models::ActiveChampSelectSnapshot;
 
 const IDLE_FALLBACK_POLL_MS: u64 = 4000;
@@ -304,12 +304,12 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
     tokio::spawn(run_fallback_poll_loop(ctx.clone()));
 
     let mut conn_rx = crate::lcu_connector::subscribe_lcu_connection();
-    let mut active_ws: Option<LcuWebSocket> = None;
+    let mut active_ws: Option<LcuWsHandle> = None;
 
     loop {
         if !*conn_rx.borrow() {
             if let Some(ws) = active_ws.take() {
-                let _ = ws.abort();
+                ws.abort();
             }
             if conn_rx.changed().await.is_err() {
                 break;
@@ -317,7 +317,7 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
             continue;
         }
 
-        if active_ws.as_ref().is_none_or(LcuWebSocket::is_finished) {
+        if active_ws.as_ref().is_none_or(LcuWsHandle::is_finished) {
             active_ws = Some(spawn_configured_ws(&ctx));
         }
 
@@ -325,7 +325,7 @@ pub async fn start_ws_listener(app_handle: tauri::AppHandle) {
             changed = conn_rx.changed() => {
                 if changed.is_err() {
                     if let Some(ws) = active_ws.take() {
-                        let _ = ws.abort();
+                        ws.abort();
                     }
                     break;
                 }

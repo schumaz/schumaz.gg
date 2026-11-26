@@ -1,9 +1,6 @@
-use irelia::ws::LcuWebSocket;
-use irelia::ws::types::{Event, EventKind};
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::time::Duration;
 use tauri_specta::Event as SpectaEvent;
 
 use super::coordinator::ChampSelectCoordinator;
@@ -16,9 +13,10 @@ use super::reconcile_state::{
 use super::session_handler::{
     handle_session_transition, process_session_timer, should_defer_initial_inject_to_finalization,
 };
+use super::ws_client::{LcuWsEvent, LcuWsHandle, WsEventCallback, endpoint_to_json_api_topic};
 use crate::{logging, models};
 
-/// Spawns an async task from synchronous WebSocket callback threads (e.g. `irelia` WS thread)
+/// Spawns an async task from synchronous WebSocket callback threads
 /// onto the captured Tokio runtime, falling back to `tauri::async_runtime` if needed.
 fn spawn_on_runtime<F>(rt_handle: Option<&tokio::runtime::Handle>, future: F)
 where
@@ -30,32 +28,6 @@ where
         handle.spawn(future);
     } else {
         tauri::async_runtime::spawn(future);
-    }
-}
-
-/// Custom error handler for irelia WebSocket that stops immediately when LCU is disconnected
-/// so irelia never runs full-process scans in the background while the League Client is closed.
-struct MonitorAwareErrorHandler;
-
-impl irelia::ws::ErrorHandler for MonitorAwareErrorHandler {
-    fn on_error(
-        &mut self,
-        error: irelia::ws::WebSocketError,
-    ) -> std::ops::ControlFlow<(), irelia::ws::Flow> {
-        if !crate::lcu_connector::is_lcu_connected() {
-            logging::log_info("ws.listener", "event=ws_stopped reason=lcu_disconnected");
-            return std::ops::ControlFlow::Break(());
-        }
-        logging::log_warn(
-            "ws.listener",
-            format!("event=ws_reconnect_scheduled err={error:?}"),
-        );
-        std::thread::sleep(Duration::from_millis(1500));
-        if !crate::lcu_connector::is_lcu_connected() {
-            logging::log_info("ws.listener", "event=ws_stopped reason=lcu_disconnected");
-            return std::ops::ControlFlow::Break(());
-        }
-        std::ops::ControlFlow::Continue(irelia::ws::Flow::TryReconnect)
     }
 }
 
@@ -104,19 +76,18 @@ pub(super) async fn clear_active_session(ctx: &WsListenerCtx, emit_ended: bool) 
     }
 }
 
-pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
+pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWsHandle {
     let rt_handle = tokio::runtime::Handle::try_current().ok();
-    let mut ws = LcuWebSocket::new_with_error_handler(MonitorAwareErrorHandler);
-    logging::log_info("ws.listener", "event=ws_subscribed");
+    let mut subscriptions: Vec<(String, WsEventCallback)> = Vec::with_capacity(9);
 
     let ws_ctx = ctx.clone();
     let session_rt = rt_handle.clone();
-    ws.subscribe(
-        EventKind::json_api_event_callback_str("/lol-champ-select/v1/session"),
-        move |event: &Event| {
+    subscriptions.push((
+        endpoint_to_json_api_topic(crate::lcu_connector::CHAMP_SELECT_SESSION_ENDPOINT),
+        Arc::new(move |event: &LcuWsEvent| {
             let ctx = ws_ctx.clone();
-            let event_type = event.2.event_type.clone();
-            let data = event.2.data.clone();
+            let event_type = event.event_type.clone();
+            let data = event.data.clone();
 
             spawn_on_runtime(session_rt.as_ref(), async move {
                 let mut current_q = ctx.active_queue_id.load(Ordering::Relaxed);
@@ -171,18 +142,18 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
                     .await;
                 }
             });
-        },
-    );
+        }),
+    ));
 
     let phase_handle = ctx.app_handle.clone();
     let phase_state = Arc::clone(&ctx.last_gameflow_phase);
     let phase_rt = rt_handle.clone();
-    ws.subscribe(
-        EventKind::json_api_event_callback_str("/lol-gameflow/v1/gameflow-phase"),
-        move |event: &Event| {
+    subscriptions.push((
+        endpoint_to_json_api_topic(crate::lcu_connector::GAMEFLOW_PHASE_ENDPOINT),
+        Arc::new(move |event: &LcuWsEvent| {
             let handle = phase_handle.clone();
             let state = Arc::clone(&phase_state);
-            let next_phase = event.2.data.as_str().unwrap_or("").to_string();
+            let next_phase = event.data.as_str().unwrap_or("").to_string();
 
             if next_phase.is_empty() {
                 return;
@@ -191,22 +162,22 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
             spawn_on_runtime(phase_rt.as_ref(), async move {
                 process_gameflow_phase_update(&handle, &state, next_phase).await;
             });
-        },
-    );
+        }),
+    ));
 
     let lobby_ctx = ctx.clone();
     let lobby_rt = rt_handle.clone();
-    ws.subscribe(
-        EventKind::json_api_event_callback_str(crate::lcu_connector::LOBBY_ENDPOINT),
-        move |event: &Event| {
+    subscriptions.push((
+        endpoint_to_json_api_topic(crate::lcu_connector::LOBBY_ENDPOINT),
+        Arc::new(move |event: &LcuWsEvent| {
             let ctx = lobby_ctx.clone();
-            let event_type = event.2.event_type.clone();
-            let data = event.2.data.clone();
+            let event_type = event.event_type.clone();
+            let data = event.data.clone();
             spawn_on_runtime(lobby_rt.as_ref(), async move {
                 super::lobby_handler::handle_lobby_ws_payload(&ctx, &event_type, &data).await;
             });
-        },
-    );
+        }),
+    ));
 
     for endpoint in [
         crate::lcu_connector::OBJECTIVES_READY_ENDPOINT,
@@ -217,15 +188,17 @@ pub(super) fn spawn_configured_ws(ctx: &WsListenerCtx) -> LcuWebSocket {
         crate::lcu_connector::LOL_MISSIONS_SERIES_ENDPOINT,
     ] {
         let missions_rt = rt_handle.clone();
-        ws.subscribe(
-            EventKind::json_api_event_callback_str(endpoint),
-            move |_event: &Event| {
+        subscriptions.push((
+            endpoint_to_json_api_topic(endpoint),
+            Arc::new(move |_event: &LcuWsEvent| {
                 let _guard = missions_rt.as_ref().map(tokio::runtime::Handle::enter);
                 crate::lcu_connector::schedule_debounced_auto_mark_missions();
-            },
-        );
+            }),
+        ));
     }
 
+    let ws = LcuWsHandle::spawn(subscriptions);
+    logging::log_info("ws.listener", "event=ws_subscribed");
     ws
 }
 

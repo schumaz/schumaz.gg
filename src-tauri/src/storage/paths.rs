@@ -105,6 +105,10 @@ impl AppPaths {
     pub fn log_file_path(&self) -> PathBuf {
         self.logs_dir.join("schumazgg.log")
     }
+
+    pub fn lcu_lockfile_cache_path(&self) -> PathBuf {
+        self.config_dir.join("lcu_lockfile_path.txt")
+    }
 }
 
 pub fn set_global_paths(paths: AppPaths) {
@@ -243,6 +247,10 @@ mod tests {
         assert_eq!(
             paths.log_file_path(),
             root.join("Logs").join("schumazgg.log")
+        );
+        assert_eq!(
+            paths.lcu_lockfile_cache_path(),
+            root.join("Config").join("lcu_lockfile_path.txt")
         );
         assert!(!paths.logs_dir.starts_with(&paths.cache_dir));
 

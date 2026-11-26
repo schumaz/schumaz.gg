@@ -3815,6 +3815,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-specta",
  "tokio",
+ "tungstenite",
  "winreg",
  "wiremock",
 ]
