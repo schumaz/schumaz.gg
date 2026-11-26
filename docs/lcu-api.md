@@ -2,6 +2,7 @@
 
 ## Endpoints REST usados
 - `GET /lol-summoner/v1/current-summoner` → `{ summonerId, gameName, tagLine, displayName, summonerLevel, profileIconId }`
+- `GET /lol-match-history/v1/products/lol/current-summoner/matches?begIndex={beg}&endIndex={end}` → página incremental do histórico de partidas (janelas inclusivas de 10 em 10, ex.: `0..=9`, `10..=19`)
 - `GET /lol-gameflow/v1/session` → `{ gameData: { isCustomGame, gameMode, queue: { id, gameMode }, teamOne, teamTwo, playerChampionSelections } }`
 - `GET /lol-lobby/v2/lobby` → `{ gameConfig: { queueId, gameMode }, localMember: { playerSlots: [{ championId, positionPreference, spell1, spell2, perks, skinId }] } }`
 - `GET / PUT /lol-lobby/v1/lobby/members/localMember/player-slots` → lê/atualiza os slots de pré-seleção no lobby do **Swiftplay (`480`)** / **Quickplay (`490`)** (`perks` JSON string + `spell1`/`spell2`, preservando `skinId`/`positionPreference`)

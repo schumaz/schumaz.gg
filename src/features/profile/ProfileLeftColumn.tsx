@@ -129,6 +129,7 @@ export function ProfileLeftColumn({
               <div className="recent-streak-pills">
                 {filteredMatches
                   .filter((m) => !m.remake)
+                  .slice(0, 10)
                   .map((m) => (
                     <span
                       key={m.game_id}

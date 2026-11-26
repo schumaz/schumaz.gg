@@ -238,6 +238,8 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
                 ..Default::default()
             },
         ],
+        history_next_beg_index: 10,
+        history_has_more: true,
         item_metadata: HashMap::new(),
         rune_metadata: HashMap::new(),
         spell_metadata: HashMap::new(),
@@ -248,6 +250,8 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
     let now = crate::storage::now_unix_secs();
     let loaded_fresh = load_profile_from_dir(&profile_dir, 55501, now).unwrap();
     assert!(!loaded_fresh.is_stale);
+    assert_eq!(loaded_fresh.profile.history_next_beg_index, 10);
+    assert!(loaded_fresh.profile.history_has_more);
 
     let mut loaded_stale = load_profile_from_dir(&profile_dir, 55501, now + 400).unwrap();
     assert!(loaded_stale.is_stale);

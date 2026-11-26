@@ -69,41 +69,22 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     });
 
     await buildIpc.updateBuildFilters(103, 420, "mid", "emerald_plus", "br", "16.22");
-    expect(invoke).toHaveBeenCalledWith("update_build_filters", {
-      championId: 103,
-      queueId: 420,
-      position: "mid",
-      tier: "emerald_plus",
-      region: "br",
-      patch: "16.22",
-    });
+    expect(invoke).toHaveBeenCalledWith("update_build_filters", { championId: 103, queueId: 420, position: "mid", tier: "emerald_plus", region: "br", patch: "16.22" });
 
     await injectorIpc.injectSummonerSpells(4, 14, 103);
-    expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", {
-      championId: 103,
-      spell1Id: 4,
-      spell2Id: 14,
-    });
+    expect(invoke).toHaveBeenCalledWith("inject_summoner_spells", { championId: 103, spell1Id: 4, spell2Id: 14 });
 
     await injectorIpc.injectRunePage(103, "Ahri", 0, 8100, 8200, [8112]);
-    expect(invoke).toHaveBeenCalledWith("inject_rune_page", {
-      championId: 103,
-      championName: "Ahri",
-      pageIndex: 0,
-      primaryStyleId: 8100,
-      subStyleId: 8200,
-      selectedPerkIds: [8112],
-    });
+    expect(invoke).toHaveBeenCalledWith("inject_rune_page", { championId: 103, championName: "Ahri", pageIndex: 0, primaryStyleId: 8100, subStyleId: 8200, selectedPerkIds: [8112] });
 
     await injectorIpc.injectItemBuild(103, 420, 0);
-    expect(invoke).toHaveBeenCalledWith("inject_item_build", {
-      championId: 103,
-      queueId: 420,
-      buildIndex: 0,
-    });
+    expect(invoke).toHaveBeenCalledWith("inject_item_build", { championId: 103, queueId: 420, buildIndex: 0 });
 
     await profileIpc.getPlayerProfile(true);
     expect(invoke).toHaveBeenCalledWith("get_player_profile", { forceRefresh: true });
+
+    await profileIpc.getPlayerMatchHistoryPage(10, 10);
+    expect(invoke).toHaveBeenCalledWith("get_player_match_history_page", { begIndex: 10, count: 10 });
 
     await profileIpc.getCachedPlayerProfile(null);
     expect(invoke).toHaveBeenCalledWith("get_cached_player_profile", { summonerId: null });

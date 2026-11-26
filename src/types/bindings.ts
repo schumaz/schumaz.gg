@@ -25,6 +25,8 @@ export const commands = {
 	 *  When `force_refresh` is `Some(true)`, bypasses the `.lz4` disk cache.
 	 */
 	getPlayerProfile: (forceRefresh: boolean | null) => __TAURI_INVOKE<PlayerProfile_Serialize | null>("get_player_profile", { forceRefresh }),
+	/**  Tauri command to fetch an incremental match history page (`beg_index..=beg_index+count-1`) from LCU. */
+	getPlayerMatchHistoryPage: (begIndex: number, count: number | null) => __TAURI_INVOKE<MatchHistoryPage_Serialize>("get_player_match_history_page", { begIndex, count }),
 	/**
 	 *  Syncs the champion ID currently displayed in the frontend UI to backend session state
 	 *  so final Champ Select reconciliation can detect UI/backend divergence.
@@ -856,6 +858,31 @@ export type LocalCacheInfo = {
 
 export type MatchEnded = null;
 
+/**  Paginated match history window returned by `get_player_match_history_page`. */
+export type MatchHistoryPage = MatchHistoryPage_Serialize | MatchHistoryPage_Deserialize;
+
+/**  Paginated match history window returned by `get_player_match_history_page`. */
+export type MatchHistoryPage_Deserialize = {
+	matches: RecentMatchInfo_Deserialize[],
+	next_beg_index: number,
+	has_more: boolean,
+	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
+	rune_metadata?: { [key in number]: RuneMetadata_Deserialize },
+	spell_metadata?: { [key in number]: SpellMetadata_Deserialize },
+	augment_metadata?: { [key in number]: ArenaAugmentMetadata_Deserialize },
+};
+
+/**  Paginated match history window returned by `get_player_match_history_page`. */
+export type MatchHistoryPage_Serialize = {
+	matches: RecentMatchInfo_Serialize[],
+	next_beg_index: number,
+	has_more: boolean,
+	item_metadata: { [key in number]: ItemMetadata_Serialize },
+	rune_metadata: { [key in number]: RuneMetadata_Serialize },
+	spell_metadata: { [key in number]: SpellMetadata_Serialize },
+	augment_metadata: { [key in number]: ArenaAugmentMetadata_Serialize },
+};
+
 export type NavigationState = NavigationState_Serialize | NavigationState_Deserialize;
 
 export type NavigationStatePatch = NavigationStatePatch_Serialize | NavigationStatePatch_Deserialize;
@@ -926,6 +953,8 @@ export type PlayerProfile_Deserialize = {
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
 	recent_matches: RecentMatchInfo_Deserialize[],
+	history_next_beg_index?: number,
+	history_has_more?: boolean,
 	item_metadata?: { [key in number]: ItemMetadata_Deserialize },
 	rune_metadata?: { [key in number]: RuneMetadata_Deserialize },
 	spell_metadata?: { [key in number]: SpellMetadata_Deserialize },
@@ -943,6 +972,8 @@ export type PlayerProfile_Serialize = {
 	ranked_stats: RankedQueueStats[],
 	top_masteries: ChampionMasteryInfo[],
 	recent_matches: RecentMatchInfo_Serialize[],
+	history_next_beg_index: number,
+	history_has_more: boolean,
 	item_metadata: { [key in number]: ItemMetadata_Serialize },
 	rune_metadata: { [key in number]: RuneMetadata_Serialize },
 	spell_metadata: { [key in number]: SpellMetadata_Serialize },

@@ -1,6 +1,8 @@
 use crate::build_provider;
-use crate::lcu_connector::LcuConnection;
-use crate::models::{CachedProfileResult, DataDragonCache, PlayerProfile};
+use crate::lcu_connector::{
+    DEFAULT_MATCH_HISTORY_PAGE_SIZE, LcuConnection, MAX_MATCH_HISTORY_PAGE_SIZE,
+};
+use crate::models::{AppLocale, CachedProfileResult, DataDragonCache, MatchHistoryPage, PlayerProfile};
 
 use super::cache::{
     get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
@@ -10,12 +12,25 @@ use super::match_metadata::{
     collect_matches_augment_metadata, collect_matches_item_metadata, collect_matches_rune_metadata,
     collect_matches_spell_metadata,
 };
-use super::matches_parser::parse_recent_matches_for_locale;
+use super::matches_parser::parse_match_history_page_for_locale;
 use super::ranked_parser::parse_ranked_stats_for_locale;
 use super::skins::{
     extract_background_skin_id, fetch_skin_name_for_locale,
     resolve_background_splash_urls_for_locale,
 };
+
+async fn resolve_ddragon_cache_for_locale(
+    http_client: &reqwest::Client,
+    locale: AppLocale,
+) -> DataDragonCache {
+    match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
+        Ok(c) => c.as_ref().clone(),
+        Err(_) => DataDragonCache {
+            version: build_provider::latest_cached_ddragon_version().unwrap_or_default(),
+            ..Default::default()
+        },
+    }
+}
 
 /// Fetches and assembles the full `PlayerProfile` from an active LCU connection + DataDragon cache,
 /// supporting disk `.lz4` caching (48h TTL, SWR > 5m, `force_refresh` bypass) and `LastSummonerId` persistence.
@@ -45,14 +60,7 @@ pub async fn load_player_profile_with_cache(
         return Ok(cached.profile);
     }
 
-    let cache =
-        match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
-            Ok(c) => c.as_ref().clone(),
-            Err(_) => DataDragonCache {
-                version: build_provider::latest_cached_ddragon_version().unwrap_or_default(),
-                ..Default::default()
-            },
-        };
+    let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
 
     let (profile_res, masteries_res, ranked_res, history_res) = tokio::join!(
         conn.get_summoner_profile(),
@@ -94,10 +102,20 @@ pub async fn load_player_profile_with_cache(
         .map(|val| parse_top_masteries(val, &cache, 3))
         .unwrap_or_default();
 
-    let recent_matches = history_res
+    let initial_page = history_res
         .as_ref()
-        .map(|val| parse_recent_matches_for_locale(val, summoner.summoner_id, &cache, 10, locale))
+        .map(|val| {
+            parse_match_history_page_for_locale(
+                val,
+                summoner.summoner_id,
+                &cache,
+                0,
+                DEFAULT_MATCH_HISTORY_PAGE_SIZE,
+                locale,
+            )
+        })
         .unwrap_or_default();
+    let recent_matches = initial_page.matches;
     let item_metadata = collect_matches_item_metadata(&recent_matches, &cache.items);
     let rune_metadata = collect_matches_rune_metadata(&recent_matches, &cache.runes);
     let spell_metadata = collect_matches_spell_metadata(&recent_matches, &cache, locale);
@@ -123,6 +141,8 @@ pub async fn load_player_profile_with_cache(
         ranked_stats,
         top_masteries,
         recent_matches,
+        history_next_beg_index: initial_page.next_beg_index,
+        history_has_more: initial_page.has_more,
         item_metadata,
         rune_metadata,
         spell_metadata,
@@ -158,3 +178,79 @@ pub async fn fetch_live_player_profile(force_refresh: bool) -> Option<PlayerProf
         .await
         .ok()
 }
+
+/// Parses a match history JSON payload into a paginated response with deduplicated tooltip metadata.
+pub fn build_match_history_page_response(
+    history_json: &serde_json::Value,
+    summoner_id: u64,
+    cache: &DataDragonCache,
+    beg_index: u32,
+    page_size: u32,
+    locale: AppLocale,
+) -> MatchHistoryPage {
+    let parsed = parse_match_history_page_for_locale(
+        history_json,
+        summoner_id,
+        cache,
+        beg_index,
+        page_size,
+        locale,
+    );
+    let item_metadata = collect_matches_item_metadata(&parsed.matches, &cache.items);
+    let rune_metadata = collect_matches_rune_metadata(&parsed.matches, &cache.runes);
+    let spell_metadata = collect_matches_spell_metadata(&parsed.matches, cache, locale);
+    let augment_metadata =
+        collect_matches_augment_metadata(&parsed.matches, &cache.arena_augments);
+
+    MatchHistoryPage {
+        matches: parsed.matches,
+        next_beg_index: parsed.next_beg_index,
+        has_more: parsed.has_more,
+        item_metadata,
+        rune_metadata,
+        spell_metadata,
+        augment_metadata,
+    }
+}
+
+/// Fetches and enriches a single match history page (`beg_index..=beg_index+count-1`) from LCU.
+pub async fn load_match_history_page(
+    conn: &LcuConnection,
+    beg_index: u32,
+    count: Option<u32>,
+) -> Result<MatchHistoryPage, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    let page_size = count
+        .unwrap_or(DEFAULT_MATCH_HISTORY_PAGE_SIZE)
+        .clamp(1, MAX_MATCH_HISTORY_PAGE_SIZE);
+    let end_index = beg_index.saturating_add(page_size - 1);
+
+    let (summoner, history_json) = tokio::try_join!(
+        conn.get_current_summoner(),
+        conn.get_match_history_page(beg_index, end_index)
+    )?;
+
+    let http_client = build_provider::shared_http_client();
+    let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
+    Ok(build_match_history_page_response(
+        &history_json,
+        summoner.summoner_id,
+        &cache,
+        beg_index,
+        page_size,
+        locale,
+    ))
+}
+
+/// Connects to the local LCU and returns the requested paginated match history window.
+pub async fn fetch_live_match_history_page(
+    beg_index: u32,
+    count: Option<u32>,
+) -> Result<MatchHistoryPage, String> {
+    let conn = LcuConnection::connect()?;
+    load_match_history_page(&conn, beg_index, count).await
+}
+
+#[cfg(test)]
+#[path = "match_pagination_tests.rs"]
+mod pagination_tests;

@@ -7,11 +7,12 @@ import {
   computeAvailableModes,
   computeHighlightedChampion,
   computeWinLossStats,
-  filterValidMatches,
+  filterValidMatchList,
 } from "./profileHelpers";
 import { ProfileHeroCard } from "./ProfileHeroCard";
 import { ProfileLeftColumn } from "./ProfileLeftColumn";
 import { ProfileMatchesCard } from "./ProfileMatchesCard";
+import { useMatchHistoryPagination } from "./useMatchHistoryPagination";
 
 interface ProfileTabProps {
   summoner: SummonerInfo | null;
@@ -56,6 +57,7 @@ export function ProfileTab({
 }: ProfileTabProps) {
   const { t } = useTranslation();
   const [selectedMode, setSelectedMode] = useState<string>(savedModeFilter || "all");
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
     if (savedModeFilter) {
@@ -69,7 +71,29 @@ export function ProfileTab({
   };
 
   const displaySummoner = summoner ?? profile?.summoner ?? null;
-  const validMatches = useMemo(() => filterValidMatches(profile), [profile]);
+  const pagination = useMatchHistoryPagination(
+    profile,
+    displaySummoner?.summonerId ?? null,
+    summoner !== null
+  );
+  const handleRefresh = () => {
+    pagination.resetPagination();
+    setRefreshCount((prev) => prev + 1);
+    onRefresh();
+  };
+  const matchesResetKey = useMemo(
+    () => ({
+      summonerId: displaySummoner?.summonerId ?? null,
+      profile,
+      refreshCount,
+    }),
+    [displaySummoner?.summonerId, profile, refreshCount]
+  );
+
+  const validMatches = useMemo(
+    () => filterValidMatchList(pagination.matches),
+    [pagination.matches]
+  );
   const availableModes = useMemo(() => computeAvailableModes(validMatches), [validMatches]);
 
   const activeMode =
@@ -134,7 +158,7 @@ export function ProfileTab({
             profile={profile}
             loading={loading}
             refreshCooldownSecs={refreshCooldownSecs}
-            onRefresh={onRefresh}
+            onRefresh={handleRefresh}
             glassBlurStyle={glassBlurStyle}
           />
 
@@ -154,10 +178,16 @@ export function ProfileTab({
               activeMode={activeMode}
               onSelectMode={handleSelectMode}
               glassBlurStyle={glassBlurStyle}
-              itemMetadata={profile?.item_metadata}
-              runeMetadata={profile?.rune_metadata}
-              spellMetadata={profile?.spell_metadata}
-              augmentMetadata={profile?.augment_metadata}
+              itemMetadata={pagination.itemMetadata}
+              runeMetadata={pagination.runeMetadata}
+              spellMetadata={pagination.spellMetadata}
+              augmentMetadata={pagination.augmentMetadata}
+              hasMore={pagination.hasMore}
+              canLoadMore={pagination.canLoadMore && !loading}
+              isLoadingMore={pagination.isLoadingMore}
+              loadMoreError={pagination.loadMoreError}
+              onLoadMore={pagination.loadMore}
+              resetKey={matchesResetKey}
             />
           </div>
         </div>

@@ -7,10 +7,29 @@ pub const CURRENT_SUMMONER_PROFILE_ENDPOINT: &str =
 pub const CHAMPION_MASTERIES_ENDPOINT: &str =
     "/lol-champion-mastery/v1/local-player/champion-masteries";
 pub const RANKED_STATS_ENDPOINT: &str = "/lol-ranked/v1/current-ranked-stats";
+pub const DEFAULT_MATCH_HISTORY_PAGE_SIZE: u32 = 10;
+pub const MAX_MATCH_HISTORY_PAGE_SIZE: u32 = 50;
 pub const MATCH_HISTORY_ENDPOINT: &str =
-    "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=29";
+    "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=9";
 pub const MATCH_HISTORY_FALLBACK_ENDPOINT: &str =
     "/lol-match-history/v1/products/lol/current-summoner/matches";
+
+/// Builds the LCU match history endpoint query for an inclusive `[beg_index..=end_index]` window.
+pub fn build_match_history_page_endpoint(beg_index: u32, end_index: u32) -> String {
+    let normalized_end = end_index.max(beg_index);
+    format!(
+        "{}?begIndex={}&endIndex={}",
+        MATCH_HISTORY_FALLBACK_ENDPOINT, beg_index, normalized_end
+    )
+}
+
+fn is_lcu_error_payload(val: &serde_json::Value) -> bool {
+    val.get("errorCode").is_some()
+        || val
+            .get("httpStatus")
+            .and_then(|s| s.as_i64())
+            .is_some_and(|s| s >= 400)
+}
 
 /// Pure parser function to extract summoner information from a raw JSON string.
 /// Falls back to `displayName` if `gameName` is empty.
@@ -149,16 +168,42 @@ impl LcuConnection {
             .await
     }
 
-    /// Fetches recent match history via GET /lol-match-history/v1/products/lol/current-summoner/matches.
-    pub async fn get_match_history(&self) -> Result<serde_json::Value, String> {
-        if let Ok(Some(val)) = self
-            .get_json_opt(MATCH_HISTORY_ENDPOINT, "match history")
-            .await
-        {
-            return Ok(val);
+    /// Fetches an inclusive page (`begIndex..=endIndex`) of recent match history.
+    /// Only falls back to the unparameterized endpoint when `beg_index == 0`.
+    pub async fn get_match_history_page(
+        &self,
+        beg_index: u32,
+        end_index: u32,
+    ) -> Result<serde_json::Value, String> {
+        let endpoint = build_match_history_page_endpoint(beg_index, end_index);
+        match self.get_json_opt(&endpoint, "match history page").await {
+            Ok(Some(val)) if !is_lcu_error_payload(&val) => return Ok(val),
+            Ok(Some(_)) if beg_index > 0 => {
+                return Err(format!(
+                    "LCU returned an error payload for match history page begIndex={beg_index}"
+                ));
+            }
+            Ok(None) if beg_index > 0 => {
+                return Err(format!(
+                    "LCU returned an empty response for match history page begIndex={beg_index}"
+                ));
+            }
+            Err(err) if beg_index > 0 => return Err(err),
+            Ok(_) | Err(_) => {}
         }
 
-        self.get_json_required(MATCH_HISTORY_FALLBACK_ENDPOINT, "match history")
+        let fallback = self
+            .get_json_required(MATCH_HISTORY_FALLBACK_ENDPOINT, "match history")
+            .await?;
+        if is_lcu_error_payload(&fallback) {
+            return Err("LCU returned an error payload for match history".to_string());
+        }
+        Ok(fallback)
+    }
+
+    /// Fetches the initial page (0..=9) of recent match history via GET /lol-match-history/v1/products/lol/current-summoner/matches.
+    pub async fn get_match_history(&self) -> Result<serde_json::Value, String> {
+        self.get_match_history_page(0, DEFAULT_MATCH_HISTORY_PAGE_SIZE - 1)
             .await
     }
 }

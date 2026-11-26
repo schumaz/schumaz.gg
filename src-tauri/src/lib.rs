@@ -27,6 +27,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::get_active_champ_select_snapshot,
             commands::get_cached_player_profile,
             commands::get_player_profile,
+            commands::get_player_match_history_page,
             commands::sync_displayed_champion,
             commands::select_lobby_preselect_slot,
             commands::sync_user_preferences,

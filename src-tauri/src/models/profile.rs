@@ -97,6 +97,26 @@ pub struct PlayerProfile {
     pub top_masteries: Vec<ChampionMasteryInfo>,
     pub recent_matches: Vec<RecentMatchInfo>,
     #[serde(default)]
+    pub history_next_beg_index: u32,
+    #[serde(default)]
+    pub history_has_more: bool,
+    #[serde(default)]
+    pub item_metadata: HashMap<i32, ItemMetadata>,
+    #[serde(default)]
+    pub rune_metadata: HashMap<i32, RuneMetadata>,
+    #[serde(default)]
+    pub spell_metadata: HashMap<i32, SpellMetadata>,
+    #[serde(default)]
+    pub augment_metadata: HashMap<i32, ArenaAugmentMetadata>,
+}
+
+/// Paginated match history window returned by `get_player_match_history_page`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
+pub struct MatchHistoryPage {
+    pub matches: Vec<RecentMatchInfo>,
+    pub next_beg_index: u32,
+    pub has_more: bool,
+    #[serde(default)]
     pub item_metadata: HashMap<i32, ItemMetadata>,
     #[serde(default)]
     pub rune_metadata: HashMap<i32, RuneMetadata>,

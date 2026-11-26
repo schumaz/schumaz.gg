@@ -93,3 +93,23 @@ fn test_parse_summoner_value_from_json_value() {
     assert_eq!(summoner.summoner_level, 600);
     assert_eq!(summoner.profile_icon_id, 123);
 }
+
+#[test]
+fn test_build_match_history_page_endpoint_builds_inclusive_windows_and_clamps() {
+    assert_eq!(
+        build_match_history_page_endpoint(0, 9),
+        "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=9"
+    );
+    assert_eq!(
+        build_match_history_page_endpoint(10, 19),
+        "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=10&endIndex=19"
+    );
+    assert_eq!(
+        build_match_history_page_endpoint(20, 29),
+        "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=20&endIndex=29"
+    );
+    assert_eq!(
+        build_match_history_page_endpoint(15, 5),
+        "/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=15&endIndex=15"
+    );
+}

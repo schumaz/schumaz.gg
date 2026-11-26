@@ -34,6 +34,9 @@ export interface TabTranslations {
     noMasteries: string;
     recentMatchesTitle: string;
     showingMatches: string;
+    loadMoreMatches: string;
+    loadingMoreMatches: string;
+    loadMoreError: string;
     filterMatchesAria: string;
     allModes: string;
     spell1Alt: string;

@@ -70,9 +70,8 @@ export interface HighlightedChampion {
   kdaSum: number;
 }
 
-export function filterValidMatches(profile: PlayerProfile | null): RecentMatchInfo[] {
-  if (!profile?.recent_matches) return [];
-  return profile.recent_matches.filter((m) => {
+export function filterValidMatchList(matches: RecentMatchInfo[]): RecentMatchInfo[] {
+  return matches.filter((m) => {
     const modeLabelLower = m.game_mode_label.toLowerCase();
     return (
       m.queue_id >= 0 &&
@@ -81,6 +80,11 @@ export function filterValidMatches(profile: PlayerProfile | null): RecentMatchIn
       !modeLabelLower.includes("practice")
     );
   });
+}
+
+export function filterValidMatches(profile: PlayerProfile | null): RecentMatchInfo[] {
+  if (!profile?.recent_matches) return [];
+  return filterValidMatchList(profile.recent_matches);
 }
 
 export function computeAvailableModes(validMatches: RecentMatchInfo[]): AvailableModeItem[] {

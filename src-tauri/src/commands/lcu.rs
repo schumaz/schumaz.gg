@@ -41,6 +41,16 @@ pub async fn get_player_profile(
     Ok(profile_provider::fetch_live_player_profile(force_refresh.unwrap_or(false)).await)
 }
 
+/// Tauri command to fetch an incremental match history page (`beg_index..=beg_index+count-1`) from LCU.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_player_match_history_page(
+    beg_index: u32,
+    count: Option<u32>,
+) -> Result<models::MatchHistoryPage, String> {
+    profile_provider::fetch_live_match_history_page(beg_index, count).await
+}
+
 /// Syncs the champion ID currently displayed in the frontend UI to backend session state
 /// so final Champ Select reconciliation can detect UI/backend divergence.
 #[tauri::command]

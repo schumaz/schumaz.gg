@@ -1,9 +1,10 @@
-import { CSSProperties, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
 import {
   AugmentMetadataMap,
   ItemMetadataMap,
+  LoadingDots,
   RuneMetadataMap,
   SpellMetadataMap,
 } from "../../components/ui";
@@ -21,6 +22,12 @@ interface ProfileMatchesCardProps {
   runeMetadata?: RuneMetadataMap;
   spellMetadata?: SpellMetadataMap;
   augmentMetadata?: AugmentMetadataMap;
+  hasMore?: boolean;
+  canLoadMore?: boolean;
+  isLoadingMore?: boolean;
+  loadMoreError?: string | null;
+  onLoadMore?: () => void;
+  resetKey?: unknown;
 }
 
 export function ProfileMatchesCard({
@@ -34,9 +41,19 @@ export function ProfileMatchesCard({
   runeMetadata,
   spellMetadata,
   augmentMetadata,
+  hasMore = false,
+  canLoadMore = false,
+  isLoadingMore = false,
+  loadMoreError = null,
+  onLoadMore,
+  resetKey,
 }: ProfileMatchesCardProps) {
   const { t, formatCompactNumber } = useTranslation();
   const [expandedGameId, setExpandedGameId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setExpandedGameId(null);
+  }, [resetKey]);
 
   return (
     <div className="profile-col profile-col-right">
@@ -149,6 +166,42 @@ export function ProfileMatchesCard({
           ) : (
             <div className="matches-empty">
               <p className="text-muted">{t("profile.noMatchesMode")}</p>
+            </div>
+          )}
+
+          {(hasMore || loadMoreError) && (
+            <div className="matches-pagination-footer">
+              {loadMoreError && (
+                <p
+                  className="matches-load-more-error"
+                  role="alert"
+                  data-testid="load-more-matches-error"
+                >
+                  {loadMoreError}
+                </p>
+              )}
+              {hasMore && (
+                <button
+                  type="button"
+                  className="matches-load-more-btn"
+                  data-testid="load-more-matches-btn"
+                  disabled={!canLoadMore || isLoadingMore}
+                  onClick={() => onLoadMore?.()}
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <span>{t("profile.loadingMoreMatches")}</span>
+                      <LoadingDots
+                        variant="inline"
+                        size="sm"
+                        testId="load-more-matches-dots"
+                      />
+                    </>
+                  ) : (
+                    t("profile.loadMoreMatches")
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>

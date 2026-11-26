@@ -52,6 +52,7 @@ export type {
   LobbyPreselectSlot,
   LocalCacheInfo,
   MatchEnded,
+  MatchHistoryPage,
   NavigationState,
   NavigationStatePatch,
   PlayerProfile,
