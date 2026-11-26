@@ -58,14 +58,14 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
 ├── scripts/                       # Automação de release, gatekeeper de linhas e higiene do target Cargo (run-tauri, sweep-cargo-target)
 ├── src/
 │   ├── services/ipc/              # Adaptadores IPC tipados por domínio (bindings.ts, diagnostics, @tauri-apps/api, plugin-updater, plugin-opener)
-│   ├── components/ui/             # Componentes visuais puros (FiltersHeader, PatchProtectionIndicator, championTier, FilterDropdown, SearchInput, RegionFlag, RuneTree, SpellsBar, SkillOrderCard, LaneMatchupsCard, ItemBlocks, Docks)
+│   │   ├── Tooltip, SkillOrderPopover, LaneMatchupsPopover, LobbySlotsBar, RuneTree, SpellsBar, SkillOrderCard, LaneMatchupsCard, ItemBlocks, Docks
 │   ├── hooks/                     # Hooks transversais do shell (useAppBootstrap, useAppUpdater, useWindowMinimized)
 │   ├── features/                  # Domínios isolados (cada qual com componentes, hooks, helpers e CSS locais)
-│   │   ├── champ-select/          # Sessão LCU, IdleState e auto-injeção
-│   │   ├── profile/               # Perfil do invocador, elos, maestrias e histórico
+│   │   ├── champ-select/          # Sessão LCU, pré-seleção de lobby (Swiftplay), IdleState e auto-injeção
+│   │   ├── profile/               # Perfil 2.0 (elos, catálogo de maestrias, histórico paginado e placar 5v5/Arena sob demanda)
 │   │   ├── ranked/                # Tier list Solo/Duo e explorador de builds
 │   │   ├── arena/                 # Arena 3x6 (tier list, augments, sinergias e itens prismáticos)
-│   │   ├── aram/                  # ARAM Clássico e ARAM Desordem (Mayhem Augments)
+│   │   ├── aram/                  # ARAM Clássico (explorador de builds) e ARAM Desordem (Mayhem Augments & Builds)
 │   │   └── settings/              # Configurações (Geral, Automação & Cliente, Aparência & Desempenho, Sistema & Armazenamento + Suporte e Diagnóstico)
 │   ├── i18n/                      # Contexto de tradução e dicionários fatiados (pt/en core, build, settings & tabs)
 │   ├── styles/                    # Tokens, layout shell e estilos compartilhados
@@ -81,13 +81,13 @@ Modelo canônico ChampionBuild ──► lcu_injector (runas, feitiços, item se
         ├── app_bootstrap.rs + app_bootstrap/ # Inicialização, protocolo schumaz-asset://, tray.rs, window_factory.rs, prewarm.rs e window_events.rs
         ├── logging.rs + logging/  # Logs rotativos locais (Logs/, logfmt 100% std, actor assíncrono, sanitizador, métricas lock-free, diagnóstico)
         ├── commands.rs + commands/        # Handlers IPC finos (#[tauri::command] + #[specta::specta], incluindo diagnostics.rs)
-        ├── models.rs + models/            # Structs serde/specta e Events IPC (incluindo diagnostics.rs)
+        ├── models.rs + models/            # Structs serde/specta e Events IPC (build, profile, skills, matchups, ws, diagnostics, updater)
         ├── updater.rs                     # Detecção de modo Portable (feature + Registro HKCU/path), cooldown 24h/HEAD e info de distribuição
         ├── storage.rs + storage/          # Infraestrutura: paths (Config/, Cache/, Logs/), cache .lz4, GC, assets, graphics, window_bounds, settings/ (INI)
         ├── lcu_connector.rs + lcu_connector/ # Cliente REST LCU, endpoints por domínio, motor de missões e monitor
-        ├── profile_provider.rs + profile_provider/ # Cache de perfil/skins e parsers de ranked, maestrias e histórico
-        ├── ws_listener.rs + ws_listener/  # WebSocket (subscription.rs) + fallback polling, extração de draft, coordinator e reconciliação
-        ├── lcu_injector.rs + lcu_injector/ # Regras de spells/Flash, seleções, payloads e serviço de injeção REST
+        ├── profile_provider.rs + profile_provider/ # Cache de perfil/skins e parsers de ranked, maestrias, histórico paginado e placar 5v5/Arena
+        ├── ws_listener.rs + ws_listener/  # WebSocket (subscription.rs), lobby pré-seleção (lobby*.rs), fallback polling, extração de draft, coordinator e reconciliação
+        ├── lcu_injector.rs + lcu_injector/ # Regras de spells/Flash, seleções, payloads (draft e lobby Swiftplay) e serviço de injeção REST
         └── build_provider.rs + build_provider/ # Serviço/orquestrador de builds, ddragon/, items/, analytics/ (OP.GG), runes, skills, spells, patch
 ```
 

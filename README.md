@@ -64,16 +64,12 @@ telemetry.
 
 ## Features
 
-- **Instant Champion Select automation**: detects champion hover and lock-in in the League client, plus a final safety
-  reconciliation right before the match starts (including last-second ARAM bench swaps).
-- **Configurable auto-injection**: independently toggle automatic application of **Runes**, **Summoner Spells**
-  (respecting your **Flash on D or F** preference), and **5-block Shop Item Sets**.
-- **Ranked Tier List & Build Explorer**: browse champion tier lists and full builds filtered by **Tier/Elo**, **Role**,
-  **Region** (15 servers + Global), and **Patch**.
-- **ARAM & ARAM Mayhem**: dedicated support for both classic **ARAM** and **ARAM Mayhem**, including **Augments**
-  rankings filterable by rarity (*Silver*, *Gold*, *Prismatic*, *Special*).
-- **Summoner Profile Analytics**: view your summoner icon, level, client profile wallpaper, ranked emblems, Top 3
-  champion masteries, Win/Loss chart, and last 10 matches filterable by game mode.
+- **Instant Champion Select & Swiftplay Lobby automation**: detects champion hover and lock-in in the League client across Summoner's Rift, ARAM, ARAM Mayhem, Arena, Clash (`700`), and **Swiftplay (`480`)** lobby pre-selection slots, with final pre-match safety reconciliation (including late ARAM bench swaps).
+- **Configurable auto-injection**: independently toggle automatic application of **Runes**, **Summoner Spells** (with selectable top-2 spell pairs and **Flash on D or F** preference), and **5-block Shop Item Sets**.
+- **Rich Build Intelligence**: DataDragon tooltips on items, runes, spells, and abilities, **Skill Order** priority (`Q > E > W`) with a `1–18` leveling grid, and **Lane Matchups** (*Hard* vs. *Favorable* opponents with lane win rates).
+- **Ranked Tier List & Build Explorer**: browse champion tier lists and full builds filtered by **Tier/Elo**, **Role**, **Region** (15 servers + Global), and **Patch**.
+- **ARAM & ARAM Mayhem**: explore full clickable **ARAM** builds alongside **ARAM Mayhem** champion builds and **Augments** rankings filterable by rarity (*Silver*, *Gold*, *Prismatic*, *Special*).
+- **Summoner Profile 2.0**: view your summoner icon, level, client profile wallpaper, ranked emblems, full **Champion Mastery Catalog** modal, Win/Loss chart (excluding remakes), **paginated match history** with runes/augments/trinket (`item6`) and Arena placement, **on-demand 5v5 & Arena scoreboard drawers**, and one-click shortcuts to any champion's Ranked build.
 - **48h New Patch Protection**: locks automatic selection to the previous consolidated patch for the first 48 hours
   after a new patch drops to avoid noisy low-sample builds (can be overridden manually in the filter bar or disabled in
   Settings).

@@ -67,17 +67,12 @@ telemetria.
 
 ## Funcionalidades
 
-- **Automação instantânea no Champ Select**: detecta quando você passa o mouse (*hover*) ou confirma (*lock-in*) um
-  campeão no cliente do LoL, com reconciliação final de segurança antes de a partida começar (incluindo trocas de última
-  hora no banco do ARAM).
-- **Auto-injeção configurável**: ative ou desative de forma independente a aplicação automática de **Runas**, **Feitiços
-  de Invocador** (respeitando sua preferência de **Flash no D ou F**) e **Conjuntos de Itens** em 5 blocos na loja.
-- **Tier List Ranqueada & Explorador de Builds**: consulte a lista de tiers e builds completas filtradas por **Elo**,
-  **Rota**, **Região** (15 servidores + Global) e **Patch**.
-- **ARAM & ARAM Desordem (Mayhem)**: suporte dedicado tanto ao **ARAM** clássico quanto ao **ARAM Desordem**, incluindo
-  ranking de **Aprimoramentos (Augments)** filtráveis por raridade (*Prata*, *Ouro*, *Prismático*, *Especial*).
-- **Análise de Perfil do Invocador**: visualize seu ícone, nível, papel de parede do perfil do cliente, emblemas
-  ranqueados, Top 3 maestrias, gráfico de Vitórias/Derrotas e as últimas 10 partidas filtráveis por modo de jogo.
+- **Automação instantânea no Champ Select e Lobby do Swiftplay**: detecta *hover* e confirmação (*lock-in*) em Summoner's Rift, ARAM, ARAM Desordem, Arena, Clash (`700`) e pré-seleção no lobby do **Jogo Rápido / Swiftplay (`480`)**, com reconciliação final de segurança antes de a partida começar (incluindo trocas no banco do ARAM).
+- **Auto-injeção configurável**: ative ou desative de forma independente **Runas**, **Feitiços de Invocador** (com seleção dos top-2 pares e preferência de **Flash no D ou F**) e **Conjuntos de Itens** em 5 blocos na loja.
+- **Inteligência Completa de Build**: tooltips ricos do DataDragon em itens, runas, feitiços e habilidades, **Ordem de Habilidades** (`Q > E > W` + grade `1–18`) e **Confrontos na Rota** (*Difíceis* vs. *Favoráveis* com taxa de vitória real).
+- **Tier List Ranqueada & Explorador de Builds**: consulte a lista de tiers e builds completas filtradas por **Elo**, **Rota**, **Região** (15 servidores + Global) e **Patch**.
+- **ARAM & ARAM Desordem (Mayhem)**: explore builds completas clicáveis no **ARAM** clássico e alterne entre **Augments** e **Build & Feitiços** no **ARAM Desordem** com filtro por raridade (*Prata*, *Ouro*, *Prismático*, *Especial*).
+- **Perfil do Invocador 2.0**: visualize ícone, nível, papel de parede do perfil, elos, catálogo completo de **Maestrias**, gráfico de Vitórias/Derrotas (excluindo *Remakes*), **histórico paginado** com runas/augments/amuleto (`item6`) e colocação na Arena, **placar completo 5v5 e Arena sob demanda** e atalhos diretos para a build do campeão na Ranqueada.
 - **Proteção de Novo Patch (48h)**: trava a seleção automática no patch anterior já consolidado durante as primeiras
   48 horas após o lançamento de um novo patch para evitar builds com baixa amostragem (pode ser ignorada manualmente no
   seletor de patch ou desativada nas Configurações).
