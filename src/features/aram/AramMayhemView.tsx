@@ -61,14 +61,14 @@ export function AramMayhemView({
 
   return (
     <div
-      className={`aram-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      className={`tierlist-layout${motionClassName ? ` ${motionClassName}` : ""}`}
       data-testid="aram-mayhem-view"
     >
       <div className="aram-mayhem-grid">
         <section className="card aram-mayhem-col aram-mayhem-champions-col">
           <div className="aram-panel-header">
             <div className="aram-panel-title-row">
-              <span className="aram-mode-badge is-mayhem">{t("aram.mayhemTitle")}</span>
+              <span className="tierlist-mode-badge is-mayhem">{t("aram.mayhemTitle")}</span>
               <h2 className="aram-mayhem-hero-title">{t("aram.augmentsColumnTitle")}</h2>
             </div>
             <SearchInput
@@ -85,21 +85,21 @@ export function AramMayhemView({
             {isLoadingList && currentChampions.length === 0 ? (
               <div className="loading-skeleton-shell" data-testid="aram-mayhem-champions-loading">
                 <div className="loading-banner">
-                  <div className="spinner aram-spinner" />
+                  <div className="spinner" />
                   <span>{t("aram.loadingChampions")}</span>
                   <LoadingDots size="sm" testId="aram-mayhem-champions-loading-dots" />
                 </div>
                 <ListSkeleton rows={7} variant="compact" testId="aram-mayhem-champions-skeleton" />
               </div>
             ) : listError && currentChampions.length === 0 ? (
-              <div className="aram-state-box">
-                <span className="aram-error-text">{listError}</span>
-                <button type="button" className="aram-retry-btn" onClick={() => onRetryTierList("aram_mayhem")}>
+              <div className="tierlist-state-box">
+                <span className="tierlist-error-text">{listError}</span>
+                <button type="button" className="tierlist-retry-btn" onClick={() => onRetryTierList("aram_mayhem")}>
                   {t("common.retry")}
                 </button>
               </div>
             ) : filteredMayhemChampions.length === 0 ? (
-              <div className="aram-state-box">
+              <div className="tierlist-state-box">
                 <span>{t("aram.noChampFound")}</span>
               </div>
             ) : (
@@ -111,12 +111,12 @@ export function AramMayhemView({
                   onClick={() => onSelectChampion(champ.key)}
                   data-testid={`mayhem-champ-${champ.key}`}
                 >
-                  <span className="aram-rank-num">#{champ.rank}</span>
-                  <div className="dd-icon-frame aram-champ-frame">
-                    <img src={resolveCachedAssetUrl(champ.icon_url)} alt={champ.name} className="aram-champ-avatar" loading="lazy" decoding="async" />
+                  <span className="tierlist-rank-num">#{champ.rank}</span>
+                  <div className="dd-icon-frame tierlist-champ-frame">
+                    <img src={resolveCachedAssetUrl(champ.icon_url)} alt={champ.name} className="tierlist-champ-avatar" loading="lazy" decoding="async" />
                   </div>
-                  <span className="aram-champ-name">{champ.name}</span>
-                  <span className={`aram-tier-pill ${getChampionTierClass(champ.tier)}`}>
+                  <span className="tierlist-champ-name">{champ.name}</span>
+                  <span className={`tier-pill ${getChampionTierClass(champ.tier)}`}>
                     {getChampionTierLabel(champ.tier)}
                   </span>
                 </button>
@@ -127,7 +127,7 @@ export function AramMayhemView({
 
         <section className="card aram-mayhem-col aram-mayhem-augments-col">
           {!selectedChampionKey ? (
-            <div className="aram-state-box" data-testid="aram-mayhem-empty-augments">
+            <div className="tierlist-state-box" data-testid="aram-mayhem-empty-augments">
               <span>{t("aram.selectChampPrompt")}</span>
             </div>
           ) : (
@@ -146,7 +146,7 @@ export function AramMayhemView({
                     </span>
                   </div>
                   {selectedChampion && (
-                    <span className={`aram-tier-pill aram-hero-rank-pill ${getChampionTierClass(selectedChampion.tier)}`}>
+                    <span className={`tier-pill is-auto-width ${getChampionTierClass(selectedChampion.tier)}`}>
                       #{selectedChampion.rank} · {getChampionTierLabel(selectedChampion.tier)}
                     </span>
                   )}

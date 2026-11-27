@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import tokensShellCss from "../styles/tokens-shell.css?raw";
-import aramTabCss from "../features/aram/AramTab.css?raw";
+import tierListSharedCss from "../styles/TierListShared.css?raw";
+import aramMayhemCss from "../features/aram/AramMayhem.css?raw";
 import settingsTabCss from "../features/settings/SettingsTab.css?raw";
 import profileTabCss from "../features/profile/ProfileTab.css?raw";
+import profileMatchesCss from "../features/profile/ProfileMatches.css?raw";
 import matchScoreboardCss from "../features/profile/MatchScoreboard.css?raw";
 import champSelectCss from "../features/champ-select/ChampSelect.css?raw";
 import arenaPanelCss from "../components/ui/ArenaPanel.css?raw";
 import itemBlocksCss from "../components/ui/ItemBlocks.css?raw";
-import rankedTabCss from "../features/ranked/RankedTab.css?raw";
-import arenaTabCss from "../features/arena/ArenaTab.css?raw";
 
 function extractRuleBlock(css: string, selectorPattern: RegExp): string {
   const match = css.match(selectorPattern);
@@ -38,13 +38,13 @@ describe("Tab layout centering, grid track sizing, and block-only intrinsic sizi
 
   it("uses minmax(0, ...) with >=1fr tracks and min-width: 0 on split grids and columns", () => {
     const aramGridRule = extractRuleBlock(
-      aramTabCss,
+      aramMayhemCss,
       /\/\* ARAM Mayhem Split Layout \*\/\s*\.aram-mayhem-grid\s*\{[^}]*\}/
     );
     expect(aramGridRule).toMatch(
       /grid-template-columns:\s*minmax\(0,\s*85fr\)\s+minmax\(0,\s*135fr\)\s*;/
     );
-    const aramColRule = extractRuleBlock(aramTabCss, /\.aram-mayhem-col\s*\{[^}]*\}/);
+    const aramColRule = extractRuleBlock(aramMayhemCss, /\.aram-mayhem-col\s*\{[^}]*\}/);
     expect(aramColRule).toMatch(/min-width:\s*0\s*;/);
 
     const profileGridRule = extractRuleBlock(
@@ -82,8 +82,10 @@ describe("Tab layout centering, grid track sizing, and block-only intrinsic sizi
 
     // Ensure no grid-template-columns or grid-template-rows uses sub-1fr tracks (0.xfr)
     for (const css of [
-      aramTabCss,
+      aramMayhemCss,
+      tierListSharedCss,
       profileTabCss,
+      profileMatchesCss,
       matchScoreboardCss,
       champSelectCss,
       arenaPanelCss,
@@ -96,10 +98,9 @@ describe("Tab layout centering, grid track sizing, and block-only intrinsic sizi
   it("uses contain-intrinsic-block-size instead of two-axis contain-intrinsic-size across tabs and rows", () => {
     const stylesheets = [
       { name: "tokens-shell.css", css: tokensShellCss },
-      { name: "AramTab.css", css: aramTabCss },
-      { name: "ProfileTab.css", css: profileTabCss },
-      { name: "RankedTab.css", css: rankedTabCss },
-      { name: "ArenaTab.css", css: arenaTabCss },
+      { name: "TierListShared.css", css: tierListSharedCss },
+      { name: "AramMayhem.css", css: aramMayhemCss },
+      { name: "ProfileMatches.css", css: profileMatchesCss },
       { name: "ArenaPanel.css", css: arenaPanelCss },
       { name: "MatchScoreboard.css", css: matchScoreboardCss },
     ];

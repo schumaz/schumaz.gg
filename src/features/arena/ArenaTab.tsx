@@ -1,4 +1,3 @@
-import "./ArenaTab.css";
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import { useSubviewTransition } from "../../hooks/useSubviewTransition";
@@ -107,6 +106,7 @@ export const ArenaTab = memo(function ArenaTab({
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
+      data-tab="arena"
       data-testid="view-arena"
       aria-hidden={!isActive}
     >
@@ -127,7 +127,7 @@ export const ArenaTab = memo(function ArenaTab({
         />
       ) : (
         <div
-          className={`arena-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}
+          className={`tierlist-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}
           data-testid="arena-tierlist-view"
         >
           <ArenaToolbarCard

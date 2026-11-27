@@ -1,0 +1,145 @@
+/* Pending GPU Restart Banner & Updates/Version Subsection */
+.settings-restart-banner {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+}
+
+.settings-restart-text {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.settings-restart-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--accent-border);
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+
+.settings-restart-btn:hover {
+  background-color: var(--accent-primary-hover);
+}
+
+.settings-restart-btn:active {
+  transform: scale(0.97);
+}
+
+/* Updates & Version subsection inside Diversos card */
+.settings-updates-row {
+  cursor: default;
+}
+
+.settings-updates-row:hover {
+  background-color: transparent;
+}
+
+.settings-updates-version-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-updates-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.settings-updates-mode-badge.is-installed {
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+}
+
+.settings-updates-mode-badge.is-portable {
+  background-color: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: var(--accent-warning);
+}
+
+.settings-updates-status.is-success {
+  color: var(--accent-success);
+}
+
+.settings-updates-status.is-ready {
+  color: var(--accent-primary-hover);
+}
+
+.settings-updates-status.is-error {
+  color: var(--accent-danger);
+}
+
+.settings-updates-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-updates-btn {
+  padding: 7px 14px;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.settings-updates-btn.is-primary {
+  border: 1px solid var(--accent-border);
+  background-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.settings-updates-btn.is-primary:hover:not(:disabled) {
+  background-color: var(--accent-primary-hover);
+}
+
+.settings-updates-btn.is-secondary {
+  border: 1px solid var(--border-highlight);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.settings-updates-btn.is-secondary:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.settings-updates-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.settings-updates-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.settings-updates-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

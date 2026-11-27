@@ -1,4 +1,3 @@
-import "./RankedTab.css";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import { useSubviewTransition } from "../../hooks/useSubviewTransition";
@@ -142,6 +141,7 @@ export const RankedTab = memo(function RankedTab({
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
+      data-tab="ranked"
       data-testid="view-ranked"
       aria-hidden={!isActive}
     >
@@ -166,7 +166,7 @@ export const RankedTab = memo(function RankedTab({
         />
       ) : (
         <div
-          className={`ranked-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}
+          className={`tierlist-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}
           data-testid="ranked-tierlist-view"
         >
           <RankedToolbarCard

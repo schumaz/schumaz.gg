@@ -39,32 +39,32 @@ export function ArenaToolbarCard({
       {
         value: "all",
         label: t("arenaTab.allTiers"),
-        icon: <span className="arena-tier-filter-dot tier-all" />,
+        icon: <span className="tier-filter-dot tier-all" />,
       },
       {
         value: "0",
         label: "OP",
-        icon: <span className="arena-tier-filter-dot tier-op" />,
+        icon: <span className="tier-filter-dot tier-op" />,
       },
       {
         value: "1",
         label: "Tier 1",
-        icon: <span className="arena-tier-filter-dot tier-1" />,
+        icon: <span className="tier-filter-dot tier-1" />,
       },
       {
         value: "2",
         label: "Tier 2",
-        icon: <span className="arena-tier-filter-dot tier-2" />,
+        icon: <span className="tier-filter-dot tier-2" />,
       },
       {
         value: "3",
         label: "Tier 3",
-        icon: <span className="arena-tier-filter-dot tier-3" />,
+        icon: <span className="tier-filter-dot tier-3" />,
       },
       {
         value: "4",
         label: "Tier 4",
-        icon: <span className="arena-tier-filter-dot tier-4" />,
+        icon: <span className="tier-filter-dot tier-4" />,
       },
     ],
     [t]
@@ -87,16 +87,16 @@ export function ArenaToolbarCard({
   const activePatchValue = tierData?.active_patch || filters.patch || patchOptions[0] || "";
 
   return (
-    <section className="card arena-toolbar-card" data-testid="arena-filters-card">
+    <section className="card tierlist-toolbar-card" data-testid="arena-filters-card">
       <LoadingBar active={Boolean(tierLoading && tierData)} testId="arena-loading-bar" />
 
-      <div className="arena-toolbar-top">
-        <div className="arena-hero-left">
+      <div className="tierlist-toolbar-top">
+        <div className="tierlist-hero-left">
           <h2 className="page-hero-title">{t("arenaTab.title")}</h2>
         </div>
 
-        <div className="arena-hero-right">
-          <div className="arena-hero-badges">
+        <div className="tierlist-hero-right">
+          <div className="tierlist-hero-badges">
             {isPatchProtectionActive && (
               <span
                 className="badge badge-warning badge-stat patch-fallback-badge"
@@ -107,7 +107,7 @@ export function ArenaToolbarCard({
                 {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
               </span>
             )}
-            <span className="arena-mode-badge">{t("arenaTab.modeBadge")}</span>
+            <span className="tierlist-mode-badge">{t("arenaTab.modeBadge")}</span>
           </div>
 
           <SearchInput
@@ -121,7 +121,7 @@ export function ArenaToolbarCard({
         </div>
       </div>
 
-      <div className="champ-filters-bar arena-filters-bar" data-testid="arena-filters-bar">
+      <div className="champ-filters-bar" data-testid="arena-filters-bar">
         <div className="filter-group">
           <label
             id="arena-filter-champ-tier-label"

@@ -136,32 +136,32 @@
 }
 
 /* Top-Level Tab Directional Transitions */
-.tabs-viewport[data-transition-dir="forward"][data-entering-tab="profile"] > [data-testid="view-profile"].active-tab,
-.tabs-viewport[data-transition-dir="forward"][data-entering-tab="runes"] > [data-testid="view-runes"].active-tab,
-.tabs-viewport[data-transition-dir="forward"][data-entering-tab="ranked"] > [data-testid="view-ranked"].active-tab,
-.tabs-viewport[data-transition-dir="forward"][data-entering-tab="arena"] > [data-testid="view-arena"].active-tab,
-.tabs-viewport[data-transition-dir="forward"][data-entering-tab="aram"] > [data-testid="view-aram"].active-tab,
-.tabs-viewport[data-transition-dir="forward"][data-entering-tab="settings"] > [data-testid="view-settings"].active-tab {
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="profile"] > [data-tab="profile"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="runes"] > [data-tab="runes"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="ranked"] > [data-tab="ranked"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="arena"] > [data-tab="arena"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="aram"] > [data-tab="aram"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="settings"] > [data-tab="settings"].active-tab {
   will-change: transform, opacity;
   animation: tabEnterForward var(--motion-tab-enter-duration) var(--motion-ease-enter) both;
 }
 
-.tabs-viewport[data-transition-dir="backward"][data-entering-tab="profile"] > [data-testid="view-profile"].active-tab,
-.tabs-viewport[data-transition-dir="backward"][data-entering-tab="runes"] > [data-testid="view-runes"].active-tab,
-.tabs-viewport[data-transition-dir="backward"][data-entering-tab="ranked"] > [data-testid="view-ranked"].active-tab,
-.tabs-viewport[data-transition-dir="backward"][data-entering-tab="arena"] > [data-testid="view-arena"].active-tab,
-.tabs-viewport[data-transition-dir="backward"][data-entering-tab="aram"] > [data-testid="view-aram"].active-tab,
-.tabs-viewport[data-transition-dir="backward"][data-entering-tab="settings"] > [data-testid="view-settings"].active-tab {
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="profile"] > [data-tab="profile"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="runes"] > [data-tab="runes"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="ranked"] > [data-tab="ranked"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="arena"] > [data-tab="arena"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="aram"] > [data-tab="aram"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="settings"] > [data-tab="settings"].active-tab {
   will-change: transform, opacity;
   animation: tabEnterBackward var(--motion-tab-enter-duration) var(--motion-ease-enter) both;
 }
 
-.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="profile"] > [data-testid="view-profile"].inactive-tab,
-.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="runes"] > [data-testid="view-runes"].inactive-tab,
-.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="ranked"] > [data-testid="view-ranked"].inactive-tab,
-.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="arena"] > [data-testid="view-arena"].inactive-tab,
-.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="aram"] > [data-testid="view-aram"].inactive-tab,
-.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="settings"] > [data-testid="view-settings"].inactive-tab {
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="profile"] > [data-tab="profile"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="runes"] > [data-tab="runes"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="ranked"] > [data-tab="ranked"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="arena"] > [data-tab="arena"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="aram"] > [data-tab="aram"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="settings"] > [data-tab="settings"].inactive-tab {
   visibility: visible;
   pointer-events: none;
   z-index: 1;
@@ -169,12 +169,12 @@
   animation: tabExitForward var(--motion-tab-exit-duration) var(--motion-ease-exit) both;
 }
 
-.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="profile"] > [data-testid="view-profile"].inactive-tab,
-.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="runes"] > [data-testid="view-runes"].inactive-tab,
-.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="ranked"] > [data-testid="view-ranked"].inactive-tab,
-.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="arena"] > [data-testid="view-arena"].inactive-tab,
-.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="aram"] > [data-testid="view-aram"].inactive-tab,
-.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="settings"] > [data-testid="view-settings"].inactive-tab {
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="profile"] > [data-tab="profile"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="runes"] > [data-tab="runes"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="ranked"] > [data-tab="ranked"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="arena"] > [data-tab="arena"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="aram"] > [data-tab="aram"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="settings"] > [data-tab="settings"].inactive-tab {
   visibility: visible;
   pointer-events: none;
   z-index: 1;

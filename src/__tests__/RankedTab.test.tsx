@@ -57,7 +57,7 @@ describe("RankedTab UI", () => {
     const filtersCard = screen.getByTestId("ranked-filters-card");
     const heroTitle = within(filtersCard).getByRole("heading", { name: "Tier List" });
     expect(heroTitle).toHaveClass("page-hero-title");
-    expect(within(filtersCard).getByText("Ranqueada")).toHaveClass("ranked-mode-badge");
+    expect(within(filtersCard).getByText("Ranqueada")).toHaveClass("tierlist-mode-badge");
     expect(screen.queryByText(/entradas/i)).not.toBeInTheDocument();
 
     expect(within(filtersCard).getByTestId("ranked-toolbar-search-wrap")).toBeInTheDocument();

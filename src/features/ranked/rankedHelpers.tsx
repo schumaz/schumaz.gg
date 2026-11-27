@@ -57,32 +57,32 @@ export function getChampionTierFilterOptions(
     {
       value: "all",
       label: t("ranked.allTiers"),
-      icon: <span className="ranked-tier-filter-dot tier-all" />,
+      icon: <span className="tier-filter-dot tier-all" />,
     },
     {
       value: "0",
       label: "OP",
-      icon: <span className="ranked-tier-filter-dot tier-op" />,
+      icon: <span className="tier-filter-dot tier-op" />,
     },
     {
       value: "1",
       label: "Tier 1",
-      icon: <span className="ranked-tier-filter-dot tier-1" />,
+      icon: <span className="tier-filter-dot tier-1" />,
     },
     {
       value: "2",
       label: "Tier 2",
-      icon: <span className="ranked-tier-filter-dot tier-2" />,
+      icon: <span className="tier-filter-dot tier-2" />,
     },
     {
       value: "3",
       label: "Tier 3",
-      icon: <span className="ranked-tier-filter-dot tier-3" />,
+      icon: <span className="tier-filter-dot tier-3" />,
     },
     {
       value: "4",
       label: "Tier 4",
-      icon: <span className="ranked-tier-filter-dot tier-4" />,
+      icon: <span className="tier-filter-dot tier-4" />,
     },
   ];
 }

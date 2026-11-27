@@ -63,7 +63,7 @@ describe("ArenaTab UI", () => {
 
     const toolbar = screen.getByTestId("arena-filters-card");
     expect(within(toolbar).getByRole("heading", { name: "Arena" })).toHaveClass("page-hero-title");
-    expect(within(toolbar).getByText("3x6")).toHaveClass("arena-mode-badge");
+    expect(within(toolbar).getByText("3x6")).toHaveClass("tierlist-mode-badge");
     expect(screen.queryByTestId("ranked-lane-tabs")).not.toBeInTheDocument();
     expect(screen.queryByTestId("ranked-filter-tier")).not.toBeInTheDocument();
     expect(screen.queryByTestId("ranked-filter-region")).not.toBeInTheDocument();

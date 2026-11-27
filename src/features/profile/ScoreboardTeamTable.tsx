@@ -81,7 +81,7 @@ export function ScoreboardTeamTable({
               <span className="is-center">{t("profile.colKda")}</span>
               <span>{t("profile.colDamage")}</span>
               <span className="is-right">{t("profile.colCs")}</span>
-              <span className="is-right">{t("profile.colVision")}</span>
+              <span className="is-right sb-col-vision">{t("profile.colVision")}</span>
               <span className="is-right">{t("profile.colItems")}</span>
             </div>
 
@@ -136,7 +136,7 @@ export function ScoreboardTeamTable({
                       <span>{t("profile.csPerMinShort", { rate: csPerMin })}</span>
                     </div>
 
-                    <div className="sb-metric-cell">
+                    <div className="sb-metric-cell sb-col-vision">
                       <strong>{p.vision_score}</strong>
                       <span>{t("profile.wardsPlacedShort", { count: p.wards_placed })}</span>
                     </div>

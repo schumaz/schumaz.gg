@@ -34,7 +34,7 @@ export function ScoreboardAugmentsStrip({
 
   return (
     <div
-      className={`sb-augments-grid${validIds.length > 4 ? " is-wide" : ""}`}
+      className={`match-augments-grid${validIds.length > 4 ? " is-wide" : ""}`}
       aria-label={t("profile.augmentsAria")}
     >
       {validIds.map((augId, idx) => {
@@ -47,11 +47,11 @@ export function ScoreboardAugmentsStrip({
             content={<AugmentTooltipContent augmentId={augId} metadata={meta} />}
             triggerClassName="ui-tooltip-trigger-fill"
           >
-            <div className={`sb-augment-frame ${getAugmentRarityClass(meta?.rarity)}`}>
+            <div className={`match-augment-frame ${getAugmentRarityClass(meta?.rarity)}`}>
               {iconSrc ? (
-                <img src={iconSrc} alt={alt} className="sb-augment-icon" loading="lazy" decoding="async" />
+                <img src={iconSrc} alt={alt} className="match-augment-icon" loading="lazy" decoding="async" />
               ) : (
-                <span className="sb-augment-fallback">{alt.charAt(0).toUpperCase()}</span>
+                <span className="match-augment-fallback">{alt.charAt(0).toUpperCase()}</span>
               )}
             </div>
           </Tooltip>
@@ -101,15 +101,15 @@ export function ScoreboardLoadoutCell({
   return (
     <div className="sb-loadout-cell">
       {spells.length > 0 && (
-        <div className="sb-spells-col">
+        <div className="match-spells-col">
           {spells.map((spell, idx) => {
             const meta = lookupSpellMetadata(spellMetadata, spell.id);
             const img = (
-              <div className="dd-icon-frame sb-spell-frame">
+              <div className="dd-icon-frame match-spell-frame">
                 <img
                   src={resolveCachedAssetUrl(spell.url)}
                   alt={meta?.name || spell.alt}
-                  className="sb-spell-icon"
+                  className="match-spell-icon"
                   loading="lazy"
                   decoding="async"
                 />
@@ -130,15 +130,15 @@ export function ScoreboardLoadoutCell({
         <ScoreboardAugmentsStrip augmentIds={augmentIds} augmentMetadata={augmentMetadata} />
       ) : (
         runeSlots.length > 0 && (
-          <div className="sb-runes-col">
+          <div className="match-runes-col">
             {runeSlots.map((slot, idx) => {
               const meta = lookupRuneMetadata(runeMetadata, slot.id);
               const img = (
-                <div className={`dd-icon-frame sb-rune-frame ${slot.cls}`}>
+                <div className={`dd-icon-frame match-rune-frame ${slot.cls}`}>
                   <img
                     src={resolveCachedAssetUrl(slot.url)}
                     alt={meta?.name || slot.alt}
-                    className="sb-rune-icon"
+                    className="match-rune-icon"
                     loading="lazy"
                     decoding="async"
                   />

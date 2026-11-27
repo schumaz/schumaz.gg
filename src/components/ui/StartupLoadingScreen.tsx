@@ -1,7 +1,6 @@
 import appIconUrl from "../../assets/app-icon.png";
 import type { StartupStageKey } from "../../hooks/useAppBootstrap";
 import { useTranslation } from "../../i18n";
-import "./StartupLoadingScreen.css";
 
 interface StartupLoadingScreenProps {
   progress: number;

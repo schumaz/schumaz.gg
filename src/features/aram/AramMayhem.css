@@ -1,0 +1,422 @@
+/* =========================================================
+   ARAM Mayhem Split Layout, Augments & Build Panel
+   ========================================================= */
+
+/* ARAM Mayhem Split Layout */
+.aram-mayhem-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 85fr) minmax(0, 135fr);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.aram-mayhem-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  margin-bottom: 0;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.aram-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.aram-panel-title-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.card .aram-mayhem-hero-title,
+.aram-mayhem-hero-title {
+  margin: 0;
+  width: 100%;
+  font-size: clamp(2.15rem, 4.1vw, 4.1rem);
+  font-weight: 800;
+  line-height: 1.16;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.06em;
+  letter-spacing: -0.035em;
+  color: #ffffff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aram-panel-title {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.15vw, 1.85rem);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+  padding-bottom: 0.04em;
+  color: #ffffff;
+}
+
+.aram-scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.aram-mayhem-champ-row {
+  width: 100%;
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aram-mayhem-champ-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+}
+
+.aram-mayhem-champ-row.selected {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+}
+
+/* Mayhem Augments Panel */
+.aram-augments-hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aram-hero-frame {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.aram-hero-frame::after {
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+.aram-hero-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
+.aram-hero-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.aram-hero-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.aram-mayhem-augments-col {
+  overflow: visible;
+}
+
+.aram-mayhem-augments-col > .aram-panel-header {
+  position: relative;
+  z-index: 20;
+}
+
+.aram-mayhem-panel-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aram-mayhem-panel-switch {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: none;
+  padding: 3px;
+}
+
+.aram-mayhem-panel-switch .segment-btn {
+  flex: 0 1 auto;
+  padding: 5px 14px;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.aram-mayhem-build-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.aram-mayhem-build-body > .card {
+  margin-bottom: 0;
+  background-color: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
+}
+
+.aram-augments-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.aram-rarity-filter {
+  flex: 1;
+  min-width: 240px;
+  max-width: none;
+  padding: 3px;
+}
+
+.aram-rarity-filter .segment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  min-width: 0;
+  font-size: 0.76rem;
+  font-family: inherit;
+}
+
+.aram-rarity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.aram-rarity-dot.dot-silver {
+  background: #cbd5e1;
+}
+
+.aram-rarity-dot.dot-gold {
+  background: linear-gradient(135deg, #fde68a, #f5c451 55%, #d97706);
+}
+
+.aram-rarity-dot.dot-prismatic {
+  background: linear-gradient(135deg, #f472b6, #a78bfa, #38bdf8);
+}
+
+.aram-aug-search {
+  width: 175px;
+}
+
+.aram-augment-row {
+  display: flex;
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 76px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aram-augment-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+}
+
+.aram-augment-icon-frame {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.aram-augment-icon-frame.rarity-silver {
+  border-color: var(--rarity-silver-border);
+  background: var(--rarity-silver-bg);
+}
+
+.aram-augment-icon-frame.rarity-gold {
+  border-color: var(--rarity-gold-border);
+  background: var(--rarity-gold-bg);
+  box-shadow: inset 0 0 0 1px rgba(254, 240, 138, 0.12);
+}
+
+.aram-augment-icon-frame.rarity-prismatic {
+  border-color: var(--rarity-prismatic-border);
+  background: var(--rarity-prismatic-bg);
+}
+
+.aram-augment-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.aram-icon-fallback {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.aram-aug-tier-badge {
+  width: 24px;
+  height: 24px;
+  margin-top: 6px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.aram-aug-tier-badge.aug-tier-s {
+  background: rgba(124, 58, 237, 0.26);
+  border: 1px solid rgba(167, 139, 250, 0.6);
+  color: #ede9fe;
+}
+
+.aram-aug-tier-badge.aug-tier-a {
+  background: rgba(52, 211, 153, 0.18);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  color: #6ee7b7;
+}
+
+.aram-aug-tier-badge.aug-tier-b {
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+}
+
+.aram-aug-tier-badge.aug-tier-c {
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fcd34d;
+}
+
+.aram-aug-tier-badge.aug-tier-low {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.aram-augment-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.aram-augment-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aram-augment-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.aram-rarity-tag {
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aram-rarity-tag.rarity-silver {
+  background: var(--rarity-silver-bg);
+  border-color: rgba(203, 213, 225, 0.35);
+  color: var(--rarity-silver-text);
+}
+
+.aram-rarity-tag.rarity-gold {
+  background: var(--rarity-gold-tag-bg);
+  border: 1px solid rgba(245, 196, 81, 0.55);
+  color: var(--rarity-gold-text);
+}
+
+.aram-rarity-tag.rarity-prismatic {
+  background: var(--rarity-prismatic-bg);
+  border-color: rgba(192, 132, 252, 0.45);
+  color: var(--rarity-prismatic-text);
+}
+
+.aram-rarity-tag.rarity-neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+.aram-aug-pick {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.aram-augment-desc {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+@media (max-width: 860px) {
+  .aram-mayhem-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 9fr) minmax(0, 11fr);
+  }
+
+  .aram-aug-search {
+    width: 100%;
+  }
+}

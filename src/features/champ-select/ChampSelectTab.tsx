@@ -75,6 +75,7 @@ export const ChampSelectTab = memo(function ChampSelectTab({
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
+      data-tab="runes"
       data-testid="view-runes"
       aria-hidden={!isActive}
     >

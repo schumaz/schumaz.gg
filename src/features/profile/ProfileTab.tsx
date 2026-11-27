@@ -163,9 +163,10 @@ export const ProfileTab = memo(function ProfileTab({
 
   return (
     <div
-      className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}${
+      className={`tab-content profile-view ${isActive ? "active-tab" : "inactive-tab"}${
         isBlurOff ? " profile-blur-off" : ""
       }`}
+      data-tab="profile"
       data-testid="view-profile"
       aria-hidden={!isActive}
       style={viewStyle}

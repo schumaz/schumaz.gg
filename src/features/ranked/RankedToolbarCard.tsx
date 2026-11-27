@@ -63,16 +63,16 @@ export function RankedToolbarCard({
   const activePatchValue = tierData?.active_patch || filters.patch || patchOptions[0] || "";
 
   return (
-    <section className="card ranked-toolbar-card" data-testid="ranked-filters-card">
+    <section className="card tierlist-toolbar-card" data-testid="ranked-filters-card">
       <LoadingBar active={Boolean(tierLoading && tierData)} testId="ranked-loading-bar" />
 
-      <div className="ranked-toolbar-top">
-        <div className="ranked-hero-left">
+      <div className="tierlist-toolbar-top">
+        <div className="tierlist-hero-left">
           <h2 className="page-hero-title">{t("ranked.title")}</h2>
         </div>
 
-        <div className="ranked-hero-right">
-          <div className="ranked-hero-badges">
+        <div className="tierlist-hero-right">
+          <div className="tierlist-hero-badges">
             {isPatchProtectionActive && (
               <span
                 className="badge badge-warning badge-stat patch-fallback-badge"
@@ -83,7 +83,7 @@ export function RankedToolbarCard({
                 {remainingHoursShort ? ` · ${remainingHoursShort}` : ""}
               </span>
             )}
-            <span className="ranked-mode-badge">{t("ranked.modeBadge")}</span>
+            <span className="tierlist-mode-badge">{t("ranked.modeBadge")}</span>
           </div>
 
           <SearchInput
@@ -97,7 +97,7 @@ export function RankedToolbarCard({
         </div>
       </div>
 
-      <div className="champ-filters-bar ranked-filters-bar" data-testid="ranked-filters-bar">
+      <div className="champ-filters-bar" data-testid="ranked-filters-bar">
         <div className="filter-group">
           <label id="ranked-filter-tier-label" htmlFor="ranked-filter-tier" className="filter-label">
             {t("filters.eloLabel")}

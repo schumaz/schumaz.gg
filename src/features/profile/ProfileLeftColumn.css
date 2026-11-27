@@ -1,0 +1,339 @@
+/* Profile Left Column: Top 3 Masteries, Win/Loss SVG Donut & Recent Form */
+.profile-masteries-card {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.mastery-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mastery-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.profile-layout .mastery-row,
+.profile-layout .highlighted-champ-box {
+  background-color: rgba(19, 20, 26, 0.28);
+}
+
+.mastery-row:hover {
+  border-color: var(--border-highlight);
+  background-color: var(--bg-card-hover);
+}
+
+.profile-layout .mastery-row:hover {
+  background-color: rgba(26, 27, 36, 0.44);
+}
+
+.mastery-rank {
+  font-size: 0.78rem;
+  font-weight: 800;
+  width: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.mastery-rank.rank-1 {
+  color: #fbbf24;
+}
+
+.mastery-rank.rank-2 {
+  color: #cbd5e1;
+}
+
+.mastery-rank.rank-3 {
+  color: #d97706;
+}
+
+.mastery-champ-frame {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.mastery-champ-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
+.mastery-champ-placeholder {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border-highlight);
+  flex-shrink: 0;
+  background-color: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--accent-primary-hover);
+}
+
+.mastery-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.mastery-champ-name {
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mastery-points {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.mastery-level-pill {
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.mastery-view-all-btn {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--accent-border);
+  background-color: var(--accent-subtle);
+  color: var(--accent-primary-hover);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  outline: none;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.mastery-view-all-btn:hover {
+  background-color: rgba(124, 58, 237, 0.28);
+  border-color: var(--accent-primary-hover);
+  color: #ffffff;
+}
+
+.mastery-view-all-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.mastery-row-btn {
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+  outline: none;
+}
+
+.mastery-row-btn.is-clickable {
+  cursor: pointer;
+}
+
+.mastery-row-btn:disabled {
+  cursor: default;
+}
+
+.mastery-row-btn.is-clickable:hover .mastery-champ-name {
+  color: var(--accent-primary-hover);
+}
+
+.mastery-row-btn.is-clickable:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* Win/Loss SVG Donut & Metrics */
+.profile-winloss-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.winloss-overview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.winloss-donut-wrap {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+}
+
+.winloss-donut-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.donut-center-value {
+  fill: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.donut-center-label {
+  fill: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.winloss-metrics {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.winloss-stat-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.winloss-stat-line strong {
+  margin-left: auto;
+  color: var(--text-primary);
+}
+
+.winloss-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.winloss-dot.win {
+  background-color: var(--accent-success);
+}
+
+.winloss-dot.loss {
+  background-color: var(--accent-danger);
+}
+
+.highlighted-champ-box {
+  margin-top: 2px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.highlighted-champ-frame {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.highlighted-champ-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.16);
+}
+
+.highlighted-champ-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.28;
+}
+
+.highlighted-champ-text strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.highlighted-label {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.35px;
+}
+
+.highlighted-sub {
+  color: var(--text-secondary);
+}
+
+.recent-streak-block {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.recent-streak-label {
+  font-size: var(--title-sub-size);
+  line-height: 1.25;
+  color: var(--text-primary);
+  letter-spacing: var(--title-sub-tracking);
+  font-weight: var(--title-sub-weight);
+}
+
+.recent-streak-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.streak-pill {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.streak-pill.win {
+  background-color: rgba(52, 211, 153, 0.16);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: var(--accent-success);
+}
+
+.streak-pill.loss {
+  background-color: rgba(248, 113, 113, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--accent-danger);
+}

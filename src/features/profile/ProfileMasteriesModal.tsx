@@ -57,14 +57,14 @@ export function ProfileMasteriesModal({
 
   return createPortal(
     <div
-      className="masteries-modal-backdrop"
+      className="modal-backdrop masteries-modal-backdrop"
       data-testid="profile-masteries-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="card masteries-modal-dialog"
+        className="card modal-dialog masteries-modal-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-masteries-modal-title"

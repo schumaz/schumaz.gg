@@ -58,7 +58,7 @@ export function AramClassicChampionDetail({
 
   return (
     <div
-      className={`aram-detail-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      className={`tierlist-detail-layout${motionClassName ? ` ${motionClassName}` : ""}`}
       data-testid="aram-classic-champion-detail"
     >
       {championBuild ? (
@@ -104,11 +104,11 @@ export function AramClassicChampionDetail({
           </div>
         </div>
       ) : (
-        <div className="card aram-detail-state-card">
-          <div className="aram-detail-fallback-top">
+        <div className="card tierlist-detail-state-card">
+          <div className="tierlist-detail-fallback-top">
             <button
               type="button"
-              className="ranked-back-btn"
+              className="tierlist-back-btn"
               data-testid="aram-back-btn"
               onClick={onBackToTierList}
               title={t("filters.backToAramTierListTitle")}
@@ -128,30 +128,30 @@ export function AramClassicChampionDetail({
               </svg>
               <span>{t("common.back")}</span>
             </button>
-            <div className="aram-detail-champ-summary">
-              <div className="dd-icon-frame aram-champ-frame">
+            <div className="tierlist-detail-champ-summary">
+              <div className="dd-icon-frame tierlist-champ-frame">
                 <img
                   src={resolveCachedAssetUrl(selectedChampion.icon_url)}
                   alt={selectedChampion.name}
-                  className="aram-champ-avatar"
+                  className="tierlist-champ-avatar"
                   decoding="async"
                 />
               </div>
-              <span className="aram-detail-champ-name">{selectedChampion.name}</span>
+              <span className="tierlist-detail-champ-name">{selectedChampion.name}</span>
             </div>
           </div>
 
           {buildError ? (
-            <div className="aram-state-box">
-              <span className="aram-error-text">{buildError}</span>
-              <button type="button" className="aram-retry-btn" onClick={onRetryBuild}>
+            <div className="tierlist-state-box">
+              <span className="tierlist-error-text">{buildError}</span>
+              <button type="button" className="tierlist-retry-btn" onClick={onRetryBuild}>
                 {t("common.retry")}
               </button>
             </div>
           ) : (
-            <div className="aram-state-box" data-testid="aram-classic-build-loading">
+            <div className="tierlist-state-box" data-testid="aram-classic-build-loading">
               <div className="loading-status-line">
-                <div className="spinner aram-spinner" />
+                <div className="spinner" />
                 <span>{t("aram.loadingBuild", { name: selectedChampion.name })}</span>
                 <LoadingDots size="sm" testId="aram-classic-build-loading-dots" />
               </div>

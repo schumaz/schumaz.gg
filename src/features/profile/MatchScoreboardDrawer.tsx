@@ -86,7 +86,7 @@ export function MatchScoreboardDrawer({
 
   return (
     <div
-      className="match-details-drawer match-scoreboard-drawer"
+      className="match-scoreboard-drawer"
       data-testid={`match-details-${match.game_id}`}
     >
       <MatchIndividualSummary match={match} />

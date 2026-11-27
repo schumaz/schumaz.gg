@@ -30,9 +30,9 @@ export function SearchInput({
   };
 
   return (
-    <div className={`aram-search-wrap ${className}`.trim()} data-testid={testId}>
+    <div className={`search-input-wrap ${className}`.trim()} data-testid={testId}>
       <svg
-        className="aram-search-icon"
+        className="search-input-icon"
         viewBox="0 0 24 24"
         width="14"
         height="14"
@@ -47,7 +47,7 @@ export function SearchInput({
       <input
         ref={inputRef}
         type="text"
-        className={`aram-search-input ${value ? "has-clear" : ""}`.trim()}
+        className={`search-input-field ${value ? "has-clear" : ""}`.trim()}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -56,7 +56,7 @@ export function SearchInput({
       {value.length > 0 && (
         <button
           type="button"
-          className="aram-search-clear"
+          className="search-input-clear"
           onClick={handleClear}
           aria-label={resolvedClearAriaLabel}
           title={resolvedClearAriaLabel}

@@ -35,17 +35,17 @@ export function AramMayhemBuildPanel({
   return (
     <div className="aram-mayhem-build-body" data-testid="aram-mayhem-build-panel">
       {loading && !build ? (
-        <div className="aram-state-box" data-testid="aram-mayhem-build-loading">
+        <div className="tierlist-state-box" data-testid="aram-mayhem-build-loading">
           <div className="loading-status-line">
-            <div className="spinner aram-spinner" />
+            <div className="spinner" />
             <span>{t("aram.loadingMayhemBuild", { name: championName })}</span>
             <LoadingDots size="sm" testId="aram-mayhem-build-loading-dots" />
           </div>
         </div>
       ) : error && !build ? (
-        <div className="aram-state-box">
-          <span className="aram-error-text">{error}</span>
-          <button type="button" className="aram-retry-btn" onClick={onRetryBuild}>
+        <div className="tierlist-state-box">
+          <span className="tierlist-error-text">{error}</span>
+          <button type="button" className="tierlist-retry-btn" onClick={onRetryBuild}>
             {t("common.retry")}
           </button>
         </div>

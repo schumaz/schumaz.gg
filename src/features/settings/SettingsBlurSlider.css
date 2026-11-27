@@ -1,0 +1,140 @@
+/* Settings Range Slider (Profile Blur) */
+.settings-slider-item {
+  cursor: default;
+  transition: opacity 0.2s ease, background-color 0.15s ease;
+}
+
+.settings-slider-item.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-slider-item.is-disabled:hover {
+  background-color: transparent;
+}
+
+.settings-slider-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.blur-range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 160px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.14);
+  outline: none;
+  cursor: pointer;
+}
+
+.blur-range-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.blur-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.blur-range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  background: var(--accent-primary-hover);
+}
+
+.blur-range-slider:disabled::-webkit-slider-thumb {
+  background: var(--text-muted);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.blur-range-slider:disabled::-webkit-slider-thumb:hover {
+  transform: none;
+  background: var(--text-muted);
+}
+
+.slider-value-badge {
+  min-width: 62px;
+  text-align: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-primary-hover);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.slider-value-btn {
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.slider-value-btn:hover:not(:disabled) {
+  background-color: rgba(124, 58, 237, 0.28);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.slider-value-btn:disabled {
+  cursor: not-allowed;
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.slider-value-edit-wrap {
+  min-width: 62px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.slider-value-input {
+  width: 32px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  text-align: right;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.slider-value-input::-webkit-inner-spin-button,
+.slider-value-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.slider-value-percent {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--accent-primary-hover);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

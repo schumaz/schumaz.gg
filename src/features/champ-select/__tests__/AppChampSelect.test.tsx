@@ -100,7 +100,7 @@ describe("App — Champ Select Dashboard, Filters & Spells", () => {
     expect(screen.getByText("Ahri")).toBeInTheDocument();
     const tierBadge = screen.getByTestId("champ-tier-badge");
     expect(tierBadge).toHaveTextContent("OP");
-    expect(tierBadge).toHaveClass("aram-tier-pill", "tier-op");
+    expect(tierBadge).toHaveClass("tier-pill", "tier-op");
     expect(screen.queryByText(/Win Rate/i)).not.toBeInTheDocument();
     expect(screen.getByText(/8.4% Pick Rate/i)).toBeInTheDocument();
     expect(screen.queryByTestId("reapply-build-btn")).not.toBeInTheDocument();

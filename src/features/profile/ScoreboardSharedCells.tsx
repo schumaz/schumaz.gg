@@ -159,7 +159,7 @@ export function ScoreboardItemsStrip({
         const iconUrl = itemIconUrls[slotIdx] || "";
         if (itemId <= 0 || !iconUrl) {
           return (
-            <div key={slotIdx} className="sb-item-slot">
+            <div key={slotIdx} className="match-item-slot">
               <span className="match-item-empty" />
             </div>
           );
@@ -171,7 +171,7 @@ export function ScoreboardItemsStrip({
             content={<ItemTooltipContent itemId={itemId} metadata={meta} />}
             triggerClassName="ui-tooltip-trigger-fill"
           >
-            <div className="sb-item-slot">
+            <div className="match-item-slot">
               <img
                 src={resolveCachedAssetUrl(iconUrl)}
                 alt={meta?.name || t("common.itemAlt", { id: itemId })}
@@ -190,7 +190,7 @@ export function ScoreboardItemsStrip({
             content={<ItemTooltipContent itemId={trinketId} metadata={trinketMeta} />}
             triggerClassName="ui-tooltip-trigger-fill"
           >
-            <div className="sb-trinket-slot">
+            <div className="match-trinket-slot">
               <img
                 src={resolveCachedAssetUrl(trinketIconUrl)}
                 alt={trinketMeta?.name || t("profile.trinketAria")}
@@ -201,7 +201,7 @@ export function ScoreboardItemsStrip({
             </div>
           </Tooltip>
         ) : (
-          <div className="sb-trinket-slot">
+          <div className="match-trinket-slot">
             <span className="match-item-empty" />
           </div>
         ))}

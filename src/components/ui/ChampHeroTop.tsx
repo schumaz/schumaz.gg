@@ -40,7 +40,7 @@ export function ChampHeroTop({
         {onBackToTierList && (
           <button
             type="button"
-            className="ranked-back-btn"
+            className="tierlist-back-btn"
             data-testid="ranked-back-btn"
             onClick={onBackToTierList}
             title={backButtonTitle ?? t("filters.backToTierListTitle")}
@@ -76,7 +76,7 @@ export function ChampHeroTop({
 
         {typeof build.tier === "number" && (
           <span
-            className={`aram-tier-pill champ-hero-tier-pill ${getChampionTierClass(build.tier)}`}
+            className={`tier-pill champ-hero-tier-pill ${getChampionTierClass(build.tier)}`}
             data-testid="champ-tier-badge"
           >
             {getChampionTierLabel(build.tier)}

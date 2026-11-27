@@ -14,7 +14,7 @@ export function PatchProtectionModal({
 
   return createPortal(
     <div
-      className="settings-modal-backdrop"
+      className="modal-backdrop"
       data-testid="patch-48h-disable-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -23,31 +23,31 @@ export function PatchProtectionModal({
       }}
     >
       <div
-        className="card settings-modal-dialog"
+        className="card modal-dialog is-danger"
         role="dialog"
         aria-modal="true"
         aria-labelledby="patch-48h-modal-title"
         aria-describedby="patch-48h-modal-desc"
         data-testid="patch-48h-protection-warning"
       >
-        <div className="settings-modal-header">
-          <span className="settings-warning-icon settings-modal-icon" aria-hidden="true">
+        <div className="modal-header">
+          <span className="modal-warning-icon" aria-hidden="true">
             !
           </span>
-          <h3 id="patch-48h-modal-title" className="settings-modal-title">
+          <h3 id="patch-48h-modal-title" className="modal-title">
             {t("settings.patchModalTitle")}
           </h3>
         </div>
 
-        <p id="patch-48h-modal-desc" className="settings-modal-desc">
+        <p id="patch-48h-modal-desc" className="modal-desc is-danger">
           <strong>{t("settings.patchModalStrong")}</strong>
           {t("settings.patchModalBody")}
         </p>
 
-        <div className="settings-modal-actions">
+        <div className="modal-actions">
           <button
             type="button"
-            className="settings-modal-btn settings-modal-btn-revert"
+            className="modal-btn modal-btn-primary"
             data-testid="patch-48h-revert-btn"
             onClick={onRevert}
           >
@@ -55,7 +55,7 @@ export function PatchProtectionModal({
           </button>
           <button
             type="button"
-            className="settings-modal-btn settings-modal-btn-accept"
+            className="modal-btn modal-btn-danger"
             data-testid="patch-48h-accept-btn"
             onClick={onAccept}
           >

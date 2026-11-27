@@ -1,34 +1,20 @@
 /* Full Champion Mastery Catalog Modal (Portal on document.body) */
 .masteries-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 24px;
   background-color: rgba(7, 8, 12, 0.78);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  animation: settingsModalBackdropIn 200ms ease-out forwards;
+  animation-duration: 200ms;
 }
 
 .masteries-modal-dialog {
-  width: 100%;
   max-width: 920px;
   height: min(640px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
-  margin: 0;
   padding: 18px 20px;
   background-color: #13141a;
-  border: 1px solid var(--border-highlight);
-  border-radius: 16px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(124, 58, 237, 0.18);
-  display: flex;
-  flex-direction: column;
   gap: 12px;
   overflow: hidden;
-  animation: settingsModalDialogIn 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-duration: 240ms;
 }
 
 .masteries-modal-header {

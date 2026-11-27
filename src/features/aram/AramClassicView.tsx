@@ -32,20 +32,20 @@ export function AramClassicView({
 
   return (
     <div
-      className={`aram-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      className={`tierlist-layout${motionClassName ? ` ${motionClassName}` : ""}`}
       data-testid="aram-classic-view"
     >
-      <div className="card aram-toolbar-card">
+      <div className="card tierlist-toolbar-card is-inline">
         <LoadingBar
           active={isLoadingList && currentChampions.length > 0}
           testId="aram-classic-loading-bar"
         />
-        <div className="aram-toolbar-left">
+        <div className="tierlist-hero-left">
           <h2 className="page-hero-title">{t("aram.classicRankingTitle")}</h2>
         </div>
 
-        <div className="aram-hero-right">
-          <span className="aram-mode-badge">{t("aram.aramTitle")}</span>
+        <div className="tierlist-hero-right">
+          <span className="tierlist-mode-badge is-aram-classic">{t("aram.aramTitle")}</span>
 
           <SearchInput
             value={aramSearch}
@@ -57,59 +57,59 @@ export function AramClassicView({
         </div>
       </div>
 
-      <div className="card aram-classic-list-card">
+      <div className="card tierlist-list-card aram-classic-list-card">
         {isLoadingList && currentChampions.length === 0 ? (
           <div className="loading-skeleton-shell" data-testid="aram-classic-loading">
             <div className="loading-banner">
-              <div className="spinner aram-spinner" />
+              <div className="spinner" />
               <span>{t("aram.loadingRanking")}</span>
               <LoadingDots size="sm" testId="aram-classic-loading-dots" />
             </div>
             <ListSkeleton rows={7} variant="aram" testId="aram-classic-skeleton" />
           </div>
         ) : listError && currentChampions.length === 0 ? (
-          <div className="aram-state-box">
-            <span className="aram-error-text">{listError}</span>
+          <div className="tierlist-state-box">
+            <span className="tierlist-error-text">{listError}</span>
             <button
               type="button"
-              className="aram-retry-btn"
+              className="tierlist-retry-btn"
               onClick={() => onRetryTierList("aram")}
             >
               {t("common.retry")}
             </button>
           </div>
         ) : filteredAramChampions.length === 0 ? (
-          <div className="aram-state-box">
+          <div className="tierlist-state-box">
             <span>{t("aram.noChampFoundSearch", { query: aramSearch })}</span>
           </div>
         ) : (
-          <div className="aram-classic-list" data-testid="aram-classic-list">
+          <div className="tierlist-list-scroll aram-classic-list" data-testid="aram-classic-list">
             {filteredAramChampions.map((champ) => (
               <button
                 key={champ.id}
                 type="button"
-                className="aram-classic-row"
+                className="tierlist-champ-row"
                 onClick={() => onSelectChampion?.(champ)}
                 data-testid={`aram-classic-champ-${champ.key}`}
               >
-                <span className="aram-rank-num">#{champ.rank}</span>
-                <div className="dd-icon-frame aram-champ-frame">
+                <span className="tierlist-rank-num">#{champ.rank}</span>
+                <div className="dd-icon-frame tierlist-champ-frame">
                   <img
                     src={resolveCachedAssetUrl(champ.icon_url)}
                     alt={champ.name}
-                    className="aram-champ-avatar"
+                    className="tierlist-champ-avatar"
                     loading="lazy"
                     decoding="async"
                   />
                 </div>
-                <span className="aram-champ-name">{champ.name}</span>
+                <span className="tierlist-champ-name">{champ.name}</span>
 
-                <div className="aram-classic-stats">
+                <div className="tierlist-row-stats">
                   {champ.win_rate !== null && champ.win_rate !== undefined && (
-                    <span className="aram-stat-pill">
-                      <span className="aram-stat-label">WR</span>
+                    <span className="stat-pill">
+                      <span className="stat-pill-label">WR</span>
                       <span
-                        className={`aram-stat-val ${
+                        className={`stat-pill-val ${
                           champ.win_rate >= 52
                             ? "is-high"
                             : champ.win_rate < 48
@@ -122,12 +122,12 @@ export function AramClassicView({
                     </span>
                   )}
                   {champ.pick_rate !== null && champ.pick_rate !== undefined && (
-                    <span className="aram-stat-pill">
-                      <span className="aram-stat-label">PR</span>
-                      <span className="aram-stat-val">{champ.pick_rate.toFixed(1)}%</span>
+                    <span className="stat-pill">
+                      <span className="stat-pill-label">PR</span>
+                      <span className="stat-pill-val">{champ.pick_rate.toFixed(1)}%</span>
                     </span>
                   )}
-                  <span className={`aram-tier-pill ${getChampionTierClass(champ.tier)}`}>
+                  <span className={`tier-pill ${getChampionTierClass(champ.tier)}`}>
                     {getChampionTierLabel(champ.tier)}
                   </span>
                 </div>

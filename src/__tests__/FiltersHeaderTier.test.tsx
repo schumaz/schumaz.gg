@@ -44,7 +44,7 @@ describe("FiltersHeader — Champion Meta Tier Badge", () => {
 
       const badge = screen.getByTestId("champ-tier-badge");
       expect(badge).toHaveTextContent(expectedLabel);
-      expect(badge).toHaveClass("aram-tier-pill", "champ-hero-tier-pill", expectedClass);
+      expect(badge).toHaveClass("tier-pill", "champ-hero-tier-pill", expectedClass);
 
       const champName = screen.getByRole("heading", { name: "Ahri" });
       expect(champName.nextElementSibling).toBe(badge);

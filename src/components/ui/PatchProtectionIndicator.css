@@ -1,0 +1,63 @@
+/* Patch 48h Protection Indicator & Tooltip */
+.filter-group-patch {
+  position: relative;
+}
+
+.patch-protection-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.patch-protection-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: rgba(239, 68, 68, 0.18);
+  border: 1.5px solid #ef4444;
+  color: #f87171;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+  transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.patch-protection-indicator:hover,
+.patch-protection-indicator:focus-visible {
+  background-color: rgba(239, 68, 68, 0.28);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  transform: scale(1.06);
+}
+
+.patch-protection-hours {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-danger);
+  white-space: nowrap;
+}
+
+.patch-protection-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 300px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background-color: #161722;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  z-index: 80;
+  pointer-events: none;
+}

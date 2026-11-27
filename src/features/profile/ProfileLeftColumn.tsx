@@ -37,7 +37,7 @@ export const ProfileLeftColumn = memo(function ProfileLeftColumn({
   return (
     <div className="profile-col profile-col-left">
       <section
-        className="card profile-section-card"
+        className="card profile-section-card profile-winloss-card"
         data-testid="winloss-chart-card"
       >
         <div className="profile-card-header">
@@ -158,7 +158,7 @@ export const ProfileLeftColumn = memo(function ProfileLeftColumn({
       </section>
 
       <section
-        className="card profile-section-card"
+        className="card profile-section-card profile-masteries-card"
         data-testid="top-masteries-card"
       >
         <div className="profile-card-header">

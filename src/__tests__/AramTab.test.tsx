@@ -62,9 +62,9 @@ describe("AramTab UI", () => {
     const heroHeading = within(classicView).getByRole("heading", { name: "Ranking de Campeões" });
     expect(heroHeading).toHaveClass("page-hero-title");
 
-    const rightContainer = classicView.querySelector(".aram-hero-right") as HTMLElement;
+    const rightContainer = classicView.querySelector(".tierlist-hero-right") as HTMLElement;
     expect(rightContainer).toBeTruthy();
-    expect(within(rightContainer).getByText("ARAM")).toHaveClass("aram-mode-badge");
+    expect(within(rightContainer).getByText("ARAM")).toHaveClass("tierlist-mode-badge", "is-aram-classic");
     expect(within(rightContainer).getByLabelText("Buscar campeão no ARAM")).toBeInTheDocument();
 
     expect(within(classicView).queryByText(/2 campeões/i)).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("AramTab UI", () => {
     expect(within(list).getByText("Miss Fortune")).toBeInTheDocument();
     expect(within(list).getByText("OP")).toHaveClass("tier-op");
     expect(within(list).getByText("Tier 1")).toHaveClass("tier-1");
-    expect(list.querySelectorAll(".dd-icon-frame.aram-champ-frame .aram-champ-avatar")).toHaveLength(2);
+    expect(list.querySelectorAll(".dd-icon-frame.tierlist-champ-frame .tierlist-champ-avatar")).toHaveLength(2);
 
     expect(screen.queryByLabelText("Limpar busca de campeão no ARAM")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar campeão no ARAM"), {
@@ -112,7 +112,7 @@ describe("AramTab UI", () => {
     const titleRow = mayhemView.querySelector(".aram-panel-title-row") as HTMLElement;
     expect(titleRow).toBeTruthy();
     const mayhemBadge = within(titleRow).getByText("ARAM Mayhem");
-    expect(mayhemBadge).toHaveClass("aram-mode-badge", "is-mayhem");
+    expect(mayhemBadge).toHaveClass("tierlist-mode-badge", "is-mayhem");
     const cartinhasHeading = within(titleRow).getByRole("heading", { name: "Cartinhas" });
     expect(cartinhasHeading).toHaveClass("aram-mayhem-hero-title");
     expect(Array.from(titleRow.children)).toEqual([mayhemBadge, cartinhasHeading]);

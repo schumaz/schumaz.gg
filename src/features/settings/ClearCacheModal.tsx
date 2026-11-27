@@ -62,7 +62,7 @@ export function ClearCacheModal({
 
   return createPortal(
     <div
-      className="settings-modal-backdrop"
+      className="modal-backdrop"
       data-testid="clear-cache-modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -71,8 +71,8 @@ export function ClearCacheModal({
       }}
     >
       <div
-        className={`card settings-modal-dialog ${
-          pendingScope ? "settings-cache-confirm-dialog" : "settings-cache-modal-dialog"
+        className={`card modal-dialog ${
+          pendingScope ? "is-danger settings-cache-confirm-dialog" : "settings-cache-modal-dialog"
         }`}
         role="dialog"
         aria-modal="true"
@@ -82,11 +82,11 @@ export function ClearCacheModal({
       >
         {pendingScope && activeConfirm ? (
           <div className="settings-cache-confirm-content" data-testid="clear-cache-confirm-prompt">
-            <div className="settings-modal-header">
-              <span className="settings-warning-icon settings-modal-icon" aria-hidden="true">
+            <div className="modal-header">
+              <span className="modal-warning-icon" aria-hidden="true">
                 !
               </span>
-              <h3 id="clear-cache-confirm-title" className="settings-modal-title">
+              <h3 id="clear-cache-confirm-title" className="modal-title">
                 {t("settings.cacheConfirmTitle")}
               </h3>
             </div>
@@ -96,14 +96,14 @@ export function ClearCacheModal({
               <span className="settings-cache-confirm-scope-size">{activeConfirm.size}</span>
             </div>
 
-            <p id="clear-cache-confirm-desc" className="settings-modal-desc">
+            <p id="clear-cache-confirm-desc" className="modal-desc is-danger">
               {activeConfirm.body}
             </p>
 
-            <div className="settings-modal-actions">
+            <div className="modal-actions">
               <button
                 type="button"
-                className="settings-modal-btn settings-modal-btn-secondary"
+                className="modal-btn modal-btn-secondary"
                 data-testid="clear-cache-confirm-back-btn"
                 onClick={() => setPendingScope(null)}
               >
@@ -111,7 +111,7 @@ export function ClearCacheModal({
               </button>
               <button
                 type="button"
-                className="settings-modal-btn settings-modal-btn-accept"
+                className="modal-btn modal-btn-danger"
                 data-testid="clear-cache-confirm-btn"
                 onClick={() => onSelectScope(pendingScope)}
               >
@@ -121,13 +121,13 @@ export function ClearCacheModal({
           </div>
         ) : (
           <>
-            <div className="settings-modal-header">
-              <h3 id="clear-cache-modal-title" className="settings-modal-title">
+            <div className="modal-header">
+              <h3 id="clear-cache-modal-title" className="modal-title">
                 {t("settings.cacheModalTitle")}
               </h3>
             </div>
 
-            <p id="clear-cache-modal-desc" className="settings-modal-desc">
+            <p id="clear-cache-modal-desc" className="modal-desc">
               {t("settings.cacheModalDesc")}
             </p>
 
@@ -190,7 +190,7 @@ export function ClearCacheModal({
               </button>
             </div>
 
-            <div className="settings-modal-actions">
+            <div className="modal-actions">
               <button
                 type="button"
                 className="settings-updates-btn is-secondary"

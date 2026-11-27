@@ -4,6 +4,7 @@ import { I18nProvider } from "../../../i18n";
 import type { PlayerProfile } from "../../../types";
 import { ProfileTab } from "../ProfileTab";
 import profileTabCss from "../ProfileTab.css?raw";
+import profileLeftColumnCss from "../ProfileLeftColumn.css?raw";
 import { mockProfile, mockSummoner } from "./profileFixtures";
 
 let injectedStyleEl: HTMLStyleElement | null = null;
@@ -117,7 +118,7 @@ describe("P15.0 — ProfileLeftColumn Win/Loss & Recent Form Layout Regression",
 
   it("prevents vertical shrinking on winloss-chart-card and keeps column-only scroll under viewport lock", () => {
     injectedStyleEl = document.createElement("style");
-    injectedStyleEl.textContent = profileTabCss;
+    injectedStyleEl.textContent = [profileTabCss, profileLeftColumnCss].join("\n");
     document.head.appendChild(injectedStyleEl);
 
     const { container } = render(

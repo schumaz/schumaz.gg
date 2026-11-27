@@ -157,21 +157,21 @@ export function AramMayhemAugmentsPanel({
         {augmentsLoading ? (
           <div className="loading-skeleton-shell" data-testid="aram-augments-loading">
             <div className="loading-banner">
-              <div className="spinner aram-spinner" />
+              <div className="spinner" />
               <span>{t("aram.loadingAugments")}</span>
               <LoadingDots size="sm" testId="aram-augments-loading-dots" />
             </div>
             <ListSkeleton rows={5} variant="augments" testId="aram-augments-skeleton" />
           </div>
         ) : augmentsError ? (
-          <div className="aram-state-box">
-            <span className="aram-error-text">{augmentsError}</span>
-            <button type="button" className="aram-retry-btn" onClick={onRetryAugments}>
+          <div className="tierlist-state-box">
+            <span className="tierlist-error-text">{augmentsError}</span>
+            <button type="button" className="tierlist-retry-btn" onClick={onRetryAugments}>
               {t("common.retry")}
             </button>
           </div>
         ) : currentAugments.length === 0 ? (
-          <div className="aram-state-box">
+          <div className="tierlist-state-box">
             <span>{t("aram.noAugmentsFound")}</span>
           </div>
         ) : (

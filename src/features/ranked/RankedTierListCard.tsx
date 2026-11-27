@@ -47,20 +47,20 @@ export function RankedTierListCard({
     return groups.map((group) => (
       <div
         key={`${scopeKey}-tier-${group.tier}`}
-        className="ranked-tier-group"
+        className="tierlist-tier-group"
         data-testid={`ranked-tier-group-${scopeKey}-${group.tier}`}
       >
-        <div className="ranked-tier-group-header">
-          <span className={`aram-tier-pill ${getChampionTierClass(group.tier)}`}>
+        <div className="tierlist-tier-group-header">
+          <span className={`tier-pill ${getChampionTierClass(group.tier)}`}>
             {getChampionTierLabel(group.tier)}
           </span>
-          <span className="ranked-tier-group-count">
+          <span className="tierlist-tier-group-count">
             {group.items.length}{" "}
             {group.items.length === 1 ? t("common.championSingular") : t("common.championPlural")}
           </span>
         </div>
 
-        <div className="ranked-tier-rows">
+        <div className="tierlist-tier-rows">
           {group.items.map((champ) => {
             runningGlobalRank += 1;
             const laneInfo = laneMeta[champ.lane];
@@ -74,25 +74,25 @@ export function RankedTierListCard({
               <button
                 key={`${champ.lane}-${champ.id}`}
                 type="button"
-                className="ranked-champ-row"
+                className="tierlist-champ-row"
                 onClick={() => onSelectChampion(champ)}
                 data-testid={`ranked-champ-${champ.lane}-${champ.key}`}
               >
-                <span className="aram-rank-num">
+                <span className="tierlist-rank-num">
                   {displayRank > 0 ? `#${displayRank}` : "—"}
                 </span>
-                <div className="dd-icon-frame aram-champ-frame">
+                <div className="dd-icon-frame tierlist-champ-frame">
                   <img
                     src={resolveCachedAssetUrl(champ.icon_url)}
                     alt={champ.name}
-                    className="aram-champ-avatar"
+                    className="tierlist-champ-avatar"
                     loading="lazy"
                     decoding="async"
                   />
                 </div>
-                <span className="aram-champ-name">{champ.name}</span>
+                <span className="tierlist-champ-name">{champ.name}</span>
 
-                <div className="aram-classic-stats">
+                <div className="tierlist-row-stats">
                   {isAllLanes && (
                     <span
                       className="ranked-champ-lane-pill"
@@ -117,10 +117,10 @@ export function RankedTierListCard({
                   )}
 
                   {champ.win_rate !== null && champ.win_rate !== undefined && (
-                    <span className="aram-stat-pill">
-                      <span className="aram-stat-label">WR</span>
+                    <span className="stat-pill">
+                      <span className="stat-pill-label">WR</span>
                       <span
-                        className={`aram-stat-val ${
+                        className={`stat-pill-val ${
                           champ.win_rate >= 52
                             ? "is-high"
                             : champ.win_rate < 48
@@ -133,18 +133,18 @@ export function RankedTierListCard({
                     </span>
                   )}
                   {champ.pick_rate !== null && champ.pick_rate !== undefined && (
-                    <span className="aram-stat-pill">
-                      <span className="aram-stat-label">PR</span>
-                      <span className="aram-stat-val">{champ.pick_rate.toFixed(1)}%</span>
+                    <span className="stat-pill">
+                      <span className="stat-pill-label">PR</span>
+                      <span className="stat-pill-val">{champ.pick_rate.toFixed(1)}%</span>
                     </span>
                   )}
                   {champ.ban_rate !== null && champ.ban_rate !== undefined && (
-                    <span className="aram-stat-pill">
-                      <span className="aram-stat-label">BR</span>
-                      <span className="aram-stat-val">{champ.ban_rate.toFixed(1)}%</span>
+                    <span className="stat-pill">
+                      <span className="stat-pill-label">BR</span>
+                      <span className="stat-pill-val">{champ.ban_rate.toFixed(1)}%</span>
                     </span>
                   )}
-                  <span className={`aram-tier-pill ${getChampionTierClass(champ.tier)}`}>
+                  <span className={`tier-pill ${getChampionTierClass(champ.tier)}`}>
                     {getChampionTierLabel(champ.tier)}
                   </span>
                 </div>
@@ -157,25 +157,25 @@ export function RankedTierListCard({
   };
 
   return (
-    <div className="card ranked-list-card">
+    <div className="card tierlist-list-card">
       {tierLoading && !tierData ? (
         <div className="loading-skeleton-shell" data-testid="ranked-tierlist-loading">
           <div className="loading-banner">
-            <div className="spinner aram-spinner" />
+            <div className="spinner" />
             <span>{t("ranked.loadingTierList")}</span>
             <LoadingDots size="sm" testId="ranked-tierlist-loading-dots" />
           </div>
           <ListSkeleton rows={7} variant="ranked" testId="ranked-tierlist-skeleton" />
         </div>
       ) : tierError && !tierData ? (
-        <div className="aram-state-box">
-          <span className="aram-error-text">{tierError}</span>
-          <button type="button" className="aram-retry-btn" onClick={onRetryTierList}>
+        <div className="tierlist-state-box">
+          <span className="tierlist-error-text">{tierError}</span>
+          <button type="button" className="tierlist-retry-btn" onClick={onRetryTierList}>
             {t("common.retry")}
           </button>
         </div>
       ) : tierGroups.length === 0 ? (
-        <div className="aram-state-box">
+        <div className="tierlist-state-box">
           <span>
             {search.trim()
               ? t("ranked.noChampFoundSearch", { query: search })
@@ -185,9 +185,9 @@ export function RankedTierListCard({
           </span>
         </div>
       ) : (
-        <div className="ranked-list-scroll" data-testid="ranked-tierlist-scroll">
+        <div className="tierlist-list-scroll" data-testid="ranked-tierlist-scroll">
           {isAllLanes ? (
-            <div className="ranked-tier-groups" data-testid="ranked-all-lanes-list">
+            <div className="tierlist-tier-groups" data-testid="ranked-all-lanes-list">
               {renderTierGroups(tierGroups, "all")}
             </div>
           ) : (
@@ -203,7 +203,7 @@ export function RankedTierListCard({
                   </div>
                 </header>
 
-                <div className="ranked-tier-groups">
+                <div className="tierlist-tier-groups">
                   {renderTierGroups(tierGroups, laneFilter)}
                 </div>
               </section>

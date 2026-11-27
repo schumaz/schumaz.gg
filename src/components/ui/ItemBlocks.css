@@ -220,10 +220,6 @@
   grid-row: 3;
 }
 
-.block-span-third {
-  grid-column: span 1;
-}
-
 .block-span-full {
   grid-column: 1 / -1;
 }
