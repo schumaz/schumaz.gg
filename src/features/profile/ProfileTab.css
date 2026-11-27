@@ -483,13 +483,14 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 0.92fr 1.38fr;
+  grid-template-columns: minmax(0, 92fr) minmax(0, 138fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   overflow: visible;
 }
 
 .profile-col {
+  min-width: 0;
   min-height: 0;
   height: 100%;
   display: flex;
@@ -953,7 +954,7 @@
 .match-card {
   border-radius: 12px;
   content-visibility: auto;
-  contain-intrinsic-size: auto 62px;
+  contain-intrinsic-block-size: auto 62px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-left-width: 3px;

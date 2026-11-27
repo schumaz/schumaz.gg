@@ -143,7 +143,7 @@ img {
   align-items: center;
   min-height: 44px;
   margin: 0 -16px 4px -16px;
-  padding: 0 0 0 16px;
+  padding: 0;
   background: transparent;
   border: none;
   flex-shrink: 0;
@@ -156,7 +156,7 @@ img {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px 6px 0;
+  padding: 6px 8px 6px 16px;
   min-width: 0;
 }
 
@@ -436,7 +436,7 @@ img {
 .tabs-viewport:not([data-fading-tab="aram"]) > [data-testid="view-aram"].inactive-tab,
 .tabs-viewport:not([data-fading-tab="settings"]) > [data-testid="view-settings"].inactive-tab {
   content-visibility: hidden;
-  contain-intrinsic-size: 0 600px;
+  contain-intrinsic-block-size: 600px;
   transform: none;
 }
 
@@ -446,12 +446,12 @@ img {
 .aram-classic-row,
 .aram-mayhem-champ-row {
   content-visibility: auto;
-  contain-intrinsic-size: auto 48px;
+  contain-intrinsic-block-size: auto 48px;
 }
 
 .mastery-catalog-card {
   content-visibility: auto;
-  contain-intrinsic-size: auto 76px;
+  contain-intrinsic-block-size: auto 76px;
 }
 
 @media (prefers-reduced-motion: reduce) {

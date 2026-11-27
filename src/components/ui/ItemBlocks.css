@@ -185,7 +185,7 @@
 .grid-blocks {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1.38fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.38fr);
   gap: 9px;
 }
 

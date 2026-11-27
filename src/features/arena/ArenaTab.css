@@ -166,7 +166,7 @@
 .arena-champ-row {
   width: 100%;
   content-visibility: auto;
-  contain-intrinsic-size: auto 48px;
+  contain-intrinsic-block-size: auto 48px;
   display: flex;
   align-items: center;
   gap: 10px;

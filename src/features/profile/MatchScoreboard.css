@@ -3,7 +3,7 @@
    ============================================================ */
 .match-card.expanded {
   content-visibility: visible;
-  contain-intrinsic-size: auto;
+  contain-intrinsic-block-size: none;
 }
 
 .match-scoreboard-drawer {
@@ -217,7 +217,7 @@
 .sb-team-columns,
 .sb-player-row {
   display: grid;
-  grid-template-columns: minmax(145px, 1.45fr) minmax(76px, 0.72fr) minmax(72px, 0.68fr) 48px 54px auto;
+  grid-template-columns: minmax(145px, 14.5fr) minmax(76px, 7.2fr) minmax(72px, 6.8fr) 48px 54px auto;
   align-items: center;
   gap: 8px;
   padding: 5px 10px;
@@ -667,7 +667,7 @@
 
 .sb-arena-player-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.4fr) minmax(66px, 0.6fr) minmax(72px, 0.7fr) auto auto;
+  grid-template-columns: minmax(140px, 14fr) minmax(66px, 6fr) minmax(72px, 7fr) auto auto;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
@@ -681,7 +681,7 @@
 @media (max-width: 1080px) {
   .sb-team-columns,
   .sb-player-row {
-    grid-template-columns: minmax(125px, 1.3fr) minmax(68px, 0.7fr) minmax(64px, 0.65fr) 44px auto;
+    grid-template-columns: minmax(125px, 13fr) minmax(68px, 7fr) minmax(64px, 6.5fr) 44px auto;
   }
   .sb-team-columns > :nth-child(5),
   .sb-player-row > :nth-child(5) {

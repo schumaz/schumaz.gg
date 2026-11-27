@@ -308,7 +308,7 @@
 .aram-classic-row {
   width: 100%;
   content-visibility: auto;
-  contain-intrinsic-size: auto 48px;
+  contain-intrinsic-block-size: auto 48px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -515,12 +515,13 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 0.85fr 1.35fr;
+  grid-template-columns: minmax(0, 85fr) minmax(0, 135fr);
   gap: 10px;
   overflow: hidden;
 }
 
 .aram-mayhem-col {
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -585,7 +586,7 @@
 .aram-mayhem-champ-row {
   width: 100%;
   content-visibility: auto;
-  contain-intrinsic-size: auto 46px;
+  contain-intrinsic-block-size: auto 46px;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -748,7 +749,7 @@
 .aram-augment-row {
   display: flex;
   content-visibility: auto;
-  contain-intrinsic-size: auto 76px;
+  contain-intrinsic-block-size: auto 76px;
   align-items: flex-start;
   gap: 10px;
   padding: 8px 10px;
@@ -977,7 +978,7 @@
 
   .aram-mayhem-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: 0.9fr 1.1fr;
+    grid-template-rows: minmax(0, 9fr) minmax(0, 11fr);
   }
 
   .aram-aug-search {
