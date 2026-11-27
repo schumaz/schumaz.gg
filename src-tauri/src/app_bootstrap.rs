@@ -1,6 +1,7 @@
 pub mod prewarm;
 pub mod tray;
 pub mod webview_power;
+pub mod win32_sizemove;
 pub mod window_events;
 pub mod window_factory;
 

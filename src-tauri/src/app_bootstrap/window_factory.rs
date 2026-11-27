@@ -218,6 +218,7 @@ pub fn show_or_create_main_window(app_handle: &tauri::AppHandle) -> Result<(), S
 
     match build_result {
         Ok(window) => {
+            super::win32_sizemove::install_sizemove_subclass(&window);
             if let Some(graphics) = app_handle.try_state::<storage::GraphicsState>() {
                 graphics.mark_webview_created(hw_accel);
             }
