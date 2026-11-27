@@ -12,17 +12,8 @@ use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use crate::lcu_connector::client::{ConnectedLcuClient, DefaultRequestClient};
 use crate::logging;
 use crate::storage;
-
-mod manifests;
-mod parsers;
-
-#[cfg(test)]
-use parsers::{build_lcu_credentials, extract_credentials_from_cmd, parse_lockfile_contents};
-#[cfg(test)]
-use std::net::Ipv4Addr;
-
-#[cfg(test)]
-mod discovery_tests;
+use schumaz_domain::lcu_parsers::discovery_manifests as manifests;
+use schumaz_domain::lcu_parsers::discovery_parsers as parsers;
 
 #[cfg(target_os = "windows")]
 const CLIENT_PROCESS_NAME: &str = "LeagueClientUx.exe";
@@ -305,3 +296,7 @@ fn discover_lcu_credentials() -> Result<LcuCredentials, String> {
     let (addr, auth_header) = parsers::build_lcu_credentials(port, &token)?;
     Ok(LcuCredentials { addr, auth_header })
 }
+
+#[cfg(test)]
+#[path = "discovery_tests.rs"]
+mod tests;

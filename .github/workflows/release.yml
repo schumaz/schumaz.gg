@@ -81,7 +81,7 @@ jobs:
           try {
             cargo clippy --all-targets --message-format=short -- -D warnings
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            cargo clippy --all-targets --features portable --message-format=short -- -D warnings
+            cargo clippy -p schumazgg --all-targets --features portable --message-format=short -- -D warnings
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             cargo test -q
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -4,9 +4,7 @@
 pub mod client;
 pub mod discovery;
 pub mod endpoints;
-pub mod missions_parser;
 pub mod missions_runner;
-pub mod missions_tracker;
 pub mod monitor;
 
 pub use crate::models::{LcuStatus, SummonerInfo};
@@ -16,7 +14,10 @@ pub use discovery::{
     invalidate_lcu_credentials, lcu_tls_client_config, shared_request_client,
 };
 pub use endpoints::*;
-pub use missions_parser::*;
 pub use missions_runner::*;
-pub use missions_tracker::*;
 pub use monitor::*;
+pub use schumaz_domain::lcu_parsers::{
+    discovery_manifests, discovery_parsers, endpoints as parser_endpoints, missions_parser,
+    missions_tracker,
+};
+pub use schumaz_domain::lcu_parsers::{missions_parser::*, missions_tracker::*};

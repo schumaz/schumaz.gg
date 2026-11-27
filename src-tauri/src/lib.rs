@@ -1,14 +1,13 @@
 pub mod app_bootstrap;
-pub mod build_provider;
 pub mod commands;
 pub mod lcu_connector;
 pub mod lcu_injector;
-pub mod logging;
 pub mod models;
 pub mod profile_provider;
-pub mod storage;
 pub mod updater;
 pub mod ws_listener;
+
+pub use schumaz_domain::{build_provider, logging, storage};
 
 pub use app_bootstrap::{
     WindowGraphicsTier, focus_main_window, is_window_minimized_or_hidden,
@@ -82,9 +81,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
 }
 
 pub fn export_bindings() {
-    specta_builder()
-        .export(Typescript::default(), "../src/types/bindings.ts")
-        .expect("Failed to export TypeScript bindings");
+    schumaz_models::export_bindings();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -149,4 +146,32 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+#[cfg(test)]
+mod ipc_parity_tests {
+    use specta_typescript::Typescript;
+
+    #[test]
+    fn test_models_ipc_export_matches_tauri_specta_builder_exactly() {
+        let tmp_dir = std::env::temp_dir();
+        let tmp_path = tmp_dir.join(format!(
+            "schumaz_specta_parity_{}_{}.ts",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        super::specta_builder()
+            .export(Typescript::default(), &tmp_path)
+            .expect("tauri-specta export should succeed");
+        let tauri_ts = std::fs::read_to_string(&tmp_path)
+            .expect("temp tauri-specta bindings should be readable");
+        let _ = std::fs::remove_file(&tmp_path);
+
+        let models_ts = schumaz_models::export_ts_string()
+            .expect("schumaz-models export should succeed");
+        assert_eq!(models_ts, tauri_ts);
+    }
 }

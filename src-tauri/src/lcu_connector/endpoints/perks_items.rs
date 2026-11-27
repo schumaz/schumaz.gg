@@ -1,3 +1,4 @@
+use super::build_item_sets_endpoint;
 use crate::lcu_connector::client::LcuConnection;
 
 impl LcuConnection {
@@ -114,9 +115,4 @@ impl LcuConnection {
         self.put_json_ignoring_eof(&endpoint, payload, "Error putting item sets")
             .await
     }
-}
-
-/// Builds the LCU item sets endpoint for a given `summoner_id`.
-pub fn build_item_sets_endpoint(summoner_id: u64) -> String {
-    format!("/lol-item-sets/v1/item-sets/{}/sets", summoner_id)
 }

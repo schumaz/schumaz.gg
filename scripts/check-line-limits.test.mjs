@@ -92,4 +92,25 @@ describe("check-line-limits", () => {
     const strictResult = checkLineLimits({ rootDir, strict: true, baseline });
     expect(strictResult.violations).toHaveLength(2);
   });
+
+  it("checks Rust line limits inside src-tauri/crates as well as src-tauri/src", () => {
+    const rootDir = createTempProject();
+    const cratesDir = path.join(rootDir, "src-tauri", "crates", "schumaz-domain", "src");
+    mkdirSync(cratesDir, { recursive: true });
+    writeFileSync(path.join(rootDir, "src-tauri", "src", "ok.rs"), makeLines(10), "utf8");
+    writeFileSync(path.join(cratesDir, "oversized.rs"), makeLines(351), "utf8");
+    writeFileSync(path.join(rootDir, "src", "ok.ts"), makeLines(10), "utf8");
+
+    const result = checkLineLimits({ rootDir, strict: true, baseline: {} });
+    expect(result.checkedCount).toBe(3);
+    expect(result.violations).toEqual([
+      {
+        file: "src-tauri/crates/schumaz-domain/src/oversized.rs",
+        lines: 351,
+        limit: 350,
+        baseLimit: 350,
+        isBaselineRegression: false,
+      },
+    ]);
+  });
 });

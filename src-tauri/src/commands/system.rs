@@ -27,7 +27,7 @@ pub async fn get_app_distribution_info(app_handle: AppHandle) -> AppDistribution
     tokio::task::spawn_blocking(move || updater::get_distribution_info(&app_handle))
         .await
         .unwrap_or_else(|_| AppDistributionInfo {
-            is_portable: cfg!(feature = "portable"),
+            is_portable: updater::is_compile_time_portable(),
             current_version: fallback.package_info().version.to_string(),
             releases_url: updater::GITHUB_RELEASES_LATEST_URL.to_string(),
             last_check_epoch_secs: storage::get_last_update_check_epoch_secs(),
@@ -125,7 +125,7 @@ pub async fn get_autostart_status(app_handle: AppHandle) -> AutostartStatus {
         }
     })
     .await
-    .unwrap_or_else(|_| build_autostart_status(cfg!(feature = "portable"), false))
+    .unwrap_or_else(|_| build_autostart_status(updater::is_compile_time_portable(), false))
 }
 
 /// Enables or disables OS startup launch (`--autostart`) for installed builds.

@@ -1,0 +1,318 @@
+use std::sync::Arc;
+
+use crate::build_provider;
+use crate::lcu_parsers::{DEFAULT_MATCH_HISTORY_PAGE_SIZE, MAX_MATCH_HISTORY_PAGE_SIZE};
+use crate::models::{
+    AppLocale, CachedProfileResult, DataDragonCache, MatchHistoryPage, MatchScoreboardDetail,
+    PlayerProfile, SummonerInfo,
+};
+
+use super::cache::{
+    get_cached_profile_for_last_summoner, get_cached_profile_for_summoner_id, save_profile_to_dir,
+};
+use super::masteries_parser::parse_all_masteries_for_locale;
+use super::match_metadata::{
+    collect_matches_augment_metadata, collect_matches_item_metadata, collect_matches_rune_metadata,
+    collect_matches_spell_metadata,
+};
+use super::matches_parser::parse_match_history_page_for_locale;
+use super::ranked_parser::parse_ranked_stats_for_locale;
+use super::scoreboard_parser::parse_match_scoreboard_detail_for_locale;
+use super::skins::{
+    extract_background_skin_id, fetch_skin_name_for_locale,
+    resolve_background_splash_urls_for_locale,
+};
+
+async fn resolve_ddragon_cache_for_locale(
+    http_client: &reqwest::Client,
+    locale: AppLocale,
+) -> Arc<DataDragonCache> {
+    match build_provider::get_or_init_ddragon_cache_for_locale(http_client, locale).await {
+        Ok(c) => c,
+        Err(_) => Arc::new(DataDragonCache {
+            version: build_provider::latest_cached_ddragon_version().unwrap_or_default(),
+            ..Default::default()
+        }),
+    }
+}
+
+/// LCU read interface required by the profile aggregator without coupling domain logic to transport.
+pub trait ProfileLcuClient: Send + Sync {
+    fn get_current_summoner_with_puuid(
+        &self,
+    ) -> impl std::future::Future<Output = Result<(SummonerInfo, Option<String>), String>> + Send;
+    fn get_current_summoner(
+        &self,
+    ) -> impl std::future::Future<Output = Result<SummonerInfo, String>> + Send;
+    fn get_summoner_profile(
+        &self,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, String>> + Send;
+    fn get_champion_masteries(
+        &self,
+        summoner_id: u64,
+        puuid: Option<&str>,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, String>> + Send;
+    fn get_ranked_stats(
+        &self,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, String>> + Send;
+    fn get_match_history(
+        &self,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, String>> + Send;
+    fn get_match_history_page(
+        &self,
+        beg_index: u32,
+        end_index: u32,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, String>> + Send;
+    fn get_match_details(
+        &self,
+        game_id: u64,
+    ) -> impl std::future::Future<Output = Result<serde_json::Value, String>> + Send;
+}
+
+/// Fetches and assembles the full `PlayerProfile` from an active LCU client + DataDragon cache,
+/// supporting disk `.lz4` caching (48h TTL, SWR > 5m, `force_refresh` bypass) and `LastSummonerId` persistence.
+pub async fn load_player_profile_with_cache(
+    conn: &impl ProfileLcuClient,
+    force_refresh: bool,
+) -> Result<PlayerProfile, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    let (summoner, puuid) = conn.get_current_summoner_with_puuid().await?;
+    let http_client = build_provider::shared_http_client();
+
+    let summoner_id = summoner.summoner_id;
+    let cached_fresh = tokio::task::spawn_blocking(move || {
+        if summoner_id > 0 {
+            let current_last = crate::storage::get_global_settings()
+                .navigation
+                .last_summoner_id;
+            if current_last != Some(summoner_id) {
+                let _ = crate::storage::update_global_settings(|s| {
+                    s.navigation.last_summoner_id = Some(summoner_id);
+                });
+            }
+        }
+
+        if !force_refresh
+            && let Some(cached) = get_cached_profile_for_summoner_id(summoner_id, locale)
+            && !cached.is_stale
+        {
+            Some(cached.profile)
+        } else {
+            None
+        }
+    })
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(profile) = cached_fresh {
+        return Ok(profile);
+    }
+
+    let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
+
+    let (profile_res, masteries_res, ranked_res, history_res) = tokio::join!(
+        conn.get_summoner_profile(),
+        conn.get_champion_masteries(summoner.summoner_id, puuid.as_deref()),
+        conn.get_ranked_stats(),
+        conn.get_match_history()
+    );
+
+    let background_skin_id = profile_res
+        .as_ref()
+        .map(extract_background_skin_id)
+        .unwrap_or(0);
+
+    let (background_splash_url, background_splash_fallback_url, default_label, key_name, skin_num) =
+        resolve_background_splash_urls_for_locale(background_skin_id, &cache, locale);
+
+    let background_skin_name = if background_skin_id > 0 && !key_name.is_empty() {
+        fetch_skin_name_for_locale(
+            http_client,
+            &cache.version,
+            &key_name,
+            skin_num,
+            background_skin_id,
+            locale,
+        )
+        .await
+        .unwrap_or(default_label)
+    } else {
+        String::new()
+    };
+
+    let ranked_stats = ranked_res
+        .as_ref()
+        .map(|val| parse_ranked_stats_for_locale(val, locale))
+        .unwrap_or_else(|_| parse_ranked_stats_for_locale(&serde_json::Value::Null, locale));
+
+    let all_masteries = masteries_res
+        .as_ref()
+        .map(|val| parse_all_masteries_for_locale(val, &cache, locale))
+        .unwrap_or_default();
+    let top_masteries = all_masteries.iter().take(3).cloned().collect();
+
+    let initial_page = history_res
+        .as_ref()
+        .map(|val| {
+            parse_match_history_page_for_locale(
+                val,
+                summoner.summoner_id,
+                &cache,
+                0,
+                DEFAULT_MATCH_HISTORY_PAGE_SIZE,
+                locale,
+            )
+        })
+        .unwrap_or_default();
+    let recent_matches = initial_page.matches;
+    let item_metadata = collect_matches_item_metadata(&recent_matches, &cache.items);
+    let rune_metadata = collect_matches_rune_metadata(&recent_matches, &cache.runes);
+    let spell_metadata = collect_matches_spell_metadata(&recent_matches, &cache, locale);
+    let augment_metadata =
+        collect_matches_augment_metadata(&recent_matches, &cache.arena_augments);
+
+    let profile_icon_url = if !cache.version.is_empty() {
+        format!(
+            "https://ddragon.leagueoflegends.com/cdn/{}/img/profileicon/{}.png",
+            cache.version, summoner.profile_icon_id
+        )
+    } else {
+        String::new()
+    };
+
+    let profile = PlayerProfile {
+        summoner,
+        profile_icon_url,
+        background_skin_id,
+        background_skin_name,
+        background_splash_url,
+        background_splash_fallback_url,
+        ranked_stats,
+        top_masteries,
+        all_masteries,
+        recent_matches,
+        history_next_beg_index: initial_page.next_beg_index,
+        history_has_more: initial_page.has_more,
+        item_metadata,
+        rune_metadata,
+        spell_metadata,
+        augment_metadata,
+    };
+
+    if let Some(paths) = crate::storage::global_paths() {
+        let profile_dir = paths.profile_dir.clone();
+        let version = cache.version.clone();
+        let profile_snapshot = profile.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let _ = save_profile_to_dir(&profile_dir, &profile_snapshot, &version);
+        })
+        .await;
+    }
+
+    Ok(profile)
+}
+
+pub async fn load_player_profile(conn: &impl ProfileLcuClient) -> Result<PlayerProfile, String> {
+    load_player_profile_with_cache(conn, false).await
+}
+
+/// Returns the cached profile for `summoner_id` (or the last known summoner) using the active locale.
+pub fn get_cached_profile_for_active_locale(
+    summoner_id: Option<u64>,
+) -> Option<CachedProfileResult> {
+    let locale = crate::lcu_injector::get_active_locale();
+    match summoner_id {
+        Some(id) if id > 0 => get_cached_profile_for_summoner_id(id, locale),
+        _ => get_cached_profile_for_last_summoner(locale),
+    }
+}
+
+/// Parses a match history JSON payload into a paginated response with deduplicated tooltip metadata.
+pub fn build_match_history_page_response(
+    history_json: &serde_json::Value,
+    summoner_id: u64,
+    cache: &DataDragonCache,
+    beg_index: u32,
+    page_size: u32,
+    locale: AppLocale,
+) -> MatchHistoryPage {
+    let parsed = parse_match_history_page_for_locale(
+        history_json,
+        summoner_id,
+        cache,
+        beg_index,
+        page_size,
+        locale,
+    );
+    let item_metadata = collect_matches_item_metadata(&parsed.matches, &cache.items);
+    let rune_metadata = collect_matches_rune_metadata(&parsed.matches, &cache.runes);
+    let spell_metadata = collect_matches_spell_metadata(&parsed.matches, cache, locale);
+    let augment_metadata =
+        collect_matches_augment_metadata(&parsed.matches, &cache.arena_augments);
+
+    MatchHistoryPage {
+        matches: parsed.matches,
+        next_beg_index: parsed.next_beg_index,
+        has_more: parsed.has_more,
+        item_metadata,
+        rune_metadata,
+        spell_metadata,
+        augment_metadata,
+    }
+}
+
+/// Fetches and enriches a single match history page (`beg_index..=beg_index+count-1`) from LCU.
+pub async fn load_match_history_page(
+    conn: &impl ProfileLcuClient,
+    beg_index: u32,
+    count: Option<u32>,
+) -> Result<MatchHistoryPage, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    let page_size = count
+        .unwrap_or(DEFAULT_MATCH_HISTORY_PAGE_SIZE)
+        .clamp(1, MAX_MATCH_HISTORY_PAGE_SIZE);
+    let end_index = beg_index.saturating_add(page_size - 1);
+
+    let (summoner, history_json) = tokio::try_join!(
+        conn.get_current_summoner(),
+        conn.get_match_history_page(beg_index, end_index)
+    )?;
+
+    let http_client = build_provider::shared_http_client();
+    let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
+    Ok(build_match_history_page_response(
+        &history_json,
+        summoner.summoner_id,
+        &cache,
+        beg_index,
+        page_size,
+        locale,
+    ))
+}
+
+/// Fetches and parses full match scoreboard details (`/lol-match-history/v1/games/{gameId}`) from LCU.
+pub async fn load_match_scoreboard_detail(
+    conn: &impl ProfileLcuClient,
+    game_id: u64,
+) -> Result<MatchScoreboardDetail, String> {
+    let locale = crate::lcu_injector::get_active_locale();
+    let ((summoner, puuid), game_json) = tokio::try_join!(
+        conn.get_current_summoner_with_puuid(),
+        conn.get_match_details(game_id)
+    )?;
+
+    let http_client = build_provider::shared_http_client();
+    let cache = resolve_ddragon_cache_for_locale(http_client, locale).await;
+    parse_match_scoreboard_detail_for_locale(
+        &game_json,
+        summoner.summoner_id,
+        puuid.as_deref(),
+        &cache,
+        locale,
+    )
+}
+
+#[cfg(test)]
+#[path = "match_pagination_tests.rs"]
+mod pagination_tests;

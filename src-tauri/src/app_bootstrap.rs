@@ -93,6 +93,15 @@ pub fn handle_schumaz_asset_protocol(uri_path: String, responder: tauri::UriSche
     });
 }
 
+/// Official Windows directory: `%LOCALAPPDATA%\schumazgg\`.
+pub fn resolve_app_paths(app: &tauri::AppHandle) -> Result<storage::AppPaths, String> {
+    let local_data = app
+        .path()
+        .local_data_dir()
+        .map_err(|e| format!("Failed to resolve local_data_dir: {e}"))?;
+    Ok(storage::AppPaths::from_local_data_dir(local_data))
+}
+
 /// Initializes local storage, loads settings, sets up the reactive system tray, and launches
 /// either the main window (interactive startup) or headless tray mode (`--autostart`).
 pub fn setup_app(
@@ -106,7 +115,7 @@ pub fn setup_app(
     app.manage(window_state.clone());
 
     // 1. Resolve %LOCALAPPDATA%\schumazgg\ and ensure Config/, Cache/, Logs/, & WebView/ subfolders
-    let paths = storage::AppPaths::resolve_from_app(&app_handle).map_err(std::io::Error::other)?;
+    let paths = resolve_app_paths(&app_handle).map_err(std::io::Error::other)?;
     paths.ensure_dirs().map_err(std::io::Error::other)?;
     let _ = logging::init_logging(&paths.logs_dir);
     let ini_path = paths.user_settings_ini_path();

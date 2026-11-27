@@ -1,31 +1,14 @@
-use super::injection::{inject_item_sets, inject_specific_rune_page};
-use super::lobby_injection::{
+use super::live_injection::{inject_item_sets, inject_specific_rune_page};
+use super::live_lobby::{
     inject_multi_item_sets, patch_single_lobby_slot_runes, patch_single_lobby_slot_spells,
 };
-use super::payloads::build_spells_payload;
-use super::preferences::{get_user_preferences, set_active_locale, set_user_preferences};
-use super::selections::{set_selected_build, set_selected_rune_page, set_selected_spell_pair};
-use crate::models::{
-    AppLocale, FlashKeyPreference, QUEUE_SOLO_DUO, UserPreferences, canonical_build_queue_id,
+use super::{
+    build_spells_payload, get_user_preferences, normalize_item_build_queue_id, set_active_locale,
+    set_selected_build, set_selected_rune_page, set_selected_spell_pair, set_user_preferences,
 };
+use crate::models::{AppLocale, UserPreferences};
 use crate::storage::AppSettings;
 use crate::{build_provider, lcu_connector, logging, storage};
-
-/// Resolves the active queue ID for item build injection without hardcoding 420.
-/// Redirects Clash (`700`) and Practice Tool (`-1` / `0`) to Solo/Duo (`420`).
-pub fn normalize_item_build_queue_id(
-    provided_queue_id: Option<i32>,
-    lcu_queue_id: Option<i32>,
-) -> i32 {
-    match provided_queue_id {
-        Some(q) if q > 0 => canonical_build_queue_id(q),
-        Some(_) => QUEUE_SOLO_DUO,
-        None => match lcu_queue_id {
-            Some(q) if q > 0 => canonical_build_queue_id(q),
-            _ => QUEUE_SOLO_DUO,
-        },
-    }
-}
 
 /// Connects to LCU, saves the selected rune page index, and injects it immediately.
 pub async fn apply_manual_rune_page(
@@ -205,46 +188,4 @@ pub fn complete_language_onboarding_service(locale: AppLocale) -> Result<AppSett
     });
 
     Ok(updated)
-}
-
-/// Marks Flash key onboarding completed, persists `flashKey` to `UserSettings.ini`, and syncs preferences.
-pub fn complete_flash_onboarding_service(
-    flash_key: FlashKeyPreference,
-) -> Result<AppSettings, String> {
-    let updated = storage::update_global_settings(|s| {
-        s.general.flash_onboarding_completed = true;
-        s.automation.flash_key = flash_key;
-    })?;
-
-    set_user_preferences(updated.automation.clone());
-    Ok(updated)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_normalize_item_build_queue_id_respects_active_queue() {
-        assert_eq!(normalize_item_build_queue_id(Some(450), None), 450);
-        assert_eq!(normalize_item_build_queue_id(Some(2400), None), 2400);
-        assert_eq!(normalize_item_build_queue_id(Some(480), None), 480);
-        assert_eq!(normalize_item_build_queue_id(Some(700), None), 420);
-        assert_eq!(normalize_item_build_queue_id(Some(440), None), 440);
-        assert_eq!(normalize_item_build_queue_id(Some(-1), None), 420);
-        assert_eq!(normalize_item_build_queue_id(None, Some(450)), 450);
-        assert_eq!(normalize_item_build_queue_id(None, Some(480)), 480);
-        assert_eq!(normalize_item_build_queue_id(None, Some(700)), 420);
-        assert_eq!(normalize_item_build_queue_id(None, Some(2400)), 2400);
-        assert_eq!(normalize_item_build_queue_id(None, None), 420);
-    }
-
-    #[test]
-    fn test_complete_flash_onboarding_service_persists_flash_key_and_flag() {
-        let updated = complete_flash_onboarding_service(FlashKeyPreference::F).unwrap();
-        assert!(updated.general.flash_onboarding_completed);
-        assert_eq!(updated.automation.flash_key, FlashKeyPreference::F);
-        assert_eq!(get_user_preferences().flash_key, FlashKeyPreference::F);
-        set_user_preferences(UserPreferences::default());
-    }
 }

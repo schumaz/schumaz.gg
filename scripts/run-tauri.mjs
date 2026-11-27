@@ -2,10 +2,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  DEFAULT_AUTO_THRESHOLD_GB,
-  DEFAULT_MAX_SIZE,
-  runCargoSweep,
+  DEFAULT_KEEP_INCREMENTAL,
+  pruneIncrementalOrphans,
 } from "./sweep-cargo-target.mjs";
+import { withMainBinaryArg } from "./tauri-args.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,21 +16,19 @@ const isDevCommand = tauriArgs[0] === "dev";
 
 if (isDevCommand && process.env.SCHUMAZ_SKIP_CARGO_SWEEP !== "1") {
   try {
-    runCargoSweep({
+    pruneIncrementalOrphans({
       rootDir: ROOT_DIR,
-      maxSize: DEFAULT_MAX_SIZE,
-      ifOverGb: DEFAULT_AUTO_THRESHOLD_GB,
-      allowMissing: true,
+      keepPerCrate: DEFAULT_KEEP_INCREMENTAL,
       quiet: true,
     });
   } catch (error) {
-    // Never block local Tauri startup if cleanup fails unexpectedly.
-    console.warn(`[cargo-sweep] Auto-cleanup warning: ${error.message}`);
+    // Never block local Tauri startup if incremental cleanup fails unexpectedly.
+    console.warn(`[cargo-prune] Auto-cleanup warning: ${error.message}`);
   }
 }
 
 const tauriCliPath = path.join(ROOT_DIR, "node_modules", "@tauri-apps", "cli", "tauri.js");
-const result = spawnSync(process.execPath, [tauriCliPath, ...tauriArgs], {
+const result = spawnSync(process.execPath, [tauriCliPath, ...withMainBinaryArg(tauriArgs)], {
   cwd: ROOT_DIR,
   stdio: "inherit",
 });

@@ -52,6 +52,7 @@ export function checkLineLimits({
   baseline = LEGACY_BASELINE,
 } = {}) {
   const rustDir = path.join(rootDir, "src-tauri", "src");
+  const rustCratesDir = path.join(rootDir, "src-tauri", "crates");
   const frontendDir = path.join(rootDir, "src");
 
   if (!existsSync(rustDir)) {
@@ -61,7 +62,12 @@ export function checkLineLimits({
     throw new Error(`Frontend source directory not found: ${frontendDir}`);
   }
 
-  const rustFiles = walkFiles(rustDir, (file) => file.endsWith(".rs"));
+  const rustFiles = [
+    ...walkFiles(rustDir, (file) => file.endsWith(".rs")),
+    ...(existsSync(rustCratesDir)
+      ? walkFiles(rustCratesDir, (file) => file.endsWith(".rs"))
+      : []),
+  ];
   const tsFiles = walkFiles(
     frontendDir,
     (file) => file.endsWith(".ts") || file.endsWith(".tsx")

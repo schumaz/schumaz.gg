@@ -1,14 +1,22 @@
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
+use crate::app_bootstrap;
 use crate::build_provider;
 use crate::lcu_connector;
 use crate::logging;
-use crate::logging::diagnostics::{DiagnosticInput, build_diagnostic_summary, detect_os_version};
+use crate::logging::diagnostics::{DiagnosticInput, build_diagnostic_summary};
 use crate::models::DiagnosticSummary;
 use crate::storage::{self, AppPaths, GraphicsState};
 use crate::updater;
 use crate::ws_listener;
+
+/// Formats the host OS version using `sysinfo` without exposing user account information.
+fn detect_os_version() -> String {
+    sysinfo::System::long_os_version()
+        .or_else(sysinfo::System::os_version)
+        .unwrap_or_else(|| std::env::consts::OS.to_string())
+}
 
 /// Builds a sanitized local diagnostic summary without exposing credentials, paths, or PII.
 #[tauri::command]
@@ -66,7 +74,7 @@ pub async fn open_logs_folder(app_handle: AppHandle) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let logs_dir = match storage::global_paths() {
             Some(paths) => paths.logs_dir.clone(),
-            None => AppPaths::resolve_from_app(&app_handle)?.logs_dir,
+            None => app_bootstrap::resolve_app_paths(&app_handle)?.logs_dir,
         };
         std::fs::create_dir_all(&logs_dir)
             .map_err(|e| format!("Failed to ensure logs directory: {e}"))?;

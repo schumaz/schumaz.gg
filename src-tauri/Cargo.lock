@@ -3789,19 +3789,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "schumaz-domain"
+version = "0.5.1"
+dependencies = [
+ "bytes",
+ "http",
+ "lz4_flex",
+ "reqwest",
+ "rmp-serde",
+ "schumaz-models",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "schumaz-models"
+version = "0.5.1"
+dependencies = [
+ "heck 0.5.0",
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-serde",
+ "specta-typescript",
+ "specta-util",
+]
+
+[[package]]
 name = "schumazgg"
 version = "0.5.1"
 dependencies = [
  "bytes",
+ "embed-resource",
  "http",
  "http-body-util",
  "hyper-rustls",
  "hyper-util",
  "irelia",
- "lz4_flex",
  "reqwest",
- "rmp-serde",
  "rustls",
+ "schumaz-domain",
+ "schumaz-models",
  "serde",
  "serde_json",
  "specta",

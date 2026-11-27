@@ -68,12 +68,14 @@ jobs:
           workspaces: "src-tauri"
 
       - name: Run cargo clippy (default and portable)
+        env:
+          CARGO_BUILD_WARNINGS: deny
         run: |
           Push-Location src-tauri
           try {
-            cargo clippy --all-targets --message-format=short -- -D warnings
+            cargo clippy --all-targets --message-format=short
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            cargo clippy --all-targets --features portable --message-format=short -- -D warnings
+            cargo clippy -p schumazgg --all-targets --features portable --message-format=short
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {
             Pop-Location
