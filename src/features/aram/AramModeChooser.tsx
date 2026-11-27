@@ -6,13 +6,21 @@ import { LEAGUE_ARAM_ICON_URL, LEAGUE_ARAM_MAYHEM_ICON_URL } from "./aramHelpers
 interface AramModeChooserProps {
   savedMode: AramMode | null;
   onSelectMode: (mode: AramMode) => void;
+  motionClassName?: string;
 }
 
-export function AramModeChooser({ savedMode, onSelectMode }: AramModeChooserProps) {
+export function AramModeChooser({
+  savedMode,
+  onSelectMode,
+  motionClassName,
+}: AramModeChooserProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="aram-chooser-wrapper" data-testid="aram-mode-chooser">
+    <div
+      className={`aram-chooser-wrapper${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid="aram-mode-chooser"
+    >
       <div className="aram-chooser-header">
         <h2 className="aram-chooser-title">{t("aram.chooserTitle")}</h2>
         <p className="aram-chooser-subtitle">{t("aram.chooserSubtitle")}</p>

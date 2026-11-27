@@ -17,7 +17,7 @@
 ## 3. Paleta Dark Amethyst & Animações
 - Base `#0d0e12`, cards `#13141a`, hover `#1a1b24` / `#151620`. A barra inferior `.floating-dock` usa a paleta Dark Amethyst estática e opaca centralizada em `src/styles/navigation-dock.css` (tonalidade idêntica em todas as abas, inclusive no Perfil).
 - Acento `#7c3aed` (`--accent-primary`), hover `#a78bfa`, sutil `rgba(124, 58, 237, 0.16)`, borda `rgba(124, 58, 237, 0.45)`.
-- `.tabs-viewport`: crossfade entre abas (`260ms cubic-bezier(0.16, 1, 0.3, 1)` entrada, `220ms ease-out` saída) respeitando `@media (prefers-reduced-motion: reduce)`.
+- `.tabs-viewport`: transições direcionais horizontais via `@keyframes` exclusivos do compositor (`opacity` e `transform: translate3d`) em `src/styles/page-transitions.css` (`240ms cubic-bezier(0.22, 1, 0.36, 1)` entrada, `170ms cubic-bezier(0.4, 0, 1, 1)` saída), sincronizadas com a pílula deslizante da `NavigationDock`, dissolve suave do wallpaper do Perfil (`240ms` / `180ms`) e transições hierárquicas de subviews internas (`210ms` / `190ms` / `175ms`). Em modo sem aceleração de GPU (`.gpu-effects-disabled`), degrada para fades curtos apenas de opacidade (`140ms`); em modo Zero-GPU (`.app-minimized`) ou `@media (prefers-reduced-motion: reduce)`, todas as transições e animações são desativadas.
 
 ## 4. Tom de Voz & Regra de Ouro
 - Copywriting curto, técnico e impessoal (`"Aguardando cliente do LoL"`, `"D"`/`"F"`). Nunca mencionar executáveis (`LeagueClientUx.exe`) ou fontes externas (`OP.GG`) na UI.

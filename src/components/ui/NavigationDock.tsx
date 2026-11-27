@@ -1,6 +1,7 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
 import type { ActiveTab } from "../../types";
 import { useTranslation } from "../../i18n";
+import { useDockPillIndicator } from "./useDockPillIndicator";
 
 export const ARAM_DOCK_ICON_URL =
   "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/content/src/leagueclient/gamemodeassets/aram/img/game-select-icon-active.png";
@@ -22,10 +23,27 @@ export const NavigationDock = memo(function NavigationDock({
   onAramClick,
   aramIconSrc = ARAM_DOCK_ICON_URL,
 }: NavigationDockProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const navRef = useRef<HTMLElement | null>(null);
+  const pill = useDockPillIndicator(navRef, activeTab, locale);
 
   return (
-    <nav className="floating-dock" aria-label={t("nav.ariaLabel")}>
+    <nav
+      ref={navRef}
+      className={`floating-dock${pill.visible ? " has-pill-indicator" : ""}`}
+      aria-label={t("nav.ariaLabel")}
+    >
+      {pill.visible && (
+        <span
+          className={`dock-active-pill${pill.animated ? " is-animated" : ""}`}
+          style={{
+            width: `${pill.width}px`,
+            height: `${pill.height}px`,
+            transform: `translate3d(${pill.left}px, ${pill.top}px, 0)`,
+          }}
+          aria-hidden="true"
+        />
+      )}
 
       <button
         type="button"

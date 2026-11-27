@@ -1,0 +1,263 @@
+/* ============================================================
+   Page & Subview Transitions (Compositor-Only, Performance-First)
+   ============================================================ */
+
+:root {
+  --motion-ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-pill: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --motion-tab-enter-duration: 240ms;
+  --motion-tab-exit-duration: 170ms;
+  --motion-subview-enter-duration: 210ms;
+  --motion-subview-back-duration: 190ms;
+  --motion-panel-swap-duration: 175ms;
+  --motion-drawer-reveal-duration: 185ms;
+  --motion-wallpaper-enter-duration: 240ms;
+  --motion-wallpaper-exit-duration: 180ms;
+  --motion-soft-fade-duration: 140ms;
+}
+
+@keyframes tabEnterForward {
+  0% {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes tabEnterBackward {
+  0% {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes tabExitForward {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0) scale(0.988);
+  }
+}
+
+@keyframes tabExitBackward {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0) scale(0.988);
+  }
+}
+
+@keyframes tabFadeEnter {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes tabFadeExit {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes subviewDrillIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes subviewDrillOut {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(1.006);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes subviewSwapForward {
+  0% {
+    opacity: 0;
+    transform: translate3d(12px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes subviewSwapBackward {
+  0% {
+    opacity: 0;
+    transform: translate3d(-12px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes drawerRevealIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Top-Level Tab Directional Transitions */
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="profile"] > [data-testid="view-profile"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="runes"] > [data-testid="view-runes"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="ranked"] > [data-testid="view-ranked"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="arena"] > [data-testid="view-arena"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="aram"] > [data-testid="view-aram"].active-tab,
+.tabs-viewport[data-transition-dir="forward"][data-entering-tab="settings"] > [data-testid="view-settings"].active-tab {
+  will-change: transform, opacity;
+  animation: tabEnterForward var(--motion-tab-enter-duration) var(--motion-ease-enter) both;
+}
+
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="profile"] > [data-testid="view-profile"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="runes"] > [data-testid="view-runes"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="ranked"] > [data-testid="view-ranked"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="arena"] > [data-testid="view-arena"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="aram"] > [data-testid="view-aram"].active-tab,
+.tabs-viewport[data-transition-dir="backward"][data-entering-tab="settings"] > [data-testid="view-settings"].active-tab {
+  will-change: transform, opacity;
+  animation: tabEnterBackward var(--motion-tab-enter-duration) var(--motion-ease-enter) both;
+}
+
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="profile"] > [data-testid="view-profile"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="runes"] > [data-testid="view-runes"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="ranked"] > [data-testid="view-ranked"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="arena"] > [data-testid="view-arena"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="aram"] > [data-testid="view-aram"].inactive-tab,
+.tabs-viewport[data-transition-dir="forward"][data-exiting-tab="settings"] > [data-testid="view-settings"].inactive-tab {
+  visibility: visible;
+  pointer-events: none;
+  z-index: 1;
+  will-change: transform, opacity;
+  animation: tabExitForward var(--motion-tab-exit-duration) var(--motion-ease-exit) both;
+}
+
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="profile"] > [data-testid="view-profile"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="runes"] > [data-testid="view-runes"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="ranked"] > [data-testid="view-ranked"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="arena"] > [data-testid="view-arena"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="aram"] > [data-testid="view-aram"].inactive-tab,
+.tabs-viewport[data-transition-dir="backward"][data-exiting-tab="settings"] > [data-testid="view-settings"].inactive-tab {
+  visibility: visible;
+  pointer-events: none;
+  z-index: 1;
+  will-change: transform, opacity;
+  animation: tabExitBackward var(--motion-tab-exit-duration) var(--motion-ease-exit) both;
+}
+
+/* Hierarchical Intra-Tab Subviews & State Reveals */
+.subview-enter-forward {
+  will-change: transform, opacity;
+  animation: subviewDrillIn var(--motion-subview-enter-duration) var(--motion-ease-enter) both;
+}
+
+.subview-enter-back {
+  will-change: transform, opacity;
+  animation: subviewDrillOut var(--motion-subview-back-duration) var(--motion-ease-enter) both;
+}
+
+.subview-enter-swap-forward {
+  will-change: transform, opacity;
+  animation: subviewSwapForward var(--motion-panel-swap-duration) var(--motion-ease-enter) both;
+}
+
+.subview-enter-swap-back {
+  will-change: transform, opacity;
+  animation: subviewSwapBackward var(--motion-panel-swap-duration) var(--motion-ease-enter) both;
+}
+
+.aram-mayhem-panel-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.profile-layout {
+  animation: subviewDrillIn var(--motion-subview-enter-duration) var(--motion-ease-enter) both;
+}
+
+.match-scoreboard-drawer {
+  animation: drawerRevealIn var(--motion-drawer-reveal-duration) var(--motion-ease-enter) both;
+}
+
+/* Mode: GPU Effects Disabled — lightweight opacity-only fades without transform hints */
+.gpu-effects-disabled .tabs-viewport[data-transition-dir][data-entering-tab] > .tab-content.active-tab {
+  will-change: auto;
+  animation: tabFadeEnter var(--motion-soft-fade-duration) ease-out both;
+}
+
+.gpu-effects-disabled .tabs-viewport[data-transition-dir][data-exiting-tab] > .tab-content.inactive-tab {
+  will-change: auto;
+  animation: tabFadeExit var(--motion-soft-fade-duration) ease-out both;
+}
+
+.gpu-effects-disabled .subview-enter-forward,
+.gpu-effects-disabled .subview-enter-back,
+.gpu-effects-disabled .subview-enter-swap-forward,
+.gpu-effects-disabled .subview-enter-swap-back,
+.gpu-effects-disabled .profile-layout,
+.gpu-effects-disabled .match-scoreboard-drawer {
+  will-change: auto;
+  animation: tabFadeEnter var(--motion-soft-fade-duration) ease-out both;
+}
+
+.gpu-effects-disabled .profile-wallpaper-backdrop,
+.gpu-effects-disabled .profile-wallpaper-backdrop.is-hidden {
+  transition-duration: var(--motion-soft-fade-duration);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs-viewport[data-transition-dir] > .tab-content,
+  .subview-enter-forward,
+  .subview-enter-back,
+  .subview-enter-swap-forward,
+  .subview-enter-swap-back,
+  .profile-layout,
+  .match-scoreboard-drawer,
+  .profile-wallpaper-backdrop,
+  .profile-wallpaper-backdrop.is-hidden {
+    animation: none !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+}

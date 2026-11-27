@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
+import { useSubviewTransition } from "../../hooks/useSubviewTransition";
 import { computeOrderedSpells } from "../../utils/spells";
 import {
   AramMayhemPanel,
@@ -137,6 +138,20 @@ export const AramTab = memo(function AramTab({
       : t("aram.classicDetailStatusFallback")
     : t("aram.classicDetailStatusFallback");
 
+  const subviewKey = showChooser
+    ? "chooser"
+    : activeMode === "aram"
+      ? selectedClassicChampion
+        ? `classic-detail:${selectedClassicChampion.id}`
+        : "classic-list"
+      : "mayhem";
+  const subviewRank = showChooser
+    ? 0
+    : activeMode === "aram" && selectedClassicChampion
+      ? 2
+      : 1;
+  const subviewMotionClass = useSubviewTransition(subviewKey, subviewRank, isActive, "depth");
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -144,7 +159,11 @@ export const AramTab = memo(function AramTab({
       aria-hidden={!isActive}
     >
       {showChooser ? (
-        <AramModeChooser savedMode={savedMode} onSelectMode={onSelectMode} />
+        <AramModeChooser
+          savedMode={savedMode}
+          onSelectMode={onSelectMode}
+          motionClassName={subviewMotionClass}
+        />
       ) : activeMode === "aram" ? (
         selectedClassicChampion ? (
           <AramClassicChampionDetail
@@ -168,6 +187,7 @@ export const AramTab = memo(function AramTab({
               if (classicBuildIndex === undefined) setLocalClassicBuildIdx(idx);
               onSelectClassicBuild?.(idx);
             }}
+            motionClassName={subviewMotionClass}
           />
         ) : (
           <AramClassicView
@@ -179,6 +199,7 @@ export const AramTab = memo(function AramTab({
             onSearchChange={setAramSearch}
             onSelectChampion={onSelectClassicChampion}
             onRetryTierList={onRetryTierList}
+            motionClassName={subviewMotionClass}
           />
         )
       ) : (
@@ -214,6 +235,8 @@ export const AramTab = memo(function AramTab({
             onSelectMayhemBuild?.(idx);
           }}
           onRetryMayhemBuild={onRetryMayhemBuild}
+          isTabActive={isActive}
+          motionClassName={subviewMotionClass}
         />
       )}
     </div>

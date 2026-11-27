@@ -191,6 +191,7 @@ function App({ forceStartupLoading }: AppProps = {}) {
         <AppTabsViewport
           activeTab={activeTab}
           isBooting={boot.isBooting}
+          disableTabTransitions={boot.isBooting || graphics.isZeroGpu || prefersReducedMotion}
           prefs={prefs}
           lcu={lcu}
           playerProfile={playerProfile}

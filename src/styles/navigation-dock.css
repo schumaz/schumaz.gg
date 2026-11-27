@@ -130,3 +130,41 @@
 .dock-btn.active .dock-icon-img {
   filter: none;
 }
+
+.dock-active-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 9999px;
+  background-color: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 14px rgba(124, 58, 237, 0.3);
+}
+
+.dock-active-pill.is-animated {
+  will-change: transform;
+  transition:
+    transform 240ms var(--motion-ease-pill, cubic-bezier(0.22, 1, 0.36, 1)),
+    width 240ms var(--motion-ease-pill, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.floating-dock.has-pill-indicator .dock-btn.active {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.app-minimized .dock-active-pill,
+.gpu-effects-disabled .dock-active-pill {
+  transition: none !important;
+  will-change: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-active-pill {
+    transition: none !important;
+    will-change: auto !important;
+  }
+}

@@ -22,6 +22,7 @@ interface ArenaChampionDetailProps {
   onRetryBuild: () => void;
   onSelectBuild: (index: number) => void;
   onSelectSynergyChampion: (championId: number) => void;
+  motionClassName?: string;
 }
 
 /**
@@ -39,11 +40,15 @@ export function ArenaChampionDetail({
   onRetryBuild,
   onSelectBuild,
   onSelectSynergyChampion,
+  motionClassName,
 }: ArenaChampionDetailProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="arena-detail-layout" data-testid="arena-champion-detail">
+    <div
+      className={`arena-detail-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid="arena-champion-detail"
+    >
       {championBuild ? (
         <div className="dashboard-layout">
           <FiltersHeader

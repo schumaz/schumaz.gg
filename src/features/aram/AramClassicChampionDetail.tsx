@@ -30,6 +30,7 @@ interface AramClassicChampionDetailProps {
   onRetryBuild: () => void;
   onSelectRunePage: (pageIndex: number) => void;
   onSelectBuild: (index: number) => void;
+  motionClassName?: string;
 }
 
 /**
@@ -51,11 +52,15 @@ export function AramClassicChampionDetail({
   onRetryBuild,
   onSelectRunePage,
   onSelectBuild,
+  motionClassName,
 }: AramClassicChampionDetailProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="aram-detail-layout" data-testid="aram-classic-champion-detail">
+    <div
+      className={`aram-detail-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid="aram-classic-champion-detail"
+    >
       {championBuild ? (
         <div className="dashboard-layout">
           <FiltersHeader

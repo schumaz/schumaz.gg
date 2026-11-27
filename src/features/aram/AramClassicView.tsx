@@ -14,6 +14,7 @@ interface AramClassicViewProps {
   onSearchChange: (val: string) => void;
   onSelectChampion?: (champ: AramChampionRank) => void;
   onRetryTierList: (mode: AramMode) => void;
+  motionClassName?: string;
 }
 
 export function AramClassicView({
@@ -25,11 +26,15 @@ export function AramClassicView({
   onSearchChange,
   onSelectChampion,
   onRetryTierList,
+  motionClassName,
 }: AramClassicViewProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="aram-layout" data-testid="aram-classic-view">
+    <div
+      className={`aram-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid="aram-classic-view"
+    >
       <div className="card aram-toolbar-card">
         <LoadingBar
           active={isLoadingList && currentChampions.length > 0}

@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useSubviewTransition } from "../../hooks/useSubviewTransition";
 import {
   ChampionBuild,
   ChampSelectedPayload,
@@ -64,6 +65,12 @@ export const ChampSelectTab = memo(function ChampSelectTab({
   const isSpellsReadOnly =
     isSpellsLockedPhase(gameflowPhase, champSelect?.is_lobby_preselect) ||
     build?.supports_spells === false;
+  const subviewMotionClass = useSubviewTransition(
+    build ? "dashboard" : "idle",
+    build ? 1 : 0,
+    isActive,
+    "depth"
+  );
 
   return (
     <div
@@ -72,7 +79,7 @@ export const ChampSelectTab = memo(function ChampSelectTab({
       aria-hidden={!isActive}
     >
       {build ? (
-        <div className="dashboard-layout">
+        <div className={`dashboard-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}>
           <FiltersHeader
             build={build}
             champSelect={champSelect}
@@ -127,6 +134,7 @@ export const ChampSelectTab = memo(function ChampSelectTab({
           errorMsg={errorMsg}
           champSelect={champSelect}
           loading={loading}
+          motionClassName={subviewMotionClass}
         />
       )}
     </div>

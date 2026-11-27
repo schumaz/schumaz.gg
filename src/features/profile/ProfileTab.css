@@ -21,11 +21,19 @@
   overflow: hidden;
   contain: strict;
   isolation: isolate;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--motion-wallpaper-enter-duration, 240ms) var(--motion-ease-enter, cubic-bezier(0.22, 1, 0.36, 1)),
+    visibility 0ms linear;
 }
 
 .profile-wallpaper-backdrop.is-hidden {
   opacity: 0;
   visibility: hidden;
+  transition:
+    opacity var(--motion-wallpaper-exit-duration, 180ms) var(--motion-ease-exit, cubic-bezier(0.4, 0, 1, 1)),
+    visibility 0ms linear var(--motion-wallpaper-exit-duration, 180ms);
 }
 
 .profile-wallpaper-img {

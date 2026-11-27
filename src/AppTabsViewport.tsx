@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import type { ActiveTab } from "./types";
 import type { useAppUpdater } from "./hooks/useAppUpdater";
+import { useTabTransition } from "./hooks/useTabTransition";
 import { SettingsTab, type usePreferences } from "./features/settings";
 import { ProfileTab, type usePlayerProfile } from "./features/profile";
 import { ChampSelectTab, type useLcuEvents } from "./features/champ-select";
@@ -11,6 +12,7 @@ import { RankedTab, type RankedChampionShortcut, type useRanked } from "./featur
 export interface AppTabsViewportProps {
   activeTab: ActiveTab;
   isBooting: boolean;
+  disableTabTransitions?: boolean;
   prefs: ReturnType<typeof usePreferences>;
   lcu: ReturnType<typeof useLcuEvents>;
   playerProfile: ReturnType<typeof usePlayerProfile>;
@@ -25,6 +27,7 @@ export interface AppTabsViewportProps {
 export function AppTabsViewport({
   activeTab,
   isBooting,
+  disableTabTransitions = false,
   prefs,
   lcu,
   playerProfile,
@@ -36,21 +39,9 @@ export function AppTabsViewport({
   onSelectTab,
 }: AppTabsViewportProps) {
   const { locale, preferences, navigationState, updateNavigationState } = prefs;
-  const prevTabRef = useRef<ActiveTab>(activeTab);
-  const [fadingTab, setFadingTab] = useState<ActiveTab | null>(null);
-
-  useEffect(() => {
-    const prevTab = prevTabRef.current;
-    if (prevTab === activeTab) {
-      return;
-    }
-    prevTabRef.current = activeTab;
-    setFadingTab(prevTab);
-    const timer = window.setTimeout(() => {
-      setFadingTab((current) => (current === prevTab ? null : current));
-    }, 240);
-    return () => window.clearTimeout(timer);
-  }, [activeTab]);
+  const tabTransition = useTabTransition(activeTab, disableTabTransitions);
+  const hasActiveTransition =
+    tabTransition.enteringTab !== null || tabTransition.exitingTab !== null;
 
   const openChampionShortcut = ranked.openChampionShortcut;
   const { checkForUpdates, installAndRestart, openPortableRelease } = updater;
@@ -88,7 +79,9 @@ export function AppTabsViewport({
   return (
     <div
       className="tabs-viewport"
-      data-fading-tab={fadingTab ?? undefined}
+      data-entering-tab={tabTransition.enteringTab ?? undefined}
+      data-exiting-tab={tabTransition.exitingTab ?? undefined}
+      data-transition-dir={hasActiveTransition ? tabTransition.direction : undefined}
       aria-hidden={isBooting || undefined}
     >
       <ProfileTab

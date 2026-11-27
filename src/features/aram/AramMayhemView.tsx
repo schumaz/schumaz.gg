@@ -1,4 +1,5 @@
 import { useTranslation } from "../../i18n";
+import { useSubviewTransition } from "../../hooks/useSubviewTransition";
 import { AramAugmentEntry, AramChampionRank, AramMode, ChampionBuild, FlashKeyPreference, SpellMetadata } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 import { ListSkeleton, LoadingDots } from "../../components/ui/LoadingIndicators";
@@ -37,6 +38,8 @@ interface AramMayhemViewProps {
   mayhemBuildIndex?: number;
   onSelectMayhemBuild?: (index: number) => void;
   onRetryMayhemBuild?: () => void;
+  isTabActive?: boolean;
+  motionClassName?: string;
 }
 
 export function AramMayhemView({
@@ -46,11 +49,21 @@ export function AramMayhemView({
   augmentsError, currentAugments, onRetryAugments, activePanel = "augments", onSelectPanel,
   mayhemBuild = null, mayhemBuildLoading = false, mayhemBuildError = null,
   mayhemOrderedSpells = [], flashKey, mayhemBuildIndex = 0, onSelectMayhemBuild, onRetryMayhemBuild,
+  isTabActive = true, motionClassName,
 }: AramMayhemViewProps) {
   const { t } = useTranslation();
+  const panelMotionClass = useSubviewTransition(
+    activePanel,
+    activePanel === "build" ? 1 : 0,
+    isTabActive && Boolean(selectedChampionKey),
+    "horizontal"
+  );
 
   return (
-    <div className="aram-layout" data-testid="aram-mayhem-view">
+    <div
+      className={`aram-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid="aram-mayhem-view"
+    >
       <div className="aram-mayhem-grid">
         <section className="card aram-mayhem-col aram-mayhem-champions-col">
           <div className="aram-panel-header">
@@ -173,30 +186,36 @@ export function AramMayhemView({
                 </div>
               </div>
 
-              {activePanel === "augments" ? (
-                <AramMayhemAugmentsPanel
-                  rarityFilter={rarityFilter}
-                  onSelectRarityFilter={onSelectRarityFilter}
-                  augmentSearch={augmentSearch}
-                  onAugmentSearchChange={onAugmentSearchChange}
-                  augmentsLoading={augmentsLoading}
-                  augmentsError={augmentsError}
-                  currentAugments={currentAugments}
-                  onRetryAugments={onRetryAugments}
-                />
-              ) : (
-                <AramMayhemBuildPanel
-                  championName={selectedChampion?.name ?? selectedChampionKey}
-                  build={mayhemBuild}
-                  loading={mayhemBuildLoading}
-                  error={mayhemBuildError}
-                  orderedSpells={mayhemOrderedSpells}
-                  flashKey={flashKey}
-                  selectedBuildIndex={mayhemBuildIndex}
-                  onSelectBuild={(idx) => onSelectMayhemBuild?.(idx)}
-                  onRetryBuild={() => onRetryMayhemBuild?.()}
-                />
-              )}
+              <div
+                className={`aram-mayhem-panel-stage${
+                  panelMotionClass ? ` ${panelMotionClass}` : ""
+                }`}
+              >
+                {activePanel === "augments" ? (
+                  <AramMayhemAugmentsPanel
+                    rarityFilter={rarityFilter}
+                    onSelectRarityFilter={onSelectRarityFilter}
+                    augmentSearch={augmentSearch}
+                    onAugmentSearchChange={onAugmentSearchChange}
+                    augmentsLoading={augmentsLoading}
+                    augmentsError={augmentsError}
+                    currentAugments={currentAugments}
+                    onRetryAugments={onRetryAugments}
+                  />
+                ) : (
+                  <AramMayhemBuildPanel
+                    championName={selectedChampion?.name ?? selectedChampionKey}
+                    build={mayhemBuild}
+                    loading={mayhemBuildLoading}
+                    error={mayhemBuildError}
+                    orderedSpells={mayhemOrderedSpells}
+                    flashKey={flashKey}
+                    selectedBuildIndex={mayhemBuildIndex}
+                    onSelectBuild={(idx) => onSelectMayhemBuild?.(idx)}
+                    onRetryBuild={() => onRetryMayhemBuild?.()}
+                  />
+                )}
+              </div>
             </>
           )}
         </section>

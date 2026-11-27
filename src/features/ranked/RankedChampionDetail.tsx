@@ -31,6 +31,7 @@ interface RankedChampionDetailProps {
   onSelectRunePage: (pageIndex: number) => void;
   onSelectBuild: (index: number) => void;
   onSelectMatchupChampion?: (championId: number) => void;
+  motionClassName?: string;
 }
 
 export function RankedChampionDetail({
@@ -49,11 +50,15 @@ export function RankedChampionDetail({
   onSelectRunePage,
   onSelectBuild,
   onSelectMatchupChampion,
+  motionClassName,
 }: RankedChampionDetailProps) {
   const { t } = useTranslation();
 
   return (
-    <div className="ranked-detail-layout" data-testid="ranked-champion-detail">
+    <div
+      className={`ranked-detail-layout${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid="ranked-champion-detail"
+    >
       {championBuild ? (
         <div className="dashboard-layout">
           <FiltersHeader

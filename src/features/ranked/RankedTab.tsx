@@ -1,6 +1,7 @@
 import "./RankedTab.css";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
+import { useSubviewTransition } from "../../hooks/useSubviewTransition";
 import {
   ChampionBuild,
   FlashKeyPreference,
@@ -131,6 +132,13 @@ export const RankedTab = memo(function RankedTab({
         : t("ranked.detailStatusFallback")
     : t("ranked.detailStatusFallback");
 
+  const subviewMotionClass = useSubviewTransition(
+    selectedChampion ? `detail:${selectedChampion.id}` : "list",
+    selectedChampion ? 1 : 0,
+    isActive,
+    "depth"
+  );
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -154,9 +162,13 @@ export const RankedTab = memo(function RankedTab({
           onSelectRunePage={onSelectRunePage}
           onSelectBuild={onSelectBuild}
           onSelectMatchupChampion={onSelectMatchupChampion}
+          motionClassName={subviewMotionClass}
         />
       ) : (
-        <div className="ranked-layout" data-testid="ranked-tierlist-view">
+        <div
+          className={`ranked-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}
+          data-testid="ranked-tierlist-view"
+        >
           <RankedToolbarCard
             filters={filters}
             tierData={tierData}

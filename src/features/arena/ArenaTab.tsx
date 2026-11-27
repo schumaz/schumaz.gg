@@ -1,6 +1,7 @@
 import "./ArenaTab.css";
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
+import { useSubviewTransition } from "../../hooks/useSubviewTransition";
 import type {
   ArenaChampionEntry,
   ArenaTierListResponse,
@@ -96,6 +97,13 @@ export const ArenaTab = memo(function ArenaTab({
         })
       : t("arenaTab.detailStatusFallback");
 
+  const subviewMotionClass = useSubviewTransition(
+    selectedChampion ? `detail:${selectedChampion.id}` : "list",
+    selectedChampion ? 1 : 0,
+    isActive,
+    "depth"
+  );
+
   return (
     <div
       className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
@@ -115,9 +123,13 @@ export const ArenaTab = memo(function ArenaTab({
           onRetryBuild={onRetryBuild}
           onSelectBuild={onSelectBuild}
           onSelectSynergyChampion={onSelectSynergyChampion}
+          motionClassName={subviewMotionClass}
         />
       ) : (
-        <div className="arena-layout" data-testid="arena-tierlist-view">
+        <div
+          className={`arena-layout${subviewMotionClass ? ` ${subviewMotionClass}` : ""}`}
+          data-testid="arena-tierlist-view"
+        >
           <ArenaToolbarCard
             filters={filters}
             tierData={tierData}

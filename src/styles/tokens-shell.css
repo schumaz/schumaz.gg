@@ -380,7 +380,7 @@ img {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transform-origin: center top;
+  transform-origin: center center;
   backface-visibility: hidden;
 }
 
@@ -390,22 +390,14 @@ img {
   pointer-events: auto;
   visibility: visible;
   z-index: 2;
-  transition: 
-    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
-    visibility 0ms linear;
 }
 
 .tab-content.inactive-tab {
   opacity: 0;
-  transform: scale(0.985) translateY(6px);
+  transform: none;
   pointer-events: none;
   visibility: hidden;
   z-index: 1;
-  transition: 
-    opacity 220ms ease-out,
-    transform 220ms ease-out,
-    visibility 0ms linear 220ms;
 }
 
 /* Pause animations, backdrop passes, and compositor hints in inactive tabs */
@@ -416,8 +408,10 @@ img {
   will-change: auto !important;
 }
 
-.tab-content.inactive-tab,
-.tab-content.inactive-tab * {
+.tabs-viewport:not([data-exiting-tab="profile"]) > [data-testid="view-profile"].inactive-tab,
+.tabs-viewport:not([data-exiting-tab="profile"]) > [data-testid="view-profile"].inactive-tab *,
+.tab-content.inactive-tab:not([data-testid="view-profile"]),
+.tab-content.inactive-tab:not([data-testid="view-profile"]) * {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -428,13 +422,13 @@ img {
   display: none !important;
 }
 
-/* Park non-fading inactive tabs so Blink/Skia skip layout, paint, and compositor layers */
-.tabs-viewport:not([data-fading-tab="profile"]) > [data-testid="view-profile"].inactive-tab,
-.tabs-viewport:not([data-fading-tab="runes"]) > [data-testid="view-runes"].inactive-tab,
-.tabs-viewport:not([data-fading-tab="ranked"]) > [data-testid="view-ranked"].inactive-tab,
-.tabs-viewport:not([data-fading-tab="arena"]) > [data-testid="view-arena"].inactive-tab,
-.tabs-viewport:not([data-fading-tab="aram"]) > [data-testid="view-aram"].inactive-tab,
-.tabs-viewport:not([data-fading-tab="settings"]) > [data-testid="view-settings"].inactive-tab {
+/* Park non-exiting inactive tabs so Blink/Skia skip layout, paint, and compositor layers */
+.tabs-viewport:not([data-exiting-tab="profile"]) > [data-testid="view-profile"].inactive-tab,
+.tabs-viewport:not([data-exiting-tab="runes"]) > [data-testid="view-runes"].inactive-tab,
+.tabs-viewport:not([data-exiting-tab="ranked"]) > [data-testid="view-ranked"].inactive-tab,
+.tabs-viewport:not([data-exiting-tab="arena"]) > [data-testid="view-arena"].inactive-tab,
+.tabs-viewport:not([data-exiting-tab="aram"]) > [data-testid="view-aram"].inactive-tab,
+.tabs-viewport:not([data-exiting-tab="settings"]) > [data-testid="view-settings"].inactive-tab {
   content-visibility: hidden;
   contain-intrinsic-block-size: 600px;
   transform: none;

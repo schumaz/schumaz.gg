@@ -11,6 +11,7 @@ interface IdleIslandProps {
   mode?: "waiting" | "loading";
   errorMsg?: string | null;
   testId?: string;
+  motionClassName?: string;
 }
 
 export function IdleIsland({
@@ -21,13 +22,17 @@ export function IdleIsland({
   mode = "waiting",
   errorMsg,
   testId,
+  motionClassName,
 }: IdleIslandProps) {
   const { t } = useTranslation();
   const isWaiting = mode === "waiting";
   const isLoading = mode === "loading";
 
   return (
-    <div className="idle-state-container" data-testid={testId}>
+    <div
+      className={`idle-state-container${motionClassName ? ` ${motionClassName}` : ""}`}
+      data-testid={testId}
+    >
       <section className={`card idle-card ${isLoading ? "is-loading" : "is-waiting"}`}>
         <div
           className={`idle-icon-box ${isLoading ? "is-loading" : "is-waiting"}`}
@@ -105,6 +110,7 @@ interface IdleStateProps {
   errorMsg: string | null;
   champSelect?: ChampSelectedPayload | null;
   loading?: boolean;
+  motionClassName?: string;
 }
 
 export function IdleState({
@@ -112,6 +118,7 @@ export function IdleState({
   errorMsg,
   champSelect,
   loading,
+  motionClassName,
 }: IdleStateProps) {
   const { t } = useTranslation();
   const isFetchingBuild = Boolean(champSelect || loading);
@@ -124,6 +131,7 @@ export function IdleState({
       title={isFetchingBuild ? t("idle.loadingTitle") : t("idle.waitingTitle")}
       description={isFetchingBuild ? t("idle.loadingDesc") : t("idle.waitingDesc")}
       errorMsg={errorMsg}
+      motionClassName={motionClassName}
       icon={
         <svg
           viewBox="0 0 24 24"
