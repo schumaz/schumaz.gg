@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useTranslation } from "../../i18n";
 import { ChampionBuild, ChampSelectedPayload } from "../../types";
 import { ChampHeroTop, resolveChampHeroQueueLabel } from "./ChampHeroTop";
@@ -47,18 +48,28 @@ export function FiltersHeader({
 
   const isArena = isArenaBuildContext(build, champSelect);
   const isAram = isAramMode || isAramBuildContextMode(build, champSelect);
-  const tierOptions = getTierOptions(t);
-  const positionOptions = getPositionOptions(t);
-  const regionOptions = getRegionOptions(t);
+  const tierOptions = useMemo(() => getTierOptions(t), [t]);
+  const positionOptions = useMemo(() => getPositionOptions(t), [t]);
+  const regionOptions = useMemo(() => getRegionOptions(t), [t]);
 
   const { patchOptions, patchDropdownOptions, isPatchProtectionActive, remainingHoursShort, protectionTooltipText } =
-    computePatchUiMeta({
-      activePatch: build?.active_patch,
-      availablePatches: build?.available_patches,
-      patchFallbackApplied: build?.patch_fallback_applied,
-      remainingHours: build?.patch_protection_remaining_hours,
-      t,
-    });
+    useMemo(
+      () =>
+        computePatchUiMeta({
+          activePatch: build?.active_patch,
+          availablePatches: build?.available_patches,
+          patchFallbackApplied: build?.patch_fallback_applied,
+          remainingHours: build?.patch_protection_remaining_hours,
+          t,
+        }),
+      [
+        build?.active_patch,
+        build?.available_patches,
+        build?.patch_fallback_applied,
+        build?.patch_protection_remaining_hours,
+        t,
+      ]
+    );
 
   const resolvedTagText =
     statusTagText ??

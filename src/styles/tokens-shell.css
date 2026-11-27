@@ -256,8 +256,6 @@ img {
   font-size: 0.82rem;
   background-color: var(--status-badge-glass-bg);
   background-image: linear-gradient(var(--status-badge-tint), var(--status-badge-tint));
-  backdrop-filter: blur(var(--status-badge-blur));
-  -webkit-backdrop-filter: blur(var(--status-badge-blur));
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -285,14 +283,18 @@ img {
   border-radius: 9999px;
   background-color: var(--status-badge-glass-bg);
   background-image: linear-gradient(var(--accent-subtle), var(--accent-subtle));
-  backdrop-filter: blur(var(--status-badge-blur));
-  -webkit-backdrop-filter: blur(var(--status-badge-blur));
   border: 1px solid var(--accent-border);
   color: var(--text-primary);
   font-size: 0.78rem;
   line-height: 1.2;
   white-space: nowrap;
   transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.container.has-profile-wallpaper .status-badge,
+.container.has-profile-wallpaper .update-pill {
+  backdrop-filter: blur(var(--status-badge-blur));
+  -webkit-backdrop-filter: blur(var(--status-badge-blur));
 }
 
 .update-pill:hover {

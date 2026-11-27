@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppLocale,
   ChampionBuild,
@@ -61,11 +61,9 @@ export function useLcuEvents(
   const activeLocaleRef = useRef<AppLocale>(activeLocale);
   const prevLocaleRef = useRef<AppLocale | null>(localeReady ? activeLocale : null);
 
-  const resetSelections = () => {
-    setSelectedSpellPairIndex(0);
-    setSelectedRunePageIndex(0);
-    setSelectedBuildIndex(0);
-  };
+  const resetSelections = useCallback(() => {
+    setSelectedSpellPairIndex(0); setSelectedRunePageIndex(0); setSelectedBuildIndex(0);
+  }, []);
 
   useEffect(() => {
     onChampionPulledRef.current = options?.onChampionPulled;
@@ -84,47 +82,49 @@ export function useLcuEvents(
     }
   }, [champSelect?.champion_id, build?.champion_id]);
 
-  const handleFilterChange = async (
+  const handleFilterChange = useCallback(async (
     filterType: "position" | "tier" | "region" | "patch",
     value: string
   ) => {
-    const currentBuild = buildRef.current ?? build;
-    if (!currentBuild) return;
-    if (isArenaBuildContext(currentBuild, champSelectRef.current ?? champSelect) && filterType !== "patch") {
-      return;
-    }
-    const fetchSeq = ++latestFetchSeqRef.current;
-    const loadingSeq = ++activeLoadingSeqRef.current;
-    resetSelections();
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const updatedBuild = await fetchFilteredChampSelectBuild(
-        currentBuild,
-        champSelectRef.current ?? champSelect,
-        filterType,
-        value
-      );
-      if (updatedBuild && latestFetchSeqRef.current === fetchSeq) {
-        buildRef.current = updatedBuild;
-        setBuild(updatedBuild);
+      const currentBuild = buildRef.current ?? build;
+      if (!currentBuild) return;
+      if (isArenaBuildContext(currentBuild, champSelectRef.current ?? champSelect) && filterType !== "patch") {
+        return;
       }
-    } catch (err: unknown) {
-      console.error("Failed to update build filters:", err);
-      if (latestFetchSeqRef.current === fetchSeq || activeLoadingSeqRef.current === loadingSeq) {
-        setErrorMsg(
-          typeof err === "string"
-            ? err
-            : translate(activeLocaleRef.current, "idle.fetchFilterError")
+      const fetchSeq = ++latestFetchSeqRef.current;
+      const loadingSeq = ++activeLoadingSeqRef.current;
+      resetSelections();
+      setLoading(true);
+      setErrorMsg(null);
+      try {
+        const updatedBuild = await fetchFilteredChampSelectBuild(
+          currentBuild,
+          champSelectRef.current ?? champSelect,
+          filterType,
+          value
         );
+        if (updatedBuild && latestFetchSeqRef.current === fetchSeq) {
+          buildRef.current = updatedBuild;
+          setBuild(updatedBuild);
+        }
+      } catch (err: unknown) {
+        console.error("Failed to update build filters:", err);
+        if (latestFetchSeqRef.current === fetchSeq || activeLoadingSeqRef.current === loadingSeq) {
+          setErrorMsg(
+            typeof err === "string"
+              ? err
+              : translate(activeLocaleRef.current, "idle.fetchFilterError")
+          );
+        }
+      } finally {
+        if (activeLoadingSeqRef.current === loadingSeq) {
+          activeLoadingSeqRef.current += 1;
+          setLoading(false);
+        }
       }
-    } finally {
-      if (activeLoadingSeqRef.current === loadingSeq) {
-        activeLoadingSeqRef.current += 1;
-        setLoading(false);
-      }
-    }
-  };
+    },
+    [build, champSelect, resetSelections]
+  );
 
   useEffect(() => {
     if (!localeReady) return;
@@ -183,34 +183,31 @@ export function useLcuEvents(
 
   const isArena = isArenaBuildContext(build, champSelect);
 
-  const orderedSpells = isArena
-    ? []
-    : computeOrderedSpells(
-        build?.spells,
-        selectedSpellPairIndex,
-        build?.spell_options,
-        flashKey,
-        spellsInverted
-      );
+  const orderedSpells = useMemo(
+    () => (isArena ? [] : computeOrderedSpells(build?.spells, selectedSpellPairIndex, build?.spell_options, flashKey, spellsInverted)),
+    [isArena, build?.spells, selectedSpellPairIndex, build?.spell_options, flashKey, spellsInverted]
+  );
 
-  const handleSelectSpellPair = async (pairIndex: number) => {
+  const handleSelectSpellPair = useCallback(async (pairIndex: number) => {
     if (isArena || build?.supports_spells === false || isSpellsLockedPhase(gameflowPhaseRef.current, champSelectRef.current?.is_lobby_preselect)) return;
     if (!build?.spell_options || pairIndex < 0 || pairIndex >= build.spell_options.length) return;
     setSelectedSpellPairIndex(pairIndex);
     await injectSpellPairAction(build, pairIndex, flashKey, spellsInverted);
-  };
-  const handleSelectRunePage = async (pageIndex: number) => {
-    if (isArena || build?.supports_runes === false) return;
-    if (!build?.rune_pages || pageIndex >= build.rune_pages.length) return;
+  }, [isArena, build, flashKey, spellsInverted]);
+
+  const handleSelectRunePage = useCallback(async (pageIndex: number) => {
+    if (isArena || build?.supports_runes === false || !build?.rune_pages || pageIndex >= build.rune_pages.length) return;
     setSelectedRunePageIndex(pageIndex);
     await injectRunePageAction(build, pageIndex);
-  };
-  const handleSelectBuild = async (index: number) => {
+  }, [isArena, build]);
+
+  const handleSelectBuild = useCallback(async (index: number) => {
     if (!build?.build_options || index >= build.build_options.length) return;
     setSelectedBuildIndex(index);
     await injectItemBuildAction(build, champSelect, index);
-  };
-  const handleSelectLobbySlot = async (slotIndex: number) => {
+  }, [build, champSelect]);
+
+  const handleSelectLobbySlot = useCallback(async (slotIndex: number) => {
     const slotSeq = ++lobbySlotSeqRef.current;
     expectedLobbySlotRef.current = slotIndex;
     latestFetchSeqRef.current += 1;
@@ -233,7 +230,7 @@ export function useLcuEvents(
       buildRef.current = snap.build;
       setBuild(snap.build);
     }
-  };
+  }, [resetSelections]);
 
   return {
     summoner, lcuInitialChecked, champSelect, build, gameflowPhase, spellsInverted, setSpellsInverted,

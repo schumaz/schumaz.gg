@@ -143,6 +143,7 @@ export function SpellsBar({
                                 src={resolveCachedAssetUrl(spell.icon_url)}
                                 alt={spell.name}
                                 className="spell-icon"
+                                decoding="async"
                               />
                             </span>
                             {isSelected && (

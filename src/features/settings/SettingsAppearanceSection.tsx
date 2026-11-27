@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { clampProfileBlur } from "./preferencesStorage";
+import type { ProfileBlurUpdateOptions } from "./useProfileAppearance";
 import { useTranslation } from "../../i18n";
 import { SettingsGraphicsSubsection } from "./SettingsGraphicsSubsection";
 
@@ -9,7 +10,7 @@ export function isBlurSliderDisabled(wallpaperVisible: boolean): boolean {
 
 interface SettingsAppearanceSectionProps {
   profileBlur: number;
-  onProfileBlurChange?: (blurPercent: number) => void;
+  onProfileBlurChange?: (blurPercent: number, options?: ProfileBlurUpdateOptions) => void;
   wallpaperVisible: boolean;
   onWallpaperVisibleChange?: (visible: boolean) => void;
   hardwareAcceleration: boolean;
@@ -33,9 +34,12 @@ export function SettingsAppearanceSection({
   const [draftBlur, setDraftBlur] = useState(String(profileBlur));
   const blurInputRef = useRef<HTMLInputElement | null>(null);
   const originalBlurRef = useRef(profileBlur);
+  const sliderChangedRef = useRef(false);
+  const latestSliderBlurRef = useRef(profileBlur);
   const blurDisabled = isBlurSliderDisabled(wallpaperVisible);
 
   useEffect(() => {
+    latestSliderBlurRef.current = profileBlur;
     if (!isEditingBlur) {
       setDraftBlur(String(profileBlur));
     }
@@ -55,9 +59,20 @@ export function SettingsAppearanceSection({
     }
   }, [isEditingBlur]);
 
-  const handleProfileBlurChange = (nextBlur: number) => {
+  const handleProfileBlurChange = (nextBlur: number, immediate = false) => {
     if (blurDisabled) return;
-    onProfileBlurChange?.(nextBlur);
+    if (immediate) {
+      onProfileBlurChange?.(nextBlur, { immediate: true });
+    } else {
+      onProfileBlurChange?.(nextBlur);
+    }
+  };
+
+  const flushPendingSliderBlur = () => {
+    if (sliderChangedRef.current && !blurDisabled) {
+      sliderChangedRef.current = false;
+      handleProfileBlurChange(latestSliderBlurRef.current, true);
+    }
   };
 
   const startEditingBlur = () => {
@@ -74,13 +89,13 @@ export function SettingsAppearanceSection({
     }
     const trimmed = draftBlur.trim();
     if (trimmed === "") {
-      handleProfileBlurChange(0);
+      handleProfileBlurChange(0, true);
     } else {
       const parsed = Number(trimmed);
       if (Number.isFinite(parsed)) {
-        handleProfileBlurChange(clampProfileBlur(parsed));
+        handleProfileBlurChange(clampProfileBlur(parsed), true);
       } else {
-        handleProfileBlurChange(originalBlurRef.current);
+        handleProfileBlurChange(originalBlurRef.current, true);
       }
     }
     setIsEditingBlur(false);
@@ -88,7 +103,7 @@ export function SettingsAppearanceSection({
 
   const cancelBlurEdit = () => {
     if (!blurDisabled) {
-      handleProfileBlurChange(originalBlurRef.current);
+      handleProfileBlurChange(originalBlurRef.current, true);
     }
     setDraftBlur(String(originalBlurRef.current));
     setIsEditingBlur(false);
@@ -126,7 +141,15 @@ export function SettingsAppearanceSection({
                   step={1}
                   value={profileBlur}
                   disabled={blurDisabled}
-                  onChange={(e) => handleProfileBlurChange(Number(e.target.value))}
+                  onChange={(e) => {
+                    const nextBlur = Number(e.target.value);
+                    sliderChangedRef.current = true;
+                    latestSliderBlurRef.current = nextBlur;
+                    handleProfileBlurChange(nextBlur);
+                  }}
+                  onPointerUp={flushPendingSliderBlur}
+                  onKeyUp={flushPendingSliderBlur}
+                  onBlur={flushPendingSliderBlur}
                   className="blur-range-slider"
                   title={blurDisabled ? t("settings.blurDisabledTitle") : undefined}
                   aria-label={t("settings.blurSliderAria")}

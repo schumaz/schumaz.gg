@@ -40,6 +40,7 @@ export function StartupLoadingScreen({
               src={appIconUrl}
               alt=""
               className="startup-icon-img"
+              decoding="async"
               draggable={false}
             />
           </div>
@@ -57,7 +58,7 @@ export function StartupLoadingScreen({
           >
             <div
               className="startup-progress-fill"
-              style={{ width: `${clampedProgress}%` }}
+              style={{ transform: `scaleX(${clampedProgress / 100})` }}
             />
           </div>
 

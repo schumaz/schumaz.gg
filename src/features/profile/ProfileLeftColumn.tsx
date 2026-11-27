@@ -1,4 +1,4 @@
-import { CSSProperties } from "react";
+import { memo } from "react";
 import { PlayerProfile, RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
@@ -13,18 +13,16 @@ interface ProfileLeftColumnProps {
   filteredMatches: RecentMatchInfo[];
   winLossStats: WinLossStats;
   highlightedChampion: HighlightedChampion | null;
-  glassBlurStyle: CSSProperties;
   allMasteriesCount?: number;
   onOpenAllMasteries?: () => void;
   onOpenChampionBuild?: (target: ProfileChampionTarget) => void;
 }
 
-export function ProfileLeftColumn({
+export const ProfileLeftColumn = memo(function ProfileLeftColumn({
   profile,
   filteredMatches,
   winLossStats,
   highlightedChampion,
-  glassBlurStyle,
   allMasteriesCount,
   onOpenAllMasteries,
   onOpenChampionBuild,
@@ -41,7 +39,6 @@ export function ProfileLeftColumn({
       <section
         className="card profile-section-card"
         data-testid="winloss-chart-card"
-        style={glassBlurStyle}
       >
         <div className="profile-card-header">
           <h3>{t("profile.winLossTitle")}</h3>
@@ -114,6 +111,7 @@ export function ProfileLeftColumn({
                           src={resolveCachedAssetUrl(highlightedChampion.icon)}
                           alt={highlightedChampion.name}
                           className="highlighted-champ-icon"
+                          decoding="async"
                         />
                       </div>
                     )}
@@ -162,7 +160,6 @@ export function ProfileLeftColumn({
       <section
         className="card profile-section-card"
         data-testid="top-masteries-card"
-        style={glassBlurStyle}
       >
         <div className="profile-card-header">
           <h3>{t("profile.topMasteriesTitle")}</h3>
@@ -216,6 +213,7 @@ export function ProfileLeftColumn({
                       src={resolveCachedAssetUrl(mastery.champion_icon_url)}
                       alt={mastery.champion_name}
                       className="mastery-champ-icon"
+                      decoding="async"
                     />
                   </div>
                 ) : (
@@ -243,4 +241,4 @@ export function ProfileLeftColumn({
       </section>
     </div>
   );
-}
+});

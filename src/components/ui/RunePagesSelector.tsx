@@ -65,6 +65,7 @@ export function RunePagesSelector({
                     src={resolveCachedAssetUrl(keystone.icon_url)}
                     alt={keystone.name || t("runes.keystoneFallback")}
                     className="rune-page-keystone-icon"
+                    decoding="async"
                   />
                 )}
                 {subIcon && (
@@ -72,6 +73,7 @@ export function RunePagesSelector({
                     src={resolveCachedAssetUrl(subIcon)}
                     alt={page.sub_style_name || t("runes.secondaryFallback")}
                     className="rune-page-sub-icon"
+                    decoding="async"
                   />
                 )}
               </div>

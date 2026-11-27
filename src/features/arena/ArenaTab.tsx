@@ -1,5 +1,5 @@
 import "./ArenaTab.css";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import type {
   ArenaChampionEntry,
@@ -46,7 +46,7 @@ interface ArenaTabProps {
 /**
  * Top-level Arena (`CHERRY`) tab switching between the tier-grouped ranking list and champion detail.
  */
-export function ArenaTab({
+export const ArenaTab = memo(function ArenaTab({
   isActive,
   filters,
   tierData,
@@ -143,4 +143,4 @@ export function ArenaTab({
       )}
     </div>
   );
-}
+});

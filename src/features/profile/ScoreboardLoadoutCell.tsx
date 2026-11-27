@@ -49,7 +49,7 @@ export function ScoreboardAugmentsStrip({
           >
             <div className={`sb-augment-frame ${getAugmentRarityClass(meta?.rarity)}`}>
               {iconSrc ? (
-                <img src={iconSrc} alt={alt} className="sb-augment-icon" />
+                <img src={iconSrc} alt={alt} className="sb-augment-icon" loading="lazy" decoding="async" />
               ) : (
                 <span className="sb-augment-fallback">{alt.charAt(0).toUpperCase()}</span>
               )}
@@ -110,6 +110,8 @@ export function ScoreboardLoadoutCell({
                   src={resolveCachedAssetUrl(spell.url)}
                   alt={meta?.name || spell.alt}
                   className="sb-spell-icon"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             );
@@ -137,6 +139,8 @@ export function ScoreboardLoadoutCell({
                     src={resolveCachedAssetUrl(slot.url)}
                     alt={meta?.name || slot.alt}
                     className="sb-rune-icon"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               );

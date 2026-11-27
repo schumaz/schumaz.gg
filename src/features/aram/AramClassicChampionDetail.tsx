@@ -129,6 +129,7 @@ export function AramClassicChampionDetail({
                   src={resolveCachedAssetUrl(selectedChampion.icon_url)}
                   alt={selectedChampion.name}
                   className="aram-champ-avatar"
+                  decoding="async"
                 />
               </div>
               <span className="aram-detail-champ-name">{selectedChampion.name}</span>

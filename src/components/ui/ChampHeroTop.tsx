@@ -58,6 +58,7 @@ export function ChampHeroTop({
               src={resolveCachedAssetUrl(build.champion_icon_url)}
               alt={build.champion_name}
               className="champ-avatar"
+              decoding="async"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = "none";
               }}

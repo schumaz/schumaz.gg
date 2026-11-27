@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useMemo, useState } from "react";
+import { CSSProperties, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import { PlayerProfile, SummonerInfo } from "../../types";
 import { profileBlurPercentToPx } from "../settings/preferencesStorage";
@@ -23,8 +23,10 @@ interface ProfileTabProps {
   loading: boolean;
   errorMsg: string | null;
   onRefresh: () => void;
+  refreshCooldownUntilMs?: number;
   refreshCooldownSecs?: number;
   profileBlur?: number;
+  wallpaperVisible?: boolean;
   isActive?: boolean;
   savedModeFilter?: string;
   onModeFilterChange?: (mode: string) => void;
@@ -47,14 +49,16 @@ const PROFILE_IDLE_ICON = (
   </svg>
 );
 
-export function ProfileTab({
+export const ProfileTab = memo(function ProfileTab({
   summoner,
   profile,
   loading,
   errorMsg,
   onRefresh,
-  refreshCooldownSecs = 0,
+  refreshCooldownUntilMs,
+  refreshCooldownSecs,
   profileBlur = 10,
+  wallpaperVisible = true,
   isActive = true,
   savedModeFilter,
   onModeFilterChange,
@@ -71,10 +75,13 @@ export function ProfileTab({
     }
   }, [savedModeFilter]);
 
-  const handleSelectMode = (mode: string) => {
-    setSelectedMode(mode);
-    onModeFilterChange?.(mode);
-  };
+  const handleSelectMode = useCallback(
+    (mode: string) => {
+      setSelectedMode(mode);
+      onModeFilterChange?.(mode);
+    },
+    [onModeFilterChange]
+  );
 
   const displaySummoner = summoner ?? profile?.summoner ?? null;
   const allMasteries = useMemo(() => resolveAllMasteries(profile), [profile]);
@@ -83,22 +90,39 @@ export function ProfileTab({
     setMasteriesModalOpen(false);
   }, [isActive, displaySummoner?.summonerId]);
 
-  const handleOpenChampionBuild = onOpenChampionBuild
-    ? (target: ProfileChampionTarget) => {
-        setMasteriesModalOpen(false);
-        onOpenChampionBuild(target);
-      }
-    : undefined;
+  const handleOpenChampionBuild = useMemo(
+    () =>
+      onOpenChampionBuild
+        ? (target: ProfileChampionTarget) => {
+            setMasteriesModalOpen(false);
+            onOpenChampionBuild(target);
+          }
+        : undefined,
+    [onOpenChampionBuild]
+  );
   const pagination = useMatchHistoryPagination(
     profile,
     displaySummoner?.summonerId ?? null,
     summoner !== null
   );
-  const handleRefresh = () => {
-    pagination.resetPagination();
+  const resetPagination = pagination.resetPagination;
+  const handleRefresh = useCallback(() => {
+    resetPagination();
     setRefreshCount((prev) => prev + 1);
     onRefresh();
-  };
+  }, [resetPagination, onRefresh]);
+  const handleOpenAllMasteries = useCallback(() => setMasteriesModalOpen(true), []);
+  const handleCloseAllMasteries = useCallback(() => setMasteriesModalOpen(false), []);
+  const handleMasteriesModalSelect = useCallback(
+    (target: ProfileChampionTarget) => {
+      if (handleOpenChampionBuild) {
+        handleOpenChampionBuild(target);
+      } else {
+        setMasteriesModalOpen(false);
+      }
+    },
+    [handleOpenChampionBuild]
+  );
   const matchesResetKey = useMemo(
     () => ({
       summonerId: displaySummoner?.summonerId ?? null,
@@ -130,24 +154,21 @@ export function ProfileTab({
     [filteredMatches]
   );
 
-  const profileUiBlurPx = profileBlurPercentToPx(profileBlur);
-  const glassBlurStyle: CSSProperties =
-    profileUiBlurPx > 0
-      ? {
-          backdropFilter: `blur(${profileUiBlurPx}px)`,
-          WebkitBackdropFilter: `blur(${profileUiBlurPx}px)`,
-        }
-      : {
-          backdropFilter: "none",
-          WebkitBackdropFilter: "none",
-        };
+  const effectiveProfileUiBlurPx = wallpaperVisible ? profileBlurPercentToPx(profileBlur) : 0;
+  const isBlurOff = effectiveProfileUiBlurPx <= 0;
+  const viewStyle = useMemo(
+    () => ({ "--profile-ui-blur": `${effectiveProfileUiBlurPx}px` } as CSSProperties),
+    [effectiveProfileUiBlurPx]
+  );
 
   return (
     <div
-      className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}`}
+      className={`tab-content ${isActive ? "active-tab" : "inactive-tab"}${
+        isBlurOff ? " profile-blur-off" : ""
+      }`}
       data-testid="view-profile"
       aria-hidden={!isActive}
-      style={{ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties}
+      style={viewStyle}
     >
       {!displaySummoner ? (
         <IdleIsland
@@ -175,9 +196,9 @@ export function ProfileTab({
             displaySummoner={displaySummoner}
             profile={profile}
             loading={loading}
+            refreshCooldownUntilMs={refreshCooldownUntilMs}
             refreshCooldownSecs={refreshCooldownSecs}
             onRefresh={handleRefresh}
-            glassBlurStyle={glassBlurStyle}
           />
 
           <div className="profile-split-grid">
@@ -186,9 +207,8 @@ export function ProfileTab({
               filteredMatches={filteredMatches}
               winLossStats={winLossStats}
               highlightedChampion={highlightedChampion}
-              glassBlurStyle={glassBlurStyle}
               allMasteriesCount={allMasteries.length}
-              onOpenAllMasteries={() => setMasteriesModalOpen(true)}
+              onOpenAllMasteries={handleOpenAllMasteries}
               onOpenChampionBuild={handleOpenChampionBuild}
             />
 
@@ -198,7 +218,6 @@ export function ProfileTab({
               availableModes={availableModes}
               activeMode={activeMode}
               onSelectMode={handleSelectMode}
-              glassBlurStyle={glassBlurStyle}
               itemMetadata={pagination.itemMetadata}
               runeMetadata={pagination.runeMetadata}
               spellMetadata={pagination.spellMetadata}
@@ -217,14 +236,12 @@ export function ProfileTab({
           {masteriesModalOpen && allMasteries.length > 0 && (
             <ProfileMasteriesModal
               masteries={allMasteries}
-              onClose={() => setMasteriesModalOpen(false)}
-              onSelectChampion={
-                handleOpenChampionBuild ?? (() => setMasteriesModalOpen(false))
-              }
+              onClose={handleCloseAllMasteries}
+              onSelectChampion={handleMasteriesModalSelect}
             />
           )}
         </div>
       )}
     </div>
   );
-}
+});

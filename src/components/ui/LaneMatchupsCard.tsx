@@ -58,6 +58,7 @@ export function LaneMatchupsCard({
                       alt={name}
                       className="lane-matchup-avatar"
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => {
                         (e.currentTarget as HTMLElement).style.display = "none";
                       }}

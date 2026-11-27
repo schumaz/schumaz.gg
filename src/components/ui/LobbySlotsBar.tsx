@@ -70,6 +70,7 @@ export function LobbySlotsBar({
                   src={resolveCachedAssetUrl(slot.champion_icon_url)}
                   alt={champLabel}
                   className="lobby-slot-avatar"
+                  decoding="async"
                   onError={(e) => {
                     (e.target as HTMLElement).style.display = "none";
                   }}

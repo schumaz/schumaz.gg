@@ -54,6 +54,7 @@ export function FlashOnboardingModal({
                   alt=""
                   aria-hidden="true"
                   className="flash-spell-icon"
+                  decoding="async"
                   draggable={false}
                 />
               </div>
@@ -80,6 +81,7 @@ export function FlashOnboardingModal({
                   alt=""
                   aria-hidden="true"
                   className="flash-spell-icon"
+                  decoding="async"
                   draggable={false}
                 />
               </div>

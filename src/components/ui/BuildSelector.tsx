@@ -105,6 +105,7 @@ export function BuildSelector({
                               src={resolveCachedAssetUrl(iconUrl)}
                               alt={itemAlt}
                               className="build-pill-mini-icon"
+                              decoding="async"
                               onError={(e) => {
                                 (e.target as HTMLElement).style.display = "none";
                               }}

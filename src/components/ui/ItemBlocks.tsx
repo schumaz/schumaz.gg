@@ -185,6 +185,7 @@ export function ItemBlocks({
                               src={resolveCachedAssetUrl(iconUrl)}
                               alt={itemAlt}
                               className="shop-item-icon"
+                              decoding="async"
                               onError={(e) => {
                                 (e.target as HTMLElement).style.display = "none";
                               }}

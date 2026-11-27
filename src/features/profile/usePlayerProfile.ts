@@ -28,25 +28,18 @@ export function usePlayerProfile(
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [refreshCooldownSecs, setRefreshCooldownSecs] = useState(0);
+  const [refreshCooldownUntilMs, setRefreshCooldownUntilMs] = useState(0);
   const [profileInitialReady, setProfileInitialReady] = useState(false);
 
   const fetchSeqRef = useRef(0);
   const lastSummonerIdRef = useRef<number | null>(null);
   const isFetchingRef = useRef(false);
+  const refreshCooldownUntilMsRef = useRef(0);
   const prevLocaleRef = useRef<AppLocale>(locale);
   const summonerRef = useRef<SummonerInfo | null>(summoner);
   summonerRef.current = summoner;
   const profileRef = useRef<PlayerProfile | null>(profile);
   profileRef.current = profile;
-
-  useEffect(() => {
-    if (refreshCooldownSecs <= 0) return;
-    const timer = window.setInterval(() => {
-      setRefreshCooldownSecs((prev) => (prev > 1 ? prev - 1 : 0));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [refreshCooldownSecs > 0]);
 
   const fetchProfile = useCallback(
     async (withCooldown: boolean, forceRefresh: boolean, showLoadingSpinner = true) => {
@@ -56,7 +49,11 @@ export function usePlayerProfile(
       isFetchingRef.current = true;
       if (showLoadingSpinner) setProfileLoading(true);
       setProfileError(null);
-      if (withCooldown) setRefreshCooldownSecs(PROFILE_REFRESH_COOLDOWN_SECS);
+      if (withCooldown) {
+        const until = Date.now() + PROFILE_REFRESH_COOLDOWN_SECS * 1000;
+        refreshCooldownUntilMsRef.current = until;
+        setRefreshCooldownUntilMs(until);
+      }
 
       try {
         const data = await profileIpc.getPlayerProfile(forceRefresh);
@@ -106,9 +103,9 @@ export function usePlayerProfile(
   }, []);
 
   const refreshProfile = useCallback(() => {
-    if (!summoner || refreshCooldownSecs > 0 || isFetchingRef.current) return;
+    if (!summoner || Date.now() < refreshCooldownUntilMsRef.current || isFetchingRef.current) return;
     fetchProfile(true, true, true);
-  }, [summoner, fetchProfile, refreshCooldownSecs]);
+  }, [summoner, fetchProfile]);
 
   // Re-localize cached/live profile when language changes
   useEffect(() => {
@@ -149,15 +146,17 @@ export function usePlayerProfile(
       fetchSeqRef.current += 1;
       lastSummonerIdRef.current = null;
       isFetchingRef.current = false;
+      refreshCooldownUntilMsRef.current = 0;
       setProfileLoading(false);
       setProfileError(null);
-      setRefreshCooldownSecs(0);
+      setRefreshCooldownUntilMs(0);
       return;
     }
 
     if (lastSummonerIdRef.current !== summoner.summonerId) {
       lastSummonerIdRef.current = summoner.summonerId;
-      setRefreshCooldownSecs(0);
+      refreshCooldownUntilMsRef.current = 0;
+      setRefreshCooldownUntilMs(0);
 
       let cancelled = false;
       const connectSeq = ++fetchSeqRef.current;
@@ -222,7 +221,7 @@ export function usePlayerProfile(
     profile,
     profileLoading,
     profileError,
-    refreshCooldownSecs,
+    refreshCooldownUntilMs,
     refreshProfile,
     profileInitialReady,
   };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import { computeOrderedSpells } from "../../utils/spells";
 import {
@@ -16,7 +16,7 @@ import { AramMayhemView } from "./AramMayhemView";
 
 export * from "./aramHelpers";
 
-export function AramTab({
+export const AramTab = memo(function AramTab({
   isActive,
   savedMode,
   showChooser,
@@ -218,4 +218,4 @@ export function AramTab({
       )}
     </div>
   );
-}
+});

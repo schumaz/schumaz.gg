@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import appIconUrl from "./assets/app-icon.png";
 import { ActiveTab, FlashKeyPreference } from "./types";
@@ -9,18 +9,8 @@ import { useAppUpdater } from "./hooks/useAppUpdater";
 import { useWindowGraphicsMode } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
-import {
-  ARAM_DOCK_ICON_URL,
-  NavigationDock,
-  StartupLoadingScreen,
-  StatusDock,
-} from "./components/ui";
-import {
-  FlashOnboardingModal,
-  LanguageOnboardingModal,
-  profileBlurPercentToPx,
-  usePreferences,
-} from "./features/settings";
+import { ARAM_DOCK_ICON_URL, NavigationDock, StartupLoadingScreen, StatusDock } from "./components/ui";
+import { FlashOnboardingModal, LanguageOnboardingModal, profileBlurPercentToPx, usePreferences } from "./features/settings";
 import { ProfileWallpaperBackdrop, usePlayerProfile } from "./features/profile";
 import { isSpellsLockedPhase, useLcuEvents } from "./features/champ-select";
 import { useAram } from "./features/aram";
@@ -143,40 +133,45 @@ function App({ forceStartupLoading }: AppProps = {}) {
     reducedMotion: prefersReducedMotion || !prefs.hardwareAcceleration,
   });
 
-  const profileUiBlurPx = profileBlurPercentToPx(prefs.profileBlur);
-  const profileBlurOff = activeTab === "profile" && profileUiBlurPx <= 0;
+  const effectiveProfileUiBlurPx = prefs.wallpaperVisible ? profileBlurPercentToPx(prefs.profileBlur) : 0;
+  const profileBlurOff = activeTab === "profile" && effectiveProfileUiBlurPx <= 0;
+  const hasProfileWallpaper = activeTab === "profile" && prefs.wallpaperVisible;
 
-  const handleInvertSpells = async () => {
+  const handleInvertSpells = useCallback(() => {
     prefs.updatePreference("flashKey", preferences.flashKey === "D" ? "F" : "D");
-  };
+  }, [prefs.updatePreference, preferences.flashKey]);
 
-  const handleAramDockClick = () => {
+  const handleAramDockClick = useCallback(() => {
     const wasAlreadyOnAram = activeTab === "aram";
     setActiveTab("aram");
     aram.handleAramDockClick(wasAlreadyOnAram);
-  };
+  }, [activeTab, aram.handleAramDockClick]);
 
-  const handleRankedDockClick = () => {
+  const handleRankedDockClick = useCallback(() => {
     const wasAlreadyOnRanked = activeTab === "ranked";
     setActiveTab("ranked");
     if (wasAlreadyOnRanked && ranked.selectedChampion) ranked.clearSelectedChampion();
-  };
+  }, [activeTab, ranked.selectedChampion, ranked.clearSelectedChampion]);
 
-  const handleArenaDockClick = () => {
+  const handleArenaDockClick = useCallback(() => {
     const wasAlreadyOnArena = activeTab === "arena";
     setActiveTab("arena");
     if (wasAlreadyOnArena && arena.selectedChampion) arena.clearSelectedChampion();
-  };
+  }, [activeTab, arena.selectedChampion, arena.clearSelectedChampion]);
 
   return (
     <I18nProvider locale={locale} onLocaleChange={prefs.changeLanguage}>
       <main
         className={`container ${activeTab === "profile" ? "profile-active" : ""} ${
           profileBlurOff ? "profile-blur-off" : ""
-        } ${graphics.shellClassName} ${
+        } ${hasProfileWallpaper ? "has-profile-wallpaper" : ""} ${graphics.shellClassName} ${
           !prefs.hardwareAcceleration ? "gpu-effects-disabled" : ""
         }`}
-        style={activeTab === "profile" ? ({ "--profile-ui-blur": `${profileUiBlurPx}px` } as CSSProperties) : undefined}
+        style={
+          activeTab === "profile"
+            ? ({ "--profile-ui-blur": `${effectiveProfileUiBlurPx}px` } as CSSProperties)
+            : undefined
+        }
       >
         <ProfileWallpaperBackdrop
           activeTab={activeTab}

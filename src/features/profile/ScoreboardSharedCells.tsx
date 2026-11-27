@@ -25,6 +25,8 @@ export function ScoreboardChampCell({
             src={resolveCachedAssetUrl(participant.champion_icon_url)}
             alt={participant.champion_name}
             className="sb-champ-icon"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       ) : (
@@ -174,6 +176,8 @@ export function ScoreboardItemsStrip({
                 src={resolveCachedAssetUrl(iconUrl)}
                 alt={meta?.name || t("common.itemAlt", { id: itemId })}
                 className="match-item-img"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </Tooltip>
@@ -191,6 +195,8 @@ export function ScoreboardItemsStrip({
                 src={resolveCachedAssetUrl(trinketIconUrl)}
                 alt={trinketMeta?.name || t("profile.trinketAria")}
                 className="match-item-img"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </Tooltip>

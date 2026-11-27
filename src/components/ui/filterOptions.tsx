@@ -20,6 +20,7 @@ export function buildIconImg(src: string, className = "filter-option-icon") {
       alt=""
       aria-hidden="true"
       className={className}
+      decoding="async"
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.display = "none";
       }}

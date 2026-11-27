@@ -26,6 +26,7 @@ export function LanguageFlag({
       alt=""
       aria-hidden="true"
       className={`language-flag-img ${className}`.trim()}
+      decoding="async"
       draggable={false}
     />
   );

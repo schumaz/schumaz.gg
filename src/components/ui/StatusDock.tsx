@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import appIconUrl from "../../assets/app-icon.png";
 import type { AppUpdateState } from "../../hooks/useAppUpdater";
 import { useTranslation } from "../../i18n";
@@ -13,7 +13,7 @@ interface StatusDockProps {
   onDismissUpdate?: () => void;
 }
 
-export function StatusDock({
+export const StatusDock = memo(function StatusDock({
   summoner,
   updateState,
   onRestartUpdate,
@@ -87,6 +87,7 @@ export function StatusDock({
           alt=""
           aria-hidden="true"
           className="header-brand-icon"
+          decoding="async"
           draggable={false}
           data-tauri-drag-region
         />
@@ -237,4 +238,4 @@ export function StatusDock({
       </div>
     </header>
   );
-}
+});

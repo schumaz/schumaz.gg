@@ -137,14 +137,17 @@ describe("P9.4 Persistent Disk Cache & UserSettings.ini Integration", () => {
         result.current.updateNavigationState({ rankedChampionTierFilter: "1" });
       });
 
+      expect(result.current.profileBlur).toBe(75);
       expect(result.current.closeToTray).toBe(true);
       expect(invoke).toHaveBeenCalledWith("set_close_to_tray", { enabled: true });
-      expect(invoke).toHaveBeenCalledWith("update_profile_appearance", {
-        blurPercent: 75,
-        wallpaperVisible: true,
-      });
       expect(invoke).toHaveBeenCalledWith("update_navigation_state", {
         patch: { rankedChampionTierFilter: "1" },
+      });
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("update_profile_appearance", {
+          blurPercent: 75,
+          wallpaperVisible: true,
+        });
       });
       expect(localStorage.getItem("schumaz_profile_ui_blur")).toBeNull();
     });

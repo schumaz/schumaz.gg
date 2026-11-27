@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { RecentMatchInfo } from "../../types";
 import { useTranslation } from "../../i18n";
 import {
@@ -19,7 +19,6 @@ interface ProfileMatchesCardProps {
   availableModes: AvailableModeItem[];
   activeMode: string;
   onSelectMode: (mode: string) => void;
-  glassBlurStyle: CSSProperties;
   itemMetadata?: ItemMetadataMap;
   runeMetadata?: RuneMetadataMap;
   spellMetadata?: SpellMetadataMap;
@@ -34,13 +33,12 @@ interface ProfileMatchesCardProps {
   resetKey?: unknown;
 }
 
-export function ProfileMatchesCard({
+export const ProfileMatchesCard = memo(function ProfileMatchesCard({
   validMatches,
   filteredMatches,
   availableModes,
   activeMode,
   onSelectMode,
-  glassBlurStyle,
   itemMetadata,
   runeMetadata,
   spellMetadata,
@@ -70,7 +68,7 @@ export function ProfileMatchesCard({
 
   return (
     <div className="profile-col profile-col-right">
-      <section className="card profile-matches-card" style={glassBlurStyle}>
+      <section className="card profile-matches-card">
         <div className="profile-matches-header">
           <div>
             <h3>{t("profile.recentMatchesTitle")}</h3>
@@ -196,4 +194,4 @@ export function ProfileMatchesCard({
       </section>
     </div>
   );
-}
+});

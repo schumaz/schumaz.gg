@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActiveTab } from "./types";
 import type { useAppUpdater } from "./hooks/useAppUpdater";
 import { SettingsTab, type usePreferences } from "./features/settings";
@@ -52,10 +52,38 @@ export function AppTabsViewport({
     return () => window.clearTimeout(timer);
   }, [activeTab]);
 
-  const handleOpenChampionBuild = (target: RankedChampionShortcut) => {
-    ranked.openChampionShortcut(target);
-    onSelectTab("ranked");
-  };
+  const openChampionShortcut = ranked.openChampionShortcut;
+  const { checkForUpdates, installAndRestart, openPortableRelease } = updater;
+
+  const handleOpenChampionBuild = useCallback(
+    (target: RankedChampionShortcut) => {
+      openChampionShortcut(target);
+      onSelectTab("ranked");
+    },
+    [openChampionShortcut, onSelectTab]
+  );
+
+  const handleProfileModeFilterChange = useCallback(
+    (mode: string) => updateNavigationState({ profileMatchModeFilter: mode }),
+    [updateNavigationState]
+  );
+
+  const handleRankedTierFilterChange = useCallback(
+    (tier: string) => updateNavigationState({ rankedChampionTierFilter: tier }),
+    [updateNavigationState]
+  );
+
+  const handleCheckForUpdates = useCallback(() => {
+    void checkForUpdates({ manual: true });
+  }, [checkForUpdates]);
+
+  const handleRestartToUpdate = useCallback(() => {
+    void installAndRestart();
+  }, [installAndRestart]);
+
+  const handleOpenPortableRelease = useCallback(() => {
+    void openPortableRelease();
+  }, [openPortableRelease]);
 
   return (
     <div
@@ -69,11 +97,12 @@ export function AppTabsViewport({
         loading={playerProfile.profileLoading}
         errorMsg={playerProfile.profileError}
         onRefresh={playerProfile.refreshProfile}
-        refreshCooldownSecs={playerProfile.refreshCooldownSecs}
+        refreshCooldownUntilMs={playerProfile.refreshCooldownUntilMs}
         profileBlur={prefs.profileBlur}
+        wallpaperVisible={prefs.wallpaperVisible}
         isActive={activeTab === "profile"}
         savedModeFilter={navigationState?.profileMatchModeFilter}
-        onModeFilterChange={(mode) => updateNavigationState({ profileMatchModeFilter: mode })}
+        onModeFilterChange={handleProfileModeFilterChange}
         onOpenChampionBuild={handleOpenChampionBuild}
       />
 
@@ -122,7 +151,7 @@ export function AppTabsViewport({
         onSelectBuild={ranked.setSelectedBuildIndex}
         onSelectMatchupChampion={ranked.selectChampionById}
         savedChampionTierFilter={navigationState?.rankedChampionTierFilter}
-        onChampionTierFilterChange={(tier) => updateNavigationState({ rankedChampionTierFilter: tier })}
+        onChampionTierFilterChange={handleRankedTierFilterChange}
       />
 
       <ArenaTab
@@ -206,15 +235,9 @@ export function AppTabsViewport({
         distributionInfo={updater.distributionInfo}
         lastUpdateCheckResult={updater.lastCheckResult}
         lastUpdateCheckEpochSecs={updater.lastCheckEpochSecs}
-        onCheckForUpdates={() => {
-          void updater.checkForUpdates({ manual: true });
-        }}
-        onRestartToUpdate={() => {
-          void updater.installAndRestart();
-        }}
-        onOpenPortableRelease={() => {
-          void updater.openPortableRelease();
-        }}
+        onCheckForUpdates={handleCheckForUpdates}
+        onRestartToUpdate={handleRestartToUpdate}
+        onOpenPortableRelease={handleOpenPortableRelease}
       />
     </div>
   );

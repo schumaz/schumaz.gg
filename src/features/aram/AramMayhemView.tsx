@@ -123,7 +123,7 @@ export function AramMayhemView({
                 <div className="aram-augments-hero">
                   {selectedChampion && (
                     <div className="dd-icon-frame aram-hero-frame">
-                      <img src={resolveCachedAssetUrl(selectedChampion.icon_url)} alt={selectedChampion.name} className="aram-hero-avatar" />
+                      <img src={resolveCachedAssetUrl(selectedChampion.icon_url)} alt={selectedChampion.name} className="aram-hero-avatar" decoding="async" />
                     </div>
                   )}
                   <div className="aram-hero-meta">

@@ -112,6 +112,7 @@ export function ArenaChampionDetail({
                   src={resolveCachedAssetUrl(selectedChampion.icon_url)}
                   alt={selectedChampion.name}
                   className="aram-champ-avatar"
+                  decoding="async"
                 />
               </div>
               <span className="ranked-detail-champ-name">{selectedChampion.name}</span>

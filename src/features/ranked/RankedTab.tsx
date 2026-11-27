@@ -1,5 +1,5 @@
 import "./RankedTab.css";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "../../i18n";
 import {
   ChampionBuild,
@@ -54,7 +54,7 @@ interface RankedTabProps {
   onChampionTierFilterChange?: (tier: string) => void;
 }
 
-export function RankedTab({
+export const RankedTab = memo(function RankedTab({
   isActive,
   filters,
   tierData,
@@ -187,4 +187,4 @@ export function RankedTab({
       )}
     </div>
   );
-}
+});

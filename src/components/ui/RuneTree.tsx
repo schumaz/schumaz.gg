@@ -43,6 +43,7 @@ function renderMinorPerk(perk: RuneMetadata, keyPrefix: string, index: number) {
               src={resolveCachedAssetUrl(perk.icon_url)}
               alt={perk.name}
               className="rune-medallion-icon"
+              decoding="async"
             />
           ) : (
             <span className="rune-medallion-fallback" aria-hidden="true">
@@ -66,7 +67,7 @@ function renderTreeHeader(
     <div className="rune-subcard-header">
       <div className="tree-header-identity">
         {styleIcon && (
-          <img src={resolveCachedAssetUrl(styleIcon)} alt={styleName} className="tree-icon" />
+          <img src={resolveCachedAssetUrl(styleIcon)} alt={styleName} className="tree-icon" decoding="async" />
         )}
         <h3>{styleName}</h3>
       </div>
@@ -166,6 +167,7 @@ export function RuneTree({
                     src={resolveCachedAssetUrl(perksList[0].icon_url)}
                     alt={perksList[0].name}
                     className="keystone-icon"
+                    decoding="async"
                   />
                 )}
                 <span className="keystone-name">{perksList[0].name}</span>
@@ -213,6 +215,7 @@ export function RuneTree({
                             src={resolveCachedAssetUrl(shard.icon_url)}
                             alt={shard.name}
                             className="shard-medallion-icon"
+                            decoding="async"
                           />
                         )}
                       </div>

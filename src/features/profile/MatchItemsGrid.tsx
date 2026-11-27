@@ -59,6 +59,8 @@ export function MatchItemsGrid({
                   src={resolveCachedAssetUrl(iconUrl)}
                   alt={itemAlt}
                   className="match-item-img"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             </Tooltip>
@@ -82,6 +84,8 @@ export function MatchItemsGrid({
                 src={resolveCachedAssetUrl(trinketIconUrl)}
                 alt={trinketAlt}
                 className="match-item-img"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </Tooltip>

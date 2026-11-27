@@ -10,14 +10,18 @@ import {
 import { settingsIpc, windowIpc } from "../../services/ipc";
 import { DEFAULT_ONBOARDING_LOCALE, getSavedAppLocale, isValidAppLocale } from "../../i18n";
 import {
-  DEFAULT_PROFILE_BLUR,
-  clampProfileBlur,
   isValidAppSettings,
   mergeNavigationState,
 } from "./preferencesStorage";
 import { extractHydratedIniSettings, fetchInitialIniSettings } from "./preferencesHydration";
+import {
+  PROFILE_BLUR_PERSIST_DEBOUNCE_MS,
+  type ProfileBlurUpdateOptions,
+  useProfileAppearance,
+} from "./useProfileAppearance";
 
 export * from "./preferencesStorage";
+export { PROFILE_BLUR_PERSIST_DEBOUNCE_MS, type ProfileBlurUpdateOptions };
 
 export function usePreferences(
   onFlashKeyChange?: (newKey: FlashKeyPreference) => void,
@@ -34,16 +38,26 @@ export function usePreferences(
     ...DEFAULT_PREFERENCES,
     language: getSavedAppLocale() ?? DEFAULT_ONBOARDING_LOCALE,
   }));
-  const [profileBlur, setProfileBlur] = useState<number>(DEFAULT_PROFILE_BLUR);
-  const [wallpaperVisible, setWallpaperVisible] = useState<boolean>(true);
   const [hardwareAcceleration, setHardwareAcceleration] = useState<boolean>(true);
   const [gpuRestartRequired, setGpuRestartRequired] = useState<boolean>(false);
   const [navigationState, setNavigationState] = useState<NavigationState | null>(null);
   const [preferencesReady, setPreferencesReady] = useState<boolean>(false);
 
+  const {
+    profileBlur,
+    wallpaperVisible,
+    hydrateProfileAppearance,
+    updateProfileBlur,
+    updateWallpaperVisible,
+  } = useProfileAppearance();
+
   const gpuActiveAtStartupRef = useRef<boolean>(true);
-  const profileBlurRef = useRef<number>(profileBlur);
-  const wallpaperVisibleRef = useRef<boolean>(wallpaperVisible);
+  const onFlashKeyChangeRef = useRef(onFlashKeyChange);
+  onFlashKeyChangeRef.current = onFlashKeyChange;
+  const onPatchProtectionChangeRef = useRef(onPatchProtectionChange);
+  onPatchProtectionChangeRef.current = onPatchProtectionChange;
+  const onLocaleChangeRef = useRef(onLocaleChange);
+  onLocaleChangeRef.current = onLocaleChange;
 
   useEffect(() => {
     document.documentElement.lang = locale === "pt_BR" ? "pt-BR" : "en-US";
@@ -61,10 +75,7 @@ export function usePreferences(
           setNeedsFlashOnboarding(hydrated.needsFlashOnboarding);
           setCloseToTray(hydrated.closeToTray);
           setPreferences(hydrated.preferences);
-          profileBlurRef.current = hydrated.blur;
-          setProfileBlur(hydrated.blur);
-          wallpaperVisibleRef.current = hydrated.wallpaperVisible;
-          setWallpaperVisible(hydrated.wallpaperVisible);
+          hydrateProfileAppearance(hydrated.blur, hydrated.wallpaperVisible);
           setHardwareAcceleration(hydrated.hardwareAcceleration);
           setNavigationState(hydrated.navigation);
         }
@@ -88,7 +99,7 @@ export function usePreferences(
     return () => {
       active = false;
     };
-  }, []);
+  }, [hydrateProfileAppearance]);
 
   const persistPreferences = useCallback((next: UserPreferences) => {
     settingsIpc.syncUserPreferences(next).catch(() => {});
@@ -103,30 +114,28 @@ export function usePreferences(
         persistPreferences(next);
         return next;
       });
-      settingsIpc
-        .setLocale(nextLocale)
-        .then(() => onLocaleChange?.(nextLocale))
-        .catch(() => onLocaleChange?.(nextLocale));
+      const notify = () => onLocaleChangeRef.current?.(nextLocale);
+      settingsIpc.setLocale(nextLocale).then(notify).catch(notify);
     },
-    [persistPreferences, onLocaleChange]
+    [persistPreferences]
   );
 
-  const updatePreference = <K extends keyof UserPreferences>(
-    key: K,
-    value: UserPreferences[K]
-  ) => {
-    if (key === "language" && isValidAppLocale(value)) {
-      changeLanguage(value);
-      return;
-    }
-    setPreferences((prev) => {
-      const next = { ...prev, [key]: value };
-      persistPreferences(next);
-      if (key === "patch48hProtection") onPatchProtectionChange?.(Boolean(value));
-      return next;
-    });
-    if (key === "flashKey") onFlashKeyChange?.(value as FlashKeyPreference);
-  };
+  const updatePreference = useCallback(
+    <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
+      if (key === "language" && isValidAppLocale(value)) {
+        changeLanguage(value);
+        return;
+      }
+      setPreferences((prev) => {
+        const next = { ...prev, [key]: value };
+        persistPreferences(next);
+        if (key === "patch48hProtection") onPatchProtectionChangeRef.current?.(Boolean(value));
+        return next;
+      });
+      if (key === "flashKey") onFlashKeyChangeRef.current?.(value as FlashKeyPreference);
+    },
+    [changeLanguage, persistPreferences]
+  );
 
   const previewOnboardingLocale = useCallback((nextLocale: AppLocale) => {
     setLocale(nextLocale);
@@ -140,9 +149,9 @@ export function usePreferences(
       persistPreferences(next);
       return next;
     });
-    const notify = () => onLocaleChange?.(locale);
+    const notify = () => onLocaleChangeRef.current?.(locale);
     settingsIpc.completeLanguageOnboarding(locale).then(notify).catch(notify);
-  }, [locale, persistPreferences, onLocaleChange]);
+  }, [locale, persistPreferences]);
 
   const previewOnboardingFlashKey = useCallback((nextKey: FlashKeyPreference) => {
     setPreferences((prev) => ({ ...prev, flashKey: nextKey }));
@@ -157,21 +166,8 @@ export function usePreferences(
       return next;
     });
     settingsIpc.completeFlashOnboarding(selectedFlashKey).catch(() => {});
-    onFlashKeyChange?.(selectedFlashKey);
-  }, [preferences.flashKey, persistPreferences, onFlashKeyChange]);
-
-  const updateProfileBlur = useCallback((blurPercent: number) => {
-    const clamped = clampProfileBlur(blurPercent);
-    profileBlurRef.current = clamped;
-    setProfileBlur(clamped);
-    settingsIpc.updateProfileAppearance(clamped, wallpaperVisibleRef.current).catch(() => {});
-  }, []);
-
-  const updateWallpaperVisible = useCallback((visible: boolean) => {
-    wallpaperVisibleRef.current = visible;
-    setWallpaperVisible(visible);
-    settingsIpc.updateProfileAppearance(profileBlurRef.current, visible).catch(() => {});
-  }, []);
+    onFlashKeyChangeRef.current?.(selectedFlashKey);
+  }, [preferences.flashKey, persistPreferences]);
 
   const updateCloseToTray = useCallback((enabled: boolean) => {
     setCloseToTray(enabled);
@@ -193,7 +189,7 @@ export function usePreferences(
       .catch(() => {});
   }, []);
 
-  const updateHardwareAcceleration = (enabled: boolean) => {
+  const updateHardwareAcceleration = useCallback((enabled: boolean) => {
     setHardwareAcceleration(enabled);
     setGpuRestartRequired(enabled !== gpuActiveAtStartupRef.current);
     settingsIpc
@@ -206,11 +202,11 @@ export function usePreferences(
         }
       })
       .catch(() => {});
-  };
+  }, []);
 
-  const restartApp = () => {
+  const restartApp = useCallback(() => {
     windowIpc.restartApp().catch(() => {});
-  };
+  }, []);
 
   return {
     locale,

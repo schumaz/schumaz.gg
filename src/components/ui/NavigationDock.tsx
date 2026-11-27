@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ActiveTab } from "../../types";
 import { useTranslation } from "../../i18n";
 
@@ -13,7 +14,7 @@ interface NavigationDockProps {
   aramIconSrc?: string;
 }
 
-export function NavigationDock({
+export const NavigationDock = memo(function NavigationDock({
   activeTab,
   onTabChange,
   onRankedClick,
@@ -159,6 +160,7 @@ export function NavigationDock({
           className="dock-icon dock-icon-img"
           width={18}
           height={18}
+          decoding="async"
         />
         <span>{t("nav.aram")}</span>
       </button>
@@ -187,4 +189,4 @@ export function NavigationDock({
       </button>
     </nav>
   );
-}
+});

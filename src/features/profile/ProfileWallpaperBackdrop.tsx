@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { PlayerProfile, SummonerInfo } from "../../types";
 import { resolveCachedAssetUrl } from "../../utils/assets";
 
@@ -9,7 +9,7 @@ interface ProfileWallpaperBackdropProps {
   wallpaperVisible: boolean;
 }
 
-export function ProfileWallpaperBackdrop({
+export const ProfileWallpaperBackdrop = memo(function ProfileWallpaperBackdrop({
   activeTab,
   summoner,
   profile,
@@ -67,4 +67,4 @@ export function ProfileWallpaperBackdrop({
       <div className="profile-wallpaper-scrim" />
     </div>
   );
-}
+});

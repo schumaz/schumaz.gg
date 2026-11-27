@@ -31,6 +31,7 @@ export function AramModeChooser({ savedMode, onSelectMode }: AramModeChooserProp
                 src={resolveCachedAssetUrl(LEAGUE_ARAM_ICON_URL)}
                 alt=""
                 className="aram-choice-icon-img"
+                decoding="async"
               />
             </div>
             {savedMode === "aram" && (
@@ -53,6 +54,7 @@ export function AramModeChooser({ savedMode, onSelectMode }: AramModeChooserProp
                 src={resolveCachedAssetUrl(LEAGUE_ARAM_MAYHEM_ICON_URL)}
                 alt=""
                 className="aram-choice-icon-img"
+                decoding="async"
               />
             </div>
             {savedMode === "aram_mayhem" && (

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   ChampionBuild,
   ChampSelectedPayload,
@@ -39,7 +40,7 @@ interface ChampSelectTabProps {
   onSelectLobbySlot?: (slotIndex: number) => void;
 }
 
-export function ChampSelectTab({
+export const ChampSelectTab = memo(function ChampSelectTab({
   isActive,
   build,
   champSelect,
@@ -130,4 +131,4 @@ export function ChampSelectTab({
       )}
     </div>
   );
-}
+});

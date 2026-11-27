@@ -1,8 +1,9 @@
-import { CSSProperties } from "react";
+import { memo } from "react";
 import { PlayerProfile, SummonerInfo } from "../../types";
 import { useTranslation } from "../../i18n";
 import { resolveCachedAssetUrl } from "../../utils/assets";
-import { LoadingBar, LoadingDots } from "../../components/ui/LoadingIndicators";
+import { LoadingBar } from "../../components/ui/LoadingIndicators";
+import { ProfileRefreshButton } from "./ProfileRefreshButton";
 import { getRankedCrestUrl, getRankedMiniCrestUrl } from "./profileHelpers";
 
 interface ProfileHeroCardProps {
@@ -10,24 +11,24 @@ interface ProfileHeroCardProps {
   displaySummoner: SummonerInfo;
   profile: PlayerProfile | null;
   loading: boolean;
-  refreshCooldownSecs: number;
+  refreshCooldownUntilMs?: number;
+  refreshCooldownSecs?: number;
   onRefresh: () => void;
-  glassBlurStyle: CSSProperties;
 }
 
-export function ProfileHeroCard({
+export const ProfileHeroCard = memo(function ProfileHeroCard({
   summoner,
   displaySummoner,
   profile,
   loading,
+  refreshCooldownUntilMs,
   refreshCooldownSecs,
   onRefresh,
-  glassBlurStyle,
 }: ProfileHeroCardProps) {
   const { t } = useTranslation();
 
   return (
-    <section className="card profile-hero-card" style={glassBlurStyle}>
+    <section className="card profile-hero-card">
       <LoadingBar active={loading} testId="profile-loading-bar" />
 
       <div className="profile-hero-main">
@@ -39,6 +40,7 @@ export function ProfileHeroCard({
                   src={resolveCachedAssetUrl(profile.profile_icon_url)}
                   alt={t("profile.summonerIconAlt")}
                   className="profile-avatar-img"
+                  decoding="async"
                 />
               </div>
             ) : (
@@ -102,6 +104,7 @@ export function ProfileHeroCard({
                           rank: rankDisplay,
                         })}
                         className={`ranked-crest-img ${isUnranked ? "unranked" : ""}`}
+                        decoding="async"
                         onError={(e) => {
                           const img = e.currentTarget;
                           if (!img.dataset.fallbackUsed) {
@@ -131,27 +134,16 @@ export function ProfileHeroCard({
           )}
 
           <div className="profile-hero-actions">
-            <button
-              type="button"
-              className="profile-action-btn primary"
-              data-testid="refresh-profile-btn"
-              onClick={onRefresh}
-              disabled={!summoner || loading || refreshCooldownSecs > 0}
-            >
-              {loading ? (
-                <>
-                  <span>{t("profile.refreshing")}</span>
-                  <LoadingDots variant="inline" size="sm" testId="profile-refresh-dots" />
-                </>
-              ) : refreshCooldownSecs > 0 ? (
-                t("profile.refreshCooldown", { secs: refreshCooldownSecs })
-              ) : (
-                t("profile.refresh")
-              )}
-            </button>
+            <ProfileRefreshButton
+              disabled={!summoner}
+              loading={loading}
+              cooldownUntilMs={refreshCooldownUntilMs}
+              cooldownSecsOverride={refreshCooldownSecs}
+              onRefresh={onRefresh}
+            />
           </div>
         </div>
       </div>
     </section>
   );
-}
+});

@@ -107,6 +107,7 @@ export function LaneMatchupsPopover({
                       src={resolveCachedAssetUrl(entry.icon_url)}
                       alt={name}
                       className="lane-matchups-preview-avatar"
+                      decoding="async"
                       onError={(e) => {
                         (e.currentTarget as HTMLElement).style.display = "none";
                       }}

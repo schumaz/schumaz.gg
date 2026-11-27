@@ -95,6 +95,8 @@ export function MatchRowSummary({
               src={resolveCachedAssetUrl(match.champion_icon_url)}
               alt={match.champion_name}
               className="match-champ-icon"
+              loading="lazy"
+              decoding="async"
             />
           </div>
         ) : (
@@ -111,6 +113,8 @@ export function MatchRowSummary({
                     src={resolveCachedAssetUrl(spell.iconUrl)}
                     alt={spellMeta?.name || spell.fallbackAlt}
                     className="match-spell-icon"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               );
@@ -148,7 +152,7 @@ export function MatchRowSummary({
                 >
                   <div className={`match-augment-frame ${getAugmentRarityClass(augMeta?.rarity)}`}>
                     {iconSrc ? (
-                      <img src={iconSrc} alt={augAlt} className="match-augment-icon" />
+                      <img src={iconSrc} alt={augAlt} className="match-augment-icon" loading="lazy" decoding="async" />
                     ) : (
                       <span className="match-augment-fallback">{augAlt.charAt(0).toUpperCase()}</span>
                     )}
@@ -173,6 +177,8 @@ export function MatchRowSummary({
                     src={resolveCachedAssetUrl(slot.iconUrl)}
                     alt={runeMeta?.name || slot.alt}
                     className="match-rune-icon"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               );

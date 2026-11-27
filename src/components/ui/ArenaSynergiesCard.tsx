@@ -49,6 +49,7 @@ export function ArenaSynergiesCard({
                       alt={syn.name}
                       className="arena-synergy-avatar"
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = "none";
                       }}

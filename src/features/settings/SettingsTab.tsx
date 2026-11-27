@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   AppLocale,
   AutostartStatus,
@@ -9,6 +9,7 @@ import {
 import type { AppUpdateState, UpdateCheckResult } from "../../hooks/useAppUpdater";
 import type { AppDistributionInfo } from "../../services/ipc";
 import { useTranslation } from "../../i18n";
+import type { ProfileBlurUpdateOptions } from "./useProfileAppearance";
 import { SettingsGeneralSection } from "./SettingsGeneralSection";
 import { SettingsAutomationSection } from "./SettingsAutomationSection";
 import { SettingsAppearanceSection, isBlurSliderDisabled } from "./SettingsAppearanceSection";
@@ -36,7 +37,7 @@ interface SettingsTabProps {
   autostartError?: boolean;
   onAutostartChange?: (enabled: boolean) => void;
   profileBlur?: number;
-  onProfileBlurChange?: (blurPercent: number) => void;
+  onProfileBlurChange?: (blurPercent: number, options?: ProfileBlurUpdateOptions) => void;
   wallpaperVisible?: boolean;
   onWallpaperVisibleChange?: (visible: boolean) => void;
   hardwareAcceleration?: boolean;
@@ -63,7 +64,7 @@ interface SettingsTabProps {
   onOpenLogsFolder?: () => void;
 }
 
-export function SettingsTab({
+export const SettingsTab = memo(function SettingsTab({
   preferences,
   onUpdatePreference,
   locale: propLocale,
@@ -237,4 +238,4 @@ export function SettingsTab({
       )}
     </div>
   );
-}
+});

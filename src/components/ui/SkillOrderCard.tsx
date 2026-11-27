@@ -90,6 +90,7 @@ export function SkillOrderCard({ skillOrder, readOnly = false, onClose }: SkillO
                               src={resolveCachedAssetUrl(ability.icon_url)}
                               alt={label}
                               className="skill-ability-icon"
+                              decoding="async"
                               onError={(e) => {
                                 (e.currentTarget as HTMLElement).style.display = "none";
                               }}
@@ -182,6 +183,7 @@ export function SkillOrderCard({ skillOrder, readOnly = false, onClose }: SkillO
                             src={resolveCachedAssetUrl(ability.icon_url)}
                             alt={abilityLabel}
                             className="skill-ability-icon"
+                            decoding="async"
                             onError={(e) => {
                               (e.currentTarget as HTMLElement).style.display = "none";
                             }}
