@@ -15,7 +15,7 @@
 - Abaixo de `860px`, colapsa para 1 coluna mantendo fit-to-screen.
 
 ## 3. Paleta Dark Amethyst & Animações
-- Base `#0d0e12`, cards `#13141a`, hover `#1a1b24` / `#151620`, vidro `.floating-dock`: `rgba(19, 20, 26, 0.85)` + `backdrop-filter: blur(20px)`.
+- Base `#0d0e12`, cards `#13141a`, hover `#1a1b24` / `#151620`. A barra inferior `.floating-dock` usa a paleta Dark Amethyst estática e opaca centralizada em `src/styles/navigation-dock.css` (tonalidade idêntica em todas as abas, inclusive no Perfil).
 - Acento `#7c3aed` (`--accent-primary`), hover `#a78bfa`, sutil `rgba(124, 58, 237, 0.16)`, borda `rgba(124, 58, 237, 0.45)`.
 - `.tabs-viewport`: crossfade entre abas (`260ms cubic-bezier(0.16, 1, 0.3, 1)` entrada, `220ms ease-out` saída) respeitando `@media (prefers-reduced-motion: reduce)`.
 

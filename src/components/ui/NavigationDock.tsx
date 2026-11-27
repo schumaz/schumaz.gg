@@ -1,4 +1,3 @@
-import "./NavigationDock.css";
 import type { ActiveTab } from "../../types";
 import { useTranslation } from "../../i18n";
 
