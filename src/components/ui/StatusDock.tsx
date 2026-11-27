@@ -29,7 +29,7 @@ export function StatusDock({
     }
 
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    let resizeTimer: number | undefined;
 
     const syncMaximized = async () => {
       const maximized = await windowIpc.isWindowMaximized();
@@ -38,22 +38,25 @@ export function StatusDock({
       }
     };
 
-    void syncMaximized();
-    void windowIpc
-      .onWindowResized(() => {
+    const handleResize = () => {
+      if (resizeTimer !== undefined) {
+        window.clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = undefined;
         void syncMaximized();
-      })
-      .then((fn) => {
-        if (cancelled) {
-          fn();
-        } else {
-          unlisten = fn;
-        }
-      });
+      }, 120);
+    };
+
+    void syncMaximized();
+    window.addEventListener("resize", handleResize);
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      window.removeEventListener("resize", handleResize);
+      if (resizeTimer !== undefined) {
+        window.clearTimeout(resizeTimer);
+      }
     };
   }, []);
 

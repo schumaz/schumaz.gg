@@ -95,19 +95,6 @@ export const windowIpc = {
     }
   },
 
-  async onWindowResized(handler: () => void): Promise<UnlistenFn> {
-    if (!isTauriWindowAvailable()) {
-      return () => {};
-    }
-    try {
-      return await getCurrentWindow().onResized(() => {
-        handler();
-      });
-    } catch {
-      return () => {};
-    }
-  },
-
   async minimizeWindow(): Promise<void> {
     if (!isTauriWindowAvailable()) {
       return;

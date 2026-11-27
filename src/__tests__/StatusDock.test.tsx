@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { StatusDock } from "../components/ui/StatusDock";
 import { windowIpc } from "../services/ipc/window.ipc";
 import { SummonerInfo } from "../types";
@@ -138,5 +138,55 @@ describe("StatusDock", () => {
 
     fireEvent.click(screen.getByTestId("update-dismiss-btn"));
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("debounces window resize maximize-state IPC checks to a single settled call after 120ms", async () => {
+    const winRecord = window as unknown as Record<string, unknown>;
+    const hadTauriInternals = "__TAURI_INTERNALS__" in winRecord;
+    const prevTauriInternals = winRecord.__TAURI_INTERNALS__;
+    winRecord.__TAURI_INTERNALS__ = {};
+    vi.useFakeTimers();
+
+    try {
+      const isMaxSpy = vi
+        .spyOn(windowIpc, "isWindowMaximized")
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
+
+      render(<StatusDock summoner={null} />);
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(isMaxSpy).toHaveBeenCalledTimes(1);
+      const maxBtn = screen.getByTestId("window-maximize-btn");
+      expect(maxBtn).toHaveAttribute("aria-label", "Maximizar janela");
+
+      act(() => {
+        for (let i = 0; i < 20; i += 1) {
+          window.dispatchEvent(new Event("resize"));
+        }
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(119);
+      });
+      expect(isMaxSpy).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(isMaxSpy).toHaveBeenCalledTimes(2);
+      expect(maxBtn.querySelector("path")).toBeInTheDocument();
+      expect(maxBtn).toHaveAttribute("aria-label", "Restaurar janela");
+    } finally {
+      if (hadTauriInternals) {
+        winRecord.__TAURI_INTERNALS__ = prevTauriInternals;
+      } else {
+        delete winRecord.__TAURI_INTERNALS__;
+      }
+      vi.useRealTimers();
+    }
   });
 });

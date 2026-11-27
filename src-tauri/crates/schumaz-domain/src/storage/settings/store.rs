@@ -6,7 +6,7 @@ use super::super::paths::atomic_write;
 use super::ini_parser::parse_user_settings_ini;
 use super::ini_serializer::serialize_user_settings_ini;
 use super::{
-    AppSettings, NavigationState, NavigationStatePatch, clamp_profile_blur,
+    AppSettings, NavigationState, NavigationStatePatch, WindowSettings, clamp_profile_blur,
     validate_champion_tier_filter, validate_ranked_lane,
 };
 
@@ -160,4 +160,89 @@ pub fn record_last_update_check_epoch_secs(epoch_secs: u64) -> Result<AppSetting
     update_global_settings(|s| {
         s.updater.last_check_epoch_secs = normalized;
     })
+}
+
+fn round_opt_coord(val: Option<f64>) -> Option<i64> {
+    val.filter(|v| v.is_finite()).map(|v| v.round() as i64)
+}
+
+fn normalized_monitor(monitor: &Option<String>) -> Option<&str> {
+    monitor
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+}
+
+/// Returns `true` when two `WindowSettings` values serialize identically in `UserSettings.ini`.
+pub fn window_settings_serialized_eq(a: &WindowSettings, b: &WindowSettings) -> bool {
+    (a.window_width.round() as i64) == (b.window_width.round() as i64)
+        && (a.window_height.round() as i64) == (b.window_height.round() as i64)
+        && round_opt_coord(a.window_x) == round_opt_coord(b.window_x)
+        && round_opt_coord(a.window_y) == round_opt_coord(b.window_y)
+        && a.window_maximized == b.window_maximized
+        && normalized_monitor(&a.window_monitor) == normalized_monitor(&b.window_monitor)
+}
+
+/// Persists `[WindowSettings]` to `UserSettings.ini` only when its serialized representation changed.
+pub fn update_window_settings_if_changed(window: WindowSettings) -> Result<bool, String> {
+    let (updated, path_opt) = {
+        let mut guard = settings_lock()
+            .write()
+            .map_err(|_| "Settings lock poisoned".to_string())?;
+        if window_settings_serialized_eq(&guard.settings.window, &window) {
+            return Ok(false);
+        }
+        guard.settings.window = window;
+        (guard.settings.clone(), guard.ini_path.clone())
+    };
+
+    if let Some(path) = path_opt {
+        save_user_settings_to_path(&path, &updated)?;
+    }
+
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_settings_serialized_eq_matches_ini_rounding_and_monitor_normalization() {
+        let base = WindowSettings {
+            window_width: 1280.2,
+            window_height: 720.4,
+            window_x: Some(100.3),
+            window_y: Some(200.4),
+            window_maximized: false,
+            window_monitor: None,
+        };
+        let equivalent = WindowSettings {
+            window_width: 1279.8,
+            window_height: 719.6,
+            window_x: Some(99.7),
+            window_y: Some(199.6),
+            window_maximized: false,
+            window_monitor: Some("   ".to_string()),
+        };
+        assert!(window_settings_serialized_eq(&base, &equivalent));
+
+        let moved_x = WindowSettings {
+            window_x: Some(101.0),
+            ..base.clone()
+        };
+        assert!(!window_settings_serialized_eq(&base, &moved_x));
+
+        let toggled_max = WindowSettings {
+            window_maximized: true,
+            ..base.clone()
+        };
+        assert!(!window_settings_serialized_eq(&base, &toggled_max));
+
+        let changed_monitor = WindowSettings {
+            window_monitor: Some(r"\\.\DISPLAY2".to_string()),
+            ..base
+        };
+        assert!(!window_settings_serialized_eq(&equivalent, &changed_monitor));
+    }
 }

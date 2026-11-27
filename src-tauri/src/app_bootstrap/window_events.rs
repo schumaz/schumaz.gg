@@ -15,6 +15,7 @@ use super::webview_power::{
 };
 
 const WIN32_MINIMIZED_COORD_THRESHOLD: i32 = -30_000;
+pub const WINDOW_BOUNDS_SAVE_DEBOUNCE_MS: u64 = 450;
 
 #[derive(Clone)]
 pub struct WindowRuntimeState {
@@ -22,6 +23,7 @@ pub struct WindowRuntimeState {
     pub restoring_window: Arc<AtomicBool>,
     pub window_tracker: Arc<Mutex<storage::WindowSettings>>,
     pub window_save_seq: Arc<AtomicU64>,
+    pub window_save_worker_active: Arc<AtomicBool>,
     pub last_power_policy: Arc<AtomicU8>,
 }
 
@@ -32,6 +34,7 @@ impl Default for WindowRuntimeState {
             restoring_window: Arc::new(AtomicBool::new(false)),
             window_tracker: Arc::new(Mutex::new(storage::WindowSettings::default())),
             window_save_seq: Arc::new(AtomicU64::new(0)),
+            window_save_worker_active: Arc::new(AtomicBool::new(false)),
             last_power_policy: Arc::new(AtomicU8::new(UNSET_POWER_POLICY)),
         }
     }
@@ -52,6 +55,35 @@ pub fn request_taskbar_attention(app_handle: &tauri::AppHandle) {
 /// Shows/focuses (or lazily recreates) the `"main"` window on second-instance launch or tray open.
 pub fn focus_main_window(app_handle: &tauri::AppHandle) {
     let _ = super::window_factory::show_or_create_main_window(app_handle);
+}
+
+/// Returns true when `event` can affect minimized/visibility/power-policy state, avoiding Win32
+/// queries on every frame of normal window dragging or resizing.
+pub fn should_sync_minimized_state_for_event(
+    event: &tauri::WindowEvent,
+    was_minimized: bool,
+) -> bool {
+    match event {
+        tauri::WindowEvent::Focused(_) => true,
+        tauri::WindowEvent::Resized(size) => was_minimized || size.width == 0 || size.height == 0,
+        tauri::WindowEvent::Moved(pos) => {
+            was_minimized
+                || pos.x <= WIN32_MINIMIZED_COORD_THRESHOLD
+                || pos.y <= WIN32_MINIMIZED_COORD_THRESHOLD
+        }
+        _ => false,
+    }
+}
+
+/// Returns true when `event` carries Win32 minimized sentinel geometry (`0×0` or `<= -30000`).
+pub fn is_minimized_geometry_event(event: &tauri::WindowEvent) -> bool {
+    match event {
+        tauri::WindowEvent::Resized(size) => size.width == 0 || size.height == 0,
+        tauri::WindowEvent::Moved(pos) => {
+            pos.x <= WIN32_MINIMIZED_COORD_THRESHOLD || pos.y <= WIN32_MINIMIZED_COORD_THRESHOLD
+        }
+        _ => false,
+    }
 }
 
 fn apply_captured_window_metrics(
@@ -108,25 +140,14 @@ fn apply_captured_window_metrics(
     true
 }
 
-fn capture_window_settings(
-    window: &tauri::Window,
+fn record_window_metrics(
     tracker: &Arc<Mutex<storage::WindowSettings>>,
+    is_maximized: bool,
+    monitor_name: Option<String>,
+    scale: f64,
+    inner_size: Option<(u32, u32)>,
+    outer_pos: Option<(i32, i32)>,
 ) -> Option<storage::WindowSettings> {
-    if window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true) {
-        return None;
-    }
-
-    let is_maximized = window.is_maximized().unwrap_or(false);
-    let current_monitor = window.current_monitor().ok().flatten();
-    let monitor_name = current_monitor.as_ref().and_then(|m| m.name().cloned());
-    let scale = current_monitor
-        .as_ref()
-        .map(|m| m.scale_factor())
-        .or_else(|| window.scale_factor().ok())
-        .unwrap_or(1.0);
-    let inner_size = window.inner_size().ok().map(|s| (s.width, s.height));
-    let outer_pos = window.outer_position().ok().map(|p| (p.x, p.y));
-
     let mut guard = tracker.lock().ok()?;
     if !apply_captured_window_metrics(
         &mut guard,
@@ -140,6 +161,120 @@ fn capture_window_settings(
     }
 
     Some(guard.clone())
+}
+
+macro_rules! capture_metrics_for_window {
+    ($window:expr, $tracker:expr) => {{
+        if $window.is_minimized().unwrap_or(false) || !$window.is_visible().unwrap_or(true) {
+            None
+        } else {
+            let is_maximized = $window.is_maximized().unwrap_or(false);
+            let current_monitor = $window.current_monitor().ok().flatten();
+            let monitor_name = current_monitor.as_ref().and_then(|m| m.name().cloned());
+            let scale = current_monitor
+                .as_ref()
+                .map(|m| m.scale_factor())
+                .or_else(|| $window.scale_factor().ok())
+                .unwrap_or(1.0);
+            let inner_size = $window.inner_size().ok().map(|s| (s.width, s.height));
+            let outer_pos = $window.outer_position().ok().map(|p| (p.x, p.y));
+            record_window_metrics(
+                $tracker,
+                is_maximized,
+                monitor_name,
+                scale,
+                inner_size,
+                outer_pos,
+            )
+        }
+    }};
+}
+
+fn capture_window_settings(
+    window: &tauri::Window,
+    tracker: &Arc<Mutex<storage::WindowSettings>>,
+) -> Option<storage::WindowSettings> {
+    capture_metrics_for_window!(window, tracker)
+}
+
+fn capture_webview_window_settings(
+    window: &tauri::WebviewWindow,
+    tracker: &Arc<Mutex<storage::WindowSettings>>,
+) -> Option<storage::WindowSettings> {
+    capture_metrics_for_window!(window, tracker)
+}
+
+async fn capture_main_window_settings_on_main_thread(
+    app_handle: &tauri::AppHandle,
+    tracker: &Arc<Mutex<storage::WindowSettings>>,
+) -> Option<storage::WindowSettings> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let handle_for_main = app_handle.clone();
+    let tracker_for_main = Arc::clone(tracker);
+    if app_handle
+        .run_on_main_thread(move || {
+            let snapshot = handle_for_main
+                .get_webview_window("main")
+                .and_then(|win| capture_webview_window_settings(&win, &tracker_for_main));
+            let _ = tx.send(snapshot);
+        })
+        .is_err()
+    {
+        return None;
+    }
+    rx.await.ok().flatten()
+}
+
+async fn run_debounced_window_save_loop(app_handle: tauri::AppHandle, state: WindowRuntimeState) {
+    loop {
+        let observed_seq = state.window_save_seq.load(Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(WINDOW_BOUNDS_SAVE_DEBOUNCE_MS)).await;
+
+        if state.window_save_seq.load(Ordering::SeqCst) != observed_seq {
+            continue;
+        }
+
+        if !state.restoring_window.load(Ordering::SeqCst)
+            && let Some(snapshot) =
+                capture_main_window_settings_on_main_thread(&app_handle, &state.window_tracker)
+                    .await
+            && !state.restoring_window.load(Ordering::SeqCst)
+            && state.window_save_seq.load(Ordering::SeqCst) == observed_seq
+        {
+            let _ = tokio::task::spawn_blocking(move || {
+                storage::update_window_settings_if_changed(snapshot)
+            })
+            .await;
+        }
+
+        state
+            .window_save_worker_active
+            .store(false, Ordering::SeqCst);
+        if state.window_save_seq.load(Ordering::SeqCst) != observed_seq
+            && state
+                .window_save_worker_active
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        {
+            continue;
+        }
+        break;
+    }
+}
+
+fn schedule_debounced_window_save(app_handle: &tauri::AppHandle, state: &WindowRuntimeState) {
+    state.window_save_seq.fetch_add(1, Ordering::SeqCst);
+    if state
+        .window_save_worker_active
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+    {
+        let app_handle = app_handle.clone();
+        let state = state.clone();
+        tauri::async_runtime::spawn(async move {
+            run_debounced_window_save_loop(app_handle, state).await;
+        });
+    }
 }
 
 /// Handles window focus, pause-animation tracking, debounced bounds persistence, and close-to-tray lifecycle.
@@ -156,18 +291,10 @@ pub fn handle_window_event(
         return;
     }
 
-    if matches!(
-        event,
-        tauri::WindowEvent::Resized(_)
-            | tauri::WindowEvent::Moved(_)
-            | tauri::WindowEvent::Focused(_)
-    ) {
+    if should_sync_minimized_state_for_event(event, state.was_minimized.load(Ordering::Relaxed)) {
         let is_minimized = window.is_minimized().unwrap_or(false);
         let is_visible = window.is_visible().unwrap_or(true);
-        let is_focused = match event {
-            tauri::WindowEvent::Focused(focused) => *focused,
-            _ => window.is_focused().unwrap_or(true),
-        };
+        let is_focused = !matches!(event, tauri::WindowEvent::Focused(false));
         let minimized = is_window_minimized_or_hidden(is_minimized, is_visible);
         let prev = state.was_minimized.swap(minimized, Ordering::SeqCst);
         if prev != minimized {
@@ -180,11 +307,7 @@ pub fn handle_window_event(
                 is_focused,
                 crate::ws_listener::is_in_game_phase_active(),
             );
-            apply_webview_power_policy_if_changed(
-                &webview_win,
-                &state.last_power_policy,
-                policy,
-            );
+            apply_webview_power_policy_if_changed(&webview_win, &state.last_power_policy, policy);
         }
     }
 
@@ -192,30 +315,18 @@ pub fn handle_window_event(
         tauri::WindowEvent::Resized(_)
         | tauri::WindowEvent::Moved(_)
         | tauri::WindowEvent::ScaleFactorChanged { .. } => {
-            if state.restoring_window.load(Ordering::SeqCst) {
+            if state.restoring_window.load(Ordering::Relaxed) || is_minimized_geometry_event(event)
+            {
                 return;
             }
-            if let Some(snapshot) = capture_window_settings(window, &state.window_tracker) {
-                let seq = state.window_save_seq.fetch_add(1, Ordering::SeqCst) + 1;
-                let seq_ref = Arc::clone(&state.window_save_seq);
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(Duration::from_millis(450)).await;
-                    if seq_ref.load(Ordering::SeqCst) == seq {
-                        let _ = storage::update_global_settings(|s| {
-                            s.window = snapshot;
-                        });
-                    }
-                });
-            }
+            schedule_debounced_window_save(window.app_handle(), state);
         }
         tauri::WindowEvent::CloseRequested { .. } => {
             state.window_save_seq.fetch_add(1, Ordering::SeqCst);
             let snapshot = capture_window_settings(window, &state.window_tracker)
                 .or_else(|| state.window_tracker.lock().ok().map(|g| g.clone()));
             if let Some(snapshot) = snapshot {
-                let _ = storage::update_global_settings(|s| {
-                    s.window = snapshot;
-                });
+                let _ = storage::update_window_settings_if_changed(snapshot);
             }
             let close_to_tray = storage::get_global_settings().general.close_to_tray;
             if should_allow_exit_on_window_close(close_to_tray) {
@@ -227,77 +338,5 @@ pub fn handle_window_event(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_window_minimized_or_hidden_preserves_unfocused_visible_window() {
-        assert!(!is_window_minimized_or_hidden(false, true));
-        assert!(is_window_minimized_or_hidden(true, true));
-        assert!(is_window_minimized_or_hidden(false, false));
-        assert!(is_window_minimized_or_hidden(true, false));
-    }
-
-    #[test]
-    fn test_should_allow_exit_on_window_close_respects_close_to_tray() {
-        assert!(should_allow_exit_on_window_close(false));
-        assert!(!should_allow_exit_on_window_close(true));
-    }
-
-    #[test]
-    fn test_apply_captured_window_metrics_tracks_monitor_dpi_and_preserves_normal_rect_when_maximized()
-     {
-        let mut settings = storage::WindowSettings::default();
-
-        // Normal capture on 200% DPI secondary monitor
-        assert!(apply_captured_window_metrics(
-            &mut settings,
-            false,
-            Some(r"\\.\DISPLAY2".to_string()),
-            2.0,
-            Some((2560, 1440)),
-            Some((2200, 150)),
-        ));
-        assert_eq!(settings.window_width, 1280.0);
-        assert_eq!(settings.window_height, 720.0);
-        assert_eq!(settings.window_x, Some(2200.0));
-        assert_eq!(settings.window_y, Some(150.0));
-        assert!(!settings.window_maximized);
-        assert_eq!(settings.window_monitor.as_deref(), Some(r"\\.\DISPLAY2"));
-
-        // Maximizing on DISPLAY3 keeps normal rect intact while updating maximized + monitor
-        assert!(apply_captured_window_metrics(
-            &mut settings,
-            true,
-            Some(r"\\.\DISPLAY3".to_string()),
-            1.5,
-            Some((2560, 1400)),
-            Some((0, 0)),
-        ));
-        assert_eq!(settings.window_width, 1280.0);
-        assert_eq!(settings.window_height, 720.0);
-        assert_eq!(settings.window_x, Some(2200.0));
-        assert_eq!(settings.window_y, Some(150.0));
-        assert!(settings.window_maximized);
-        assert_eq!(settings.window_monitor.as_deref(), Some(r"\\.\DISPLAY3"));
-
-        // Win32 minimized sentinel (-32000, -32000) and zero-size events are rejected
-        assert!(!apply_captured_window_metrics(
-            &mut settings,
-            false,
-            Some(r"\\.\DISPLAY1".to_string()),
-            1.0,
-            Some((1280, 720)),
-            Some((-32000, -32000)),
-        ));
-        assert!(!apply_captured_window_metrics(
-            &mut settings,
-            false,
-            Some(r"\\.\DISPLAY1".to_string()),
-            1.0,
-            Some((0, 0)),
-            Some((100, 100)),
-        ));
-        assert_eq!(settings.window_monitor.as_deref(), Some(r"\\.\DISPLAY3"));
-    }
-}
+#[path = "window_events_tests.rs"]
+mod tests;
