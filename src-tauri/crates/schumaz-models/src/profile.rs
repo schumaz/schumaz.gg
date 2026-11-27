@@ -1,5 +1,5 @@
 use super::arena::ArenaAugmentMetadata;
-use super::build::{ItemMetadata, RuneMetadata, SpellMetadata};
+use super::ddragon::{ItemMetadata, RuneMetadata, SpellMetadata};
 use super::lcu::SummonerInfo;
 use serde::{Deserialize, Serialize};
 use specta::Type;

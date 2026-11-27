@@ -1,10 +1,60 @@
-﻿use super::super::models::{ItemStatEntry, UnifiedBuildOption};
-use super::affinity::*;
-use super::classification::*;
-use super::core_final_options::extract_top_core_build_options_with_tear;
+﻿use super::super::models::{ItemClassificationCache, ItemStatEntry, UnifiedBuildOption};
+use super::affinity::{compute_item_affinity_score_with_cls, extract_core_archetype_tags_with_cls};
+use super::classification::{
+    is_boot_in, is_component_in, is_starter_in, normalize_tear_item_in,
+    snapshot_dynamic_item_classifications,
+};
+use super::core_final_options::extract_top_core_build_options_with_cls;
+use super::tear::resolve_tear_to_completed_item_in;
 use std::collections::HashMap;
 
-pub fn build_cohesive_final_build_for_core(
+fn collect_compatible_candidates<'a>(
+    cls: &ItemClassificationCache,
+    entries: impl Iterator<Item = &'a ItemStatEntry>,
+    excluded: &[i32],
+    core_tags: &[&str],
+    core_is_pure_ad: bool,
+    core_is_pure_ap: bool,
+) -> Vec<i32> {
+    let mut play_by_item: HashMap<i32, i64> = HashMap::new();
+    let mut order_seen: HashMap<i32, usize> = HashMap::new();
+    let mut idx = 0usize;
+
+    for entry in entries {
+        for &id in &entry.ids {
+            let norm_id = normalize_tear_item_in(cls, id);
+            if !excluded.contains(&norm_id)
+                && !is_boot_in(cls, norm_id)
+                && !is_starter_in(cls, norm_id)
+                && !is_component_in(cls, norm_id)
+            {
+                let affinity = compute_item_affinity_score_with_cls(
+                    cls,
+                    norm_id,
+                    core_tags,
+                    core_is_pure_ad,
+                    core_is_pure_ap,
+                );
+                if affinity > -500_000 {
+                    *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
+                    order_seen.entry(norm_id).or_insert(idx);
+                    idx += 1;
+                }
+            }
+        }
+    }
+
+    let mut candidates: Vec<(i32, i64, usize)> = play_by_item
+        .into_iter()
+        .map(|(id, play)| (id, play, *order_seen.get(&id).unwrap_or(&0)))
+        .collect();
+    candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+    candidates.into_iter().map(|(id, _, _)| id).collect()
+}
+
+/// Builds a cohesive 6-item final build for `core_items` using `cls` by reference (zero locks).
+pub fn build_cohesive_final_build_for_core_with_cls(
+    cls: &ItemClassificationCache,
     core_items: &[i32],
     fourth_entries: &[ItemStatEntry],
     fifth_entries: &[ItemStatEntry],
@@ -14,97 +64,42 @@ pub fn build_cohesive_final_build_for_core(
 ) -> Vec<i32> {
     let mut build_6 = core_items.to_vec();
     let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
-        extract_core_archetype_tags(core_items);
+        extract_core_archetype_tags_with_cls(cls, core_items);
 
-    let pick_best_item_for_slot =
-        |entries: &[ItemStatEntry], current_build: &[i32]| -> Option<i32> {
-            let mut play_by_item: HashMap<i32, i64> = HashMap::new();
-            let mut order_seen: HashMap<i32, usize> = HashMap::new();
-            let mut idx = 0;
-            for entry in entries {
-                for &id in &entry.ids {
-                    let norm_id = normalize_tear_item_dynamic(id);
-                    if !current_build.contains(&norm_id)
-                        && !is_boot_item_dynamic(norm_id)
-                        && !is_starter_item(norm_id)
-                        && !is_component_item_dynamic(norm_id)
-                    {
-                        let affinity = compute_item_affinity_score(
-                            norm_id,
-                            &core_tags,
-                            core_is_pure_ad,
-                            core_is_pure_ap,
-                        );
-                        if affinity > -500_000 {
-                            *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
-                            order_seen.entry(norm_id).or_insert(idx);
-                            idx += 1;
-                        }
-                    }
-                }
-            }
-            let mut candidates: Vec<(i32, i64, usize)> = play_by_item
-                .into_iter()
-                .map(|(id, play)| (id, play, *order_seen.get(&id).unwrap_or(&0)))
-                .collect();
-            candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-            candidates.first().map(|&(id, _, _)| id)
-        };
-
-    // Sequential slot selection:
-    // Slot 4: #1 most played compatible item from fourth_entries
-    if let Some(item_4) = pick_best_item_for_slot(fourth_entries, &build_6) {
-        build_6.push(item_4);
-    }
-    // Slot 5: #1 most played compatible item from fifth_entries
-    if let Some(item_5) = pick_best_item_for_slot(fifth_entries, &build_6) {
-        build_6.push(item_5);
-    }
-    // Slot 6: #1 most played compatible item from sixth_entries
-    if let Some(item_6) = pick_best_item_for_slot(sixth_entries, &build_6) {
-        build_6.push(item_6);
+    for depth_entries in [fourth_entries, fifth_entries, sixth_entries] {
+        if let Some(best) = collect_compatible_candidates(
+            cls,
+            depth_entries.iter(),
+            &build_6,
+            &core_tags,
+            core_is_pure_ad,
+            core_is_pure_ap,
+        )
+        .into_iter()
+        .next()
+        {
+            build_6.push(best);
+        }
     }
 
-    // Dynamic late-game completion fallback if any depth lists were exhausted or sparse
     if build_6.len() < 6 {
-        let all_remaining_entries = fourth_entries
+        let remaining = fourth_entries
             .iter()
             .chain(fifth_entries.iter())
             .chain(sixth_entries.iter())
             .chain(candidate_entries.iter());
-
-        let mut fallback_play: HashMap<i32, i64> = HashMap::new();
-        let mut fallback_seen: HashMap<i32, usize> = HashMap::new();
-        let mut f_idx = 0;
-        for entry in all_remaining_entries {
-            for &id in &entry.ids {
-                let norm_id = normalize_tear_item_dynamic(id);
-                if !build_6.contains(&norm_id)
-                    && !is_boot_item_dynamic(norm_id)
-                    && !is_starter_item(norm_id)
-                    && !is_component_item_dynamic(norm_id)
-                {
-                    let affinity = compute_item_affinity_score(
-                        norm_id,
-                        &core_tags,
-                        core_is_pure_ad,
-                        core_is_pure_ap,
-                    );
-                    if affinity > -500_000 {
-                        *fallback_play.entry(norm_id).or_insert(0) += entry.play.max(1);
-                        fallback_seen.entry(norm_id).or_insert(f_idx);
-                        f_idx += 1;
-                    }
-                }
+        for id in collect_compatible_candidates(
+            cls,
+            remaining,
+            &build_6,
+            &core_tags,
+            core_is_pure_ad,
+            core_is_pure_ap,
+        ) {
+            if build_6.len() >= 6 {
+                break;
             }
-        }
-        let mut fallback_cands: Vec<(i32, i64, usize)> = fallback_play
-            .into_iter()
-            .map(|(id, play)| (id, play, *fallback_seen.get(&id).unwrap_or(&0)))
-            .collect();
-        fallback_cands.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-        for (id, _, _) in fallback_cands {
-            if build_6.len() < 6 && !build_6.contains(&id) {
+            if !build_6.contains(&id) {
                 build_6.push(id);
             }
         }
@@ -113,11 +108,30 @@ pub fn build_cohesive_final_build_for_core(
     build_6
 }
 
-/// Builds up to 6 coherent situational / useful items for a specific build option,
-/// strictly excluding core items, final build items, boots, starters, and components,
-/// while filtering out conflicting archetypes.
+pub fn build_cohesive_final_build_for_core(
+    core_items: &[i32],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    damage_type: &str,
+) -> Vec<i32> {
+    let cls = snapshot_dynamic_item_classifications();
+    build_cohesive_final_build_for_core_with_cls(
+        &cls,
+        core_items,
+        fourth_entries,
+        fifth_entries,
+        sixth_entries,
+        candidate_entries,
+        damage_type,
+    )
+}
+
+/// Builds up to 6 coherent situational / useful items for a specific build option using `cls` by reference.
 #[allow(clippy::too_many_arguments)]
-pub fn build_situational_items_for_option(
+pub fn build_situational_items_for_option_with_cls(
+    cls: &ItemClassificationCache,
     core_items: &[i32],
     final_items: &[i32],
     fourth_entries: &[ItemStatEntry],
@@ -129,7 +143,7 @@ pub fn build_situational_items_for_option(
     _damage_type: &str,
 ) -> Vec<i32> {
     let (core_tags, _core_has_ap, _core_has_ad, core_is_pure_ad, core_is_pure_ap) =
-        extract_core_archetype_tags(core_items);
+        extract_core_archetype_tags_with_cls(cls, core_items);
 
     let all_entries = fourth_entries
         .iter()
@@ -142,48 +156,48 @@ pub fn build_situational_items_for_option(
     let mut first_seen: HashMap<i32, usize> = HashMap::new();
     let mut idx = 0;
 
-    for entry in all_entries {
-        for &id in &entry.ids {
-            let norm_id = normalize_tear_item_dynamic(id);
-            if !core_items.contains(&norm_id)
-                && !final_items.contains(&norm_id)
-                && !is_boot_item_dynamic(norm_id)
-                && !is_starter_item(norm_id)
-                && !is_component_item_dynamic(norm_id)
-            {
-                *play_by_item.entry(norm_id).or_insert(0) += entry.play.max(1);
-                first_seen.entry(norm_id).or_insert(idx);
-                idx += 1;
-            }
-        }
-    }
-
-    // Include items from general_situational as candidate pool if not already present
-    for &id in general_situational {
-        let norm_id = normalize_tear_item_dynamic(id);
+    let mut record = |id: i32, play: i64, accumulate: bool| {
+        let norm_id = normalize_tear_item_in(cls, id);
         if !core_items.contains(&norm_id)
             && !final_items.contains(&norm_id)
-            && !is_boot_item_dynamic(norm_id)
-            && !is_starter_item(norm_id)
-            && !is_component_item_dynamic(norm_id)
+            && !is_boot_in(cls, norm_id)
+            && !is_starter_in(cls, norm_id)
+            && !is_component_in(cls, norm_id)
         {
-            play_by_item.entry(norm_id).or_insert(1);
+            if accumulate {
+                *play_by_item.entry(norm_id).or_insert(0) += play;
+            } else {
+                play_by_item.entry(norm_id).or_insert(play);
+            }
             first_seen.entry(norm_id).or_insert(idx);
             idx += 1;
         }
+    };
+
+    for entry in all_entries {
+        for &id in &entry.ids {
+            record(id, entry.play.max(1), true);
+        }
+    }
+    for &id in general_situational {
+        record(id, 1, false);
     }
 
     let mut candidates: Vec<(i32, i64, usize)> = Vec::new();
     for (id, play) in play_by_item {
-        let affinity =
-            compute_item_affinity_score(id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+        let affinity = compute_item_affinity_score_with_cls(
+            cls,
+            id,
+            &core_tags,
+            core_is_pure_ad,
+            core_is_pure_ap,
+        );
         if affinity > -500_000 {
             let seen = *first_seen.get(&id).unwrap_or(&0);
             candidates.push((id, play, seen));
         }
     }
 
-    // Sort strictly by play descending, tie-break by order seen
     candidates.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
 
     let mut situational: Vec<i32> = candidates.into_iter().map(|(id, _, _)| id).collect();
@@ -191,9 +205,37 @@ pub fn build_situational_items_for_option(
     situational
 }
 
-/// Builds up to 3 unified build options (each with 3 core items, 6 matching final items, and coherent situational items).
 #[allow(clippy::too_many_arguments)]
-pub fn build_unified_build_options(
+pub fn build_situational_items_for_option(
+    core_items: &[i32],
+    final_items: &[i32],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    extra_entries: &[ItemStatEntry],
+    general_situational: &[i32],
+    damage_type: &str,
+) -> Vec<i32> {
+    let cls = snapshot_dynamic_item_classifications();
+    build_situational_items_for_option_with_cls(
+        &cls,
+        core_items,
+        final_items,
+        fourth_entries,
+        fifth_entries,
+        sixth_entries,
+        candidate_entries,
+        extra_entries,
+        general_situational,
+        damage_type,
+    )
+}
+
+/// Builds up to 3 unified build options using `cls` by reference (zero global lock overhead).
+#[allow(clippy::too_many_arguments)]
+pub fn build_unified_build_options_with_cls(
+    cls: &ItemClassificationCache,
     core_entries: &[ItemStatEntry],
     fourth_entries: &[ItemStatEntry],
     fifth_entries: &[ItemStatEntry],
@@ -213,13 +255,18 @@ pub fn build_unified_build_options(
         .chain(extra_entries.iter())
         .cloned()
         .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear);
+    let tear_upgrade = resolve_tear_to_completed_item_in(cls, &all_for_tear);
 
     let cand_ids: Vec<i32> = candidate_entries
         .iter()
-        .flat_map(|e| e.ids.clone())
+        .chain(fourth_entries.iter())
+        .chain(fifth_entries.iter())
+        .chain(sixth_entries.iter())
+        .chain(extra_entries.iter())
+        .flat_map(|e| e.ids.iter().copied())
         .collect();
-    let core_opts = extract_top_core_build_options_with_tear(
+    let core_opts = extract_top_core_build_options_with_cls(
+        cls,
         core_entries,
         &cand_ids,
         damage_type,
@@ -228,7 +275,8 @@ pub fn build_unified_build_options(
 
     let mut unified_options = Vec::new();
     for (idx, core_opt) in core_opts.into_iter().enumerate() {
-        let final_6 = build_cohesive_final_build_for_core(
+        let final_6 = build_cohesive_final_build_for_core_with_cls(
+            cls,
             &core_opt.item_ids,
             fourth_entries,
             fifth_entries,
@@ -237,16 +285,9 @@ pub fn build_unified_build_options(
             damage_type,
         );
 
-        let situational_items = build_situational_items_for_option(
-            &core_opt.item_ids,
-            &final_6,
-            fourth_entries,
-            fifth_entries,
-            sixth_entries,
-            candidate_entries,
-            extra_entries,
-            general_situational,
-            damage_type,
+        let situational_items = build_situational_items_for_option_with_cls(
+            cls, &core_opt.item_ids, &final_6, fourth_entries, fifth_entries,
+            sixth_entries, candidate_entries, extra_entries, general_situational, damage_type,
         );
 
         let name = if idx == 0 {
@@ -270,6 +311,25 @@ pub fn build_unified_build_options(
     }
 
     unified_options
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_unified_build_options(
+    core_entries: &[ItemStatEntry],
+    fourth_entries: &[ItemStatEntry],
+    fifth_entries: &[ItemStatEntry],
+    sixth_entries: &[ItemStatEntry],
+    candidate_entries: &[ItemStatEntry],
+    extra_entries: &[ItemStatEntry],
+    general_situational: &[i32],
+    damage_type: &str,
+    position: &str,
+) -> Vec<UnifiedBuildOption> {
+    let cls = snapshot_dynamic_item_classifications();
+    build_unified_build_options_with_cls(
+        &cls, core_entries, fourth_entries, fifth_entries, sixth_entries,
+        candidate_entries, extra_entries, general_situational, damage_type, position,
+    )
 }
 
 #[cfg(test)]

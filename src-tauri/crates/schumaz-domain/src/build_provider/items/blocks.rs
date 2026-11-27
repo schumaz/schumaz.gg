@@ -1,6 +1,12 @@
-﻿use super::super::models::{ItemBlock, ItemBlockKind, ItemStatEntry};
-use super::classification::*;
+﻿use super::super::models::{ItemBlock, ItemBlockKind, ItemClassificationCache, ItemStatEntry};
+use super::classification::{
+    is_boot_in, is_completed_in, is_component_in, is_starter_in, normalize_tear_item_in,
+    snapshot_dynamic_item_classifications,
+};
 use super::starters_boots::{select_starter_items, select_top_boots};
+use super::tear::{
+    is_tear_component, resolve_tear_item_ids_in, resolve_tear_to_completed_item_in,
+};
 use std::collections::{HashMap, HashSet};
 
 pub fn build_5_item_blocks(
@@ -28,7 +34,7 @@ struct ItemAggregate {
     first_seen_index: usize,
 }
 
-/// Builds the 5 item blocks using explicit OP.GG Core builds and separate Fourth, Fifth, and Sixth item lists.
+/// Convenience wrapper acquiring a single classification snapshot.
 #[allow(clippy::too_many_arguments)]
 pub fn build_5_item_blocks_with_depth_lists(
     starter_entries: Vec<ItemStatEntry>,
@@ -40,7 +46,35 @@ pub fn build_5_item_blocks_with_depth_lists(
     damage_type: &str,
     position: &str,
 ) -> Vec<ItemBlock> {
-    let starter_ids = select_starter_items(&starter_entries, damage_type, position);
+    let cls = snapshot_dynamic_item_classifications();
+    build_5_item_blocks_with_cls(
+        &cls,
+        starter_entries,
+        boot_entries,
+        candidate_entries,
+        fourth_entries,
+        fifth_entries,
+        sixth_entries,
+        damage_type,
+        position,
+    )
+}
+
+/// Builds the 5 item blocks using explicit OP.GG Core builds and separate Fourth, Fifth, and Sixth
+/// item lists without global lock contention or hardcoded fallback item padding.
+#[allow(clippy::too_many_arguments)]
+pub fn build_5_item_blocks_with_cls(
+    cls: &ItemClassificationCache,
+    starter_entries: Vec<ItemStatEntry>,
+    boot_entries: Vec<ItemStatEntry>,
+    candidate_entries: Vec<ItemStatEntry>,
+    fourth_entries: Vec<ItemStatEntry>,
+    fifth_entries: Vec<ItemStatEntry>,
+    sixth_entries: Vec<ItemStatEntry>,
+    damage_type: &str,
+    position: &str,
+) -> Vec<ItemBlock> {
+    let starter_ids = select_starter_items(cls, &starter_entries, damage_type, position);
 
     // Detect confirmed Tear legendary upgrade from payload entries (never inventing one from raw 3070)
     let all_entries_for_tear: Vec<ItemStatEntry> = candidate_entries
@@ -50,7 +84,7 @@ pub fn build_5_item_blocks_with_depth_lists(
         .chain(sixth_entries.iter())
         .cloned()
         .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_entries_for_tear);
+    let tear_upgrade = resolve_tear_to_completed_item_in(cls, &all_entries_for_tear);
 
     // Future-proof contextual sets directly from OP.GG structures:
     let known_boots: HashSet<i32> = boot_entries
@@ -58,19 +92,19 @@ pub fn build_5_item_blocks_with_depth_lists(
         .flat_map(|e| e.ids.iter().copied())
         .collect();
 
-    let is_boot = |id: i32| -> bool { known_boots.contains(&id) || is_boot_item_dynamic(id) };
-    let is_comp = |id: i32| -> bool { is_component_item_dynamic(id) };
+    let is_boot = |id: i32| -> bool { known_boots.contains(&id) || is_boot_in(cls, id) };
+    let is_comp = |id: i32| -> bool { is_component_in(cls, id) };
 
     let known_core_or_depth_items: HashSet<i32> = candidate_entries
         .iter()
         .filter(|e| {
             e.ids
                 .iter()
-                .filter(|&&id| !is_boot(id) && !is_starter_item(id) && !is_comp(id))
+                .filter(|&&id| !is_boot(id) && !is_starter_in(cls, id) && !is_comp(id))
                 .count()
                 >= 2
         })
-        .flat_map(|e| resolve_tear_item_ids(&e.ids, tear_upgrade))
+        .flat_map(|e| resolve_tear_item_ids_in(cls, &e.ids, tear_upgrade))
         .chain(
             fourth_entries
                 .iter()
@@ -78,7 +112,7 @@ pub fn build_5_item_blocks_with_depth_lists(
                 .chain(sixth_entries.iter())
                 .flat_map(|e| e.ids.iter().copied())
                 .filter(|&id| !is_tear_component(id))
-                .map(normalize_tear_item_dynamic),
+                .map(|id| normalize_tear_item_in(cls, id)),
         )
         .collect();
 
@@ -88,21 +122,20 @@ pub fn build_5_item_blocks_with_depth_lists(
         .iter()
         .flat_map(|e| e.ids.iter().copied())
         .filter(|&id| {
-            let norm = normalize_tear_item_dynamic(id);
+            let norm = normalize_tear_item_in(cls, id);
             !is_boot(id)
                 && !is_comp(id)
-                && !is_completed_item_dynamic(id)
+                && !is_completed_in(cls, id)
                 && !known_core_or_depth_items.contains(&norm)
         })
         .collect();
 
-    let is_starter = |id: i32| -> bool { known_starters.contains(&id) || is_starter_item(id) };
+    let is_starter = |id: i32| -> bool { known_starters.contains(&id) || is_starter_in(cls, id) };
 
     // 2. 3 Botas Mais Feitas: Always ranked by absolute games played (play count descending)
     let boots_list = select_top_boots(
         &boot_entries,
         &candidate_entries,
-        damage_type,
         &is_boot,
         &is_starter,
         &is_comp,
@@ -117,7 +150,7 @@ pub fn build_5_item_blocks_with_depth_lists(
         .chain(fifth_entries.iter())
         .chain(sixth_entries.iter())
     {
-        for norm_id in resolve_tear_item_ids(&entry.ids, tear_upgrade) {
+        for norm_id in resolve_tear_item_ids_in(cls, &entry.ids, tear_upgrade) {
             if !is_boot(norm_id) && !is_starter(norm_id) && !is_comp(norm_id) {
                 let entry_play = entry.play.max(1);
                 let slot = item_map.entry(norm_id).or_insert_with(|| {
@@ -163,7 +196,7 @@ pub fn build_5_item_blocks_with_depth_lists(
     if !core_combos.is_empty() {
         core_combos.sort_by_key(|a| std::cmp::Reverse(a.play));
         let best_combo = core_combos[0];
-        for norm_id in resolve_tear_item_ids(&best_combo.ids, tear_upgrade) {
+        for norm_id in resolve_tear_item_ids_in(cls, &best_combo.ids, tear_upgrade) {
             if clean_core.len() < 3
                 && !is_boot(norm_id)
                 && !is_starter(norm_id)
@@ -176,24 +209,13 @@ pub fn build_5_item_blocks_with_depth_lists(
     }
 
     for cand in &all_candidates {
-        let norm_id = normalize_tear_item_dynamic(cand.id);
+        let norm_id = normalize_tear_item_in(cls, cand.id);
         if clean_core.len() < 3 && !clean_core.contains(&norm_id) {
             clean_core.push(norm_id);
         }
     }
 
-    let default_core = if damage_type == "AP" {
-        vec![3118, 4645, 3089]
-    } else {
-        vec![3031, 3094, 3036]
-    };
-    for d in default_core {
-        if clean_core.len() < 3 && !clean_core.contains(&d) {
-            clean_core.push(d);
-        }
-    }
-
-    // Block 4: Build Final (6 items: 3 Core items + most built 4th + most built 5th + most built 6th)
+    // Block 4: Build Final (up to 6 items: Core items + most built 4th + most built 5th + most built 6th)
     let mut final_build: Vec<i32> = clean_core.clone();
 
     let pick_top_from_depth_list =
@@ -202,7 +224,7 @@ pub fn build_5_item_blocks_with_depth_lists(
             sorted.sort_by_key(|e| std::cmp::Reverse(e.play));
             for entry in sorted {
                 for &id in &entry.ids {
-                    let norm_id = normalize_tear_item_dynamic(id);
+                    let norm_id = normalize_tear_item_in(cls, id);
                     if !current_build.contains(&norm_id)
                         && !is_comp(norm_id)
                         && !is_starter(norm_id)
@@ -233,22 +255,12 @@ pub fn build_5_item_blocks_with_depth_lists(
             final_build.push(cand.id);
         }
     }
-    let default_final = if damage_type == "AP" {
-        vec![3157, 3135, 4629, 3102]
-    } else {
-        vec![3072, 3026, 3139, 3033]
-    };
-    for d in default_final {
-        if final_build.len() < 6 && !final_build.contains(&d) {
-            final_build.push(d);
-        }
-    }
 
     // Block 5: Itens Situacionais / Úteis
     let mut situational_candidates: Vec<&ItemAggregate> = all_candidates
         .iter()
         .filter(|cand| {
-            let norm_id = normalize_tear_item_dynamic(cand.id);
+            let norm_id = normalize_tear_item_in(cls, cand.id);
             !clean_core.contains(&norm_id)
                 && !final_build.contains(&norm_id)
                 && !is_comp(norm_id)
@@ -264,7 +276,7 @@ pub fn build_5_item_blocks_with_depth_lists(
 
     let mut situational_items: Vec<i32> = Vec::new();
     for c in situational_candidates {
-        let norm_id = normalize_tear_item_dynamic(c.id);
+        let norm_id = normalize_tear_item_in(cls, c.id);
         if !situational_items.contains(&norm_id)
             && !clean_core.contains(&norm_id)
             && !final_build.contains(&norm_id)

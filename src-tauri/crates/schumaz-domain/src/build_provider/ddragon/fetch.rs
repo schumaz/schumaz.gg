@@ -2,6 +2,7 @@ use super::super::items::set_dynamic_item_classifications;
 use super::super::models::DataDragonCache;
 use super::augments::fetch_arena_augments_catalog;
 use super::cache::DataDragonDiskBundle;
+use super::catalog_parsers::{parse_all_ddragon_champion_profiles, parse_ddragon_rune_trees};
 use super::parsers::{
     parse_all_ddragon_champion_abilities, parse_all_ddragon_champions,
     parse_ddragon_item_classifications, parse_ddragon_runes, parse_ddragon_summoners,
@@ -147,7 +148,11 @@ pub(super) async fn load_ddragon_bundle_for_version(
     let champions_json = champions_res?;
     let champions = parse_all_ddragon_champions(&champions_json, version)?;
     let champion_abilities = parse_all_ddragon_champion_abilities(&champions_json, version);
-    let runes = parse_ddragon_runes(&runes_res?)?;
+    let champion_profiles = parse_all_ddragon_champion_profiles(&champions_json);
+    let runes_json = runes_res?;
+    let runes = parse_ddragon_runes(&runes_json)?;
+    let rune_trees = parse_ddragon_rune_trees(&runes_json);
+    let cached_classifications = item_classifications.clone().unwrap_or_default();
 
     Ok(DataDragonDiskBundle {
         ddragon: DataDragonCache {
@@ -158,6 +163,9 @@ pub(super) async fn load_ddragon_bundle_for_version(
             items,
             arena_augments,
             champion_abilities,
+            champion_profiles,
+            rune_trees,
+            item_classifications: cached_classifications,
         },
         item_classifications,
     })

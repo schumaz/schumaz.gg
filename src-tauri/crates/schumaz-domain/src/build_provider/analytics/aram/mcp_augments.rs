@@ -1,4 +1,5 @@
 use super::super::cooldown::send_analytics_request;
+use super::super::mcp_dsl::{McpDocument, McpTuple, McpValue};
 use super::html_extract::normalize_opgg_champion_key;
 use super::parsers::{RawMayhemAugmentStat, hydrate_mayhem_augments};
 use crate::build_provider::models::DataDragonCache;
@@ -96,99 +97,41 @@ fn check_mcp_error_envelope(json_body: &serde_json::Value) -> Result<(), String>
     Ok(())
 }
 
-fn parse_augment_class_fields(text: &str) -> Vec<String> {
-    for line in text.lines() {
-        if let Some(rest) = line.trim().strip_prefix("class Augment:") {
-            let fields: Vec<String> = rest
-                .split(',')
-                .map(|s| s.trim().to_ascii_lowercase())
-                .filter(|s| !s.is_empty())
-                .collect();
-            if !fields.is_empty() {
-                return fields;
-            }
-        }
-    }
-    Vec::new()
-}
-
-fn split_dsl_args(args_slice: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let (mut start, mut paren_depth, mut bracket_depth) = (0usize, 0usize, 0usize);
-    let (mut in_string, mut escaped) = (false, false);
-
-    for (i, ch) in args_slice.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
-            }
-            continue;
-        }
-        match ch {
-            '"' => in_string = true,
-            '(' => paren_depth += 1,
-            ')' => paren_depth = paren_depth.saturating_sub(1),
-            '[' => bracket_depth += 1,
-            ']' => bracket_depth = bracket_depth.saturating_sub(1),
-            ',' if paren_depth == 0 && bracket_depth == 0 => {
-                if let Some(part) = args_slice.get(start..i) {
-                    parts.push(part.trim());
-                }
-                start = i + ch.len_utf8();
-            }
-            _ => {}
-        }
-    }
-    if let Some(tail) = args_slice.get(start..).map(str::trim)
-        && (!tail.is_empty() || !parts.is_empty())
-    {
-        parts.push(tail);
-    }
-    parts
-}
-
-fn decode_dsl_string(token: &str) -> Option<String> {
-    let trimmed = token.trim();
-    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("null") || trimmed == "None" {
-        return None;
-    }
-    if trimmed.starts_with('"') {
-        serde_json::from_str::<String>(trimmed).ok()
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
 fn parse_dsl_augment_tuple(
-    args: &[&str],
-    header_fields: &[String],
+    doc: &McpDocument<'_>,
+    tuple: &McpTuple<'_>,
 ) -> Option<RawMayhemAugmentStat> {
-    let inferred: &[&str] = match args.len() {
+    let inferred: &[&str] = match tuple.args.len() {
         4 => &["id", "tier", "performance", "popular"],
         5 => &["id", "desc", "tier", "performance", "popular"],
         6 => &["id", "name", "desc", "tier", "performance", "popular"],
         _ => &[],
     };
-    let use_header = !header_fields.is_empty() && header_fields.len() == args.len();
+    let named = doc.named_args(tuple);
     let (mut id, mut tier, mut performance, mut popular, mut desc) = (None, 5, 0.0, 0.0, None);
 
-    for (idx, raw_val) in args.iter().enumerate() {
-        let field = if use_header {
-            header_fields[idx].as_str()
+    for (idx, val) in tuple.args.iter().enumerate() {
+        let field = if let Some(ref pairs) = named {
+            pairs[idx].0
         } else {
             *inferred.get(idx)?
         };
-        match field {
-            "id" => id = raw_val.parse::<i32>().ok(),
-            "tier" => tier = raw_val.parse::<i32>().unwrap_or(tier),
-            "performance" => performance = raw_val.parse::<f64>().unwrap_or(performance),
-            "popular" => popular = raw_val.parse::<f64>().unwrap_or(popular),
-            "desc" => desc = decode_dsl_string(raw_val),
-            _ => {}
+        if field.eq_ignore_ascii_case("id") {
+            id = val.as_i32();
+        } else if field.eq_ignore_ascii_case("tier") {
+            tier = val.as_i32().unwrap_or(tier);
+        } else if field.eq_ignore_ascii_case("performance") {
+            performance = val.as_f64().unwrap_or(performance);
+        } else if field.eq_ignore_ascii_case("popular") {
+            popular = val.as_f64().unwrap_or(popular);
+        } else if field.eq_ignore_ascii_case("desc") {
+            desc = match val {
+                McpValue::Null => None,
+                _ => val
+                    .as_str()
+                    .filter(|s| !s.trim().is_empty())
+                    .map(str::to_string),
+            };
         }
     }
 
@@ -202,86 +145,12 @@ fn parse_dsl_augment_tuple(
     })
 }
 
-fn find_dsl_closing_paren_offset(rest: &str) -> Option<usize> {
-    let (mut depth, mut in_str, mut escaped) = (1usize, false, false);
-    for (idx, ch) in rest.char_indices() {
-        if in_str {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_str = false;
-            }
-            continue;
-        }
-        match ch {
-            '"' => in_str = true,
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(idx);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
 pub(crate) fn parse_mcp_augments_dsl(text: &str) -> Vec<RawMayhemAugmentStat> {
-    const PREFIX: &[u8] = b"Augment(";
-    let header_fields = parse_augment_class_fields(text);
-    let bytes = text.as_bytes();
-    let mut out = Vec::new();
-    let (mut cursor, mut in_string, mut escaped, mut prev_char) =
-        (0usize, false, false, None::<char>);
-
-    while let Some(ch) = text.get(cursor..).and_then(|s| s.chars().next()) {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
-            }
-            prev_char = Some(ch);
-            cursor += ch.len_utf8();
-            continue;
-        }
-        if ch == '"' {
-            in_string = true;
-            prev_char = Some(ch);
-            cursor += ch.len_utf8();
-            continue;
-        }
-        let boundary_ok = prev_char.is_none_or(|prev| !prev.is_alphanumeric() && prev != '_');
-        if boundary_ok
-            && text.is_char_boundary(cursor)
-            && bytes
-                .get(cursor..)
-                .is_some_and(|slice| slice.starts_with(PREFIX))
-            && let Some(rest) = text.get(cursor + PREFIX.len()..)
-        {
-            let Some(close_rel) = find_dsl_closing_paren_offset(rest) else {
-                break;
-            };
-            if let Some(args_slice) = rest.get(..close_rel) {
-                let args = split_dsl_args(args_slice);
-                if let Some(stat) = parse_dsl_augment_tuple(&args, &header_fields) {
-                    out.push(stat);
-                }
-            }
-            cursor += PREFIX.len() + close_rel + 1;
-            prev_char = Some(')');
-            continue;
-        }
-        prev_char = Some(ch);
-        cursor += ch.len_utf8();
-    }
-    out
+    let doc = McpDocument::parse(text);
+    doc.find_tuples(&["Augment"])
+        .into_iter()
+        .filter_map(|tuple| parse_dsl_augment_tuple(&doc, tuple))
+        .collect()
 }
 
 fn extract_raw_augments_from_json_value(

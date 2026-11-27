@@ -241,3 +241,24 @@ fn test_situational_items_filtered_and_sorted_by_play() {
     assert!(pos_4629 < pos_4646);
     assert!(pos_4646 < pos_3165);
 }
+
+#[test]
+fn test_sparse_build_does_not_pad_hardcoded_fallback_items() {
+    let blocks = build_5_item_blocks_with_cls(
+        &ItemClassificationCache::default(),
+        vec![ItemStatEntry { ids: vec![1056], play: 100, win: 55, pick_rate: 1.0 }],
+        vec![ItemStatEntry { ids: vec![3020], play: 100, win: 55, pick_rate: 1.0 }],
+        vec![ItemStatEntry { ids: vec![3118, 4645], play: 100, win: 55, pick_rate: 1.0 }],
+        vec![],
+        vec![],
+        vec![],
+        "AP",
+        "mid",
+    );
+
+    assert_eq!(blocks[0].item_ids, vec![1056]);
+    assert_eq!(blocks[1].item_ids, vec![3118, 4645]);
+    assert_eq!(blocks[2].item_ids, vec![3020]);
+    assert_eq!(blocks[3].item_ids, vec![3118, 4645]);
+    assert!(blocks[4].item_ids.is_empty());
+}

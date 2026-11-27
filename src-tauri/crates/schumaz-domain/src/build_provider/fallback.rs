@@ -1,8 +1,16 @@
-use super::models::{ChampionBuild, ItemBlock, ItemBlockKind};
+mod archetype;
+mod catalog;
+
+pub use archetype::{ChampionArchetype, infer_champion_archetype, infer_damage_type_from_profile};
+
+use super::items::resolve_classifications_for_ddragon;
+use super::models::{ChampionBuild, DataDragonCache, ItemBlock, ItemBlockKind};
 use crate::models::{
     QUEUE_ARAM_MAYHEM, QUEUE_QUICKPLAY, QUEUE_SWIFTPLAY, is_arena_queue, queue_supports_runes,
     queue_supports_spells,
 };
+use archetype::derive_fallback_runes;
+use catalog::derive_fallback_items;
 
 /// Maps a queue ID into an analytics REST/MCP mode slug (`"aram"`, `"arena"`, or `"ranked"`).
 ///
@@ -48,11 +56,22 @@ pub fn champion_key_to_opgg_name(key: &str) -> String {
     }
 }
 
-/// Constructs a safe, universal fallback build in case OP.GG API is down or times out.
-pub fn build_fallback_champion_build(
+fn empty_block(kind: ItemBlockKind, title: &str, item_ids: Vec<i32>) -> ItemBlock {
+    ItemBlock {
+        kind,
+        title: title.to_string(),
+        item_ids,
+        item_icon_urls: vec![],
+    }
+}
+
+/// Constructs a dynamic fallback build derived exclusively from `ddragon` catalogs for the
+/// target champion and map/queue (zero hardcoded champion, rune, or item build data).
+pub fn build_fallback_champion_build_with_ddragon(
     champion_id: i32,
     champion_name: &str,
     queue_id: i32,
+    ddragon: Option<&DataDragonCache>,
 ) -> ChampionBuild {
     if is_arena_queue(queue_id) {
         return ChampionBuild {
@@ -60,42 +79,12 @@ pub fn build_fallback_champion_build(
             champion_name: champion_name.to_string(),
             win_rate: 50.0,
             pick_rate: 0.0,
-            primary_style_id: 0,
-            sub_style_id: 0,
-            selected_perk_ids: vec![],
-            spell1_id: 0,
-            spell2_id: 0,
             item_blocks: vec![
-                ItemBlock {
-                    kind: ItemBlockKind::Prismatic,
-                    title: "Itens Prismáticos".to_string(),
-                    item_ids: vec![],
-                    item_icon_urls: vec![],
-                },
-                ItemBlock {
-                    kind: ItemBlockKind::Core,
-                    title: "Primeiros 3 Itens".to_string(),
-                    item_ids: vec![],
-                    item_icon_urls: vec![],
-                },
-                ItemBlock {
-                    kind: ItemBlockKind::Boots,
-                    title: "3 Botas Mais Feitas".to_string(),
-                    item_ids: vec![],
-                    item_icon_urls: vec![],
-                },
-                ItemBlock {
-                    kind: ItemBlockKind::Final,
-                    title: "Build Final".to_string(),
-                    item_ids: vec![],
-                    item_icon_urls: vec![],
-                },
-                ItemBlock {
-                    kind: ItemBlockKind::Situational,
-                    title: "Itens Situacionais / Úteis".to_string(),
-                    item_ids: vec![],
-                    item_icon_urls: vec![],
-                },
+                empty_block(ItemBlockKind::Prismatic, "Itens Prismáticos", vec![]),
+                empty_block(ItemBlockKind::Core, "Primeiros 3 Itens", vec![]),
+                empty_block(ItemBlockKind::Boots, "3 Botas Mais Feitas", vec![]),
+                empty_block(ItemBlockKind::Final, "Build Final", vec![]),
+                empty_block(ItemBlockKind::Situational, "Itens Situacionais / Úteis", vec![]),
             ],
             supports_runes: false,
             supports_spells: false,
@@ -104,177 +93,60 @@ pub fn build_fallback_champion_build(
     }
 
     let (spell1_id, spell2_id) = default_spells_for_queue(queue_id);
+    let profile = ddragon.and_then(|dd| dd.champion_profiles.get(&champion_id));
+    let archetype = profile
+        .map(infer_champion_archetype)
+        .unwrap_or(ChampionArchetype::Fighter);
+    let uses_mana = profile
+        .map(|p| p.partype.is_empty() || p.partype.eq_ignore_ascii_case("Mana"))
+        .unwrap_or(true);
 
-    // Universal standard rune page: Precision (8000) + Domination (8100)
-    let selected_perk_ids = vec![
-        8005, // Press the Attack
-        9111, // Triumph
-        9104, // Legend: Alacrity
-        8014, // Coup de Grace
-        8139, // Taste of Blood
-        8135, // Treasure Hunter
-        5008, // Adaptive Force
-        5008, // Adaptive Force
-        5001, // Health Scaling
-    ];
-
-    let starter_items = if queue_id == 450 || queue_id == QUEUE_ARAM_MAYHEM {
-        vec![2051, 2003] // Guardian's Horn/Blade + Potion
+    let supports_runes = queue_supports_runes(queue_id);
+    let (primary_style_id, sub_style_id, selected_perk_ids) = if supports_runes {
+        derive_fallback_runes(ddragon, archetype)
     } else {
-        vec![1055, 2003] // Doran's Blade + Health Potion
+        (0, 0, Vec::new())
     };
 
-    // Core 3 items must strictly exclude any boots (e.g. Infinity Edge, Rapid Firecannon, Lord Dominik's)
-    let core_items = vec![3031, 3094, 3036];
-    let boots_items = vec![3006, 3047, 3111];
-    // Final build: core + late-game items (e.g. Bloodthirster, Guardian Angel)
-    let final_items = vec![3031, 3094, 3036, 3072, 3026];
-    // Useful / situational items: high pickrate items that are NOT in core nor in final build
-    let situational_items = vec![3046, 3091, 3139]; // Phantom Dancer, Wit's End, Mercurial
+    let items = if let Some(dd) = ddragon {
+        let cls = resolve_classifications_for_ddragon(Some(dd));
+        derive_fallback_items(&cls, queue_id, archetype, uses_mana)
+    } else {
+        catalog::FallbackItemBlocks::default()
+    };
 
     ChampionBuild {
         champion_id,
         champion_name: champion_name.to_string(),
         win_rate: 50.0,
         pick_rate: 5.0,
-        primary_style_id: 8000,
-        sub_style_id: 8100,
+        primary_style_id,
+        sub_style_id,
         selected_perk_ids,
         spell1_id,
         spell2_id,
         item_blocks: vec![
-            ItemBlock {
-                kind: ItemBlockKind::Starter,
-                title: "Itens Iniciais".to_string(),
-                item_ids: starter_items,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                kind: ItemBlockKind::Core,
-                title: "Primeiros 3 Itens".to_string(),
-                item_ids: core_items,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                kind: ItemBlockKind::Boots,
-                title: "3 Botas Mais Feitas".to_string(),
-                item_ids: boots_items,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                kind: ItemBlockKind::Final,
-                title: "Build Final".to_string(),
-                item_ids: final_items,
-                item_icon_urls: vec![],
-            },
-            ItemBlock {
-                kind: ItemBlockKind::Situational,
-                title: "Itens Situacionais / Úteis".to_string(),
-                item_ids: situational_items,
-                item_icon_urls: vec![],
-            },
+            empty_block(ItemBlockKind::Starter, "Itens Iniciais", items.starter),
+            empty_block(ItemBlockKind::Core, "Primeiros 3 Itens", items.core),
+            empty_block(ItemBlockKind::Boots, "3 Botas Mais Feitas", items.boots),
+            empty_block(ItemBlockKind::Final, "Build Final", items.final_build),
+            empty_block(ItemBlockKind::Situational, "Itens Situacionais / Úteis", items.situational),
         ],
-        champion_icon_url: String::new(),
-        primary_style_name: String::new(),
-        primary_style_icon_url: String::new(),
-        sub_style_name: String::new(),
-        sub_style_icon_url: String::new(),
-        perks: vec![],
-        spells: vec![],
-        supports_runes: queue_supports_runes(queue_id),
+        supports_runes,
         supports_spells: queue_supports_spells(queue_id),
         ..Default::default()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::models::{QUEUE_ARENA, QUEUE_ARENA_1710, QUEUE_ARENA_1740, QUEUE_ARENA_1750};
-
-    #[test]
-    fn test_opgg_queue_param_and_default_spells_adaptation() {
-        assert_eq!(opgg_queue_param_from_id(450), "aram");
-        assert_eq!(default_spells_for_queue(450), (4, 32)); // Flash + Snowball
-
-        assert_eq!(opgg_queue_param_from_id(QUEUE_ARAM_MAYHEM), "aram");
-        assert_eq!(default_spells_for_queue(QUEUE_ARAM_MAYHEM), (4, 32));
-
-        assert_eq!(opgg_queue_param_from_id(QUEUE_ARENA), "arena");
-        assert_eq!(default_spells_for_queue(QUEUE_ARENA), (0, 0));
-
-        assert_eq!(opgg_queue_param_from_id(420), "ranked");
-        assert_eq!(default_spells_for_queue(420), (4, 14)); // Flash + Ignite
-
-        assert_eq!(opgg_queue_param_from_id(440), "ranked");
-        assert_eq!(opgg_queue_param_from_id(400), "ranked");
-        assert_eq!(opgg_queue_param_from_id(crate::models::QUEUE_SWIFTPLAY), "ranked");
-        assert_eq!(opgg_queue_param_from_id(crate::models::QUEUE_CLASH), "ranked");
-        assert_eq!(analytics_rest_mode_for_queue(crate::models::QUEUE_SWIFTPLAY), "ranked");
-        assert_eq!(analytics_rest_mode_for_queue(crate::models::QUEUE_CLASH), "ranked");
-        assert_eq!(opgg_queue_param_from_id(-1), "ranked");
-        assert_eq!(default_spells_for_queue(-1), (4, 14));
-    }
-
-    #[test]
-    fn test_fallback_build_has_valid_9_perks_and_queue_spells() {
-        let aram_fallback = build_fallback_champion_build(103, "Ahri", 450);
-        assert_eq!(aram_fallback.selected_perk_ids.len(), 9);
-        assert_eq!(aram_fallback.spell1_id, 4);
-        assert_eq!(aram_fallback.spell2_id, 32);
-        assert!(aram_fallback.supports_runes);
-        assert!(aram_fallback.supports_spells);
-        assert_eq!(aram_fallback.item_blocks.len(), 5);
-        assert_eq!(aram_fallback.item_blocks[0].kind, ItemBlockKind::Starter);
-        assert_eq!(aram_fallback.item_blocks[1].kind, ItemBlockKind::Core);
-        assert_eq!(aram_fallback.item_blocks[2].kind, ItemBlockKind::Boots);
-        assert_eq!(aram_fallback.item_blocks[3].kind, ItemBlockKind::Final);
-        assert_eq!(
-            aram_fallback.item_blocks[4].kind,
-            ItemBlockKind::Situational
-        );
-
-        let mayhem_fallback = build_fallback_champion_build(103, "Ahri", QUEUE_ARAM_MAYHEM);
-        assert_eq!(mayhem_fallback.spell1_id, 4);
-        assert_eq!(mayhem_fallback.spell2_id, 32);
-        assert_eq!(mayhem_fallback.item_blocks[0].item_ids, vec![2051, 2003]);
-        assert!(!mayhem_fallback.supports_runes);
-        assert!(mayhem_fallback.supports_spells);
-
-        for arena_queue in [
-            QUEUE_ARENA,
-            QUEUE_ARENA_1710,
-            QUEUE_ARENA_1740,
-            QUEUE_ARENA_1750,
-        ] {
-            let arena_fallback = build_fallback_champion_build(103, "Ahri", arena_queue);
-            assert!(!arena_fallback.supports_runes);
-            assert!(!arena_fallback.supports_spells);
-            assert_eq!(arena_fallback.spell1_id, 0);
-            assert_eq!(arena_fallback.spell2_id, 0);
-            assert_eq!(arena_fallback.item_blocks[0].kind, ItemBlockKind::Prismatic);
-            assert!(
-                !arena_fallback
-                    .item_blocks
-                    .iter()
-                    .flat_map(|b| b.item_ids.iter())
-                    .any(|id| matches!(id, 1055 | 1056 | 2003))
-            );
-        }
-
-        let ranked_fallback = build_fallback_champion_build(103, "Ahri", 420);
-        assert_eq!(ranked_fallback.selected_perk_ids.len(), 9);
-        assert_eq!(ranked_fallback.spell1_id, 4);
-        assert_eq!(ranked_fallback.spell2_id, 14);
-        assert!(ranked_fallback.supports_runes);
-        assert!(ranked_fallback.supports_spells);
-
-        let practice_fallback = build_fallback_champion_build(103, "Ahri", -1);
-        assert_eq!(practice_fallback.selected_perk_ids.len(), 9);
-        assert_eq!(practice_fallback.spell1_id, 4);
-        assert_eq!(practice_fallback.spell2_id, 14);
-        assert_eq!(practice_fallback.item_blocks[0].item_ids, vec![1055, 2003]);
-        assert!(practice_fallback.supports_runes);
-        assert!(practice_fallback.supports_spells);
-    }
+/// Convenience wrapper without an explicit `DataDragonCache` reference.
+pub fn build_fallback_champion_build(
+    champion_id: i32,
+    champion_name: &str,
+    queue_id: i32,
+) -> ChampionBuild {
+    build_fallback_champion_build_with_ddragon(champion_id, champion_name, queue_id, None)
 }
+
+#[cfg(test)]
+#[path = "fallback_tests.rs"]
+mod tests;

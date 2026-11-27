@@ -80,9 +80,44 @@ async fn test_get_recommended_build_uses_fallback_when_opgg_returns_500() {
         },
     );
 
+    let mut champion_profiles = HashMap::new();
+    champion_profiles.insert(
+        103,
+        ChampionProfile {
+            tags: vec!["Mage".to_string(), "Assassin".to_string()],
+            partype: "Mana".to_string(),
+            attack: 3,
+            defense: 4,
+            magic: 8,
+        },
+    );
+    let mut cls = ItemClassificationCache::default();
+    cls.item_tags.insert(3112, vec!["SpellDamage".to_string(), "ManaRegen".to_string()]);
+    cls.item_gold.insert(3112, 950);
+    cls.map12_items.insert(3112);
+    cls.starters.insert(3112);
+    cls.item_tags.insert(3118, vec!["SpellDamage".to_string(), "Mana".to_string()]);
+    cls.item_gold.insert(3118, 2800);
+    cls.map12_items.insert(3118);
+    cls.completed.insert(3118);
+
     let cache = DataDragonCache {
         version: "14.23.1".to_string(),
         champions: champions_map,
+        champion_profiles,
+        rune_trees: vec![
+            RuneTreeCatalog {
+                id: 8200,
+                key: "Sorcery".to_string(),
+                slots: vec![vec![8229], vec![8226], vec![8210], vec![8237]],
+            },
+            RuneTreeCatalog {
+                id: 8300,
+                key: "Inspiration".to_string(),
+                slots: vec![vec![8369], vec![8304], vec![8316], vec![8347]],
+            },
+        ],
+        item_classifications: cls,
         runes: HashMap::new(),
         spells: HashMap::new(),
         ..Default::default()

@@ -1,119 +1,8 @@
+use super::super::analytics::mcp_dsl::{McpDocument, McpTuple, McpValue};
 use super::super::models::RunePageOption;
 
-fn extract_balanced_paren_content(after_open_paren: &str) -> Option<(&str, usize)> {
-    let mut depth = 1usize;
-    let mut in_quotes = false;
-    let mut escaped = false;
-
-    for (idx, ch) in after_open_paren.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if in_quotes {
-            if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_quotes = false;
-            }
-            continue;
-        }
-        match ch {
-            '"' => in_quotes = true,
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some((&after_open_paren[..idx], idx + 1));
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn split_top_level_args(inside: &str) -> Vec<&str> {
-    let mut args = Vec::new();
-    let mut start = 0;
-    let mut bracket_depth = 0usize;
-    let mut paren_depth = 0usize;
-    let mut in_quotes = false;
-    let mut escaped = false;
-
-    for (idx, ch) in inside.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        if in_quotes {
-            if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_quotes = false;
-            }
-            continue;
-        }
-        match ch {
-            '"' => in_quotes = true,
-            '[' => bracket_depth += 1,
-            ']' => bracket_depth = bracket_depth.saturating_sub(1),
-            '(' => paren_depth += 1,
-            ')' => paren_depth = paren_depth.saturating_sub(1),
-            ',' if bracket_depth == 0 && paren_depth == 0 => {
-                args.push(inside[start..idx].trim());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let tail = inside[start..].trim();
-    if !tail.is_empty() || !args.is_empty() {
-        args.push(tail);
-    }
-    args
-}
-
-fn parse_int_array(arg: &str) -> Option<Vec<i32>> {
-    let trimmed = arg.trim();
-    if !trimmed.starts_with('[') || !trimmed.ends_with(']') {
-        return None;
-    }
-    let inner = trimmed[1..trimmed.len() - 1].trim();
-    if inner.is_empty() {
-        return None;
-    }
-    let mut nums = Vec::new();
-    for part in inner.split(',') {
-        if let Ok(v) = part.trim().parse::<i32>() {
-            nums.push(v);
-        } else {
-            return None;
-        }
-    }
-    Some(nums)
-}
-
-fn parse_runes_class_fields(text: &str) -> Vec<&str> {
-    if let Some(def_idx) = text.find("class Runes:") {
-        let line_rest = &text[def_idx + 12..];
-        let end_line = line_rest.find('\n').unwrap_or(line_rest.len());
-        line_rest[..end_line]
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect()
-    } else {
-        Vec::new()
-    }
-}
-
-/// Parses a single `Runes(...)` argument block into a `RunePageOption`.
-/// Supports legacy `(8100,[...],8200,[...],[...])` as well as OP.GG MCP schemas
-/// containing `id`, tree names (e.g. `"Domination"`, `"Precision"`), rune name arrays,
-/// and trailing `play`, `win`, `pick_rate` fields.
-pub fn parse_mcp_runes_args(inside: &str, class_fields: &[&str]) -> Option<RunePageOption> {
-    let args = split_top_level_args(inside);
+fn parse_mcp_runes_tuple(doc: &McpDocument<'_>, tuple: &McpTuple<'_>) -> Option<RunePageOption> {
+    let args = &tuple.args;
     if args.is_empty() {
         return None;
     }
@@ -127,36 +16,28 @@ pub fn parse_mcp_runes_args(inside: &str, class_fields: &[&str]) -> Option<RuneP
     let mut win: i64 = 1;
     let mut pick_rate: f64 = 1.0;
 
-    if !class_fields.is_empty() && class_fields.len() == args.len() {
-        for (field_name, raw_val) in class_fields.iter().zip(args.iter()) {
-            match *field_name {
-                "primary_page_id" | "primary_style_id" => {
-                    primary_style_id = raw_val.parse::<i32>().ok();
-                }
-                "primary_rune_ids" | "primary_perk_ids" => {
-                    primary_perks = parse_int_array(raw_val);
-                }
+    if let Some(named) = doc.named_args(tuple) {
+        for (field_name, val) in named {
+            match field_name {
+                "primary_page_id" | "primary_style_id" => primary_style_id = val.as_i32(),
+                "primary_rune_ids" | "primary_perk_ids" => primary_perks = val.as_i32_list(),
                 "secondary_page_id" | "sub_style_id" | "sub_page_id" => {
-                    sub_style_id = raw_val.parse::<i32>().ok();
+                    sub_style_id = val.as_i32();
                 }
-                "secondary_rune_ids" | "sub_perk_ids" => {
-                    secondary_perks = parse_int_array(raw_val);
-                }
-                "stat_mod_ids" | "stat_shards" => {
-                    stat_mods = parse_int_array(raw_val);
-                }
+                "secondary_rune_ids" | "sub_perk_ids" => secondary_perks = val.as_i32_list(),
+                "stat_mod_ids" | "stat_shards" => stat_mods = val.as_i32_list(),
                 "play" => {
-                    if let Ok(v) = raw_val.parse::<i64>() {
+                    if let Some(v) = val.as_i64() {
                         play = v;
                     }
                 }
                 "win" => {
-                    if let Ok(v) = raw_val.parse::<i64>() {
+                    if let Some(v) = val.as_i64() {
                         win = v;
                     }
                 }
                 "pick_rate" => {
-                    if let Ok(v) = raw_val.parse::<f64>() {
+                    if let Some(v) = val.as_f64() {
                         pick_rate = v;
                     }
                 }
@@ -167,45 +48,37 @@ pub fn parse_mcp_runes_args(inside: &str, class_fields: &[&str]) -> Option<RuneP
         // Structural fallback when `class Runes:` header is absent or has a different arity
         let p_idx = args
             .iter()
-            .position(|a| parse_int_array(a).is_some_and(|v| v.len() == 4))?;
-        primary_perks = parse_int_array(args[p_idx]);
+            .position(|a| a.as_i32_list().is_some_and(|v| v.len() == 4))?;
+        primary_perks = args[p_idx].as_i32_list();
+        primary_style_id = args[..p_idx].iter().filter_map(McpValue::as_i32).next_back();
 
-        // Last integer before primary_perks is primary_page_id (handles optional leading `id` and trailing tree name)
-        primary_style_id = args[..p_idx]
-            .iter()
-            .filter_map(|a| a.parse::<i32>().ok())
-            .next_back();
-
-        let s_style_rel = args[p_idx + 1..]
-            .iter()
-            .position(|a| a.parse::<i32>().is_ok())?;
+        let s_style_rel = args[p_idx + 1..].iter().position(|a| a.as_i32().is_some())?;
         let s_style_idx = p_idx + 1 + s_style_rel;
-        sub_style_id = args[s_style_idx].parse::<i32>().ok();
+        sub_style_id = args[s_style_idx].as_i32();
 
         let s_rel = args[s_style_idx + 1..]
             .iter()
-            .position(|a| parse_int_array(a).is_some_and(|v| v.len() == 2))?;
+            .position(|a| a.as_i32_list().is_some_and(|v| v.len() == 2))?;
         let s_idx = s_style_idx + 1 + s_rel;
-        secondary_perks = parse_int_array(args[s_idx]);
+        secondary_perks = args[s_idx].as_i32_list();
 
         let m_rel = args[s_idx + 1..]
             .iter()
-            .position(|a| parse_int_array(a).is_some_and(|v| v.len() == 3))?;
+            .position(|a| a.as_i32_list().is_some_and(|v| v.len() == 3))?;
         let m_idx = s_idx + 1 + m_rel;
-        stat_mods = parse_int_array(args[m_idx]);
+        stat_mods = args[m_idx].as_i32_list();
 
-        let trailing_scalars: Vec<&str> = args[m_idx + 1..]
+        let trailing_scalars: Vec<&McpValue<'_>> = args[m_idx + 1..]
             .iter()
-            .copied()
-            .filter(|a| !a.starts_with('[') && !a.starts_with('"'))
+            .filter(|a| matches!(a, McpValue::Int(_) | McpValue::Float(_)))
             .collect();
-        if let Some(Ok(p)) = trailing_scalars.first().map(|s| s.parse::<i64>()) {
+        if let Some(p) = trailing_scalars.first().and_then(|v| v.as_i64()) {
             play = p;
         }
-        if let Some(Ok(w)) = trailing_scalars.get(1).map(|s| s.parse::<i64>()) {
+        if let Some(w) = trailing_scalars.get(1).and_then(|v| v.as_i64()) {
             win = w;
         }
-        if let Some(Ok(pr)) = trailing_scalars.get(2).map(|s| s.parse::<f64>()) {
+        if let Some(pr) = trailing_scalars.get(2).and_then(|v| v.as_f64()) {
             pick_rate = pr;
         }
     }
@@ -236,33 +109,29 @@ pub fn parse_mcp_runes_args(inside: &str, class_fields: &[&str]) -> Option<RuneP
     })
 }
 
-/// Extracts all Runes(...) blocks from MCP text output into RunePageOption instances.
-pub fn extract_all_mcp_runes(text: &str) -> Vec<RunePageOption> {
-    let class_fields = parse_runes_class_fields(text);
+/// Extracts all `Runes(...)` tuples from a pre-parsed `McpDocument` (up to 3 unique setups).
+pub fn extract_all_mcp_runes_from_doc(doc: &McpDocument<'_>) -> Vec<RunePageOption> {
     let mut results = Vec::new();
-    let mut cursor = 0;
-
-    while let Some(rel_idx) = text[cursor..].find("Runes(") {
-        let runes_idx = cursor + rel_idx;
-        let after_runes = &text[runes_idx + 6..];
-
-        if let Some((inside, consumed)) = extract_balanced_paren_content(after_runes) {
-            if let Some(page) = parse_mcp_runes_args(inside, &class_fields) {
-                let is_dup = results.iter().any(|existing: &RunePageOption| {
-                    existing.primary_style_id == page.primary_style_id
-                        && existing.sub_style_id == page.sub_style_id
-                        && existing.selected_perk_ids == page.selected_perk_ids
-                });
-                if !is_dup {
-                    results.push(page);
-                }
+    for tuple in doc.find_tuples(&["Runes"]) {
+        if let Some(page) = parse_mcp_runes_tuple(doc, tuple) {
+            let is_dup = results.iter().any(|existing: &RunePageOption| {
+                existing.primary_style_id == page.primary_style_id
+                    && existing.sub_style_id == page.sub_style_id
+                    && existing.selected_perk_ids == page.selected_perk_ids
+            });
+            if !is_dup {
+                results.push(page);
             }
-            cursor = runes_idx + 6 + consumed;
-        } else {
-            cursor = runes_idx + 6;
+        }
+        if results.len() >= 3 {
+            break;
         }
     }
-
-    results.truncate(3);
     results
+}
+
+/// Extracts all `Runes(...)` blocks from MCP text output into `RunePageOption` instances.
+pub fn extract_all_mcp_runes(text: &str) -> Vec<RunePageOption> {
+    let doc = McpDocument::parse(text);
+    extract_all_mcp_runes_from_doc(&doc)
 }

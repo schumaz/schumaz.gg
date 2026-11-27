@@ -1,12 +1,13 @@
 use super::super::ddragon::enrich_build_with_ddragon_for_queue;
 use super::super::fallback::{
-    build_fallback_champion_build, champion_key_to_opgg_name, opgg_queue_param_from_id,
+    build_fallback_champion_build_with_ddragon, champion_key_to_opgg_name,
+    opgg_queue_param_from_id,
 };
 use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
 use super::super::spells::ddragon_mode_for_queue;
 use super::cooldown::send_analytics_request;
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
-use super::rest_parser::parse_opgg_analysis_payload_for_mode;
+use super::rest_parser::parse_opgg_analysis_payload_with_ddragon;
 pub use super::versions::{
     fetch_opgg_versions, fetch_opgg_versions_from_base, fetch_opgg_versions_with_cache_dir,
     opgg_versions_file_path, peek_latest_cached_opgg_version,
@@ -141,18 +142,30 @@ pub async fn get_recommended_build_with_endpoint(
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-            Ok(json_res) => match parse_opgg_analysis_payload_for_mode(
+            Ok(json_res) => match parse_opgg_analysis_payload_with_ddragon(
                 &json_res,
                 champion_id,
                 champ_name,
                 supports_runes,
                 Some(spell_mode),
+                Some(ddragon_cache),
                 Some(&ddragon_cache.spells),
+                None,
             ) {
                 Ok(build) => build,
-                Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+                Err(_) => build_fallback_champion_build_with_ddragon(
+                    champion_id,
+                    champ_name,
+                    queue_id,
+                    Some(ddragon_cache),
+                ),
             },
-            Err(_) => build_fallback_champion_build(champion_id, champ_name, queue_id),
+            Err(_) => build_fallback_champion_build_with_ddragon(
+                champion_id,
+                champ_name,
+                queue_id,
+                Some(ddragon_cache),
+            ),
         };
 
     if queue_param == "aram" {

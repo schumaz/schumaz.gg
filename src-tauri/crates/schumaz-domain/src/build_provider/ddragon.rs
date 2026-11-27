@@ -1,6 +1,7 @@
 ﻿mod augment_interpolate;
 mod augments;
 pub mod cache;
+mod catalog_parsers;
 pub mod enrichment;
 mod fetch;
 pub mod item_parser;
@@ -12,6 +13,7 @@ pub mod tooltip_parser;
 pub(crate) use augment_interpolate::{has_raw_riot_augment_markup, strip_riot_inline_markup};
 pub use augments::*;
 pub use cache::*;
+pub use catalog_parsers::*;
 pub use enrichment::*;
 pub use metadata::*;
 pub use parsers::*;

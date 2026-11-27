@@ -34,5 +34,5 @@
   }
 }
 ```
-> Também suporta wrapper MCP em `/result/content/0/text` (DSL estruturada parseada por `analytics/{mcp_parser,mcp_extractors,mcp_stats}.rs` e `analytics/aram/mcp_augments.rs`).
+> Também suporta wrapper MCP em `/result/content/0/text` (DSL estruturada parseada por `analytics/{mcp_dsl,mcp_parser,mcp_extractors,mcp_stats}.rs` e `analytics/aram/mcp_augments.rs`).
 > Normalização: `win_rate`/`pick_rate` ≤ `1.0` são multiplicados por `100` com 1 casa decimal; tiers OP.GG são 1-based (`1 = OP`, `2 = Tier 1`, `3 = Tier 2`, `4 = Tier 3`, `5 = Tier 4`) e normalizados para a escala canônica 0-based `0..=4` em todos os modos (Ranqueada por posição em `summary.positions[]`, ARAM Clássico/Mayhem, Arena e builds no Champ Select; rotas off-meta ou `is_rip == true` retornam `None`).

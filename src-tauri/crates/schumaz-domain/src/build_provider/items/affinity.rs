@@ -1,4 +1,5 @@
-use super::classification::*;
+use super::super::models::ItemClassificationCache;
+use super::classification::{item_tags_in, snapshot_dynamic_item_classifications};
 
 pub fn is_offensive_ad_tag(tag: &str) -> bool {
     matches!(
@@ -25,14 +26,15 @@ pub fn is_utility_mana_tag(tag: &str) -> bool {
     )
 }
 
-/// Computes dynamic synergy affinity score between a candidate item and core tags (zero hardcoded IDs).
-pub fn compute_item_affinity_score(
+/// Computes dynamic synergy affinity score between a candidate item and core tags (zero locks).
+pub fn compute_item_affinity_score_with_cls(
+    cls: &ItemClassificationCache,
     item_id: i32,
-    core_tags: &[String],
+    core_tags: &[&str],
     core_is_pure_ad: bool,
     core_is_pure_ap: bool,
 ) -> i64 {
-    let tags = get_item_tags_dynamic(item_id);
+    let tags = item_tags_in(cls, item_id);
     if tags.is_empty() {
         return 0;
     }
@@ -53,15 +55,15 @@ pub fn compute_item_affinity_score(
 
     // Special utility/mana synergy:
     // If core builds mana (e.g. Manamune, Archangel, Tear), an item with Mana (e.g. Frozen Heart) gets mana synergy bonus
-    let core_has_mana = core_tags.iter().any(|t| t == "Mana");
+    let core_has_mana = core_tags.contains(&"Mana");
     let item_has_mana = tags.iter().any(|t| t == "Mana");
     if core_has_mana && item_has_mana {
         score += 10_000;
     }
 
     // Direct shared tags synergy
-    for t in &tags {
-        if core_tags.contains(t) {
+    for t in tags {
+        if core_tags.contains(&t.as_str()) {
             score += 1_000;
         }
     }
@@ -69,18 +71,34 @@ pub fn compute_item_affinity_score(
     score
 }
 
-/// Extracts combined tags and archetype flags (AP/AD/pure) for a core item trio.
-pub fn extract_core_archetype_tags(core_items: &[i32]) -> (Vec<String>, bool, bool, bool, bool) {
-    let mut core_tags: Vec<String> = Vec::new();
+/// Computes dynamic synergy affinity score between a candidate item and core tags (zero hardcoded IDs).
+pub fn compute_item_affinity_score(
+    item_id: i32,
+    core_tags: &[String],
+    core_is_pure_ad: bool,
+    core_is_pure_ap: bool,
+) -> i64 {
+    let cls = snapshot_dynamic_item_classifications();
+    let tag_refs: Vec<&str> = core_tags.iter().map(String::as_str).collect();
+    compute_item_affinity_score_with_cls(&cls, item_id, &tag_refs, core_is_pure_ad, core_is_pure_ap)
+}
+
+/// Extracts combined tags and archetype flags (AP/AD/pure) for a core item trio (zero locks).
+pub fn extract_core_archetype_tags_with_cls<'a>(
+    cls: &'a ItemClassificationCache,
+    core_items: &[i32],
+) -> (Vec<&'a str>, bool, bool, bool, bool) {
+    let mut core_tags: Vec<&'a str> = Vec::new();
     for &id in core_items {
-        for tag in get_item_tags_dynamic(id) {
-            if !core_tags.contains(&tag) {
-                core_tags.push(tag);
+        for tag in item_tags_in(cls, id) {
+            let tag_str = tag.as_str();
+            if !core_tags.contains(&tag_str) {
+                core_tags.push(tag_str);
             }
         }
     }
-    let core_has_ap = core_tags.iter().any(|t| t == "SpellDamage");
-    let core_has_ad = core_tags.iter().any(|t| is_offensive_ad_tag(t));
+    let core_has_ap = core_tags.contains(&"SpellDamage");
+    let core_has_ad = core_tags.iter().any(|&t| is_offensive_ad_tag(t));
     let core_is_pure_ad = core_has_ad && !core_has_ap;
     let core_is_pure_ap = core_has_ap && !core_has_ad;
     (
@@ -92,11 +110,25 @@ pub fn extract_core_archetype_tags(core_items: &[i32]) -> (Vec<String>, bool, bo
     )
 }
 
+/// Extracts combined tags and archetype flags (AP/AD/pure) for a core item trio.
+pub fn extract_core_archetype_tags(core_items: &[i32]) -> (Vec<String>, bool, bool, bool, bool) {
+    let cls = snapshot_dynamic_item_classifications();
+    let (tags, has_ap, has_ad, pure_ad, pure_ap) =
+        extract_core_archetype_tags_with_cls(&cls, core_items);
+    (
+        tags.into_iter().map(str::to_string).collect(),
+        has_ap,
+        has_ad,
+        pure_ad,
+        pure_ap,
+    )
+}
+
 /// Dynamically builds a cohesive 6-item final build for a specific core trio
 /// using strict sequential slot selection (4th item from fourth_entries, 5th from fifth_entries,
 #[cfg(test)]
 mod tests {
-    use super::super::classification::TEST_CLASSIFICATION_MUTEX;
+    use super::super::classification::{TEST_CLASSIFICATION_MUTEX, set_dynamic_item_classifications};
     use super::*;
     use crate::build_provider::models::ItemClassificationCache;
 

@@ -1,7 +1,8 @@
 use super::super::aram::normalize_opgg_champion_key;
 use super::super::mcp_extractors::parse_json_item_entries;
 use super::super::rest_extractors::normalize_opgg_tier;
-use super::items::build_arena_item_blocks_and_options;
+use super::items::build_arena_item_blocks_and_options_with_cls;
+use crate::build_provider::items::resolve_classifications_for_ddragon;
 use crate::build_provider::models::{ChampionBuild, DataDragonCache};
 use crate::models::{ArenaAugmentEntry, ArenaSynergyEntry};
 use std::collections::HashMap;
@@ -269,7 +270,9 @@ pub fn parse_arena_champion_payload(
             .and_then(|raw| normalize_opgg_tier(raw as i32))
     };
 
-    let (item_blocks, build_options) = build_arena_item_blocks_and_options(
+    let cls = resolve_classifications_for_ddragon(Some(ddragon));
+    let (item_blocks, build_options) = build_arena_item_blocks_and_options_with_cls(
+        &cls,
         &boot_entries,
         &prism_entries,
         &core_entries,

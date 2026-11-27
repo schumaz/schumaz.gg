@@ -1,5 +1,10 @@
-use super::super::items::{get_item_tags_dynamic, is_offensive_ad_tag, is_offensive_ap_tag};
-use super::super::models::{ItemStatEntry, RunePageOption};
+use super::super::fallback::infer_damage_type_from_profile;
+use super::super::items::{
+    is_offensive_ad_tag, is_offensive_ap_tag, item_tags_in, snapshot_dynamic_item_classifications,
+};
+use super::super::models::{
+    DataDragonCache, ItemClassificationCache, ItemStatEntry, RunePageOption,
+};
 use super::super::runes::extract_top_rune_pages;
 use super::positions::normalize_opgg_lane_name;
 
@@ -200,7 +205,7 @@ pub fn extract_rest_runes_and_pages(
     ))
 }
 
-fn extract_primary_champion_role(analysis: &serde_json::Value) -> Option<&str> {
+pub(crate) fn extract_primary_champion_role(analysis: &serde_json::Value) -> Option<&str> {
     let roles = analysis
         .pointer("/summary/roles")
         .and_then(|v| v.as_array())?;
@@ -217,18 +222,18 @@ fn extract_primary_champion_role(analysis: &serde_json::Value) -> Option<&str> {
 }
 
 /// Infers `"AD"` or `"AP"` dynamically from explicit payload metadata, weighted DataDragon
-/// item tags aggregated across `core_items` + `last_items`, and champion role classification.
-pub fn infer_rest_damage_type(
-    analysis: &serde_json::Value,
+/// item tags aggregated across `core_items` + `extra_entries`, explicit champion role, and
+/// DataDragon `champion_profiles`.
+pub fn infer_damage_type_with_cls(
+    explicit_damage_type: Option<&str>,
     core_entries: &[ItemStatEntry],
-    last_entries: &[ItemStatEntry],
+    extra_entries: &[ItemStatEntry],
+    explicit_role: Option<&str>,
+    champion_id: i32,
+    ddragon: Option<&DataDragonCache>,
+    cls: &ItemClassificationCache,
 ) -> String {
-    if let Some(dt) = analysis
-        .get("damage_type")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
+    if let Some(dt) = explicit_damage_type.map(str::trim).filter(|s| !s.is_empty()) {
         return dt.to_string();
     }
 
@@ -236,10 +241,10 @@ pub fn infer_rest_damage_type(
     let mut ap_weight: i64 = 0;
     let mut has_spell_damage_tag = false;
 
-    for entry in core_entries.iter().chain(last_entries.iter()) {
+    for entry in core_entries.iter().chain(extra_entries.iter()) {
         let weight = entry.play.max(1);
         for &id in &entry.ids {
-            let tags = get_item_tags_dynamic(id);
+            let tags = item_tags_in(cls, id);
             if tags.is_empty() {
                 continue;
             }
@@ -263,7 +268,7 @@ pub fn infer_rest_damage_type(
     }
 
     if !has_spell_damage_tag
-        && extract_primary_champion_role(analysis).is_some_and(|role| {
+        && explicit_role.is_some_and(|role| {
             role.eq_ignore_ascii_case("FIGHTER")
                 || role.eq_ignore_ascii_case("ASSASSIN")
                 || role.eq_ignore_ascii_case("MARKSMAN")
@@ -272,5 +277,30 @@ pub fn infer_rest_damage_type(
         return "AD".to_string();
     }
 
+    if let Some(profile) = ddragon.and_then(|dd| dd.champion_profiles.get(&champion_id)) {
+        return infer_damage_type_from_profile(profile).to_string();
+    }
+
     "AP".to_string()
+}
+
+/// Infers `"AD"` or `"AP"` dynamically from explicit payload metadata, weighted DataDragon
+/// item tags aggregated across `core_items` + `last_items`, and champion role classification.
+pub fn infer_rest_damage_type(
+    analysis: &serde_json::Value,
+    core_entries: &[ItemStatEntry],
+    last_entries: &[ItemStatEntry],
+) -> String {
+    let cls = snapshot_dynamic_item_classifications();
+    let explicit_dt = analysis.get("damage_type").and_then(|v| v.as_str());
+    let explicit_role = extract_primary_champion_role(analysis);
+    infer_damage_type_with_cls(
+        explicit_dt,
+        core_entries,
+        last_entries,
+        explicit_role,
+        0,
+        None,
+        &cls,
+    )
 }

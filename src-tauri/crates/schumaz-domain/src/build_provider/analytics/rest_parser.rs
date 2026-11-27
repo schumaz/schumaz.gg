@@ -1,11 +1,15 @@
-use super::super::items::*;
-use super::super::models::{ChampionBuild, ItemStatEntry, SpellMetadata};
+use super::super::items::{
+    build_5_item_blocks_with_cls, build_unified_build_options_with_cls,
+    resolve_classifications_for_ddragon, resolve_tear_item_ids_in,
+    resolve_tear_to_completed_item_in,
+};
+use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry, SpellMetadata};
 use super::super::spells::extract_summoner_spell_pairs_for_mode;
 use super::mcp_extractors::parse_json_item_entries;
-use super::mcp_parser::parse_opgg_mcp_text_for_mode;
+use super::mcp_parser::parse_opgg_mcp_text_for_mode_with_ddragon;
 use super::rest_extractors::{
-    extract_rest_runes_and_pages, extract_rest_tier, extract_rest_win_and_pick_rates,
-    infer_rest_damage_type,
+    extract_primary_champion_role, extract_rest_runes_and_pages, extract_rest_tier,
+    extract_rest_win_and_pick_rates, infer_damage_type_with_cls,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -36,14 +40,7 @@ pub fn parse_opgg_analysis_payload_with_options(
     champion_name: &str,
     supports_runes: bool,
 ) -> Result<ChampionBuild, String> {
-    parse_opgg_analysis_payload_for_mode(
-        opgg_json,
-        champion_id,
-        champion_name,
-        supports_runes,
-        None,
-        None,
-    )
+    parse_opgg_analysis_payload_for_mode(opgg_json, champion_id, champion_name, supports_runes, None, None)
 }
 
 /// Parses an OP.GG REST or wrapped MCP payload into a `ChampionBuild`, filtering summoner spells
@@ -57,13 +54,7 @@ pub fn parse_opgg_analysis_payload_for_mode(
     spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
 ) -> Result<ChampionBuild, String> {
     parse_opgg_analysis_payload_for_mode_and_roster(
-        opgg_json,
-        champion_id,
-        champion_name,
-        supports_runes,
-        spell_mode,
-        spells_catalog,
-        None,
+        opgg_json, champion_id, champion_name, supports_runes, spell_mode, spells_catalog, None,
     )
 }
 
@@ -78,23 +69,29 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
     spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
     allowed_lane_champions: Option<&HashSet<i32>>,
 ) -> Result<ChampionBuild, String> {
-    let json_supports_runes = opgg_json
-        .get("supports_runes")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+    parse_opgg_analysis_payload_with_ddragon(
+        opgg_json, champion_id, champion_name, supports_runes, spell_mode, None, spells_catalog, allowed_lane_champions,
+    )
+}
 
-    // If the response is wrapped in MCP content text (e.g. result.content[0].text), use text parser!
-    if let Some(text) = opgg_json
-        .pointer("/result/content/0/text")
-        .and_then(|v| v.as_str())
-    {
-        return parse_opgg_mcp_text_for_mode(
-            text,
-            champion_id,
-            champion_name,
-            supports_runes && json_supports_runes,
-            spell_mode,
-            spells_catalog,
+/// Parses an OP.GG REST or wrapped MCP payload using `ddragon` catalogs without global lock spam.
+#[allow(clippy::too_many_arguments)]
+pub fn parse_opgg_analysis_payload_with_ddragon(
+    opgg_json: &serde_json::Value,
+    champion_id: i32,
+    champion_name: &str,
+    supports_runes: bool,
+    spell_mode: Option<&str>,
+    ddragon: Option<&DataDragonCache>,
+    spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
+    allowed_lane_champions: Option<&HashSet<i32>>,
+) -> Result<ChampionBuild, String> {
+    let json_supports_runes = opgg_json.get("supports_runes").and_then(|v| v.as_bool()).unwrap_or(true);
+    let effective_spells_catalog = spells_catalog.or_else(|| ddragon.map(|d| &d.spells));
+
+    if let Some(text) = opgg_json.pointer("/result/content/0/text").and_then(|v| v.as_str()) {
+        return parse_opgg_mcp_text_for_mode_with_ddragon(
+            text, champion_id, champion_name, supports_runes && json_supports_runes, spell_mode, ddragon, effective_spells_catalog,
         );
     }
 
@@ -125,7 +122,7 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
 
     // Extract summoner spell pairs filtered by active mode and DataDragon spell catalog
     let ((spell1_id, spell2_id), spell_options) =
-        extract_summoner_spell_pairs_for_mode(analysis, is_jungle, spell_mode, spells_catalog);
+        extract_summoner_spell_pairs_for_mode(analysis, is_jungle, spell_mode, effective_spells_catalog);
 
     // Extract item entries from JSON
     let starter_val = analysis
@@ -192,7 +189,18 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
         .unwrap_or_default();
     let mut candidate_entries = core_entries.clone();
 
-    let damage_type_owned = infer_rest_damage_type(analysis, &core_entries, &other_entries);
+    let cls = resolve_classifications_for_ddragon(ddragon);
+    let explicit_dt = analysis.get("damage_type").and_then(|v| v.as_str());
+    let explicit_role = extract_primary_champion_role(analysis);
+    let damage_type_owned = infer_damage_type_with_cls(
+        explicit_dt,
+        &core_entries,
+        &other_entries,
+        explicit_role,
+        champion_id,
+        ddragon,
+        &cls,
+    );
     let damage_type = damage_type_owned.as_str();
 
     let mut fourth_entries = parse_json_item_entries(
@@ -236,11 +244,11 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
         .chain(sixth_entries.iter())
         .cloned()
         .collect();
-    let tear_upgrade = resolve_tear_to_completed_item(&all_for_tear);
+    let tear_upgrade = resolve_tear_to_completed_item_in(&cls, &all_for_tear);
 
     let normalize_entries = |entries: &mut Vec<ItemStatEntry>| {
         for entry in entries.iter_mut() {
-            entry.ids = resolve_tear_item_ids(&entry.ids, tear_upgrade);
+            entry.ids = resolve_tear_item_ids_in(&cls, &entry.ids, tear_upgrade);
         }
         entries.retain(|e| !e.ids.is_empty());
     };
@@ -250,7 +258,8 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
     normalize_entries(&mut fifth_entries);
     normalize_entries(&mut sixth_entries);
 
-    let item_blocks = build_5_item_blocks_with_depth_lists(
+    let item_blocks = build_5_item_blocks_with_cls(
+        &cls,
         starter_entries,
         boot_entries,
         candidate_entries.clone(),
@@ -265,7 +274,8 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
         .map(|b| b.item_ids.clone())
         .unwrap_or_default();
 
-    let build_options = build_unified_build_options(
+    let build_options = build_unified_build_options_with_cls(
+        &cls,
         &core_entries,
         &fourth_entries,
         &fifth_entries,

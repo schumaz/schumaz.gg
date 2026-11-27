@@ -6,47 +6,47 @@ use std::collections::HashMap;
 
 #[test]
 fn test_enrich_build_with_ddragon_populates_urls_spells_shards_and_item_metadata() {
-    let mut ddragon_cache = DataDragonCache {
-        version: "14.23.1".to_string(),
-        ..Default::default()
-    };
+    let mut ddragon_cache = DataDragonCache { version: "14.23.1".to_string(), ..Default::default() };
+    ddragon_cache.champions.insert(103, ChampionMetadata {
+        champion_id: 103,
+        key_name: "Ahri".to_string(),
+        display_name: "Ahri".to_string(),
+        icon_url: "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png".to_string(),
+    });
+    ddragon_cache.runes.insert(8100, RuneMetadata {
+        id: 8100,
+        key: "Domination".to_string(),
+        name: "Dominação".to_string(),
+        icon_url: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png".to_string(),
+        short_desc: String::new(),
+    });
+    ddragon_cache.champion_profiles.insert(103, ChampionProfile {
+        tags: vec!["Mage".to_string(), "Assassin".to_string()],
+        partype: "Mana".to_string(),
+        attack: 3,
+        defense: 4,
+        magic: 8,
+    });
+    ddragon_cache.rune_trees = vec![
+        RuneTreeCatalog { id: 8200, key: "Sorcery".to_string(), slots: vec![vec![8229], vec![8226], vec![8210], vec![8237]] },
+        RuneTreeCatalog { id: 8300, key: "Inspiration".to_string(), slots: vec![vec![8369], vec![8304], vec![8316], vec![8347]] },
+    ];
+    let mut cls = ItemClassificationCache::default();
+    cls.item_tags.insert(1056, vec!["SpellDamage".to_string(), "ManaRegen".to_string()]);
+    cls.item_gold.insert(1056, 400);
+    cls.map11_items.insert(1056);
+    cls.starters.insert(1056);
+    ddragon_cache.item_classifications = cls;
 
-    ddragon_cache.champions.insert(
-        103,
-        ChampionMetadata {
-            champion_id: 103,
-            key_name: "Ahri".to_string(),
-            display_name: "Ahri".to_string(),
-            icon_url: "https://ddragon.leagueoflegends.com/cdn/14.23.1/img/champion/Ahri.png"
-                .to_string(),
-        },
-    );
-
-    ddragon_cache.runes.insert(
-        8100,
-        RuneMetadata {
-            id: 8100,
-            key: "Domination".to_string(),
-            name: "Dominação".to_string(),
-            icon_url:
-                "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7200_Domination.png"
-                    .to_string(),
-            short_desc: String::new(),
-        },
-    );
-
-    let mut build = build_fallback_champion_build(103, "Ahri", 420);
+    let mut build = build_fallback_champion_build_with_ddragon(103, "Ahri", 420, Some(&ddragon_cache));
     let sample_item_id = build.item_blocks[0].item_ids[0];
-    ddragon_cache.items.insert(
-        sample_item_id,
-        ItemMetadata {
-            id: sample_item_id,
-            name: "Anel de Doran".to_string(),
-            gold_total: 400,
-            stats: vec!["18 de Poder de Habilidade".to_string()],
-            plaintext: "Bom item iniciante para conjuradores".to_string(),
-        },
-    );
+    ddragon_cache.items.insert(sample_item_id, ItemMetadata {
+        id: sample_item_id,
+        name: "Anel de Doran".to_string(),
+        gold_total: 400,
+        stats: vec!["18 de Poder de Habilidade".to_string()],
+        plaintext: "Bom item iniciante para conjuradores".to_string(),
+    });
 
     enrich_build_with_ddragon_with_flash_key(&mut build, &ddragon_cache, FlashKeyPreference::D);
 

@@ -1,10 +1,12 @@
 use super::item_options::build_arena_unified_options;
 use crate::build_provider::items::{
-    ARENA_PRISMATIC_ID_RANGE, is_arena_anvil_or_consumable, is_arena_prismatic_dynamic,
-    is_boot_item_dynamic, is_completed_item_dynamic, is_component_item_dynamic,
-    is_map30_item_dynamic, is_starter_item, normalize_arena_item_id,
+    ARENA_PRISMATIC_ID_RANGE, is_arena_anvil_or_consumable_in, is_arena_prismatic_in,
+    is_boot_in, is_completed_in, is_component_in, is_map30_item_in, is_starter_in,
+    normalize_arena_item_id_in, snapshot_dynamic_item_classifications,
 };
-use crate::build_provider::models::{ItemBlock, ItemBlockKind, ItemStatEntry, UnifiedBuildOption};
+use crate::build_provider::models::{
+    ItemBlock, ItemBlockKind, ItemClassificationCache, ItemStatEntry, UnifiedBuildOption,
+};
 use std::collections::{HashMap, HashSet};
 
 /// Secondary boots below 1.5% share of total boot picks are dropped once a primary boot exists
@@ -22,17 +24,23 @@ pub(super) struct AggregatedItemStat {
 
 /// Builds the combined set of real Arena Prismatic IDs from OP.GG's `prism_items` array while
 /// protecting purchasable `44xxxx` legendaries (`447111`, `2500g`) from being misclassified.
-fn collect_known_prismatics(prism_entries: &[ItemStatEntry]) -> HashSet<i32> {
+fn collect_known_prismatics(
+    cls: &ItemClassificationCache,
+    prism_entries: &[ItemStatEntry],
+) -> HashSet<i32> {
     let mut prismatics = HashSet::new();
     for entry in prism_entries {
         for &raw_id in &entry.ids {
-            let norm = normalize_arena_item_id(raw_id);
-            if norm <= 0 || is_boot_item_dynamic(norm) || is_arena_anvil_or_consumable(norm) {
+            let norm = normalize_arena_item_id_in(cls, raw_id);
+            if norm <= 0
+                || is_boot_in(cls, norm)
+                || is_arena_anvil_or_consumable_in(cls, norm)
+            {
                 continue;
             }
             if ARENA_PRISMATIC_ID_RANGE.contains(&norm)
-                && is_completed_item_dynamic(norm)
-                && !is_arena_prismatic_dynamic(norm)
+                && is_completed_in(cls, norm)
+                && !is_arena_prismatic_in(cls, norm)
             {
                 continue;
             }
@@ -42,25 +50,37 @@ fn collect_known_prismatics(prism_entries: &[ItemStatEntry]) -> HashSet<i32> {
     prismatics
 }
 
-fn is_prismatic_item(norm_id: i32, known_prismatics: &HashSet<i32>) -> bool {
-    is_arena_prismatic_dynamic(norm_id) || known_prismatics.contains(&norm_id)
+fn is_prismatic_item(
+    cls: &ItemClassificationCache,
+    norm_id: i32,
+    known_prismatics: &HashSet<i32>,
+) -> bool {
+    is_arena_prismatic_in(cls, norm_id) || known_prismatics.contains(&norm_id)
 }
 
 /// Returns `true` iff `norm_id` is a valid purchasable Map `30` legendary item:
 /// accepts Arena `22xxxx` legendaries, 4-digit exclusives (`3430`, `4010`–`4017`), and purchasable
 /// `44xxxx` legendaries (`447111` at `2500g`), while strictly rejecting Prismatics, Boots, Anvils,
 /// Consumables, Starters, Components, and non-Map-30 SR items.
-pub(crate) fn is_valid_arena_legendary(norm_id: i32, known_prismatics: &HashSet<i32>) -> bool {
+pub(crate) fn is_valid_arena_legendary(
+    cls: &ItemClassificationCache,
+    norm_id: i32,
+    known_prismatics: &HashSet<i32>,
+) -> bool {
     norm_id > 0
-        && !is_boot_item_dynamic(norm_id)
-        && !is_prismatic_item(norm_id, known_prismatics)
-        && !is_arena_anvil_or_consumable(norm_id)
-        && !is_starter_item(norm_id)
-        && !is_component_item_dynamic(norm_id)
-        && is_map30_item_dynamic(norm_id)
+        && !is_boot_in(cls, norm_id)
+        && !is_prismatic_item(cls, norm_id, known_prismatics)
+        && !is_arena_anvil_or_consumable_in(cls, norm_id)
+        && !is_starter_in(cls, norm_id)
+        && !is_component_in(cls, norm_id)
+        && is_map30_item_in(cls, norm_id)
 }
 
-fn aggregate_single_items<F>(entries: &[ItemStatEntry], predicate: F) -> Vec<AggregatedItemStat>
+fn aggregate_single_items<F>(
+    cls: &ItemClassificationCache,
+    entries: &[ItemStatEntry],
+    predicate: F,
+) -> Vec<AggregatedItemStat>
 where
     F: Fn(i32) -> bool,
 {
@@ -69,7 +89,7 @@ where
         let play = entry.play.max(0);
         let win = entry.win.max(0);
         for &raw_id in &entry.ids {
-            let norm = normalize_arena_item_id(raw_id);
+            let norm = normalize_arena_item_id_in(cls, raw_id);
             if !predicate(norm) {
                 continue;
             }
@@ -94,13 +114,16 @@ where
 
 /// Selects relevant Arena boots without SR fallbacks, dropping residual troll boots (`< 1.5%`
 /// pick share) whenever a primary boot exists.
-fn select_arena_boots(boot_entries: &[ItemStatEntry]) -> Vec<i32> {
-    let ranked = aggregate_single_items(boot_entries, |id| {
+fn select_arena_boots(
+    cls: &ItemClassificationCache,
+    boot_entries: &[ItemStatEntry],
+) -> Vec<i32> {
+    let ranked = aggregate_single_items(cls, boot_entries, |id| {
         id != 1001
             && id != 2422
-            && is_boot_item_dynamic(id)
-            && is_map30_item_dynamic(id)
-            && !is_arena_anvil_or_consumable(id)
+            && is_boot_in(cls, id)
+            && is_map30_item_in(cls, id)
+            && !is_arena_anvil_or_consumable_in(cls, id)
     });
     let total_play: i64 = ranked.iter().map(|b| b.play.max(0)).sum();
 
@@ -123,14 +146,15 @@ fn select_arena_boots(boot_entries: &[ItemStatEntry]) -> Vec<i32> {
 
 /// Selects the top 5–6 Arena Prismatic items from OP.GG's `prism_items` array.
 fn select_arena_prismatics(
+    cls: &ItemClassificationCache,
     prism_entries: &[ItemStatEntry],
     known_prismatics: &HashSet<i32>,
 ) -> Vec<i32> {
-    aggregate_single_items(prism_entries, |id| {
-        is_prismatic_item(id, known_prismatics)
-            && is_map30_item_dynamic(id)
-            && !is_boot_item_dynamic(id)
-            && !is_arena_anvil_or_consumable(id)
+    aggregate_single_items(cls, prism_entries, |id| {
+        is_prismatic_item(cls, id, known_prismatics)
+            && is_map30_item_in(cls, id)
+            && !is_boot_in(cls, id)
+            && !is_arena_anvil_or_consumable_in(cls, id)
     })
     .into_iter()
     .take(MAX_ARENA_PRISMATICS)
@@ -138,24 +162,24 @@ fn select_arena_prismatics(
     .collect()
 }
 
-/// Builds the 5 Arena item blocks (`Prismatic`, `Core`, `Boots`, `Final`, `Situational`) and up to
-/// 3 distinct archetype-cohesive `UnifiedBuildOption`s without any SR starter/fallback items.
-pub fn build_arena_item_blocks_and_options(
+/// Builds the 5 Arena item blocks and up to 3 archetype-cohesive options using `cls` by reference.
+pub fn build_arena_item_blocks_and_options_with_cls(
+    cls: &ItemClassificationCache,
     boot_entries: &[ItemStatEntry],
     prism_entries: &[ItemStatEntry],
     core_entries: &[ItemStatEntry],
     last_entries: &[ItemStatEntry],
 ) -> (Vec<ItemBlock>, Vec<UnifiedBuildOption>) {
-    let known_prismatics = collect_known_prismatics(prism_entries);
-    let boot_ids = select_arena_boots(boot_entries);
-    let prismatic_ids = select_arena_prismatics(prism_entries, &known_prismatics);
+    let known_prismatics = collect_known_prismatics(cls, prism_entries);
+    let boot_ids = select_arena_boots(cls, boot_entries);
+    let prismatic_ids = select_arena_prismatics(cls, prism_entries, &known_prismatics);
 
-    let mut legendary_pool = aggregate_single_items(last_entries, |id| {
-        is_valid_arena_legendary(id, &known_prismatics)
+    let mut legendary_pool = aggregate_single_items(cls, last_entries, |id| {
+        is_valid_arena_legendary(cls, id, &known_prismatics)
     });
     let mut seen_pool: HashSet<i32> = legendary_pool.iter().map(|i| i.id).collect();
-    for item in aggregate_single_items(core_entries, |id| {
-        is_valid_arena_legendary(id, &known_prismatics)
+    for item in aggregate_single_items(cls, core_entries, |id| {
+        is_valid_arena_legendary(cls, id, &known_prismatics)
     }) {
         if seen_pool.insert(item.id) {
             legendary_pool.push(item);
@@ -163,7 +187,7 @@ pub fn build_arena_item_blocks_and_options(
     }
 
     let build_options =
-        build_arena_unified_options(core_entries, &legendary_pool, &known_prismatics);
+        build_arena_unified_options(cls, core_entries, &legendary_pool, &known_prismatics);
 
     let (primary_core, primary_final, primary_situational) = build_options
         .first()
@@ -210,4 +234,22 @@ pub fn build_arena_item_blocks_and_options(
     ];
 
     (item_blocks, build_options)
+}
+
+/// Builds the 5 Arena item blocks (`Prismatic`, `Core`, `Boots`, `Final`, `Situational`) and up to
+/// 3 distinct archetype-cohesive `UnifiedBuildOption`s without any SR starter/fallback items.
+pub fn build_arena_item_blocks_and_options(
+    boot_entries: &[ItemStatEntry],
+    prism_entries: &[ItemStatEntry],
+    core_entries: &[ItemStatEntry],
+    last_entries: &[ItemStatEntry],
+) -> (Vec<ItemBlock>, Vec<UnifiedBuildOption>) {
+    let cls = snapshot_dynamic_item_classifications();
+    build_arena_item_blocks_and_options_with_cls(
+        &cls,
+        boot_entries,
+        prism_entries,
+        core_entries,
+        last_entries,
+    )
 }

@@ -85,8 +85,18 @@ pub fn hydrate_ddragon_from_dir(dir: &Path, locale: AppLocale) -> Option<Arc<Dat
     if healed_dirty_desc {
         let _ = save_ddragon_bundle_to_dir(dir, locale, &bundle);
     }
-    if let Some(classifications) = bundle.item_classifications {
-        set_dynamic_item_classifications(classifications);
+    if let Some(classifications) = bundle.item_classifications.as_ref() {
+        if bundle.ddragon.item_classifications.boots.is_empty()
+            && bundle.ddragon.item_classifications.completed.is_empty()
+            && bundle.ddragon.item_classifications.item_tags.is_empty()
+        {
+            bundle.ddragon.item_classifications = classifications.clone();
+        }
+        set_dynamic_item_classifications(classifications.clone());
+    } else if !bundle.ddragon.item_classifications.item_tags.is_empty()
+        || !bundle.ddragon.item_classifications.boots.is_empty()
+    {
+        set_dynamic_item_classifications(bundle.ddragon.item_classifications.clone());
     }
     let arc = Arc::new(bundle.ddragon);
     if let Ok(mut guard) = get_ddragon_cache_store().write() {
@@ -182,10 +192,20 @@ pub async fn refresh_ddragon_if_outdated_with_base(
             || (!c.champions.is_empty() && c.champion_abilities.is_empty())
     });
 
+    let needs_catalog_backfill = base_url == DDRAGON_BASE_URL
+        && existing.as_ref().is_some_and(|c| {
+            (!c.champions.is_empty() && c.champion_profiles.is_empty())
+                || (!c.runes.is_empty() && c.rune_trees.is_empty())
+                || (!c.items.is_empty()
+                    && c.item_classifications.map11_items.is_empty()
+                    && c.item_classifications.map12_items.is_empty())
+        });
+
     if let Some(ref cached) = existing
         && cached.version == version
         && !needs_arena_backfill
         && !needs_tooltip_backfill
+        && !needs_catalog_backfill
     {
         return Ok(Arc::clone(cached));
     }

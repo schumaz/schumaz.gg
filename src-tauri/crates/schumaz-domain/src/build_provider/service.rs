@@ -1,6 +1,6 @@
 use super::analytics::{
     fetch_opgg_mcp_depth_items, fetch_opgg_versions_from_base,
-    parse_opgg_analysis_payload_for_mode_and_roster, resolve_champion_most_played_lane,
+    parse_opgg_analysis_payload_with_ddragon, resolve_champion_most_played_lane,
 };
 use super::cache::{
     load_disk_build_envelope, make_build_cache_key, store_disk_build, store_ram_cached_build,
@@ -241,12 +241,13 @@ pub async fn get_recommended_build_with_filters_and_endpoints_with_dir(
     let parsed_build = match fetch_outcome.result {
         Ok(mut json_res) => {
             merge_mcp_depth_into_json(&mut json_res, target_position.as_ref(), mcp_depth_opt);
-            parse_opgg_analysis_payload_for_mode_and_roster(
+            parse_opgg_analysis_payload_with_ddragon(
                 &json_res,
                 champion_id,
                 champ_name,
                 supports_runes,
                 Some(spell_mode),
+                Some(ddragon_cache),
                 Some(&ddragon_cache.spells),
                 lane_roster_opt.as_ref(),
             )

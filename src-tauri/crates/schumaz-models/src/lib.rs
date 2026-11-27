@@ -1,6 +1,7 @@
 pub mod aram;
 pub mod arena;
 pub mod build;
+pub mod ddragon;
 pub mod diagnostics;
 pub mod injector;
 pub mod ipc_commands;

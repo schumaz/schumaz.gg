@@ -178,3 +178,46 @@ fn test_parse_opgg_mcp_text_aram_tristana_multiple_spells_and_numeric_order() {
     assert_eq!(numeric_build.spell_options[0].pick_rate, 62.5);
     assert_eq!(numeric_build.spell_options[1].pick_rate, 30.0);
 }
+
+#[test]
+fn test_mcp_parser_schema_routing_no_jungle_false_positive_and_no_play_inflation() {
+    let text = "class LolGetChampionAnalysis: position,data
+class Data: boots,starter_items,core_items,fourth_items,fifth_items,sixth_items
+class CoreItems: ids,play,win,pick_rate
+class SummonerSpells: ids,play,win,pick_rate
+class Runes: primary_page_id,primary_rune_ids,secondary_page_id,secondary_rune_ids,stat_mod_ids,play,win,pick_rate
+
+LolGetChampionAnalysis(Position(\"mid\"),Data([CoreItems([3020],900,500,0.9)],[CoreItems([1056,2003],1200,700,0.8)],[CoreItems([3118,4645,3089],1,1,0.01),CoreItems([6655,4646,3157],14,9,0.5)],[CoreItems([3135],50,30,0.2)],[CoreItems([3102],40,22,0.15)],[CoreItems([4629],30,18,0.1)]),\"jungle_prose_mention\",SummonerSpells([4,14],1000,550,0.8),Runes(8200,[8229,8226,8210,8237],8300,[8304,8347],[5008,5008,5001],500,280,0.5))";
+
+    let mut ddragon = DataDragonCache::default();
+    ddragon.champion_profiles.insert(
+        9999,
+        crate::build_provider::models::ChampionProfile {
+            tags: vec!["Mage".to_string()],
+            partype: "Mana".to_string(),
+            attack: 2,
+            defense: 3,
+            magic: 9,
+        },
+    );
+
+    let build = parse_opgg_mcp_text_for_mode_with_ddragon(
+        text,
+        9999,
+        "NewMage",
+        true,
+        Some("CLASSIC"),
+        Some(&ddragon),
+        None,
+    )
+    .expect("Schema-routed MCP payload should parse cleanly");
+
+    // Mentioning "jungle" outside Position/position field must NOT force Smite (11)
+    assert_eq!((build.spell1_id, build.spell2_id), (4, 14));
+    // Reordered schema fields route boots/starters/core/4th/5th/6th accurately
+    assert_eq!(build.item_blocks[0].item_ids, vec![1056, 2003]);
+    assert_eq!(build.item_blocks[2].item_ids, vec![3020]);
+    // Explicit play == 1 is NOT inflated to 10000 and loses to play == 14
+    assert_eq!(build.item_blocks[1].item_ids, vec![6655, 4646, 3157]);
+    assert_eq!(build.build_options[0].play, 14);
+}

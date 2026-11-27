@@ -219,3 +219,55 @@ fn test_parse_all_ddragon_champion_abilities_extracts_qwer_and_sanitizes_html() 
     assert_eq!(ahri[3].key, "R");
     assert_eq!(ahri[3].max_rank, 3);
 }
+
+#[test]
+fn test_parse_ddragon_catalog_profiles_rune_trees_and_map_item_sets() {
+    let champions_json = serde_json::json!({
+        "data": {
+            "Ahri": {
+                "key": "103",
+                "tags": ["Mage", "Assassin"],
+                "partype": "Mana",
+                "info": { "attack": 3, "defense": 4, "magic": 8 }
+            }
+        }
+    });
+    let profiles = parse_all_ddragon_champion_profiles(&champions_json);
+    let ahri = profiles.get(&103).expect("Ahri profile should be parsed");
+    assert_eq!(ahri.tags, vec!["Mage", "Assassin"]);
+    assert_eq!((ahri.attack, ahri.defense, ahri.magic), (3, 4, 8));
+    assert_eq!(ahri.partype, "Mana");
+
+    let runes_json = serde_json::json!([
+        {
+            "id": 8200,
+            "key": "Sorcery",
+            "slots": [
+                { "runes": [{ "id": 8229 }, { "id": 8214 }] },
+                { "runes": [{ "id": 8226 }] }
+            ]
+        }
+    ]);
+    let trees = parse_ddragon_rune_trees(&runes_json);
+    assert_eq!(trees.len(), 1);
+    assert_eq!((trees[0].id, trees[0].key.as_str()), (8200, "Sorcery"));
+    assert_eq!(trees[0].slots, vec![vec![8229, 8214], vec![8226]]);
+
+    let items_json = serde_json::json!({
+        "data": {
+            "1056": { "tags": ["SpellDamage", "Lane"], "gold": { "total": 400, "purchasable": true }, "maps": { "11": true, "12": false } },
+            "3112": { "tags": ["SpellDamage"], "gold": { "total": 950, "purchasable": true }, "maps": { "11": false, "12": true } },
+            "2003": { "tags": ["Consumable", "HealthRegen"], "gold": { "total": 50, "purchasable": true }, "maps": { "11": true, "12": true } },
+            "3340": { "tags": ["Trinket"], "gold": { "total": 0, "purchasable": true }, "maps": { "11": true, "12": true } },
+            "9001": { "inStore": false, "tags": ["SpellDamage"], "gold": { "total": 3000, "purchasable": true }, "maps": { "11": true, "12": true } },
+            "9002": { "requiredChampion": "Viktor", "tags": ["SpellDamage"], "gold": { "total": 3000, "purchasable": true }, "maps": { "11": true, "12": true } }
+        }
+    });
+    let cls = parse_ddragon_item_classifications(&items_json);
+    assert!(cls.map11_items.contains(&1056) && !cls.map12_items.contains(&1056));
+    assert!(cls.map12_items.contains(&3112) && !cls.map11_items.contains(&3112));
+    assert!(cls.starters.contains(&1056) && cls.starters.contains(&3112));
+    assert!(cls.consumables.contains(&2003));
+    assert_eq!(cls.item_gold.get(&1056).copied(), Some(400));
+    assert!(!cls.map11_items.contains(&3340) && !cls.map11_items.contains(&9001) && !cls.map11_items.contains(&9002));
+}

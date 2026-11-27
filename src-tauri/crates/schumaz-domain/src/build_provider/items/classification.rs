@@ -1,11 +1,14 @@
-use super::super::models::{ItemClassificationCache, ItemStatEntry};
-use std::collections::HashMap;
-use std::ops::RangeInclusive;
+use super::super::models::{DataDragonCache, ItemClassificationCache};
+#[cfg(test)]
+use super::tear::*;
+use std::ops::{Deref, RangeInclusive};
+use std::sync::{Arc, OnceLock, RwLock};
 
 pub static TEST_CLASSIFICATION_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-static DYNAMIC_ITEM_CLASSIFICATIONS: std::sync::RwLock<Option<ItemClassificationCache>> =
-    std::sync::RwLock::new(None);
+static DYNAMIC_ITEM_CLASSIFICATIONS: OnceLock<RwLock<Option<Arc<ItemClassificationCache>>>> =
+    OnceLock::new();
+static EMPTY_ITEM_CLASSIFICATIONS: OnceLock<Arc<ItemClassificationCache>> = OnceLock::new();
 
 /// Item ID range reserved for Arena (`CHERRY`) anvils & Shardholder (`220000` Stat Anvil, `220007` Prismatic Item Anvil, `220012` Shardholder).
 pub const ARENA_ANVIL_ID_RANGE: RangeInclusive<i32> = 220_000..=220_012;
@@ -14,251 +17,203 @@ pub const ARENA_PRISMATIC_ID_RANGE: RangeInclusive<i32> = 440_000..=449_999;
 /// Canonical DataDragon total gold cost shared by all 46 real Arena Prismatic items (`sell == 1100`).
 pub const ARENA_PRISMATIC_GOLD: i64 = 2750;
 
+/// Zero-copy view over an `ItemClassificationCache`, borrowing directly from `DataDragonCache`
+/// when available or falling back to an `Arc` snapshot of the global classification store.
+pub enum ClassificationsRef<'a> {
+    Borrowed(&'a ItemClassificationCache),
+    Shared(Arc<ItemClassificationCache>),
+}
+
+impl Deref for ClassificationsRef<'_> {
+    type Target = ItemClassificationCache;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(cls) => cls,
+            Self::Shared(arc) => arc,
+        }
+    }
+}
+
+fn classification_store() -> &'static RwLock<Option<Arc<ItemClassificationCache>>> {
+    DYNAMIC_ITEM_CLASSIFICATIONS.get_or_init(|| RwLock::new(None))
+}
+
 pub fn set_dynamic_item_classifications(cache: ItemClassificationCache) {
-    if let Ok(mut guard) = DYNAMIC_ITEM_CLASSIFICATIONS.write() {
-        *guard = Some(cache);
+    if let Ok(mut guard) = classification_store().write() {
+        *guard = Some(Arc::new(cache));
     }
 }
 
 pub fn get_dynamic_item_classifications() -> Option<ItemClassificationCache> {
-    DYNAMIC_ITEM_CLASSIFICATIONS
+    classification_store()
         .read()
         .ok()
-        .and_then(|g| g.clone())
+        .and_then(|g| g.as_ref().map(|arc| (**arc).clone()))
 }
 
-/// Dynamically retrieves DataDragon tags for an item.
-pub fn get_item_tags_dynamic(id: i32) -> Vec<String> {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && let Some(tags) = cache.item_tags.get(&id)
+/// Returns an O(1) `Arc` snapshot of the active dynamic item classifications without deep-cloning.
+pub fn snapshot_dynamic_item_classifications() -> Arc<ItemClassificationCache> {
+    if let Ok(guard) = classification_store().read()
+        && let Some(arc) = guard.as_ref()
     {
-        return tags.clone();
+        return Arc::clone(arc);
     }
-    Vec::new()
+    Arc::clone(EMPTY_ITEM_CLASSIFICATIONS.get_or_init(|| Arc::new(ItemClassificationCache::default())))
 }
 
-/// Dynamically checks whether an item is a boot using Riot DataDragon tags or fallback catalog.
-pub fn is_boot_item_dynamic(id: i32) -> bool {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && cache.boots.contains(&id)
-    {
-        return true;
+/// Resolves item classifications preferring `ddragon.item_classifications` (zero locks) and falling
+/// back to a single O(1) `Arc` snapshot of the global classification cache.
+pub fn resolve_classifications_for_ddragon(
+    ddragon: Option<&DataDragonCache>,
+) -> ClassificationsRef<'_> {
+    if let Some(dd) = ddragon {
+        let cls = &dd.item_classifications;
+        if !cls.boots.is_empty()
+            || !cls.completed.is_empty()
+            || !cls.item_tags.is_empty()
+            || !cls.map11_items.is_empty()
+            || !cls.map12_items.is_empty()
+            || !cls.map30_items.is_empty()
+        {
+            return ClassificationsRef::Borrowed(cls);
+        }
     }
-    is_boot_item(id)
+    ClassificationsRef::Shared(snapshot_dynamic_item_classifications())
 }
 
-/// Dynamically checks whether an item is a component using Riot DataDragon recipe tree or fallback catalog.
-pub fn is_component_item_dynamic(id: i32) -> bool {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && cache.components.contains(&id)
-    {
-        return true;
-    }
-    is_component_item(id)
+/// Returns DataDragon tags for `id` directly from `cls` without locking.
+pub fn item_tags_in(cls: &ItemClassificationCache, id: i32) -> &[String] {
+    cls.item_tags.get(&id).map(Vec::as_slice).unwrap_or(&[])
 }
 
-/// Dynamically checks whether an item is a completed legendary item using Riot DataDragon cache.
-pub fn is_completed_item_dynamic(id: i32) -> bool {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && cache.completed.contains(&id)
-    {
-        return true;
-    }
-    false
+pub fn is_boot_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.boots.contains(&id) || is_boot_item(id)
 }
 
-/// Dynamically checks whether `id` is a real Arena Prismatic (`44xxxx` with `gold == 2750` from DataDragon).
-/// Never classifies `447111` (Overlord's Bloodmail, `2500g`) as a Prismatic.
-pub fn is_arena_prismatic_dynamic(id: i32) -> bool {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && cache.arena_prismatics.contains(&id)
-    {
-        return true;
-    }
-    false
+pub fn is_component_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.components.contains(&id) || is_component_item(id)
 }
 
-/// Dynamically checks whether `id` is enabled on Riot Map `30` (Arena).
-/// Returns `true` when the DataDragon Map 30 catalog has not been populated yet.
-pub fn is_map30_item_dynamic(id: i32) -> bool {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && !cache.map30_items.is_empty()
-    {
-        return cache.map30_items.contains(&id);
-    }
-    true
+pub fn is_completed_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.completed.contains(&id)
 }
 
-/// Returns `true` for Arena anvils (`220000..=220012`), juices/consumables, unpurchasable non-evolved
-/// Map 30 items, and any item tagged `"Consumable"` in DataDragon `item.json`.
-pub fn is_arena_anvil_or_consumable(id: i32) -> bool {
-    if ARENA_ANVIL_ID_RANGE.contains(&id) {
-        return true;
-    }
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && cache.arena_consumables.contains(&id)
-    {
-        return true;
-    }
-    matches!(id, 2142..=2146 | 222141 | 3400 | 3599 | 3600)
+pub fn is_starter_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.starters.contains(&id) || is_starter_item(id)
 }
 
-/// Normalizes an evolved Arena item (Map `30`) to its purchasable Map `30` base item while
-/// preventing Riot's DataDragon `specialRecipe` bug (`223121 -> 3119`) from leaking SR IDs.
-pub fn normalize_arena_item_id(id: i32) -> i32 {
+pub fn is_consumable_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.consumables.contains(&id)
+}
+
+pub fn is_arena_prismatic_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.arena_prismatics.contains(&id)
+}
+
+pub fn is_map30_item_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    cls.map30_items.is_empty() || cls.map30_items.contains(&id)
+}
+
+pub fn is_arena_anvil_or_consumable_in(cls: &ItemClassificationCache, id: i32) -> bool {
+    ARENA_ANVIL_ID_RANGE.contains(&id)
+        || cls.arena_consumables.contains(&id)
+        || matches!(id, 2142..=2146 | 222141 | 3400 | 3599 | 3600)
+}
+
+pub fn normalize_arena_item_id_in(cls: &ItemClassificationCache, id: i32) -> i32 {
     match id {
-        223042 => return 223004, // Arena Muramana -> Arena Manamune
-        223040 => return 223003, // Arena Seraph's Embrace -> Arena Archangel's Staff
-        223121 => return 223119, // Arena Fimbulwinter -> Arena Winter's Approach
-        222530 => return 222526, // Arena Diadem of Songs -> Arena Whispering Circlet
+        223042 => return 223004,
+        223040 => return 223003,
+        223121 => return 223119,
+        222530 => return 222526,
         _ => {}
     }
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && let Some(&base_id) = cache.evolved_fallbacks.get(&id)
-    {
-        if cache.map30_items.is_empty() || cache.map30_items.contains(&base_id) {
+    if let Some(&base_id) = cls.evolved_fallbacks.get(&id) {
+        if cls.map30_items.is_empty() || cls.map30_items.contains(&base_id) {
             return base_id;
         }
         let map30_candidate = 220_000 + base_id;
-        if cache.map30_items.contains(&map30_candidate) {
+        if cls.map30_items.contains(&map30_candidate) {
             return map30_candidate;
         }
     }
     id
 }
 
-/// Normalizes an evolved item (like Muramana, Seraph's Embrace, Fimbulwinter, Diadem of Songs) to its purchasable base.
-pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
-    if let Ok(guard) = DYNAMIC_ITEM_CLASSIFICATIONS.read()
-        && let Some(cache) = guard.as_ref()
-        && let Some(&base_id) = cache.evolved_fallbacks.get(&id)
-    {
+pub fn normalize_tear_item_in(cls: &ItemClassificationCache, id: i32) -> i32 {
+    if let Some(&base_id) = cls.evolved_fallbacks.get(&id) {
         return base_id;
     }
     match id {
-        3042 => 3004,     // Muramana -> Manamune
-        3040 => 3003,     // Seraph's Embrace -> Archangel's Staff
-        3121 => 3119,     // Fimbulwinter -> Winter's Approach
-        2530 => 2526,     // Diadem of Songs -> Whispering Circlet
-        223042 => 223004, // Arena Muramana -> Arena Manamune
-        223040 => 223003, // Arena Seraph's Embrace -> Arena Archangel's Staff
-        223121 => 223119, // Arena Fimbulwinter -> Arena Winter's Approach
-        222530 => 222526, // Arena Diadem of Songs -> Arena Whispering Circlet
+        3042 => 3004,
+        3040 => 3003,
+        3121 => 3119,
+        2530 => 2526,
+        223042 => 223004,
+        223040 => 223003,
+        223121 => 223119,
+        222530 => 222526,
         other => other,
     }
 }
 
-pub const TEAR_COMPONENT_IDS: [i32; 3] = [3070, 323070, 773070];
-
-pub fn is_tear_component(id: i32) -> bool {
-    TEAR_COMPONENT_IDS.contains(&id)
+/// Dynamically retrieves DataDragon tags for an item.
+pub fn get_item_tags_dynamic(id: i32) -> Vec<String> {
+    let cls = snapshot_dynamic_item_classifications();
+    item_tags_in(&cls, id).to_vec()
 }
 
-pub const TEAR_COMPLETED_ITEMS: [i32; 4] = [2526, 3003, 3004, 3119];
-
-pub const ARENA_TEAR_COMPLETED_ITEMS: [i32; 4] = [222526, 223003, 223004, 223119];
-
-pub fn is_tear_completed_item(id: i32) -> bool {
-    TEAR_COMPLETED_ITEMS.contains(&id) || ARENA_TEAR_COMPLETED_ITEMS.contains(&id)
+/// Dynamically checks whether an item is a boot using Riot DataDragon tags or fallback catalog.
+pub fn is_boot_item_dynamic(id: i32) -> bool {
+    let cls = snapshot_dynamic_item_classifications();
+    is_boot_in(&cls, id)
 }
 
-/// Detects the champion's most-played completed purchasable Tear legendary item across payload entries.
-/// Returns `None` when no completed/evolved Tear item appears anywhere in `entries`, so raw Tear
-/// components bought solely for early mana never invent a Tear legendary.
-pub fn resolve_tear_to_completed_item(entries: &[ItemStatEntry]) -> Option<i32> {
-    let mut play_by_item: HashMap<i32, (i64, usize)> = HashMap::new();
-    let mut seen_counter = 0usize;
-
-    for entry in entries {
-        for &id in &entry.ids {
-            let norm = normalize_tear_item_dynamic(id);
-            if TEAR_COMPLETED_ITEMS.contains(&norm) {
-                let slot = play_by_item.entry(norm).or_insert_with(|| {
-                    let idx = seen_counter;
-                    seen_counter += 1;
-                    (0, idx)
-                });
-                slot.0 += entry.play.max(1);
-            }
-        }
-    }
-
-    play_by_item
-        .into_iter()
-        .max_by(|(id_a, (play_a, idx_a)), (id_b, (play_b, idx_b))| {
-            play_a
-                .cmp(play_b)
-                .then_with(|| idx_b.cmp(idx_a))
-                .then_with(|| id_b.cmp(id_a))
-        })
-        .map(|(id, _)| id)
+/// Dynamically checks whether an item is a component using Riot DataDragon recipe tree or fallback catalog.
+pub fn is_component_item_dynamic(id: i32) -> bool {
+    let cls = snapshot_dynamic_item_classifications();
+    is_component_in(&cls, id)
 }
 
-/// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
-/// and safely handling raw Tear of the Goddess components (`3070`, `323070`, `773070`).
-pub fn resolve_tear_item_ids(ids: &[i32], tear_upgrade: Option<i32>) -> Vec<i32> {
-    let mut normalized = Vec::new();
-    let mut has_tear_component = false;
-
-    for &id in ids {
-        if is_tear_component(id) {
-            has_tear_component = true;
-            continue;
-        }
-        let norm = normalize_tear_item_dynamic(id);
-        if !normalized.contains(&norm) {
-            normalized.push(norm);
-        }
-    }
-
-    if !has_tear_component {
-        return normalized;
-    }
-
-    let has_completed_tear = normalized
-        .iter()
-        .any(|id| TEAR_COMPLETED_ITEMS.contains(id));
-    if has_completed_tear {
-        return normalized;
-    }
-
-    let completed_count = normalized
-        .iter()
-        .filter(|&&id| {
-            !is_boot_item_dynamic(id) && !is_starter_item(id) && !is_component_item_dynamic(id)
-        })
-        .count();
-
-    if completed_count > 0
-        && completed_count < 3
-        && let Some(upgrade_id) = tear_upgrade
-        && !normalized.contains(&upgrade_id)
-    {
-        normalized.push(upgrade_id);
-    }
-
-    normalized
+/// Dynamically checks whether an item is a completed legendary item using Riot DataDragon cache.
+pub fn is_completed_item_dynamic(id: i32) -> bool {
+    let cls = snapshot_dynamic_item_classifications();
+    is_completed_in(&cls, id)
 }
 
-/// Normalizes a slice of item IDs by replacing transformed items with purchasable bases
-/// and deduplicating while preserving original order.
-pub fn normalize_item_ids_dedup(ids: &[i32]) -> Vec<i32> {
-    let mut result = Vec::new();
-    for &id in ids {
-        let norm = normalize_tear_item_dynamic(id);
-        if !result.contains(&norm) {
-            result.push(norm);
-        }
-    }
-    result
+/// Dynamically checks whether `id` is a real Arena Prismatic (`44xxxx` with `gold == 2750` from DataDragon).
+/// Never classifies `447111` (Overlord's Bloodmail, `2500g`) as a Prismatic.
+pub fn is_arena_prismatic_dynamic(id: i32) -> bool {
+    let cls = snapshot_dynamic_item_classifications();
+    is_arena_prismatic_in(&cls, id)
+}
+
+/// Dynamically checks whether `id` is enabled on Riot Map `30` (Arena).
+/// Returns `true` when the DataDragon Map 30 catalog has not been populated yet.
+pub fn is_map30_item_dynamic(id: i32) -> bool {
+    let cls = snapshot_dynamic_item_classifications();
+    is_map30_item_in(&cls, id)
+}
+
+/// Returns `true` for Arena anvils (`220000..=220012`), juices/consumables, unpurchasable non-evolved
+/// Map 30 items, and any item tagged `"Consumable"` in DataDragon `item.json`.
+pub fn is_arena_anvil_or_consumable(id: i32) -> bool {
+    let cls = snapshot_dynamic_item_classifications();
+    is_arena_anvil_or_consumable_in(&cls, id)
+}
+
+/// Normalizes an evolved Arena item (Map `30`) to its purchasable Map `30` base item while
+/// preventing Riot's DataDragon `specialRecipe` bug (`223121 -> 3119`) from leaking SR IDs.
+pub fn normalize_arena_item_id(id: i32) -> i32 {
+    let cls = snapshot_dynamic_item_classifications();
+    normalize_arena_item_id_in(&cls, id)
+}
+
+/// Normalizes an evolved item (like Muramana, Seraph's Embrace, Fimbulwinter, Diadem of Songs) to its purchasable base.
+pub fn normalize_tear_item_dynamic(id: i32) -> i32 {
+    let cls = snapshot_dynamic_item_classifications();
+    normalize_tear_item_in(&cls, id)
 }
 
 pub fn is_component_item(id: i32) -> bool {

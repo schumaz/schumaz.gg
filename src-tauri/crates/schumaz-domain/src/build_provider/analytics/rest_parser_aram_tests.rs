@@ -1,4 +1,6 @@
 use super::*;
+use super::super::rest_extractors::infer_rest_damage_type;
+use crate::build_provider::items::{TEST_CLASSIFICATION_MUTEX, set_dynamic_item_classifications};
 use crate::build_provider::models::ItemClassificationCache;
 
 #[test]

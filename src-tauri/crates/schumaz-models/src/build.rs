@@ -1,4 +1,5 @@
-use super::arena::{ArenaAugmentEntry, ArenaAugmentMetadata, ArenaSynergyEntry};
+use super::arena::{ArenaAugmentEntry, ArenaSynergyEntry};
+pub use super::ddragon::*;
 pub use super::matchups::{LaneMatchupEntry, LaneMatchupsSummary};
 pub use super::skills::{ChampionAbilityMetadata, SkillOrderRecommendation};
 use serde::{Deserialize, Serialize};
@@ -7,71 +8,6 @@ use std::collections::HashMap;
 
 fn default_true() -> bool {
     true
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ItemClassificationCache {
-    pub boots: std::collections::HashSet<i32>,
-    pub components: std::collections::HashSet<i32>,
-    pub completed: std::collections::HashSet<i32>,
-    pub evolved_fallbacks: std::collections::HashMap<i32, i32>,
-    pub item_tags: std::collections::HashMap<i32, Vec<String>>,
-    /// Arena (`CHERRY`) Prismatic items (`44xxxx` with `gold.total == 2750`).
-    #[serde(default)]
-    pub arena_prismatics: std::collections::HashSet<i32>,
-    /// All items enabled on Riot Map `30` (Arena).
-    #[serde(default)]
-    pub map30_items: std::collections::HashSet<i32>,
-    /// Arena anvils (`220000..=220011`) and `Consumable`-tagged items.
-    #[serde(default)]
-    pub arena_consumables: std::collections::HashSet<i32>,
-}
-
-/// Champion metadata translated from Riot's DataDragon.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
-pub struct ChampionMetadata {
-    pub champion_id: i32,
-    pub key_name: String,
-    pub display_name: String,
-    pub icon_url: String,
-}
-
-/// Lightweight localized item metadata extracted from DataDragon's `item.json` for rich tooltips.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
-pub struct ItemMetadata {
-    pub id: i32,
-    pub name: String,
-    #[serde(default)]
-    pub gold_total: i32,
-    #[serde(default)]
-    pub stats: Vec<String>,
-    #[serde(default)]
-    pub plaintext: String,
-}
-
-/// Metadata for a rune or style from DataDragon's `runesReforged.json`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
-pub struct RuneMetadata {
-    pub id: i32,
-    pub key: String,
-    pub name: String,
-    pub icon_url: String,
-    #[serde(default)]
-    pub short_desc: String,
-}
-
-/// Metadata for a summoner spell.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
-pub struct SpellMetadata {
-    pub id: i32,
-    pub name: String,
-    pub icon_url: String,
-    #[serde(default)]
-    pub modes: Vec<String>,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub cooldown_secs: Option<i32>,
 }
 
 /// Metadata for a complete 2-spell summoner pair option (e.g. Flash + Ignite vs Flash + Teleport).
@@ -108,22 +44,6 @@ pub struct RunePageOption {
     pub sub_style_icon_url: String,
     #[serde(default)]
     pub perks: Vec<RuneMetadata>,
-}
-
-/// In-memory cache holding champion, rune, spell, item, and Arena augment metadata from DataDragon/CDragon.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, Type)]
-pub struct DataDragonCache {
-    pub version: String,
-    pub champions: HashMap<i32, ChampionMetadata>,
-    pub runes: HashMap<i32, RuneMetadata>,
-    #[serde(default)]
-    pub spells: HashMap<i32, SpellMetadata>,
-    #[serde(default)]
-    pub items: HashMap<i32, ItemMetadata>,
-    #[serde(default)]
-    pub arena_augments: HashMap<i32, ArenaAugmentMetadata>,
-    #[serde(default)]
-    pub champion_abilities: HashMap<i32, Vec<ChampionAbilityMetadata>>,
 }
 
 /// Complete unified build archetype (Core 3 + matching 6-item Final Build).

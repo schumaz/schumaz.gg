@@ -1,9 +1,9 @@
 use super::items::{AggregatedItemStat, is_valid_arena_legendary};
 use crate::build_provider::items::{
-    compute_item_affinity_score, extract_core_archetype_tags, is_tear_completed_item,
-    normalize_arena_item_id,
+    compute_item_affinity_score_with_cls, extract_core_archetype_tags_with_cls,
+    is_tear_completed_item, normalize_arena_item_id_in,
 };
-use crate::build_provider::models::{ItemStatEntry, UnifiedBuildOption};
+use crate::build_provider::models::{ItemClassificationCache, ItemStatEntry, UnifiedBuildOption};
 use std::collections::{HashMap, HashSet};
 
 const MAX_ARENA_BUILD_OPTIONS: usize = 3;
@@ -19,11 +19,15 @@ struct CoreCandidate {
     total_win: i64,
 }
 
-fn clean_arena_core_ids(ids: &[i32], known_prismatics: &HashSet<i32>) -> Vec<i32> {
+fn clean_arena_core_ids(
+    cls: &ItemClassificationCache,
+    ids: &[i32],
+    known_prismatics: &HashSet<i32>,
+) -> Vec<i32> {
     let mut cleaned = Vec::with_capacity(3);
     for &raw_id in ids {
-        let norm = normalize_arena_item_id(raw_id);
-        if !is_valid_arena_legendary(norm, known_prismatics) {
+        let norm = normalize_arena_item_id_in(cls, raw_id);
+        if !is_valid_arena_legendary(cls, norm, known_prismatics) {
             continue;
         }
         if !cleaned.contains(&norm) {
@@ -43,10 +47,12 @@ fn canonical_trio_key(ids: &[i32]) -> Vec<i32> {
 }
 
 fn rank_compatible_legendaries(
+    cls: &ItemClassificationCache,
     core_ids: &[i32],
     legendary_pool: &[AggregatedItemStat],
 ) -> Vec<i32> {
-    let (core_tags, _, _, core_is_pure_ad, core_is_pure_ap) = extract_core_archetype_tags(core_ids);
+    let (core_tags, _, _, core_is_pure_ad, core_is_pure_ap) =
+        extract_core_archetype_tags_with_cls(cls, core_ids);
     let core_has_tear = core_ids.iter().copied().any(is_tear_completed_item);
 
     let mut scored: Vec<(i32, i64, i64, i64)> = Vec::new();
@@ -57,8 +63,13 @@ fn rank_compatible_legendaries(
         if core_has_tear && is_tear_completed_item(item.id) {
             continue;
         }
-        let affinity =
-            compute_item_affinity_score(item.id, &core_tags, core_is_pure_ad, core_is_pure_ap);
+        let affinity = compute_item_affinity_score_with_cls(
+            cls,
+            item.id,
+            &core_tags,
+            core_is_pure_ad,
+            core_is_pure_ap,
+        );
         if affinity <= -500_000 {
             continue;
         }
@@ -100,6 +111,7 @@ fn upsert_candidate(
 /// Extracts up to 3 distinct Arena core trios, strictly deduplicating permuted trios
 /// (e.g. `[A, B, C]` and `[A, C, B]`) while preserving the highest-play display order.
 fn extract_arena_core_candidates(
+    cls: &ItemClassificationCache,
     core_entries: &[ItemStatEntry],
     legendary_pool: &[AggregatedItemStat],
     known_prismatics: &HashSet<i32>,
@@ -108,7 +120,7 @@ fn extract_arena_core_candidates(
     let mut pair_map: HashMap<Vec<i32>, CoreCandidate> = HashMap::new();
 
     for entry in core_entries {
-        let cleaned = clean_arena_core_ids(&entry.ids, known_prismatics);
+        let cleaned = clean_arena_core_ids(cls, &entry.ids, known_prismatics);
         let play = entry.play.max(0);
         let win = entry.win.max(0);
         if cleaned.len() == 3 {
@@ -118,9 +130,6 @@ fn extract_arena_core_candidates(
         }
     }
 
-    // Rank by dominant sequence play first so top-N API truncation does not inflate
-    // split-order trios above higher-volume primary build paths, while still aggregating
-    // total play/win across deduplicated permutations.
     let mut trios: Vec<CoreCandidate> = trio_map.into_values().collect();
     trios.sort_by(|a, b| {
         b.best_entry_play
@@ -148,7 +157,7 @@ fn extract_arena_core_candidates(
                 break;
             }
             if let Some(&third) =
-                rank_compatible_legendaries(&pair.display_ids, legendary_pool).first()
+                rank_compatible_legendaries(cls, &pair.display_ids, legendary_pool).first()
             {
                 pair.display_ids.push(third);
                 let key = canonical_trio_key(&pair.display_ids);
@@ -177,10 +186,11 @@ fn extract_arena_core_candidates(
 }
 
 fn build_final_and_situational(
+    cls: &ItemClassificationCache,
     core_ids: &[i32],
     legendary_pool: &[AggregatedItemStat],
 ) -> (Vec<i32>, Vec<i32>) {
-    let compatible = rank_compatible_legendaries(core_ids, legendary_pool);
+    let compatible = rank_compatible_legendaries(cls, core_ids, legendary_pool);
     let mut final_ids = core_ids.to_vec();
     let mut has_tear = final_ids.iter().copied().any(is_tear_completed_item);
 
@@ -212,18 +222,19 @@ fn build_final_and_situational(
 
 /// Builds up to 3 distinct, archetype-cohesive `UnifiedBuildOption`s for Arena.
 pub(super) fn build_arena_unified_options(
+    cls: &ItemClassificationCache,
     core_entries: &[ItemStatEntry],
     legendary_pool: &[AggregatedItemStat],
     known_prismatics: &HashSet<i32>,
 ) -> Vec<UnifiedBuildOption> {
     let core_candidates =
-        extract_arena_core_candidates(core_entries, legendary_pool, known_prismatics);
+        extract_arena_core_candidates(cls, core_entries, legendary_pool, known_prismatics);
     let total_core_play: i64 = core_candidates.iter().map(|c| c.total_play.max(0)).sum();
 
     let mut build_options = Vec::with_capacity(core_candidates.len());
     for (idx, candidate) in core_candidates.into_iter().enumerate() {
         let (final_item_ids, situational_item_ids) =
-            build_final_and_situational(&candidate.display_ids, legendary_pool);
+            build_final_and_situational(cls, &candidate.display_ids, legendary_pool);
         let pick_rate = if total_core_play > 0 {
             (((candidate.total_play as f64 / total_core_play as f64) * 100.0) * 10.0).round() / 10.0
         } else {

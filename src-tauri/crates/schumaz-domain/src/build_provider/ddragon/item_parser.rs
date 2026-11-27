@@ -18,6 +18,11 @@ pub fn parse_ddragon_item_classifications(
     let mut arena_prismatics = HashSet::new();
     let mut map30_items = HashSet::new();
     let mut arena_consumables = HashSet::new();
+    let mut map11_items = HashSet::new();
+    let mut map12_items = HashSet::new();
+    let mut starters = HashSet::new();
+    let mut consumables = HashSet::new();
+    let mut item_gold = HashMap::new();
 
     // Default static fallbacks for Tear of the Goddess upgrades (SR/ARAM + Arena Map 30):
     evolved_fallbacks.insert(3042, 3004); // Muramana -> Manamune
@@ -39,6 +44,11 @@ pub fn parse_ddragon_item_classifications(
             arena_prismatics,
             map30_items,
             arena_consumables,
+            map11_items,
+            map12_items,
+            starters,
+            consumables,
+            item_gold,
         };
     };
 
@@ -143,6 +153,61 @@ pub fn parse_ddragon_item_classifications(
         }
 
         let is_tear_completed = is_tear_completed_item(id);
+        let hide_from_all = item_val
+            .get("hideFromAll")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let has_req_champ = item_val
+            .get("requiredChampion")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty());
+        let has_req_ally = item_val
+            .get("requiredAlly")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty());
+        let is_trinket = tags.contains(&"Trinket");
+        let is_shop_standard = in_store
+            && purchasable
+            && !hide_from_all
+            && !has_req_champ
+            && !has_req_ally
+            && special_recipe.is_none()
+            && !is_trinket
+            && id < 200_000;
+        let map11_enabled = item_val
+            .pointer("/maps/11")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let map12_enabled = item_val
+            .pointer("/maps/12")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if is_shop_standard {
+            if map11_enabled {
+                map11_items.insert(id);
+            }
+            if map12_enabled {
+                map12_items.insert(id);
+            }
+        }
+
+        if tags.contains(&"Consumable") && !ARENA_ANVIL_ID_RANGE.contains(&id) && is_shop_standard {
+            consumables.insert(id);
+            starters.insert(id);
+        }
+
+        if is_shop_standard
+            && !tags.contains(&"Boots")
+            && !is_consumable
+            && (((tags.contains(&"Lane") || tags.contains(&"Jungle") || tags.contains(&"GoldPer"))
+                && (1..=600).contains(&gold))
+                || (map12_enabled && !map11_enabled && !has_into && (700..=1100).contains(&gold)))
+        {
+            starters.insert(id);
+        }
+
+        item_gold.insert(id, gold.max(0) as i32);
 
         if tags.contains(&"Boots") {
             boots.insert(id);
@@ -169,6 +234,11 @@ pub fn parse_ddragon_item_classifications(
         arena_prismatics,
         map30_items,
         arena_consumables,
+        map11_items,
+        map12_items,
+        starters,
+        consumables,
+        item_gold,
     }
 }
 

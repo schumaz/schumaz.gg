@@ -1,14 +1,36 @@
-use super::super::models::ItemStatEntry;
+use super::super::models::{ItemClassificationCache, ItemStatEntry};
+use super::classification::{is_consumable_in, item_tags_in};
 use std::collections::HashMap;
 
-fn is_consumable_starter_id(id: i32) -> bool {
-    matches!(id, 2003 | 2031 | 2033 | 2055)
+fn is_consumable_starter_id(cls: &ItemClassificationCache, id: i32) -> bool {
+    is_consumable_in(cls, id) || matches!(id, 2003 | 2031 | 2033 | 2055)
 }
 
-/// Selects the starter item IDs for Block 1 ("Itens Iniciais") respecting support/jungle/lane rules.
+fn is_potion_consumable_id(cls: &ItemClassificationCache, id: i32) -> bool {
+    matches!(id, 2003 | 2031 | 2033)
+        || (is_consumable_in(cls, id) && item_tags_in(cls, id).iter().any(|t| t == "HealthRegen"))
+}
+
+fn is_jungle_pet_id(cls: &ItemClassificationCache, id: i32) -> bool {
+    matches!(id, 1101..=1103)
+        || (cls.starters.contains(&id)
+            && !is_consumable_in(cls, id)
+            && item_tags_in(cls, id).iter().any(|t| t == "Jungle"))
+}
+
+fn is_support_quest_id(cls: &ItemClassificationCache, id: i32) -> bool {
+    matches!(id, 3865..=3877)
+        || (cls.starters.contains(&id)
+            && !is_consumable_in(cls, id)
+            && item_tags_in(cls, id).iter().any(|t| t == "GoldPer"))
+}
+
+/// Selects the starter item IDs for Block 1 ("Itens Iniciais") respecting support/jungle/lane rules
+/// without fabricating hardcoded fallback items when no starter data is present.
 pub(crate) fn select_starter_items(
+    cls: &ItemClassificationCache,
     starter_entries: &[ItemStatEntry],
-    damage_type: &str,
+    _damage_type: &str,
     position: &str,
 ) -> Vec<i32> {
     let norm_pos = position.to_lowercase();
@@ -20,15 +42,14 @@ pub(crate) fn select_starter_items(
     sorted_starter_entries.sort_by(|a, b| b.1.play.cmp(&a.1.play).then_with(|| a.0.cmp(&b.0)));
 
     if is_support {
-        let potion_id = sorted_starter_entries
-            .first()
-            .and_then(|(_, entry)| {
-                entry
-                    .ids
-                    .iter()
-                    .copied()
-                    .find(|&id| matches!(id, 2003 | 2031 | 2033))
-            })
+        let Some((_, first)) = sorted_starter_entries.first() else {
+            return Vec::new();
+        };
+        let potion_id = first
+            .ids
+            .iter()
+            .copied()
+            .find(|&id| is_potion_consumable_id(cls, id))
             .unwrap_or(2003);
         vec![potion_id]
     } else if is_jungle {
@@ -36,7 +57,7 @@ pub(crate) fn select_starter_items(
         let mut pet_seen = 0;
         for (_, entry) in &sorted_starter_entries {
             for &id in &entry.ids {
-                if matches!(id, 1101..=1103) {
+                if is_jungle_pet_id(cls, id) {
                     let slot = pet_counts.entry(id).or_insert_with(|| {
                         let i = pet_seen;
                         pet_seen += 1;
@@ -51,7 +72,9 @@ pub(crate) fn select_starter_items(
             .map(|(id, (p, idx))| (id, p, idx))
             .collect();
         sorted_pets.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
-        let best_pet = sorted_pets.first().map(|&(id, _, _)| id).unwrap_or(1103);
+        let Some(&(best_pet, _, _)) = sorted_pets.first() else {
+            return Vec::new();
+        };
 
         // Preserve the potion from the most-played starter entry containing the chosen pet
         let top_pet_entry = sorted_starter_entries
@@ -63,25 +86,25 @@ pub(crate) fn select_starter_items(
             if let Some(&potion_id) = entry
                 .ids
                 .iter()
-                .find(|&&id| matches!(id, 2003 | 2031 | 2033))
+                .find(|&&id| is_potion_consumable_id(cls, id))
             {
                 vec![best_pet, potion_id]
             } else {
                 vec![best_pet]
             }
         } else {
-            vec![best_pet, 2003]
+            vec![best_pet]
         }
     } else if let Some((_, top_entry)) = sorted_starter_entries.first() {
         let mut non_consumables: Vec<i32> = Vec::new();
         let mut consumables: Vec<i32> = Vec::new();
         for &id in &top_entry.ids {
-            if is_consumable_starter_id(id) {
+            if is_consumable_starter_id(cls, id) {
                 if !consumables.contains(&id) {
                     consumables.push(id);
                 }
-            } else if !matches!(id, 1101..=1103)
-                && !matches!(id, 3865..=3877)
+            } else if !is_jungle_pet_id(cls, id)
+                && !is_support_quest_id(cls, id)
                 && !non_consumables.contains(&id)
             {
                 non_consumables.push(id);
@@ -89,27 +112,16 @@ pub(crate) fn select_starter_items(
         }
         let mut combined = non_consumables;
         combined.extend(consumables);
-        if combined.is_empty() {
-            if damage_type == "AP" {
-                vec![1056, 2003]
-            } else {
-                vec![1055, 2003]
-            }
-        } else {
-            combined
-        }
-    } else if damage_type == "AP" {
-        vec![1056, 2003]
+        combined
     } else {
-        vec![1055, 2003]
+        Vec::new()
     }
 }
 
-/// Selects the top 3 boots sorted by absolute games played descending.
+/// Selects up to 3 boots sorted by absolute games played descending without hardcoded padding.
 pub(crate) fn select_top_boots(
     boot_entries: &[ItemStatEntry],
     candidate_entries: &[ItemStatEntry],
-    damage_type: &str,
     is_boot: &dyn Fn(i32) -> bool,
     is_starter: &dyn Fn(i32) -> bool,
     is_comp: &dyn Fn(i32) -> bool,
@@ -149,17 +161,6 @@ pub(crate) fn select_top_boots(
         .collect();
     boot_pairs.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
     let mut boots_list: Vec<i32> = boot_pairs.into_iter().map(|(id, _, _)| id).collect();
-
-    let archetype_boots = if damage_type == "AP" {
-        vec![3020, 3158, 3111, 3047]
-    } else {
-        vec![3006, 3047, 3111, 3009]
-    };
-    for b in archetype_boots {
-        if boots_list.len() < 3 && !boots_list.contains(&b) {
-            boots_list.push(b);
-        }
-    }
     boots_list.truncate(3);
     boots_list
 }

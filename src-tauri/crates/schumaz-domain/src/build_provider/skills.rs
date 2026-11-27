@@ -1,7 +1,7 @@
 mod mcp;
 mod rest;
 
-pub use mcp::extract_mcp_skill_order;
+pub use mcp::{extract_mcp_skill_order, extract_mcp_skill_order_from_doc};
 pub use rest::extract_rest_skill_order;
 
 use super::models::{

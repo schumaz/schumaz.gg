@@ -7,7 +7,7 @@ use super::ddragon::{
     enrich_build_with_ddragon_for_queue, get_or_init_ddragon_cache,
     get_or_init_ddragon_cache_for_locale,
 };
-use super::fallback::build_fallback_champion_build;
+use super::fallback::build_fallback_champion_build_with_ddragon;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::service::get_recommended_build_with_filters_and_endpoints_with_dir;
 use super::service_helpers::FastSpellRecommendation;
@@ -56,7 +56,12 @@ pub(super) async fn resolve_arena_build_or_fallback(
     {
         Ok(build) => build,
         Err(_) => {
-            let mut fallback = build_fallback_champion_build(champion_id, champ_name, queue_id);
+            let mut fallback = build_fallback_champion_build_with_ddragon(
+                champion_id,
+                champ_name,
+                queue_id,
+                Some(ddragon_cache),
+            );
             enrich_build_with_ddragon_for_queue(&mut fallback, ddragon_cache, queue_id);
             crate::logging::record_data_resolution(
                 "arena_build",

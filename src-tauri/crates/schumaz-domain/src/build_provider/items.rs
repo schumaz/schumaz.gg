@@ -4,9 +4,11 @@ pub mod classification;
 pub mod core_final_options;
 pub mod options;
 pub mod starters_boots;
+pub mod tear;
 
 pub use affinity::*;
 pub use blocks::*;
 pub use classification::*;
 pub use core_final_options::*;
 pub use options::*;
+pub use tear::*;
