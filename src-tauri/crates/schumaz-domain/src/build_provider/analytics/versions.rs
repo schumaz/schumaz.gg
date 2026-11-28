@@ -1,17 +1,16 @@
 use super::client::OPGG_REST_API_BASE;
 use super::cooldown::send_analytics_request;
-use std::collections::HashMap;
+use crate::build_provider::cache::build_provider_caches;
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-type VersionsCacheMap = HashMap<String, (Instant, Vec<String>)>;
-
-static OPGG_VERSIONS_CACHE: OnceLock<RwLock<VersionsCacheMap>> = OnceLock::new();
 const VERSIONS_CACHE_TTL: Duration = Duration::from_secs(600);
 
-fn get_versions_cache() -> &'static RwLock<VersionsCacheMap> {
-    OPGG_VERSIONS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+#[derive(Debug, Deserialize)]
+struct VersionsResponse {
+    #[serde(default)]
+    data: Vec<String>,
 }
 
 pub fn opgg_versions_file_path(dir: &Path, region: &str) -> PathBuf {
@@ -41,15 +40,15 @@ fn emergency_versions_from_ddragon(ddragon_version: Option<&str>) -> Vec<String>
 /// Non-blocking peek at the latest known OP.GG patch for `region` from RAM or disk `.lz4`.
 pub fn peek_latest_cached_opgg_version(region: &str) -> Option<String> {
     let cache_key = format!("{}:{}", OPGG_REST_API_BASE, region);
-    if let Ok(guard) = get_versions_cache().read()
-        && let Some((_, vers)) = guard.get(&cache_key)
-        && let Some(first) = vers.first()
+    if let Some(first) = build_provider_caches()
+        .opgg_versions
+        .get_ram_with(&cache_key, None, |entry| entry.payload.first().cloned())
     {
-        return Some(first.clone());
+        return Some(first);
     }
     if let Some(paths) = crate::storage::global_paths() {
         let path = opgg_versions_file_path(&paths.opgg_versions_dir, region);
-        if let Some(env) = crate::storage::read_lz4_envelope::<Vec<String>>(&path) {
+        if let Some(env) = build_provider_caches().opgg_versions.read_disk(&path) {
             return env.payload.first().cloned();
         }
     }
@@ -64,72 +63,75 @@ async fn fetch_opgg_versions_internal(
     ddragon_version_override: Option<&str>,
 ) -> Vec<String> {
     let cache_key = format!("{}:{}", rest_base, region);
-    if let Ok(guard) = get_versions_cache().read()
-        && let Some((ts, cached)) = guard.get(&cache_key)
-        && ts.elapsed() < VERSIONS_CACHE_TTL
-    {
-        return cached.clone();
+    let cache = &build_provider_caches().opgg_versions;
+    if let Some(cached) = cache.get_ram(&cache_key, Some(VERSIONS_CACHE_TTL)) {
+        return cached.payload;
     }
 
-    let disk_env = versions_dir.and_then(|dir| {
-        let path = opgg_versions_file_path(dir, region);
-        crate::storage::read_lz4_envelope::<Vec<String>>(&path)
-    });
-
-    if let Some(ref env) = disk_env
-        && !env.payload.is_empty()
-        && crate::storage::is_envelope_fresh(
-            env.created_at_unix,
-            crate::storage::VERSIONS_DISK_TTL_SECS,
-            crate::storage::now_unix_secs(),
-        )
-    {
-        if let Ok(mut guard) = get_versions_cache().write() {
-            guard.insert(cache_key.clone(), (Instant::now(), env.payload.clone()));
-        }
-        return env.payload.clone();
-    }
-
-    let url = format!("{}/{}/champions/ranked/versions", rest_base, region);
-    if let Ok(res) = send_analytics_request(&url, client.get(&url), "OP.GG versions").await
-        && let Ok(json) = res.json::<serde_json::Value>().await
-        && let Some(arr) = json.get("data").and_then(|d| d.as_array())
-    {
-        let vers: Vec<String> = arr
-            .iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-            .collect();
-        if !vers.is_empty() {
-            if let Ok(mut guard) = get_versions_cache().write() {
-                guard.insert(cache_key, (Instant::now(), vers.clone()));
+    let res = cache
+        .coalesce(cache_key.clone(), || async {
+            if let Some(cached) = cache.get_ram(&cache_key, Some(VERSIONS_CACHE_TTL)) {
+                return Ok(cached.payload);
             }
-            if let Some(dir) = versions_dir {
+
+            let disk_env = versions_dir.and_then(|dir| {
                 let path = opgg_versions_file_path(dir, region);
-                let latest = vers.first().map(String::as_str).unwrap_or("");
-                let _ = crate::storage::write_lz4_envelope(&path, latest, &vers);
+                cache.read_disk(&path)
+            });
+
+            if let Some(ref env) = disk_env
+                && !env.payload.is_empty()
+                && crate::storage::is_envelope_fresh(
+                    env.created_at_unix,
+                    crate::storage::VERSIONS_DISK_TTL_SECS,
+                    crate::storage::now_unix_secs(),
+                )
+            {
+                let latest = env.payload.first().map(String::as_str).unwrap_or("");
+                cache.insert_ram(cache_key.clone(), latest, env.payload.clone());
+                return Ok(env.payload.clone());
             }
-            return vers;
-        }
-    }
 
-    // Stale-While-Error offline fallback: return expired `.lz4` versions if present
-    if let Some(env) = disk_env
-        && !env.payload.is_empty()
-    {
-        if let Ok(mut guard) = get_versions_cache().write() {
-            guard.insert(cache_key, (Instant::now(), env.payload.clone()));
-        }
-        return env.payload;
-    }
+            let url = format!("{}/{}/champions/ranked/versions", rest_base, region);
+            if let Ok(res) = send_analytics_request(&url, client.get(&url), "OP.GG versions").await
+                && let Ok(parsed) = res.json::<VersionsResponse>().await
+            {
+                let vers: Vec<String> = parsed
+                    .data
+                    .into_iter()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !vers.is_empty() {
+                    let latest = vers.first().map(String::as_str).unwrap_or("");
+                    cache.insert_ram(cache_key.clone(), latest, vers.clone());
+                    if let Some(dir) = versions_dir {
+                        let path = opgg_versions_file_path(dir, region);
+                        let _ = cache.write_disk(&path, latest, &vers);
+                    }
+                    return Ok(vers);
+                }
+            }
 
-    // Dynamic emergency fallback: derive `major.minor` from cached DataDragon version (no hardcoded patches)
-    if let Some(explicit) = ddragon_version_override {
-        return emergency_versions_from_ddragon(Some(explicit));
-    }
-    let dd_version = crate::build_provider::ddragon::peek_cached_ddragon_version(
-        crate::lcu_injector::get_active_locale(),
-    );
-    emergency_versions_from_ddragon(dd_version.as_deref())
+            if let Some(env) = disk_env
+                && !env.payload.is_empty()
+            {
+                let latest = env.payload.first().map(String::as_str).unwrap_or("");
+                cache.insert_ram(cache_key.clone(), latest, env.payload.clone());
+                return Ok(env.payload);
+            }
+
+            if let Some(explicit) = ddragon_version_override {
+                return Ok(emergency_versions_from_ddragon(Some(explicit)));
+            }
+            let dd_version = crate::build_provider::ddragon::peek_cached_ddragon_version(
+                crate::storage::get_active_locale(),
+            );
+            Ok(emergency_versions_from_ddragon(dd_version.as_deref()))
+        })
+        .await;
+
+    res.unwrap_or_default()
 }
 
 /// Fetches available patch versions from the OP.GG REST API with L1 RAM + L2 `.lz4` disk cache (3h TTL)

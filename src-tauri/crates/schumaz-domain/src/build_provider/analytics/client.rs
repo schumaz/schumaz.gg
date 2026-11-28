@@ -3,11 +3,14 @@ use super::super::fallback::{
     build_fallback_champion_build_with_ddragon, champion_key_to_opgg_name,
     opgg_queue_param_from_id,
 };
-use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
+use super::super::models::{ChampionBuild, DataDragonCache};
+use super::super::query::RestAnalysisRequest;
 use super::super::spells::ddragon_mode_for_queue;
 use super::cooldown::send_analytics_request;
 use super::mcp_extractors::extract_mcp_grouped_item_lists;
-use super::rest_parser::parse_opgg_analysis_payload_with_ddragon;
+use super::rest_parser::{
+    McpDepthItems, RestAnalysisParseOptions, parse_opgg_analysis_with_options,
+};
 pub use super::versions::{
     fetch_opgg_versions, fetch_opgg_versions_from_base, fetch_opgg_versions_with_cache_dir,
     opgg_versions_file_path, peek_latest_cached_opgg_version,
@@ -142,15 +145,19 @@ pub async fn get_recommended_build_with_endpoint(
 
     let mut build =
         match fetch_opgg_champion_analysis(client, endpoint_url, champ_name, queue_param).await {
-            Ok(json_res) => match parse_opgg_analysis_payload_with_ddragon(
+            Ok(json_res) => match parse_opgg_analysis_with_options(
                 &json_res,
-                champion_id,
-                champ_name,
-                supports_runes,
-                Some(spell_mode),
-                Some(ddragon_cache),
-                Some(&ddragon_cache.spells),
-                None,
+                RestAnalysisParseOptions {
+                    champion_id,
+                    champion_name: champ_name,
+                    supports_runes,
+                    spell_mode: Some(spell_mode),
+                    ddragon: Some(ddragon_cache),
+                    spells_catalog: Some(&ddragon_cache.spells),
+                    allowed_lane_champions: None,
+                    position_override: None,
+                    mcp_depth_override: None,
+                },
             ) {
                 Ok(build) => build,
                 Err(_) => build_fallback_champion_build_with_ddragon(
@@ -189,34 +196,29 @@ pub async fn fetch_opgg_rest_champion_analysis(
     tier: &str,
     version: Option<&str>,
 ) -> Result<serde_json::Value, String> {
-    fetch_opgg_rest_champion_analysis_from_base(
+    fetch_opgg_rest_champion_analysis_req(
         client,
-        OPGG_REST_API_BASE,
-        region,
-        mode,
-        champion_id,
-        position,
-        tier,
-        version,
+        &RestAnalysisRequest {
+            rest_base: OPGG_REST_API_BASE,
+            region,
+            mode,
+            champion_id,
+            position,
+            tier,
+            version,
+        },
     )
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn fetch_opgg_rest_champion_analysis_from_base(
+pub async fn fetch_opgg_rest_champion_analysis_req(
     client: &reqwest::Client,
-    rest_base: &str,
-    region: &str,
-    mode: &str,
-    champion_id: i32,
-    position: Option<&str>,
-    tier: &str,
-    version: Option<&str>,
+    req: &RestAnalysisRequest<'_>,
 ) -> Result<serde_json::Value, String> {
-    let pos_segment = if mode.eq_ignore_ascii_case("aram") {
+    let pos_segment = if req.mode.eq_ignore_ascii_case("aram") {
         "none"
     } else {
-        match position {
+        match req.position {
             Some(p) if !p.trim().is_empty() => p.trim(),
             _ => "none",
         }
@@ -224,9 +226,9 @@ pub async fn fetch_opgg_rest_champion_analysis_from_base(
 
     let mut url = format!(
         "{}/{}/champions/{}/{}/{}?tier={}",
-        rest_base, region, mode, champion_id, pos_segment, tier
+        req.rest_base, req.region, req.mode, req.champion_id, pos_segment, req.tier
     );
-    if let Some(v) = version
+    if let Some(v) = req.version
         && !v.trim().is_empty()
     {
         url.push_str(&format!("&version={}", v.trim()));
@@ -250,7 +252,7 @@ pub async fn fetch_opgg_mcp_depth_items(
     game_mode: &str,
     position: Option<&str>,
     tier: &str,
-) -> Result<(Vec<ItemStatEntry>, Vec<ItemStatEntry>, Vec<ItemStatEntry>), String> {
+) -> Result<McpDepthItems, String> {
     let formatted_champ = champion_key_to_opgg_name(champion_name);
     // OP.GG MCP `lol_get_champion_analysis` strictly requires `position` in its schema
     // (`top|mid|jungle|adc|support`) even for `game_mode == "aram"` (omitting it or passing
@@ -305,18 +307,16 @@ pub async fn fetch_opgg_mcp_depth_items(
         .ok_or_else(|| "Missing text in MCP depth items response".to_string())?;
 
     let grouped = extract_mcp_grouped_item_lists(text);
-    let mut fourth = Vec::new();
-    let mut fifth = Vec::new();
-    let mut sixth = Vec::new();
+    let mut depth = McpDepthItems::default();
     for (name, items) in grouped {
         match name.as_str() {
-            "fourth_items" => fourth = items,
-            "fifth_items" => fifth = items,
-            "sixth_items" => sixth = items,
+            "fourth_items" => depth.fourth = items,
+            "fifth_items" => depth.fifth = items,
+            "sixth_items" => depth.sixth = items,
             _ => {}
         }
     }
-    Ok((fourth, fifth, sixth))
+    Ok(depth)
 }
 
 #[cfg(test)]

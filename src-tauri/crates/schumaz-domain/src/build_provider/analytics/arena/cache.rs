@@ -1,34 +1,13 @@
 use super::super::client::OPGG_REST_API_BASE;
-use crate::build_provider::models::{ChampionBuild, DataDragonCache};
+use crate::build_provider::cache::build_provider_caches;
+use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, ArenaTierListResponse};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub const ARENA_TIER_CACHE_TTL: Duration = Duration::from_secs(900);
 pub const ARENA_BUILD_CACHE_TTL: Duration = Duration::from_secs(600);
 pub const ARENA_VERSIONS_CACHE_TTL: Duration = Duration::from_secs(600);
-
-pub type ArenaVersionsCacheMap = HashMap<String, (Instant, Vec<String>)>;
-pub type ArenaTierCacheMap = HashMap<String, (Instant, ArenaTierListResponse)>;
-pub type ArenaBuildCacheMap = HashMap<String, (Instant, ChampionBuild)>;
-
-static ARENA_VERSIONS_CACHE: OnceLock<RwLock<ArenaVersionsCacheMap>> = OnceLock::new();
-static ARENA_TIER_CACHE: OnceLock<RwLock<ArenaTierCacheMap>> = OnceLock::new();
-static ARENA_BUILD_CACHE: OnceLock<RwLock<ArenaBuildCacheMap>> = OnceLock::new();
-
-pub(crate) fn get_arena_versions_cache() -> &'static RwLock<ArenaVersionsCacheMap> {
-    ARENA_VERSIONS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-pub(crate) fn get_arena_tier_cache() -> &'static RwLock<ArenaTierCacheMap> {
-    ARENA_TIER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-pub(crate) fn get_arena_build_cache() -> &'static RwLock<ArenaBuildCacheMap> {
-    ARENA_BUILD_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
 
 pub fn arena_versions_file_path(dir: &Path) -> PathBuf {
     dir.join("versions.lz4")
@@ -62,15 +41,15 @@ pub fn arena_build_file_path(
 
 /// Non-blocking peek at the latest known Arena patch from RAM or disk `.lz4`.
 pub fn peek_latest_cached_arena_version() -> Option<String> {
-    if let Ok(guard) = get_arena_versions_cache().read()
-        && let Some((_, vers)) = guard.get(OPGG_REST_API_BASE)
-        && let Some(first) = vers.first()
-    {
-        return Some(first.clone());
+    let cache = &build_provider_caches().arena_versions;
+    if let Some(first) = cache.get_ram_with(&OPGG_REST_API_BASE.to_string(), None, |entry| {
+        entry.payload.first().cloned()
+    }) {
+        return Some(first);
     }
     if let Some(paths) = crate::storage::global_paths() {
         let path = arena_versions_file_path(&paths.opgg_arena_dir);
-        if let Some(env) = crate::storage::read_lz4_envelope::<Vec<String>>(&path) {
+        if let Some(env) = cache.read_disk(&path) {
             return env.payload.first().cloned();
         }
     }
@@ -99,7 +78,8 @@ pub fn prewarm_arena_tier_list_from_dir(
     ddragon: &DataDragonCache,
 ) -> bool {
     let path = arena_tier_list_file_path(dir, None, patch_48h_protection, locale);
-    let Some(mut env) = crate::storage::read_lz4_envelope::<ArenaTierListResponse>(&path) else {
+    let cache = &build_provider_caches().arena_tiers;
+    let Some(mut env) = cache.read_disk(&path) else {
         return false;
     };
     let now = crate::storage::now_unix_secs();
@@ -124,9 +104,7 @@ pub fn prewarm_arena_tier_list_from_dir(
         patch_48h_protection,
         locale.as_str()
     );
-    if let Ok(mut guard) = get_arena_tier_cache().write() {
-        guard.insert(cache_key, (Instant::now(), env.payload));
-        return true;
-    }
-    false
+    let patch = env.patch.clone();
+    cache.insert_ram(cache_key, patch, env.payload);
+    true
 }

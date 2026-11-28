@@ -235,16 +235,26 @@ pub async fn get_local_cache_info() -> Result<LocalCacheInfo, String> {
         .map_err(|e| format!("Failed to inspect local cache: {e}"))
 }
 
-/// Deletes cached files under `Cache/` matching `scope` and returns refreshed usage statistics.
+/// Deletes cached files under `Cache/` matching `scope`, invalidates matching backend L1 RAM caches,
+/// emits `CacheCleared`, and returns refreshed usage statistics.
 #[tauri::command]
 #[specta::specta]
-pub async fn clear_local_cache(scope: CacheClearScope) -> Result<LocalCacheInfo, String> {
+pub async fn clear_local_cache(
+    app_handle: AppHandle,
+    scope: CacheClearScope,
+) -> Result<LocalCacheInfo, String> {
     let Some(paths) = storage::global_paths().cloned() else {
         return Ok(LocalCacheInfo::default());
     };
-    tokio::task::spawn_blocking(move || storage::clear_local_cache_at(&paths, scope))
+    let info = tokio::task::spawn_blocking(move || storage::clear_local_cache_at(&paths, scope))
         .await
-        .map_err(|e| format!("Failed to clear local cache: {e}"))?
+        .map_err(|e| format!("Failed to clear local cache: {e}"))??;
+    if matches!(scope, CacheClearScope::Builds | CacheClearScope::All) {
+        crate::build_provider::clear_all_ram_caches();
+        crate::profile_provider::clear_skins_ram_cache();
+    }
+    let _ = tauri_specta::Event::emit(&crate::models::CacheCleared(scope), &app_handle);
+    Ok(info)
 }
 
 /// Restarts the Tauri application so updated WebView2 GPU flags take effect.

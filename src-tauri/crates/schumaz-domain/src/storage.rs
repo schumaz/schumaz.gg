@@ -4,6 +4,8 @@ pub mod graphics;
 pub mod lz4_cache;
 pub mod paths;
 pub mod settings;
+pub mod singleflight;
+pub mod tiered_cache;
 pub mod window_bounds;
 
 pub use assets::*;
@@ -12,4 +14,6 @@ pub use graphics::*;
 pub use lz4_cache::*;
 pub use paths::*;
 pub use settings::*;
+pub use singleflight::*;
+pub use tiered_cache::*;
 pub use window_bounds::*;

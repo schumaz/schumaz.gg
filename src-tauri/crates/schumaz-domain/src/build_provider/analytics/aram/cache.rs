@@ -4,38 +4,16 @@ use super::html_extract::{
     sanitize_augment_placeholders,
 };
 use super::{OPGG_ARAM_MAYHEM_WEB_URL, OPGG_ARAM_REST_URL};
+use crate::build_provider::cache::build_provider_caches;
 use crate::build_provider::ddragon::{has_raw_riot_augment_markup, strip_riot_inline_markup};
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, AramChampionRank, AramMode};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub const ARAM_CACHE_TTL: Duration = Duration::from_secs(900);
 /// Extended RAM TTL (60 min) for ARAM Mayhem tier list and augments (still invalidated on patch change).
 pub const ARAM_MAYHEM_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
-
-#[derive(Debug, Clone)]
-pub struct CachedAramEntry<T> {
-    pub cached_at: Instant,
-    pub patch: String,
-    pub payload: T,
-}
-
-pub type TierCacheMap = HashMap<String, CachedAramEntry<Vec<AramChampionRank>>>;
-pub type AugmentsCacheMap = HashMap<String, CachedAramEntry<Vec<AramAugmentEntry>>>;
-
-static ARAM_TIER_CACHE: OnceLock<RwLock<TierCacheMap>> = OnceLock::new();
-static ARAM_AUGMENTS_CACHE: OnceLock<RwLock<AugmentsCacheMap>> = OnceLock::new();
-
-pub(crate) fn get_tier_cache() -> &'static RwLock<TierCacheMap> {
-    ARAM_TIER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-pub(crate) fn get_augments_cache() -> &'static RwLock<AugmentsCacheMap> {
-    ARAM_AUGMENTS_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
 
 pub(crate) fn aram_tier_cache_key(
     mode: AramMode,
@@ -81,20 +59,12 @@ pub(crate) fn persist_aram_augments(
         return;
     }
     let patch = known_latest.unwrap_or("");
+    let cache = &build_provider_caches().aram_augments;
     if let Some(dir) = aram_dir {
         let path = aram_augments_file_path(dir, locale, normalized);
-        let _ = crate::storage::write_lz4_envelope(&path, patch, &augments);
+        let _ = cache.write_disk(&path, patch, &augments.to_vec());
     }
-    if let Ok(mut guard) = get_augments_cache().write() {
-        guard.insert(
-            cache_key,
-            CachedAramEntry {
-                cached_at: Instant::now(),
-                patch: patch.to_string(),
-                payload: augments.to_vec(),
-            },
-        );
-    }
+    cache.insert_ram(cache_key, patch, augments.to_vec());
 }
 
 pub(crate) fn aram_ram_ttl(mode: AramMode) -> Duration {
@@ -149,9 +119,7 @@ pub(crate) fn has_any_augment_description(list: &[AramAugmentEntry]) -> bool {
     list.iter().any(|entry| !entry.desc.trim().is_empty())
 }
 
-/// Returns `true` when cached ARAM augments have populated, clean descriptions
-/// (no blank-desc cache, no unresolved `?` placeholders, no raw Riot `%i:...%`/`{{...}}` markup,
-/// and no raw internal keys).
+/// Returns `true` when cached ARAM augments have populated, clean descriptions.
 pub(crate) fn has_valid_augment_descriptions(list: &[AramAugmentEntry]) -> bool {
     has_any_augment_description(list)
         && !list.iter().any(|entry| {
@@ -161,8 +129,7 @@ pub(crate) fn has_valid_augment_descriptions(list: &[AramAugmentEntry]) -> bool 
         })
 }
 
-/// Best-effort sanitization for offline `stale_fallback` entries so raw `?` placeholders,
-/// Riot inline markup, and internal Riot keys are cleaned even when network refresh is unavailable.
+/// Best-effort sanitization for offline `stale_fallback` entries.
 pub(crate) fn sanitize_stale_augment_entries(list: &mut Vec<AramAugmentEntry>, locale: AppLocale) {
     list.retain_mut(|entry| {
         if is_internal_augment_key(&entry.name) {
@@ -242,13 +209,13 @@ pub(crate) fn prewarm_aram_tier_lists_from_dir_at(
     known_latest: Option<&str>,
 ) -> usize {
     let mut warmed = 0;
+    let cache = &build_provider_caches().aram_tiers;
 
     for mode in [AramMode::Aram, AramMode::AramMayhem] {
         let url_key =
             aram_tier_cache_key(mode, locale, OPGG_ARAM_REST_URL, OPGG_ARAM_MAYHEM_WEB_URL);
         let path = aram_tier_file_path(dir, mode, locale);
-        let Some(mut env) = crate::storage::read_lz4_envelope::<Vec<AramChampionRank>>(&path)
-        else {
+        let Some(mut env) = cache.read_disk(&path) else {
             continue;
         };
         if !crate::storage::is_envelope_fresh(
@@ -262,17 +229,8 @@ pub(crate) fn prewarm_aram_tier_lists_from_dir_at(
             continue;
         }
         rehydrate_aram_names(&mut env.payload, ddragon);
-        if let Ok(mut guard) = get_tier_cache().write() {
-            guard.insert(
-                url_key,
-                CachedAramEntry {
-                    cached_at: Instant::now(),
-                    patch: env.patch,
-                    payload: env.payload,
-                },
-            );
-            warmed += 1;
-        }
+        cache.insert_ram(url_key, env.patch, env.payload);
+        warmed += 1;
     }
 
     warmed

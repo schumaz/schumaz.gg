@@ -1,4 +1,5 @@
 use super::super::aram::normalize_opgg_champion_key;
+use super::super::positions::{ChampionPositionsMap, OpggPositionInfo};
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{RankedChampionEntry, RankedLane};
 use serde::Deserialize;
@@ -43,15 +44,15 @@ fn lane_sort_order(lane: RankedLane) -> u8 {
 }
 
 #[derive(Debug, Deserialize)]
-struct RestRankedResponse {
+pub(super) struct RestRankedResponse {
     #[serde(default)]
-    data: Vec<RestRankedChampionItem>,
+    pub(super) data: Vec<RestRankedChampionItem>,
     #[serde(default)]
-    meta: Option<RestRankedMeta>,
+    pub(super) meta: Option<RestRankedMeta>,
 }
 
 #[derive(Debug, Deserialize)]
-struct RestRankedMeta {
+pub(super) struct RestRankedMeta {
     #[serde(default)]
     version: Option<String>,
     #[serde(default)]
@@ -59,7 +60,7 @@ struct RestRankedMeta {
 }
 
 #[derive(Debug, Deserialize)]
-struct RestRankedChampionItem {
+pub(super) struct RestRankedChampionItem {
     id: i32,
     #[serde(default)]
     average_stats: Option<RestRankedTierFallbackStats>,
@@ -84,6 +85,8 @@ struct RestRankedPositionItem {
 
 #[derive(Debug, Deserialize)]
 struct RestRankedPositionStats {
+    #[serde(default)]
+    play: Option<u64>,
     #[serde(default)]
     win_rate: Option<f64>,
     #[serde(default)]
@@ -110,16 +113,35 @@ struct ParsedEntryWithPrecision {
     raw_pick_rate: f64,
 }
 
-pub fn parse_ranked_tier_list(
-    json: &serde_json::Value,
-    ddragon: &DataDragonCache,
-) -> Result<Vec<RankedChampionEntry>, String> {
-    let parsed: RestRankedResponse = serde_json::from_value(json.clone())
-        .map_err(|e| format!("Failed to parse ranked tier list response: {}", e))?;
+pub(super) fn extract_positions_map_from_ranked_resp(
+    resp: &RestRankedResponse,
+) -> ChampionPositionsMap {
+    let mut map = ChampionPositionsMap::new();
+    for champ in &resp.data {
+        let positions = champ
+            .positions
+            .iter()
+            .map(|pos| {
+                let stats = pos.stats.as_ref();
+                OpggPositionInfo {
+                    name: pos.name.clone(),
+                    play: stats.and_then(|s| s.play).unwrap_or(0),
+                    role_rate: stats.and_then(|s| s.role_rate).unwrap_or(0.0),
+                }
+            })
+            .collect();
+        map.insert(champ.id, positions);
+    }
+    map
+}
 
+pub(super) fn parse_ranked_tier_list_from_resp(
+    parsed: &RestRankedResponse,
+    ddragon: &DataDragonCache,
+) -> Vec<RankedChampionEntry> {
     let mut items: Vec<ParsedEntryWithPrecision> = Vec::new();
 
-    for champ in parsed.data {
+    for champ in &parsed.data {
         let dd_meta = ddragon.champions.get(&champ.id);
         let name = dd_meta
             .map(|m| m.display_name.clone())
@@ -130,11 +152,11 @@ pub fn parse_ranked_tier_list(
         let icon_url = dd_meta.map(|m| m.icon_url.clone()).unwrap_or_default();
         let fallback_tier = champ.average_stats.as_ref().and_then(|s| s.tier);
 
-        for pos in champ.positions {
+        for pos in &champ.positions {
             let Some(lane) = parse_ranked_lane(&pos.name) else {
                 continue;
             };
-            let Some(stats) = pos.stats else {
+            let Some(stats) = &pos.stats else {
                 continue;
             };
 
@@ -177,12 +199,7 @@ pub fn parse_ranked_tier_list(
         }
     }
 
-    // Global cross-lane OP ranking (matches OP.GG's "All Roles" tier list ordering):
-    // 1. Canonical tier ascending (OP -> Tier 1 -> Tier 2 ...)
-    // 2. Full-precision win rate descending
-    // 3. Full-precision pick rate descending
-    // 4. Per-lane rank ascending
-    // 5. Champion name & lane order for deterministic tie-breaking
+    // Global cross-lane OP ranking (matches OP.GG's "All Roles" tier list ordering).
     items.sort_by(|a, b| {
         let a_valid_rank = if a.entry.rank > 0 { 0 } else { 1 };
         let b_valid_rank = if b.entry.rank > 0 { 0 } else { 1 };
@@ -197,35 +214,38 @@ pub fn parse_ranked_tier_list(
             .then_with(|| lane_sort_order(a.entry.lane).cmp(&lane_sort_order(b.entry.lane)))
     });
 
-    let entries = items
+    items
         .into_iter()
         .enumerate()
         .map(|(idx, mut item)| {
             item.entry.overall_rank = (idx + 1) as i32;
             item.entry
         })
-        .collect();
-
-    Ok(entries)
+        .collect()
 }
 
-pub(crate) fn extract_ranked_meta_info(json: &serde_json::Value) -> (Option<String>, Option<u64>) {
-    let parsed: Result<RestRankedResponse, _> = serde_json::from_value(json.clone());
-    match parsed {
-        Ok(resp) => {
-            let version = resp
-                .meta
-                .as_ref()
-                .and_then(|m| m.version.clone())
-                .filter(|v| !v.trim().is_empty());
-            let match_count = resp.meta.as_ref().and_then(|m| m.match_count).or_else(|| {
-                resp.data
-                    .iter()
-                    .filter_map(|c| c.average_stats.as_ref().and_then(|s| s.play))
-                    .max()
-            });
-            (version, match_count)
-        }
-        Err(_) => (None, None),
-    }
+pub fn parse_ranked_tier_list(
+    json: &serde_json::Value,
+    ddragon: &DataDragonCache,
+) -> Result<Vec<RankedChampionEntry>, String> {
+    let parsed = RestRankedResponse::deserialize(json)
+        .map_err(|e| format!("Failed to parse ranked tier list response: {}", e))?;
+    Ok(parse_ranked_tier_list_from_resp(&parsed, ddragon))
+}
+
+pub(super) fn extract_ranked_meta_from_resp(
+    resp: &RestRankedResponse,
+) -> (Option<String>, Option<u64>) {
+    let version = resp
+        .meta
+        .as_ref()
+        .and_then(|m| m.version.clone())
+        .filter(|v| !v.trim().is_empty());
+    let match_count = resp.meta.as_ref().and_then(|m| m.match_count).or_else(|| {
+        resp.data
+            .iter()
+            .filter_map(|c| c.average_stats.as_ref().and_then(|s| s.play))
+            .max()
+    });
+    (version, match_count)
 }

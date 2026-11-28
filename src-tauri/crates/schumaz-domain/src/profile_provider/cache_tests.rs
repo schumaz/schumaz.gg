@@ -4,8 +4,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::super::skins::{
-    fetch_skin_name_for_locale_with_base, lookup_cached_skin_name, prewarm_skins_from_dir,
-    skin_cache, skins_file_path,
+    clear_skins_ram_cache, fetch_skin_name_for_locale_with_base, lookup_cached_skin_name,
+    prewarm_skins_from_dir, skins_file_path,
 };
 use super::*;
 use crate::models::{
@@ -176,9 +176,7 @@ async fn test_skin_cache_lz4_incremental_and_profile_persistence_relocalization(
     assert!(skins_file_path(&ddragon_dir, AppLocale::PtBr).exists());
 
     // Clear RAM map and reload from disk to prove 0-network disk hydration
-    if let Ok(mut g) = skin_cache().write() {
-        g.remove(&AppLocale::PtBr);
-    }
+    clear_skins_ram_cache();
     assert_eq!(prewarm_skins_from_dir(&ddragon_dir, AppLocale::PtBr), 1);
     assert_eq!(
         lookup_cached_skin_name(AppLocale::PtBr, 103027).as_deref(),

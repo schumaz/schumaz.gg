@@ -1,29 +1,20 @@
 use super::super::client::{OPGG_REST_API_BASE, peek_latest_cached_opgg_version};
 use super::super::cooldown::send_analytics_request;
+use super::parser::RestRankedResponse;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, RankedTierListResponse};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub const RANKED_CACHE_TTL: Duration = Duration::from_secs(900);
 
-pub type RankedCacheMap = HashMap<String, (Instant, RankedTierListResponse)>;
-
-static RANKED_TIER_CACHE: OnceLock<RwLock<RankedCacheMap>> = OnceLock::new();
-
-pub(crate) fn get_ranked_cache() -> &'static RwLock<RankedCacheMap> {
-    RANKED_TIER_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-pub(super) async fn fetch_ranked_json(
+pub(super) async fn fetch_ranked_response(
     client: &reqwest::Client,
     rest_base: &str,
     region: &str,
     tier: &str,
     version: Option<&str>,
-) -> Result<serde_json::Value, String> {
+) -> Result<RestRankedResponse, String> {
     let mut url = format!(
         "{}/{}/champions/ranked?tier={}",
         rest_base.trim_end_matches('/'),
@@ -37,7 +28,7 @@ pub(super) async fn fetch_ranked_json(
     }
 
     let res = send_analytics_request(&url, client.get(&url), "Ranked tier list").await?;
-    res.json::<serde_json::Value>()
+    res.json::<RestRankedResponse>()
         .await
         .map_err(|e| format!("Failed to parse ranked tier list JSON: {}", e))
 }
@@ -92,7 +83,8 @@ pub fn prewarm_ranked_tier_list_from_dir(
         patch_48h_protection,
         locale,
     );
-    let Some(mut env) = crate::storage::read_lz4_envelope::<RankedTierListResponse>(&path) else {
+    let cache = &crate::build_provider::cache::build_provider_caches().ranked_tiers;
+    let Some(mut env) = cache.read_disk(&path) else {
         return false;
     };
     let now = crate::storage::now_unix_secs();
@@ -121,9 +113,7 @@ pub fn prewarm_ranked_tier_list_from_dir(
         patch_48h_protection,
         locale.as_str()
     );
-    if let Ok(mut guard) = get_ranked_cache().write() {
-        guard.insert(cache_key, (Instant::now(), env.payload));
-        return true;
-    }
-    false
+    let patch = env.patch.clone();
+    cache.insert_ram(cache_key, patch, env.payload);
+    true
 }

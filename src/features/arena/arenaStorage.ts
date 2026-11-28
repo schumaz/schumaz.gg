@@ -1,4 +1,4 @@
-import type { AppLocale } from "../../types";
+import type { AppLocale, ArenaChampionEntry, ArenaSynergyEntry } from "../../types";
 
 export interface ArenaFilters {
   patch: string | null;
@@ -78,4 +78,21 @@ export function saveArenaTierFilter(tier: string): void {
   } catch {
     // Ignore storage quota or restricted context errors.
   }
+}
+
+export function synergyToArenaChampionEntry(syn: ArenaSynergyEntry): ArenaChampionEntry {
+  return {
+    id: syn.champion_id,
+    key: syn.key,
+    name: syn.name,
+    icon_url: syn.icon_url,
+    tier: 0,
+    rank: 0,
+    win_rate: syn.win_rate ?? null,
+    first_place_rate: syn.first_place_rate ?? null,
+    avg_placement: syn.avg_placement ?? null,
+    pick_rate: syn.pick_rate ?? null,
+    ban_rate: null,
+    play: syn.play ?? null,
+  };
 }

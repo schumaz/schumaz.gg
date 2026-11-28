@@ -1,5 +1,6 @@
 import {
   commands,
+  events,
   type AppLocale,
   type AppSettings,
   type AutostartStatus,
@@ -10,8 +11,11 @@ import {
   type NavigationStatePatch,
   type UserPreferences,
 } from "../../types/bindings";
+import type { UnlistenFn } from "./lcu.ipc";
 
 export type { AutostartStatus };
+
+const cacheClearedListeners = new Set<(scope: CacheClearScope) => void>();
 
 /**
  * Typed IPC adapter for unified `UserSettings.ini`, preferences, locale, tray/autostart, cache, and GPU settings.
@@ -73,6 +77,22 @@ export const settingsIpc = {
   },
 
   async clearLocalCache(scope: CacheClearScope): Promise<LocalCacheInfo> {
-    return commands.clearLocalCache(scope);
+    const info = await commands.clearLocalCache(scope);
+    for (const listener of cacheClearedListeners) {
+      listener(scope);
+    }
+    return info;
+  },
+
+  async onCacheCleared(handler: (scope: CacheClearScope) => void): Promise<UnlistenFn> {
+    cacheClearedListeners.add(handler);
+    let unlistenEvent: UnlistenFn | null = null;
+    if (typeof events?.cacheCleared?.listen === "function") {
+      unlistenEvent = await events.cacheCleared.listen((event) => handler(event.payload));
+    }
+    return () => {
+      cacheClearedListeners.delete(handler);
+      unlistenEvent?.();
+    };
   },
 };

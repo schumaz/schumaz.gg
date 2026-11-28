@@ -16,15 +16,18 @@ async fn test_fetch_opgg_rest_uses_none_for_aram_ignoring_position() {
         .await;
 
     let client = reqwest::Client::new();
-    let res = fetch_opgg_rest_champion_analysis_from_base(
+    let base = mock_server.uri();
+    let res = fetch_opgg_rest_champion_analysis_req(
         &client,
-        &mock_server.uri(),
-        "global",
-        "aram",
-        103,
-        Some("top"),
-        "emerald_plus",
-        Some("16.22"),
+        &RestAnalysisRequest {
+            rest_base: &base,
+            region: "global",
+            mode: "aram",
+            champion_id: 103,
+            position: Some("top"),
+            tier: "emerald_plus",
+            version: Some("16.22"),
+        },
     )
     .await;
 

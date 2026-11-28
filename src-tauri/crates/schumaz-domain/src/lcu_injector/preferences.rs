@@ -1,78 +1,44 @@
 pub use crate::models::{AppLocale, FlashKeyPreference, UserPreferences};
-use std::sync::{
-    OnceLock, RwLock,
-    atomic::{AtomicU8, Ordering},
-};
 
-static USER_PREFERENCES: OnceLock<RwLock<UserPreferences>> = OnceLock::new();
-static ACTIVE_LOCALE: AtomicU8 = AtomicU8::new(1); // 0 = pt_BR, 1 = en_US
-
-fn locale_to_u8(locale: AppLocale) -> u8 {
-    match locale {
-        AppLocale::PtBr => 0,
-        AppLocale::EnUs => 1,
-    }
-}
-
-fn u8_to_locale(val: u8) -> AppLocale {
-    match val {
-        0 => AppLocale::PtBr,
-        _ => AppLocale::EnUs,
-    }
-}
-
-fn get_preferences_lock() -> &'static RwLock<UserPreferences> {
-    USER_PREFERENCES.get_or_init(|| RwLock::new(UserPreferences::default()))
-}
-
-/// Returns the active backend locale (`pt_BR` | `en_US`).
+/// Returns the active backend locale (`pt_BR` | `en_US`) from the unified `SettingsStore`.
 pub fn get_active_locale() -> AppLocale {
-    u8_to_locale(ACTIVE_LOCALE.load(Ordering::Relaxed))
+    crate::storage::get_active_locale()
 }
 
-/// Updates the active backend locale (`pt_BR` | `en_US`).
+/// Updates the active backend locale (`pt_BR` | `en_US`) in the unified `SettingsStore`.
 pub fn set_active_locale(locale: AppLocale) {
-    ACTIVE_LOCALE.store(locale_to_u8(locale), Ordering::Relaxed);
-    if let Ok(mut guard) = get_preferences_lock().write() {
-        guard.language = locale;
-    }
+    crate::storage::set_active_locale(locale);
 }
 
-/// Retrieves a clone of the current global user preferences.
+/// Retrieves a clone of the current global user preferences from the unified `SettingsStore`.
 pub fn get_user_preferences() -> UserPreferences {
-    get_preferences_lock()
-        .read()
-        .map(|guard| guard.clone())
-        .unwrap_or_default()
+    crate::storage::get_user_preferences()
 }
 
-/// Updates the global user preferences and active locale.
+/// Updates the global user preferences and active locale in the unified `SettingsStore`.
 pub fn set_user_preferences(prefs: UserPreferences) {
-    ACTIVE_LOCALE.store(locale_to_u8(prefs.language), Ordering::Relaxed);
-    if let Ok(mut guard) = get_preferences_lock().write() {
-        *guard = prefs;
-    }
+    crate::storage::set_user_preferences(prefs);
 }
 
-/// Marks Flash key onboarding completed, persists `flashKey` to `UserSettings.ini`, and syncs preferences.
+/// Marks Flash key onboarding completed, persists `flashKey` to `UserSettings.ini`, and syncs `SettingsStore`.
 pub fn complete_flash_onboarding_service(
     flash_key: FlashKeyPreference,
 ) -> Result<crate::models::AppSettings, String> {
-    let updated = crate::storage::update_global_settings(|s| {
+    crate::storage::update_global_settings(|s| {
         s.general.flash_onboarding_completed = true;
         s.automation.flash_key = flash_key;
-    })?;
-
-    set_user_preferences(updated.automation.clone());
-    Ok(updated)
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    static PREFS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_user_preferences_global_sync() {
+        let _guard = PREFS_TEST_LOCK.lock().unwrap();
         let prefs = UserPreferences {
             auto_inject_runes: false,
             auto_inject_spells: true,
@@ -91,7 +57,6 @@ mod tests {
         assert_eq!(get_active_locale(), AppLocale::EnUs);
         assert_eq!(get_user_preferences().language, AppLocale::EnUs);
 
-        // Reset to default
         set_user_preferences(UserPreferences::default());
         assert_eq!(get_user_preferences(), UserPreferences::default());
         assert!(get_user_preferences().patch_48h_protection);
@@ -115,6 +80,7 @@ mod tests {
 
     #[test]
     fn test_complete_flash_onboarding_service_persists_flash_key_and_flag() {
+        let _guard = PREFS_TEST_LOCK.lock().unwrap();
         let updated = complete_flash_onboarding_service(FlashKeyPreference::F).unwrap();
         assert!(updated.general.flash_onboarding_completed);
         assert_eq!(updated.automation.flash_key, FlashKeyPreference::F);

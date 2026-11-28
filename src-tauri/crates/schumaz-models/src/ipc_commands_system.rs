@@ -102,7 +102,8 @@ pub async fn get_local_cache_info() -> CmdResult<LocalCacheInfo> {
     unreachable!()
 }
 
-/// Deletes cached files under `Cache/` matching `scope` and returns refreshed usage statistics.
+/// Deletes cached files under `Cache/` matching `scope`, invalidates matching backend L1 RAM caches,
+/// emits `CacheCleared`, and returns refreshed usage statistics.
 #[specta::specta]
 pub async fn clear_local_cache(scope: CacheClearScope) -> CmdResult<LocalCacheInfo> {
     unreachable!()

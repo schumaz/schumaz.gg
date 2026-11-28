@@ -1,6 +1,7 @@
 use super::*;
 use crate::build_provider::analytics::aram::fetch_aram_mayhem_augments_with_endpoints_locale_and_dir;
-use crate::build_provider::analytics::client::fetch_opgg_rest_champion_analysis_from_base;
+use crate::build_provider::analytics::client::fetch_opgg_rest_champion_analysis_req;
+use crate::build_provider::query::RestAnalysisRequest;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, ArenaAugmentMetadata, ChampionMetadata};
 use std::collections::HashMap;
@@ -76,30 +77,19 @@ async fn test_analytics_cooldown_prevents_burst_retries_on_429_and_allows_stale_
 
     let client = reqwest::Client::new();
     let rest_base = format!("{}/cooldown_rest", mock_server.uri());
-    let first = fetch_opgg_rest_champion_analysis_from_base(
-        &client,
-        &rest_base,
-        "global",
-        "ranked",
-        103,
-        Some("mid"),
-        "emerald_plus",
-        Some("16.25"),
-    )
-    .await;
+    let req = RestAnalysisRequest {
+        rest_base: &rest_base,
+        region: "global",
+        mode: "ranked",
+        champion_id: 103,
+        position: Some("mid"),
+        tier: "emerald_plus",
+        version: Some("16.25"),
+    };
+    let first = fetch_opgg_rest_champion_analysis_req(&client, &req).await;
     assert!(first.is_err());
 
-    let second = fetch_opgg_rest_champion_analysis_from_base(
-        &client,
-        &rest_base,
-        "global",
-        "ranked",
-        103,
-        Some("mid"),
-        "emerald_plus",
-        Some("16.25"),
-    )
-    .await;
+    let second = fetch_opgg_rest_champion_analysis_req(&client, &req).await;
     assert!(second.is_err());
     assert!(
         second.unwrap_err().contains("cooldown"),

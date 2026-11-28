@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use specta::{Type, Types, datatype::DataType};
 
 use crate::{
-    BootstrapStatus, ChampSelectReconciledPayload, ChampSelectedPayload, ChampionBuild,
-    InjectionReport, SummonerInfo,
+    BootstrapStatus, CacheClearScope, ChampSelectReconciledPayload, ChampSelectedPayload,
+    ChampionBuild, InjectionReport, SummonerInfo,
 };
 
 /// IPC event metadata registered purely for TypeScript bindings generation without pulling Tauri.
@@ -51,6 +51,10 @@ pub struct MatchEnded;
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct WindowMinimizedChanged(pub bool);
 
+/// Emitted after local caches are cleared so frontend hooks invalidate their in-memory caches.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct CacheCleared(pub CacheClearScope);
+
 fn spec<T: Type>(struct_name: &'static str, types: &mut Types) -> IpcEventSpec {
     IpcEventSpec {
         struct_name,
@@ -73,5 +77,6 @@ pub fn collect_events(types: &mut Types) -> Vec<IpcEventSpec> {
         spec::<GameflowPhaseChanged>("GameflowPhaseChanged", types),
         spec::<MatchEnded>("MatchEnded", types),
         spec::<WindowMinimizedChanged>("WindowMinimizedChanged", types),
+        spec::<CacheCleared>("CacheCleared", types),
     ]
 }

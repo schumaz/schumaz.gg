@@ -1,5 +1,6 @@
 use super::client::OPGG_REST_API_BASE;
 use super::cooldown::send_analytics_request;
+use crate::build_provider::cache::build_provider_caches;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -16,9 +17,50 @@ pub struct OpggPositionInfo {
 pub type ChampionPositionsMap = HashMap<i32, Vec<OpggPositionInfo>>;
 pub type PositionsCache = HashMap<String, ChampionPositionsMap>;
 
-// In-memory cache for OP.GG champion rankings by (region, tier, version)
-static CHAMPION_POSITIONS_CACHE: std::sync::LazyLock<std::sync::RwLock<PositionsCache>> =
-    std::sync::LazyLock::new(|| std::sync::RwLock::new(HashMap::new()));
+#[derive(Debug, Deserialize)]
+struct RestPositionsResponse {
+    #[serde(default)]
+    data: Vec<RestPositionChampion>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RestPositionChampion {
+    #[serde(default)]
+    id: Option<i32>,
+    #[serde(default)]
+    positions: Vec<RestPositionEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RestPositionEntry {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    stats: Option<RestPositionStats>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RestPositionStats {
+    #[serde(default)]
+    play: Option<u64>,
+    #[serde(default)]
+    role_rate: Option<f64>,
+}
+
+pub(crate) fn positions_cache_key(
+    rest_base: &str,
+    region: &str,
+    tier: &str,
+    version: Option<&str>,
+) -> String {
+    format!(
+        "{}:{}:{}:{}",
+        rest_base,
+        region,
+        tier,
+        version.unwrap_or("latest")
+    )
+}
 
 pub fn positions_file_path(dir: &Path, region: &str, tier: &str, version: Option<&str>) -> PathBuf {
     let reg = crate::storage::sanitize_key_component(region);
@@ -51,39 +93,35 @@ pub fn select_most_played_lane(positions: &[OpggPositionInfo]) -> Option<&'stati
         .map(|(lane, _)| lane)
 }
 
-/// Extracts champion position statistics from the OP.GG champions/ranked JSON payload.
-pub fn parse_opgg_champion_positions_ranking(
-    json: &serde_json::Value,
-) -> HashMap<i32, Vec<OpggPositionInfo>> {
+fn build_positions_map(parsed: RestPositionsResponse) -> ChampionPositionsMap {
     let mut map = HashMap::new();
-    if let Some(data_arr) = json.get("data").and_then(|d| d.as_array()) {
-        for champ in data_arr {
-            if let Some(champ_id) = champ.get("id").and_then(|v| v.as_i64()).map(|id| id as i32) {
-                let mut positions = Vec::new();
-                if let Some(pos_arr) = champ.get("positions").and_then(|v| v.as_array()) {
-                    for pos in pos_arr {
-                        if let Some(name) = pos.get("name").and_then(|v| v.as_str()) {
-                            let play = pos
-                                .pointer("/stats/play")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0);
-                            let role_rate = pos
-                                .pointer("/stats/role_rate")
-                                .and_then(|v| v.as_f64())
-                                .unwrap_or(0.0);
-                            positions.push(OpggPositionInfo {
-                                name: name.to_string(),
-                                play,
-                                role_rate,
-                            });
-                        }
-                    }
-                }
-                map.insert(champ_id, positions);
-            }
+    for champ in parsed.data {
+        let Some(champ_id) = champ.id else {
+            continue;
+        };
+        let mut positions = Vec::new();
+        for pos in champ.positions {
+            let Some(name) = pos.name else {
+                continue;
+            };
+            let play = pos.stats.as_ref().and_then(|s| s.play).unwrap_or(0);
+            let role_rate = pos.stats.as_ref().and_then(|s| s.role_rate).unwrap_or(0.0);
+            positions.push(OpggPositionInfo {
+                name,
+                play,
+                role_rate,
+            });
         }
+        map.insert(champ_id, positions);
     }
     map
+}
+
+/// Extracts champion position statistics from the OP.GG champions/ranked JSON payload without cloning `Value`.
+pub fn parse_opgg_champion_positions_ranking(json: &serde_json::Value) -> ChampionPositionsMap {
+    RestPositionsResponse::deserialize(json)
+        .map(build_positions_map)
+        .unwrap_or_default()
 }
 
 /// Extracts the set of champion IDs that genuinely belong to `target_lane`
@@ -115,34 +153,26 @@ pub fn extract_lane_champion_roster(
         .collect()
 }
 
-/// Seeds the shared RAM + optional `.lz4` positions cache from an already-fetched `/champions/ranked` JSON payload.
-pub(crate) fn seed_champion_positions_cache(
+/// Seeds the shared RAM + optional `.lz4` positions cache from an already-parsed positions map.
+pub(crate) fn seed_champion_positions_map(
     rest_base: &str,
     region: &str,
     tier: &str,
     version: Option<&str>,
-    json: &serde_json::Value,
+    parsed_map: ChampionPositionsMap,
     positions_dir: Option<&Path>,
 ) {
-    let parsed_map = parse_opgg_champion_positions_ranking(json);
     if parsed_map.is_empty() {
         return;
     }
-    let cache_key = format!(
-        "{}:{}:{}:{}",
-        rest_base,
-        region,
-        tier,
-        version.unwrap_or("latest")
-    );
+    let cache = &build_provider_caches().positions;
+    let cache_key = positions_cache_key(rest_base, region, tier, version);
+    let patch_str = version.unwrap_or("").trim();
     if let Some(dir) = positions_dir {
         let path = positions_file_path(dir, region, tier, version);
-        let _ =
-            crate::storage::write_lz4_envelope(&path, version.unwrap_or("").trim(), &parsed_map);
+        let _ = cache.write_disk(&path, patch_str, &parsed_map);
     }
-    if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
-        guard.insert(cache_key, parsed_map);
-    }
+    cache.insert_ram(cache_key, patch_str, parsed_map);
 }
 
 pub async fn fetch_champion_positions_map_with_base_and_dir(
@@ -153,102 +183,94 @@ pub async fn fetch_champion_positions_map_with_base_and_dir(
     version: Option<&str>,
     positions_dir: Option<&Path>,
 ) -> Result<ChampionPositionsMap, String> {
-    let cache_key = format!(
-        "{}:{}:{}:{}",
-        rest_base,
-        region,
-        tier,
-        version.unwrap_or("latest")
-    );
-    let legacy_cache_key = format!("{}:{}:{}", region, tier, version.unwrap_or("latest"));
+    let cache = &build_provider_caches().positions;
+    let cache_key = positions_cache_key(rest_base, region, tier, version);
 
-    // 1. Check L1 RAM cache first
-    if let Ok(guard) = CHAMPION_POSITIONS_CACHE.read()
-        && let Some(champ_map) = guard
-            .get(&cache_key)
-            .or_else(|| guard.get(&legacy_cache_key))
-    {
-        return Ok(champ_map.clone());
+    if let Some(entry) = cache.get_ram(&cache_key, None) {
+        return Ok(entry.payload);
     }
 
-    // 2. Check L2 disk .lz4 cache (48h TTL + patch check)
-    let disk_env = positions_dir.and_then(|dir| {
-        let path = positions_file_path(dir, region, tier, version);
-        crate::storage::read_lz4_envelope::<ChampionPositionsMap>(&path)
-    });
-
-    if let Some(ref env) = disk_env
-        && crate::storage::is_envelope_fresh(
-            env.created_at_unix,
-            crate::storage::OPGG_CACHE_TTL_SECS,
-            crate::storage::now_unix_secs(),
-        )
-    {
-        let patch_ok = match version.map(str::trim).filter(|v| !v.is_empty()) {
-            Some(v) => env.patch == v,
-            None => true,
-        };
-        if patch_ok {
-            if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
-                guard.insert(cache_key.clone(), env.payload.clone());
+    cache
+        .coalesce(cache_key.clone(), || async {
+            if let Some(entry) = cache.get_ram(&cache_key, None) {
+                return Ok(entry.payload);
             }
-            return Ok(env.payload.clone());
-        }
-    }
 
-    // 3. Fetch from OP.GG REST API
-    let mut url = format!(
-        "{}/{}/champions/ranked?tier={}",
-        rest_base.trim_end_matches('/'),
-        region,
-        tier
-    );
-    if let Some(v) = version
-        && !v.trim().is_empty()
-    {
-        url.push_str(&format!("&version={}", v.trim()));
-    }
+            let disk_env = positions_dir.and_then(|dir| {
+                let path = positions_file_path(dir, region, tier, version);
+                cache.read_disk(&path)
+            });
 
-    let fetch_res = async {
-        let res = send_analytics_request(&url, client.get(&url), "OP.GG champions/ranked").await?;
-        let json_body: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse OP.GG champions/ranked JSON: {}", e))?;
-        Ok::<serde_json::Value, String>(json_body)
-    }
-    .await;
-
-    let json_body = match fetch_res {
-        Ok(json) => json,
-        Err(err) => {
-            if let Some(env) = disk_env
-                && !env.payload.is_empty()
+            if let Some(ref env) = disk_env
+                && crate::storage::is_envelope_fresh(
+                    env.created_at_unix,
+                    crate::storage::OPGG_CACHE_TTL_SECS,
+                    crate::storage::now_unix_secs(),
+                )
             {
-                if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
-                    guard.insert(cache_key, env.payload.clone());
+                let patch_ok = match version.map(str::trim).filter(|v| !v.is_empty()) {
+                    Some(v) => env.patch == v,
+                    None => true,
+                };
+                if patch_ok {
+                    cache.insert_ram(cache_key.clone(), env.patch.clone(), env.payload.clone());
+                    return Ok(env.payload.clone());
                 }
-                return Ok(env.payload);
             }
-            return Err(err);
-        }
-    };
 
-    let parsed_map = parse_opgg_champion_positions_ranking(&json_body);
+            let mut url = format!(
+                "{}/{}/champions/ranked?tier={}",
+                rest_base.trim_end_matches('/'),
+                region,
+                tier
+            );
+            if let Some(v) = version
+                && !v.trim().is_empty()
+            {
+                url.push_str(&format!("&version={}", v.trim()));
+            }
 
-    if let Some(dir) = positions_dir
-        && !parsed_map.is_empty()
-    {
-        let path = positions_file_path(dir, region, tier, version);
-        let patch_str = version.unwrap_or("").trim();
-        let _ = crate::storage::write_lz4_envelope(&path, patch_str, &parsed_map);
-    }
+            let fetch_res = async {
+                let res =
+                    send_analytics_request(&url, client.get(&url), "OP.GG champions/ranked").await?;
+                let parsed: RestPositionsResponse = res
+                    .json()
+                    .await
+                    .map_err(|e| format!("Failed to parse OP.GG champions/ranked JSON: {}", e))?;
+                Ok::<RestPositionsResponse, String>(parsed)
+            }
+            .await;
 
-    if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
-        guard.insert(cache_key, parsed_map.clone());
-    }
+            let parsed = match fetch_res {
+                Ok(resp) => resp,
+                Err(err) => {
+                    if let Some(env) = disk_env
+                        && !env.payload.is_empty()
+                    {
+                        cache.insert_ram(
+                            cache_key.clone(),
+                            env.patch.clone(),
+                            env.payload.clone(),
+                        );
+                        return Ok(env.payload);
+                    }
+                    return Err(err);
+                }
+            };
 
-    Ok(parsed_map)
+            let parsed_map = build_positions_map(parsed);
+            let patch_str = version.unwrap_or("").trim();
+            if let Some(dir) = positions_dir
+                && !parsed_map.is_empty()
+            {
+                let path = positions_file_path(dir, region, tier, version);
+                let _ = cache.write_disk(&path, patch_str, &parsed_map);
+            }
+
+            cache.insert_ram(cache_key.clone(), patch_str, parsed_map.clone());
+            Ok(parsed_map)
+        })
+        .await
 }
 
 pub async fn resolve_champion_most_played_lane_with_base_and_dir(
@@ -260,10 +282,7 @@ pub async fn resolve_champion_most_played_lane_with_base_and_dir(
     version: Option<&str>,
     positions_dir: Option<&Path>,
 ) -> Result<String, String> {
-    let map = fetch_champion_positions_map_with_base_and_dir(
-        client, rest_base, region, tier, version, positions_dir,
-    )
-    .await?;
+    let map = fetch_champion_positions_map_with_base_and_dir(client, rest_base, region, tier, version, positions_dir).await?;
     map.get(&champion_id)
         .and_then(|positions| select_most_played_lane(positions))
         .map(str::to_string)
@@ -281,11 +300,10 @@ pub async fn resolve_lane_champion_roster_with_base_and_dir(
     version: Option<&str>,
     positions_dir: Option<&Path>,
 ) -> Option<HashSet<i32>> {
-    let primary_map = fetch_champion_positions_map_with_base_and_dir(
-        client, rest_base, region, tier, version, positions_dir,
-    )
-    .await
-    .ok()?;
+    let primary_map =
+        fetch_champion_positions_map_with_base_and_dir(client, rest_base, region, tier, version, positions_dir)
+            .await
+            .ok()?;
     let primary_roster = extract_lane_champion_roster(&primary_map, target_lane);
     if primary_roster.len() >= 10 {
         return Some(primary_roster);
@@ -314,16 +332,7 @@ pub async fn resolve_champion_most_played_lane(
     version: Option<&str>,
 ) -> Result<String, String> {
     let dir = crate::storage::global_paths().map(|p| p.opgg_positions_dir.as_path());
-    resolve_champion_most_played_lane_with_base_and_dir(
-        client,
-        OPGG_REST_API_BASE,
-        champion_id,
-        region,
-        tier,
-        version,
-        dir,
-    )
-    .await
+    resolve_champion_most_played_lane_with_base_and_dir(client, OPGG_REST_API_BASE, champion_id, region, tier, version, dir).await
 }
 
 #[cfg(test)]

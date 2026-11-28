@@ -3,8 +3,8 @@ use specta::Type;
 use tauri_specta::Event;
 
 use schumaz_models::{
-    BootstrapStatus, ChampSelectReconciledPayload, ChampSelectedPayload, ChampionBuild,
-    InjectionReport, SummonerInfo,
+    BootstrapStatus, CacheClearScope, ChampSelectReconciledPayload, ChampSelectedPayload,
+    ChampionBuild, InjectionReport, SummonerInfo,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
@@ -43,3 +43,7 @@ pub struct MatchEnded;
 /// Emitted when the main window becomes minimized/hidden (`true`) or restored/visible (`false`).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 pub struct WindowMinimizedChanged(pub bool);
+
+/// Emitted after local caches are cleared so frontend hooks invalidate their in-memory caches.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+pub struct CacheCleared(pub CacheClearScope);

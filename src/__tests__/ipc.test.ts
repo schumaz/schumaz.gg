@@ -224,6 +224,22 @@ describe("Frontend IPC Adapters (src/services/ipc/)", () => {
     capturedHandler?.({ payload: mockSummoner });
 
     expect(received).toEqual([mockSummoner]);
+
+    let capturedCacheHandler: ((event: { payload: unknown }) => void) | undefined;
+    vi.mocked(listen).mockImplementationOnce((event: string, handler: unknown) => {
+      expect(event).toBe("cache-cleared");
+      capturedCacheHandler = handler as (event: { payload: unknown }) => void;
+      return Promise.resolve(() => {});
+    });
+    const clearedScopes: string[] = [];
+    const unlistenCache = await settingsIpc.onCacheCleared((scope) => {
+      clearedScopes.push(scope);
+    });
+    capturedCacheHandler?.({ payload: "all" });
+    await settingsIpc.clearLocalCache("builds");
+    expect(clearedScopes).toEqual(["all", "builds"]);
+    unlistenCache();
+
     expect(assetsIpc.isTauriRuntime()).toBe(false);
     expect(assetsIpc.convertAssetFileSrc("v1_xyz.png")).toBe("schumaz-asset://localhost/v1_xyz.png");
   });

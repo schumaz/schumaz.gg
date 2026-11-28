@@ -15,6 +15,11 @@ const VALID_ASSET_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg", "gi
 const MAX_ASSET_URL_CACHE_SIZE = 2048;
 const tauriAssetUrlCache = new Map<string, string>();
 
+/** Clears the in-memory `schumaz-asset` URL resolution cache. */
+export function clearAssetUrlCache(): void {
+  tauriAssetUrlCache.clear();
+}
+
 export function isAllowedAssetUrl(url: string): boolean {
   const trimmed = url.trim();
   return ALLOWED_ASSET_PREFIXES.some((prefix) => trimmed.startsWith(prefix));

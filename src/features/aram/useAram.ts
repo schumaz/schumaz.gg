@@ -46,6 +46,7 @@ export function useAram(
   const tierFetchingRef = useRef<Partial<Record<AramMode, boolean>>>({});
   const augmentsCacheRef = useRef<Record<string, AramAugmentEntry[]>>({});
   const augmentsSeqRef = useRef(0);
+  const staleAugmentsRef = useRef(false);
   const wasMayhemVisibleRef = useRef(false);
   const lastAutoChampionIdRef = useRef<number | null>(null);
   const prevLocaleRef = useRef<AppLocale>(locale);
@@ -89,10 +90,12 @@ export function useAram(
       }
 
       if (!force && augmentsCacheRef.current[normalizedKey]) {
+        staleAugmentsRef.current = false;
         setAugmentsLoading(false);
         return;
       }
 
+      staleAugmentsRef.current = false;
       const seq = ++augmentsSeqRef.current;
       setAugmentsLoading(true);
 
@@ -141,7 +144,11 @@ export function useAram(
     if (!tierLists[savedMode] && !tierLoading[savedMode] && !tierErrors[savedMode]) {
       fetchTierList(savedMode);
     }
-  }, [isActive, showChooser, savedMode, tierLists, tierLoading, tierErrors, fetchTierList]);
+    if (savedMode === "aram_mayhem" && staleAugmentsRef.current && selectedChampionKey) {
+      staleAugmentsRef.current = false;
+      void fetchAugmentsForChampion(selectedChampionKey, true, false);
+    }
+  }, [isActive, showChooser, savedMode, tierLists, tierLoading, tierErrors, selectedChampionKey, fetchTierList, fetchAugmentsForChampion]);
 
   useEffect(() => {
     const isMayhemVisible = isActive && !showChooser && savedMode === "aram_mayhem";
@@ -164,39 +171,21 @@ export function useAram(
         fetchAugmentsForChampion(matched.key);
       }
     }
-  }, [
-    isActive,
-    showChooser,
-    savedMode,
-    tierLists.aram_mayhem,
-    currentChampionId,
-    fetchAugmentsForChampion,
-  ]);
+  }, [isActive, showChooser, savedMode, tierLists.aram_mayhem, currentChampionId, fetchAugmentsForChampion]);
 
   const selectedMayhemChampion = useMemo(() => {
     if (!selectedChampionKey) return null;
     return (tierLists.aram_mayhem ?? []).find((c) => c.key === selectedChampionKey) ?? null;
   }, [tierLists.aram_mayhem, selectedChampionKey]);
 
-  const builds = useAramBuilds({
-    isActive,
-    savedMode,
-    showChooser,
-    selectedMayhemChampion,
-    flashKey,
-    locale,
-  });
+  const builds = useAramBuilds({ isActive, savedMode, showChooser, selectedMayhemChampion, flashKey, locale });
 
   const clearSelectedClassicChampion = builds.clearSelectedClassicChampion;
 
   const handleAramDockClick = useCallback(
     (wasAlreadyOnAram: boolean) => {
-      if (!wasAlreadyOnAram) {
-        setShowChooser(savedMode === null);
-        return;
-      }
-      if (savedMode === null) {
-        setShowChooser(true);
+      if (!wasAlreadyOnAram || savedMode === null) {
+        setShowChooser(!wasAlreadyOnAram ? savedMode === null : true);
       } else {
         setShowChooser((prev) => !prev);
       }
@@ -214,6 +203,20 @@ export function useAram(
     [onNavigationPatch, clearSelectedClassicChampion]
   );
 
+  const invalidateBuildsCache = builds.invalidateBuildsCache;
+  const invalidateCache = useCallback(() => {
+    tierCacheRef.current = {};
+    tierFetchingRef.current = {};
+    augmentsCacheRef.current = {};
+    augmentsSeqRef.current += 1;
+    staleAugmentsRef.current = Boolean(selectedChampionKeyRef.current);
+    setTierLists({});
+    setTierErrors({});
+    setAugmentsByChampion({});
+    setAugmentsError(null);
+    invalidateBuildsCache();
+  }, [invalidateBuildsCache]);
+
   const retryTierList = useCallback((mode: AramMode) => fetchTierList(mode, true), [fetchTierList]);
 
   const retryAugments = useCallback(() => {
@@ -221,20 +224,8 @@ export function useAram(
   }, [selectedChampionKey, fetchAugmentsForChampion]);
 
   return {
-    savedMode,
-    showChooser,
-    tierLists,
-    tierLoading,
-    tierErrors,
-    selectedChampionKey,
-    augmentsByChampion,
-    augmentsLoading,
-    augmentsError,
-    handleAramDockClick,
-    selectMode,
-    selectChampion: fetchAugmentsForChampion,
-    retryTierList,
-    retryAugments,
-    ...builds,
+    savedMode, showChooser, tierLists, tierLoading, tierErrors, selectedChampionKey,
+    augmentsByChampion, augmentsLoading, augmentsError, handleAramDockClick, selectMode,
+    selectChampion: fetchAugmentsForChampion, retryTierList, retryAugments, invalidateCache, ...builds,
   };
 }

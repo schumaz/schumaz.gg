@@ -75,7 +75,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             models::ProfileRefreshRequested,
             models::GameflowPhaseChanged,
             models::MatchEnded,
-            models::WindowMinimizedChanged
+            models::WindowMinimizedChanged,
+            models::CacheCleared
         ])
         .dangerously_cast_bigints_to_number()
 }

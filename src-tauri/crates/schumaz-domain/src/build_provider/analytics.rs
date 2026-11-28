@@ -11,6 +11,7 @@ pub mod positions;
 pub mod ranked;
 pub mod rest_extractors;
 pub mod rest_parser;
+mod rest_parser_items;
 pub mod versions;
 
 pub use aram::*;
@@ -25,3 +26,4 @@ pub use positions::*;
 pub use ranked::*;
 pub use rest_extractors::*;
 pub use rest_parser::*;
+pub use rest_parser_items::{McpDepthItems, RestAnalysisParseOptions};

@@ -135,20 +135,12 @@ async fn test_tristana_aram_and_mayhem_rest_plus_mcp_merge_builds_exact_opgg_blo
         (crate::models::QUEUE_ARAM, true),
         (crate::models::QUEUE_ARAM_MAYHEM, false),
     ] {
-        let build = get_recommended_build_with_filters_and_endpoints(
-            &client,
-            18,
-            queue_id,
-            None,
-            None,
-            None,
-            Some("16.22"),
-            &cache,
-            &rest_base,
-            &mcp_url,
-        )
-        .await
-        .expect("Tristana ARAM/Mayhem merge should succeed");
+        let query = BuildQuery::new(18, queue_id)
+            .with_filters(None, None, None, Some("16.22"))
+            .with_endpoints(&rest_base, &mcp_url);
+        let build = resolve_recommended_build(&client, &query, &cache, None)
+            .await
+            .expect("Tristana ARAM/Mayhem merge should succeed");
 
         assert_eq!(build.supports_runes, expected_supports_runes);
         assert_eq!(build.spell1_id, 4);
@@ -266,64 +258,35 @@ async fn test_patch_48h_protection_exposes_remaining_hours_and_respects_toggle()
     let rest_base = format!("{}/patch48h", mock_server.uri());
     let mcp_url = format!("{}/mcp", mock_server.uri());
 
-    let protected_build = get_recommended_build_with_filters_and_endpoints_with_protection(
-        &client,
-        103,
-        crate::models::QUEUE_ARAM,
-        None,
-        None,
-        None,
-        None,
-        &cache,
-        &rest_base,
-        &mcp_url,
-        None,
-        true,
-    )
-    .await
-    .expect("Protected build should succeed");
+    let protected_query = BuildQuery::new(103, crate::models::QUEUE_ARAM)
+        .with_endpoints(&rest_base, &mcp_url)
+        .with_patch_48h_protection(true);
+    let protected_build = resolve_recommended_build(&client, &protected_query, &cache, None)
+        .await
+        .expect("Protected build should succeed");
 
     assert_eq!(protected_build.active_patch, "16.21");
     assert!(protected_build.patch_fallback_applied);
     assert_eq!(protected_build.patch_protection_remaining_hours, Some(38));
 
-    let unprotected_build = get_recommended_build_with_filters_and_endpoints_with_protection(
-        &client,
-        103,
-        crate::models::QUEUE_ARAM,
-        None,
-        None,
-        None,
-        None,
-        &cache,
-        &rest_base,
-        &mcp_url,
-        None,
-        false,
-    )
-    .await
-    .expect("Unprotected build should succeed");
+    let unprotected_query = BuildQuery::new(103, crate::models::QUEUE_ARAM)
+        .with_endpoints(&rest_base, &mcp_url)
+        .with_patch_48h_protection(false);
+    let unprotected_build = resolve_recommended_build(&client, &unprotected_query, &cache, None)
+        .await
+        .expect("Unprotected build should succeed");
 
     assert_eq!(unprotected_build.active_patch, "16.22");
     assert!(!unprotected_build.patch_fallback_applied);
     assert_eq!(unprotected_build.patch_protection_remaining_hours, None);
 
-    let manual_build = get_recommended_build_with_filters_and_endpoints_with_protection(
-        &client,
-        103,
-        crate::models::QUEUE_ARAM,
-        None,
-        None,
-        None,
-        Some("16.22"),
-        &cache,
-        &rest_base,
-        &mcp_url,
-        None,
-        true,
-    )
-    .await
-    .expect("Manual override build should succeed");
+    let manual_query = BuildQuery::new(103, crate::models::QUEUE_ARAM)
+        .with_filters(None, None, None, Some("16.22"))
+        .with_endpoints(&rest_base, &mcp_url)
+        .with_patch_48h_protection(true);
+    let manual_build = resolve_recommended_build(&client, &manual_query, &cache, None)
+        .await
+        .expect("Manual override build should succeed");
 
     assert_eq!(manual_build.active_patch, "16.22");
     assert!(!manual_build.patch_fallback_applied);

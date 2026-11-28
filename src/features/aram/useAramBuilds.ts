@@ -42,6 +42,7 @@ export function useAramBuilds({
 
   const mayhemBuildCacheRef = useRef<Record<string, ChampionBuild>>({});
   const mayhemBuildSeqRef = useRef(0);
+  const staleClassicBuildRef = useRef(false);
   const mayhemPanelRef = useRef<AramMayhemPanel>(mayhemPanel);
   mayhemPanelRef.current = mayhemPanel;
   const selectedMayhemChampionRef = useRef<AramChampionRank | null>(selectedMayhemChampion);
@@ -50,6 +51,7 @@ export function useAramBuilds({
 
   const fetchClassicBuild = useCallback(
     async (champion: AramChampionRank, targetFilters: AramClassicBuildFilters) => {
+      staleClassicBuildRef.current = false;
       const seq = ++classicBuildSeqRef.current;
       setClassicBuildLoading(true);
       setClassicBuildError(null);
@@ -105,11 +107,14 @@ export function useAramBuilds({
   }, [selectedMayhemChampion?.key]);
 
   useEffect(() => {
-    if (!isActive || showChooser || savedMode !== "aram_mayhem" || mayhemPanel !== "build" || !selectedMayhemChampion) {
-      return;
+    if (!isActive || showChooser) return;
+    if (savedMode === "aram" && staleClassicBuildRef.current && selectedClassicChampion) {
+      staleClassicBuildRef.current = false;
+      void fetchClassicBuild(selectedClassicChampion, classicFiltersRef.current);
+    } else if (savedMode === "aram_mayhem" && mayhemPanel === "build" && selectedMayhemChampion) {
+      void fetchMayhemBuild(selectedMayhemChampion);
     }
-    void fetchMayhemBuild(selectedMayhemChampion);
-  }, [isActive, showChooser, savedMode, mayhemPanel, selectedMayhemChampion, fetchMayhemBuild]);
+  }, [isActive, showChooser, savedMode, mayhemPanel, selectedMayhemChampion, selectedClassicChampion, fetchClassicBuild, fetchMayhemBuild]);
 
   useEffect(() => {
     if (prevLocaleRef.current === locale) return;
@@ -135,10 +140,22 @@ export function useAramBuilds({
 
   const clearSelectedClassicChampion = useCallback(() => {
     classicBuildSeqRef.current += 1;
+    staleClassicBuildRef.current = false;
     setSelectedClassicChampion(null);
     setClassicBuild(null);
     setClassicBuildError(null);
     setClassicBuildLoading(false);
+  }, []);
+
+  const invalidateBuildsCache = useCallback(() => {
+    mayhemBuildCacheRef.current = {};
+    classicBuildSeqRef.current += 1;
+    mayhemBuildSeqRef.current += 1;
+    staleClassicBuildRef.current = Boolean(selectedClassicChampionRef.current);
+    setClassicBuild(null);
+    setClassicBuildError(null);
+    setMayhemBuildsByChampion({});
+    setMayhemBuildError(null);
   }, []);
 
   const handleClassicDetailFilterChange = useCallback(
@@ -208,6 +225,6 @@ export function useAramBuilds({
     clearSelectedClassicChampion, handleClassicDetailFilterChange, retryClassicBuild,
     mayhemPanel, setMayhemPanel, mayhemBuildsByChampion, mayhemBuildLoading,
     mayhemBuildError, mayhemBuildIndex, mayhemOrderedSpells, setMayhemBuildIndex,
-    retryMayhemBuild, handlePatchProtectionChange,
+    retryMayhemBuild, handlePatchProtectionChange, invalidateBuildsCache,
   };
 }

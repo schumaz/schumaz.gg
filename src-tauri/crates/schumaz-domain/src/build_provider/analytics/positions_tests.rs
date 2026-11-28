@@ -63,10 +63,10 @@ async fn test_resolve_champion_most_played_lane_cached() {
     let mut inner_map = HashMap::new();
     inner_map.insert(champ_id, positions);
 
-    let cache_key = "global:emerald_plus:test_v1".to_string();
-    if let Ok(mut guard) = CHAMPION_POSITIONS_CACHE.write() {
-        guard.insert(cache_key, inner_map);
-    }
+    let cache_key = positions_cache_key(OPGG_REST_API_BASE, "global", "emerald_plus", Some("test_v1"));
+    build_provider_caches()
+        .positions
+        .insert_ram(cache_key, "test_v1", inner_map);
 
     let dummy_client = reqwest::Client::new();
     let resolved = resolve_champion_most_played_lane(
@@ -116,9 +116,7 @@ async fn test_positions_disk_cache_and_stale_while_error() {
     assert!(positions_file_path(&dir, "global", "emerald_plus", Some("16.25")).exists());
 
     // Clear RAM and test expired disk envelope with offline server -> Stale-While-Error rescues!
-    if let Ok(mut g) = CHAMPION_POSITIONS_CACHE.write() {
-        g.clear();
-    }
+    build_provider_caches().positions.clear_ram();
     let disk_file = positions_file_path(&dir, "global", "emerald_plus", Some("16.25"));
     let env = crate::storage::read_lz4_envelope::<ChampionPositionsMap>(&disk_file).unwrap();
     crate::storage::write_lz4_envelope_at(&disk_file, "16.25", &env.payload, 1).unwrap();

@@ -53,8 +53,9 @@ fn test_ensure_skins_hydrated_from_dir_reads_disk_once_and_rehydrates_on_evictio
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    if let Ok(mut g) = skin_cache().write() {
-        g.remove(&AppLocale::EnUs);
+    if let Ok(mut g) = skin_cache_state().write() {
+        g.names.remove(&AppLocale::EnUs);
+        g.hydrated_dirs.clear();
     }
 
     let mut initial_map = HashMap::new();
@@ -83,8 +84,9 @@ fn test_ensure_skins_hydrated_from_dir_reads_disk_once_and_rehydrates_on_evictio
     assert_eq!(lookup_cached_skin_name(AppLocale::EnUs, 103028), None);
 
     // Evicting the locale from SKIN_NAME_CACHE triggers fresh disk hydration.
-    if let Ok(mut g) = skin_cache().write() {
-        g.remove(&AppLocale::EnUs);
+    if let Ok(mut g) = skin_cache_state().write() {
+        g.names.remove(&AppLocale::EnUs);
+        g.hydrated_dirs.clear();
     }
     ensure_skins_hydrated_from_dir(&dir, AppLocale::EnUs);
     assert_eq!(

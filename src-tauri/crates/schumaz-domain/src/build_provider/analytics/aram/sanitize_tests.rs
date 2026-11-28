@@ -1,9 +1,9 @@
 use super::*;
 use crate::build_provider::analytics::aram::augments::fetch_aram_mayhem_augments_with_base_locale_and_dir;
 use crate::build_provider::analytics::aram::cache::{
-    aram_augments_file_path, get_augments_cache, has_valid_augment_descriptions,
-    rehydrate_aram_augments,
+    aram_augments_file_path, has_valid_augment_descriptions, rehydrate_aram_augments,
 };
+use crate::build_provider::cache::build_provider_caches;
 use crate::build_provider::analytics::aram::parsers::parse_aram_mayhem_augments_html_for_locale;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{AppLocale, AramAugmentEntry, ArenaAugmentMetadata};
@@ -265,9 +265,7 @@ async fn test_parser_skips_internal_key_and_cache_auto_refreshes_placeholder_ent
         desc: "Empower ?! Empowered ? gains 20 Ability Haste.".to_string(),
     }];
     crate::storage::write_lz4_envelope(&file_path, "", &dirty_cache).unwrap();
-    if let Ok(mut g) = get_augments_cache().write() {
-        g.clear();
-    }
+    build_provider_caches().aram_augments.clear_ram();
 
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))

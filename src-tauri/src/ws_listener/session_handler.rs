@@ -160,8 +160,11 @@ async fn run_champ_select_build_and_inject(
         .is_ok()
     };
 
-    let build_fut = crate::build_provider::get_recommended_build_with_filters_and_fast_spells(
-        http_client, champ_id, q_id, assigned_pos.as_deref(), None, None, None,
+    let build_query = crate::build_provider::BuildQuery::new(champ_id, q_id)
+        .with_filters(assigned_pos.as_deref(), None, None, None);
+    let build_fut = crate::build_provider::resolve_recommended_build_with_query(
+        http_client,
+        &build_query,
         if supports_spells { Some(fast_tx) } else { None },
     );
 

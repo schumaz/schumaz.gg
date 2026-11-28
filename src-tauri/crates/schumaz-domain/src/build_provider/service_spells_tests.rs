@@ -103,21 +103,12 @@ async fn test_lulu_aram_mayhem_filters_exhaust_in_fast_spells_and_full_build_whi
 
     // 1. ARAM Mayhem (2400 / "KIWI"): fast spells and full build must drop Exhaust (3)
     let (fast_tx, fast_rx) = tokio::sync::oneshot::channel();
-    let mayhem_build = get_recommended_build_with_filters_and_endpoints_internal(
-        &client,
-        117,
-        QUEUE_ARAM_MAYHEM,
-        None,
-        None,
-        None,
-        Some("16.22"),
-        &cache,
-        &rest_base,
-        &mcp_url,
-        Some(fast_tx),
-    )
-    .await
-    .expect("Lulu ARAM Mayhem build should succeed");
+    let mayhem_query = BuildQuery::new(117, QUEUE_ARAM_MAYHEM)
+        .with_filters(None, None, None, Some("16.22"))
+        .with_endpoints(&rest_base, &mcp_url);
+    let mayhem_build = resolve_recommended_build(&client, &mayhem_query, &cache, Some(fast_tx))
+        .await
+        .expect("Lulu ARAM Mayhem build should succeed");
 
     let fast_mayhem = fast_rx.await.expect("Fast spells should be emitted");
     assert_eq!((fast_mayhem.spell1_id, fast_mayhem.spell2_id), (4, 7));
@@ -134,21 +125,12 @@ async fn test_lulu_aram_mayhem_filters_exhaust_in_fast_spells_and_full_build_whi
 
     // 2. Classic ARAM (450 / "ARAM"): Exhaust (3) remains allowed while listed in DataDragon "ARAM"
     let (fast_aram_tx, fast_aram_rx) = tokio::sync::oneshot::channel();
-    let aram_build = get_recommended_build_with_filters_and_endpoints_internal(
-        &client,
-        117,
-        QUEUE_ARAM,
-        None,
-        None,
-        None,
-        Some("16.22"),
-        &cache,
-        &rest_base,
-        &mcp_url,
-        Some(fast_aram_tx),
-    )
-    .await
-    .expect("Lulu Classic ARAM build should succeed");
+    let aram_query = BuildQuery::new(117, QUEUE_ARAM)
+        .with_filters(None, None, None, Some("16.22"))
+        .with_endpoints(&rest_base, &mcp_url);
+    let aram_build = resolve_recommended_build(&client, &aram_query, &cache, Some(fast_aram_tx))
+        .await
+        .expect("Lulu Classic ARAM build should succeed");
 
     let fast_aram = fast_aram_rx.await.expect("Fast spells should be emitted");
     assert_eq!((fast_aram.spell1_id, fast_aram.spell2_id), (4, 3));

@@ -178,22 +178,12 @@ async fn test_irelia_aram_mayhem_16_23_48h_fallback_tier_all_and_no_ap_troll_bui
     let mcp_url = format!("{}/mcp", mock_server.uri());
 
     // 1. With 48h protection enabled: defaults to tier=all and falls back from 16.23 (13h, 79 games) to 16.22
-    let protected = get_recommended_build_with_filters_and_endpoints_with_protection(
-        &client,
-        39,
-        QUEUE_ARAM_MAYHEM,
-        None,
-        None,
-        None,
-        None,
-        &cache,
-        &rest_base,
-        &mcp_url,
-        None,
-        true,
-    )
-    .await
-    .expect("Protected Irelia ARAM Mayhem build should succeed");
+    let protected_query = BuildQuery::new(39, QUEUE_ARAM_MAYHEM)
+        .with_endpoints(&rest_base, &mcp_url)
+        .with_patch_48h_protection(true);
+    let protected = resolve_recommended_build(&client, &protected_query, &cache, None)
+        .await
+        .expect("Protected Irelia ARAM Mayhem build should succeed");
 
     assert_eq!(protected.active_tier, "all");
     assert_eq!(protected.active_patch, "16.22");
@@ -206,22 +196,13 @@ async fn test_irelia_aram_mayhem_16_23_48h_fallback_tier_all_and_no_ap_troll_bui
     );
 
     // 2. Even on manual 16.23, play==1 AP troll build [6655, 3118, 4646] must never overtake [3153, 6610, 6333]
-    let manual_16_23 = get_recommended_build_with_filters_and_endpoints_with_protection(
-        &client,
-        39,
-        QUEUE_ARAM_MAYHEM,
-        None,
-        None,
-        None,
-        Some("16.23"),
-        &cache,
-        &rest_base,
-        &mcp_url,
-        None,
-        true,
-    )
-    .await
-    .expect("Manual 16.23 Irelia build should succeed");
+    let manual_query = BuildQuery::new(39, QUEUE_ARAM_MAYHEM)
+        .with_filters(None, None, None, Some("16.23"))
+        .with_endpoints(&rest_base, &mcp_url)
+        .with_patch_48h_protection(true);
+    let manual_16_23 = resolve_recommended_build(&client, &manual_query, &cache, None)
+        .await
+        .expect("Manual 16.23 Irelia build should succeed");
 
     assert_eq!(manual_16_23.active_patch, "16.23");
     assert_eq!(manual_16_23.item_blocks[1].item_ids, vec![3153, 6610, 6333]);
@@ -309,20 +290,12 @@ async fn test_aram_explicit_emerald_plus_falls_back_to_all_when_sample_under_100
     let rest_base = format!("{}/aram_tier_fb", mock_server.uri());
     let mcp_url = format!("{}/mcp", mock_server.uri());
 
-    let build = get_recommended_build_with_filters_and_endpoints(
-        &client,
-        39,
-        QUEUE_ARAM,
-        None,
-        Some("emerald_plus"),
-        None,
-        Some("16.22"),
-        &cache,
-        &rest_base,
-        &mcp_url,
-    )
-    .await
-    .expect("ARAM build should fall back from emerald_plus to all");
+    let query = BuildQuery::new(39, QUEUE_ARAM)
+        .with_filters(None, Some("emerald_plus"), None, Some("16.22"))
+        .with_endpoints(&rest_base, &mcp_url);
+    let build = resolve_recommended_build(&client, &query, &cache, None)
+        .await
+        .expect("ARAM build should fall back from emerald_plus to all");
 
     assert_eq!(build.active_tier, "all");
     assert_eq!(build.item_blocks[1].item_ids, vec![3153, 6610, 6333]);

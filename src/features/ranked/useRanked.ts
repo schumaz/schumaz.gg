@@ -15,11 +15,8 @@ import { computeOrderedSpells } from "../../utils/spells";
 export * from "./rankedStorage";
 
 export function useRanked(
-  isActive: boolean,
-  flashKey: FlashKeyPreference,
-  patch48hProtection: boolean,
-  locale: AppLocale = "pt_BR",
-  persistence?: UseRankedPersistenceOptions
+  isActive: boolean, flashKey: FlashKeyPreference, patch48hProtection: boolean,
+  locale: AppLocale = "pt_BR", persistence?: UseRankedPersistenceOptions
 ) {
   const onNavigationPatch = persistence?.onNavigationPatch;
   const [filters, setFilters] = useState<RankedFilters>(() =>
@@ -39,6 +36,7 @@ export function useRanked(
   const tierSeqRef = useRef(0);
   const buildSeqRef = useRef(0);
   const loadedCacheKeyRef = useRef<string | null>(null);
+  const staleBuildRef = useRef(false);
   const prevLocaleRef = useRef<AppLocale>(locale);
   const autoLaneRef = useRef(false);
   const hydratedIniRef = useRef(Boolean(persistence?.savedFilters));
@@ -47,10 +45,8 @@ export function useRanked(
 
   const persistFilters = useCallback(
     (next: RankedFilters) => onNavigationPatch?.({
-      rankedFilterRegion: next.region,
-      rankedFilterTier: next.tier,
-      rankedFilterLane: next.lane,
-      rankedFilterPatch: next.patch ?? "",
+      rankedFilterRegion: next.region, rankedFilterTier: next.tier,
+      rankedFilterLane: next.lane, rankedFilterPatch: next.patch ?? "",
     }),
     [onNavigationPatch]
   );
@@ -83,9 +79,7 @@ export function useRanked(
           setTierData(res);
         }
       } catch (err: unknown) {
-        if (tierSeqRef.current === seq) {
-          setTierError(typeof err === "string" ? err : translate(locale, "ranked.fetchTierListError"));
-        }
+        if (tierSeqRef.current === seq) setTierError(typeof err === "string" ? err : translate(locale, "ranked.fetchTierListError"));
       } finally {
         if (tierSeqRef.current === seq) setTierLoading(false);
       }
@@ -95,6 +89,7 @@ export function useRanked(
 
   const fetchChampionBuild = useCallback(
     async (champion: RankedChampionEntry, laneOverride: RankedLane | null, targetFilters: RankedFilters) => {
+      staleBuildRef.current = false;
       const seq = ++buildSeqRef.current;
       setBuildLoading(true);
       setBuildError(null);
@@ -109,9 +104,7 @@ export function useRanked(
           }
         }
       } catch (err: unknown) {
-        if (buildSeqRef.current === seq) {
-          setBuildError(typeof err === "string" ? err : translate(locale, "ranked.fetchBuildError"));
-        }
+        if (buildSeqRef.current === seq) setBuildError(typeof err === "string" ? err : translate(locale, "ranked.fetchBuildError"));
       } finally {
         if (buildSeqRef.current === seq) setBuildLoading(false);
       }
@@ -130,7 +123,11 @@ export function useRanked(
     if (!isActive) return;
     const key = buildRankedCacheKey(filters, patch48hProtection);
     if (loadedCacheKeyRef.current !== key && !tierError) fetchTierList(filters);
-  }, [isActive, filters, patch48hProtection, tierError, fetchTierList]);
+    if (staleBuildRef.current && selectedChampion) {
+      staleBuildRef.current = false;
+      fetchChampionBuild(selectedChampion, autoLaneRef.current ? null : selectedChampion.lane, filters);
+    }
+  }, [isActive, filters, patch48hProtection, tierError, selectedChampion, fetchTierList, fetchChampionBuild]);
 
   const handleTierListFilterChange = useCallback(
     (filterType: "position" | "tier" | "region" | "patch", value: string) => {
@@ -144,31 +141,30 @@ export function useRanked(
     [persistFilters]
   );
 
-  const selectChampion = useCallback(
-    (entry: RankedChampionEntry) => {
-      autoLaneRef.current = false;
-      setSelectedChampion(entry);
-      setChampionBuild(null);
-      setBuildError(null);
-      setSelectedRunePageIndex(0);
-      setSelectedBuildIndex(0);
-      fetchChampionBuild(entry, entry.lane, filters);
-    },
-    [filters, fetchChampionBuild]
-  );
-
-  const openChampionShortcut = useCallback(
-    (shortcut: RankedChampionShortcut) => {
-      const { entry, positionOverride } = resolveRankedShortcutEntry(shortcut, latestStateRef.current.tierData);
+  const openChampionWithLane = useCallback(
+    (entry: RankedChampionEntry, positionOverride: RankedLane | null, targetFilters: RankedFilters) => {
       autoLaneRef.current = positionOverride === null;
       setSelectedChampion(entry);
       setChampionBuild(null);
       setBuildError(null);
       setSelectedRunePageIndex(0);
       setSelectedBuildIndex(0);
-      fetchChampionBuild(entry, positionOverride, latestStateRef.current.filters);
+      fetchChampionBuild(entry, positionOverride, targetFilters);
     },
     [fetchChampionBuild]
+  );
+
+  const selectChampion = useCallback(
+    (entry: RankedChampionEntry) => openChampionWithLane(entry, entry.lane, filters),
+    [filters, openChampionWithLane]
+  );
+
+  const openChampionShortcut = useCallback(
+    (shortcut: RankedChampionShortcut) => {
+      const { entry, positionOverride } = resolveRankedShortcutEntry(shortcut, latestStateRef.current.tierData);
+      openChampionWithLane(entry, positionOverride, latestStateRef.current.filters);
+    },
+    [openChampionWithLane]
   );
 
   const selectChampionById = useCallback(
@@ -189,7 +185,7 @@ export function useRanked(
       setFilters(nextFilters);
       setTierError(null);
       if (currentChamp) {
-        const updatedChamp: RankedChampionEntry = nextLane !== currentChamp.lane ? { ...currentChamp, lane: nextLane } : currentChamp;
+        const updatedChamp = nextLane !== currentChamp.lane ? { ...currentChamp, lane: nextLane } : currentChamp;
         setSelectedChampion(updatedChamp);
         fetchChampionBuild(updatedChamp, autoLaneRef.current ? null : nextLane, nextFilters);
       }
@@ -200,14 +196,26 @@ export function useRanked(
   const clearSelectedChampion = useCallback(() => {
     buildSeqRef.current += 1;
     autoLaneRef.current = false;
+    staleBuildRef.current = false;
     setSelectedChampion(null);
     setChampionBuild(null);
     setBuildError(null);
     setBuildLoading(false);
   }, []);
 
-  const retryTierList = useCallback(() => fetchTierList(filters, true), [filters, fetchTierList]);
+  const invalidateCache = useCallback(() => {
+    tierCacheRef.current = {};
+    loadedCacheKeyRef.current = null;
+    tierSeqRef.current += 1;
+    buildSeqRef.current += 1;
+    staleBuildRef.current = Boolean(latestStateRef.current.selectedChampion);
+    setTierData(null);
+    setTierError(null);
+    setChampionBuild(null);
+    setBuildError(null);
+  }, []);
 
+  const retryTierList = useCallback(() => fetchTierList(filters, true), [filters, fetchTierList]);
   const retryChampionBuild = useCallback(() => {
     if (selectedChampion) fetchChampionBuild(selectedChampion, autoLaneRef.current ? null : selectedChampion.lane, filters);
   }, [selectedChampion, filters, fetchChampionBuild]);
@@ -218,10 +226,9 @@ export function useRanked(
     setFilters(nextFilters);
     loadedCacheKeyRef.current = null;
     setTierError(null);
-    if (isActive) {
-      fetchTierList(nextFilters, true);
-      if (selectedChampion) fetchChampionBuild(selectedChampion, autoLaneRef.current ? null : selectedChampion.lane, nextFilters);
-    }
+    if (!isActive) return;
+    fetchTierList(nextFilters, true);
+    if (selectedChampion) fetchChampionBuild(selectedChampion, autoLaneRef.current ? null : selectedChampion.lane, nextFilters);
   }, [filters, isActive, selectedChampion, fetchTierList, fetchChampionBuild, persistFilters]);
 
   const orderedSpells = useMemo(
@@ -234,5 +241,6 @@ export function useRanked(
     selectedRunePageIndex, selectedBuildIndex, orderedSpells, setSelectedRunePageIndex, setSelectedBuildIndex,
     handleTierListFilterChange, handleDetailFilterChange, selectChampion, openChampionShortcut,
     selectChampionById, clearSelectedChampion, retryTierList, retryChampionBuild, handlePatchProtectionChange,
+    invalidateCache,
   };
 }

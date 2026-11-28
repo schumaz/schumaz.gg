@@ -6,16 +6,24 @@ use std::time::Duration;
 use crate::build_provider::DDRAGON_BASE_URL;
 use crate::models::{AppLocale, DataDragonCache};
 
-static SKIN_NAME_CACHE: OnceLock<RwLock<HashMap<AppLocale, HashMap<i32, String>>>> =
-    OnceLock::new();
-static HYDRATED_SKIN_DIRS: OnceLock<RwLock<HashSet<(PathBuf, AppLocale)>>> = OnceLock::new();
-
-pub(crate) fn skin_cache() -> &'static RwLock<HashMap<AppLocale, HashMap<i32, String>>> {
-    SKIN_NAME_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+#[derive(Default)]
+struct SkinCacheState {
+    names: HashMap<AppLocale, HashMap<i32, String>>,
+    hydrated_dirs: HashSet<(PathBuf, AppLocale)>,
 }
 
-fn hydrated_skin_dirs() -> &'static RwLock<HashSet<(PathBuf, AppLocale)>> {
-    HYDRATED_SKIN_DIRS.get_or_init(|| RwLock::new(HashSet::new()))
+static SKIN_CACHE_STATE: OnceLock<RwLock<SkinCacheState>> = OnceLock::new();
+
+fn skin_cache_state() -> &'static RwLock<SkinCacheState> {
+    SKIN_CACHE_STATE.get_or_init(|| RwLock::new(SkinCacheState::default()))
+}
+
+/// Clears all localized skin names and hydrated directory markers from L1 RAM.
+pub fn clear_skins_ram_cache() {
+    if let Ok(mut guard) = skin_cache_state().write() {
+        guard.names.clear();
+        guard.hydrated_dirs.clear();
+    }
 }
 
 pub fn skins_file_path(dir: &Path, locale: AppLocale) -> PathBuf {
@@ -27,30 +35,22 @@ pub fn prewarm_skins_from_dir(dir: &Path, locale: AppLocale) -> usize {
     let loaded =
         crate::storage::read_lz4_envelope::<HashMap<i32, String>>(&path).map(|env| env.payload);
     let count = loaded.as_ref().map_or(0, HashMap::len);
-    if let Ok(mut guard) = skin_cache().write() {
-        let entry = guard.entry(locale).or_default();
+    if let Ok(mut guard) = skin_cache_state().write() {
+        let entry = guard.names.entry(locale).or_default();
         if let Some(payload) = loaded {
             for (k, v) in payload {
                 entry.entry(k).or_insert(v);
             }
         }
-    }
-    if let Ok(mut dirs) = hydrated_skin_dirs().write() {
-        dirs.insert((dir.to_path_buf(), locale));
+        guard.hydrated_dirs.insert((dir.to_path_buf(), locale));
     }
     count
 }
 
 fn is_skins_hydrated_for_dir(dir: &Path, locale: AppLocale) -> bool {
-    let cache_has_locale = skin_cache()
-        .read()
-        .ok()
-        .is_some_and(|g| g.contains_key(&locale));
-    cache_has_locale
-        && hydrated_skin_dirs()
-            .read()
-            .ok()
-            .is_some_and(|s| s.contains(&(dir.to_path_buf(), locale)))
+    skin_cache_state().read().ok().is_some_and(|g| {
+        g.names.contains_key(&locale) && g.hydrated_dirs.contains(&(dir.to_path_buf(), locale))
+    })
 }
 
 /// Hydrates `skins_{locale}.lz4` from `dir` into RAM at most once per `(dir, locale)`
@@ -73,8 +73,8 @@ pub fn lookup_cached_skin_name(locale: AppLocale, background_skin_id: i32) -> Op
     if background_skin_id <= 0 {
         return None;
     }
-    if let Ok(guard) = skin_cache().read()
-        && let Some(locale_map) = guard.get(&locale)
+    if let Ok(guard) = skin_cache_state().read()
+        && let Some(locale_map) = guard.names.get(&locale)
         && let Some(name) = locale_map.get(&background_skin_id)
     {
         return Some(name.clone());
@@ -83,10 +83,10 @@ pub fn lookup_cached_skin_name(locale: AppLocale, background_skin_id: i32) -> Op
 }
 
 fn save_skins_map_to_dir(dir: &Path, locale: AppLocale, version: &str) {
-    let snapshot = skin_cache()
+    let snapshot = skin_cache_state()
         .read()
         .ok()
-        .and_then(|g| g.get(&locale).cloned());
+        .and_then(|g| g.names.get(&locale).cloned());
     if let Some(map) = snapshot {
         let path = skins_file_path(dir, locale);
         let _ = crate::storage::write_lz4_envelope(&path, version, &map);
@@ -243,8 +243,9 @@ pub async fn fetch_skin_name_for_locale_with_base(
         raw_name.to_string()
     };
 
-    if let Ok(mut guard) = skin_cache().write() {
+    if let Ok(mut guard) = skin_cache_state().write() {
         guard
+            .names
             .entry(locale)
             .or_default()
             .insert(background_skin_id, formatted.clone());

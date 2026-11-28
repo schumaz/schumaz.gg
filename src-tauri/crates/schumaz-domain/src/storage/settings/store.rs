@@ -9,6 +9,7 @@ use super::{
     AppSettings, NavigationState, NavigationStatePatch, WindowSettings, clamp_profile_blur,
     validate_champion_tier_filter, validate_ranked_lane,
 };
+use crate::models::{AppLocale, UserPreferences};
 
 pub fn load_user_settings(ini_path: &Path) -> AppSettings {
     if ini_path.exists()
@@ -81,17 +82,13 @@ fn settings_lock() -> &'static RwLock<SettingsStore> {
     SETTINGS_STORE.get_or_init(|| RwLock::new(SettingsStore::default()))
 }
 
-pub fn init_global_settings(ini_path: PathBuf, settings: AppSettings) {
+pub fn init_global_settings(ini_path: PathBuf, mut settings: AppSettings) {
+    if let Some(lang) = settings.general.language {
+        settings.automation.language = lang;
+    }
     if let Ok(mut guard) = settings_lock().write() {
         guard.ini_path = Some(ini_path);
         guard.settings = settings;
-    }
-    if let Some(lang) = get_global_settings().general.language {
-        let mut prefs = get_global_settings().automation;
-        prefs.language = lang;
-        crate::lcu_injector::set_user_preferences(prefs);
-    } else {
-        crate::lcu_injector::set_user_preferences(get_global_settings().automation);
     }
 }
 
@@ -100,6 +97,47 @@ pub fn get_global_settings() -> AppSettings {
         .read()
         .map(|g| g.settings.clone())
         .unwrap_or_default()
+}
+
+/// Returns the active backend locale (`pt_BR` | `en_US`) from the unified `SettingsStore`.
+pub fn get_active_locale() -> AppLocale {
+    settings_lock()
+        .read()
+        .map(|g| {
+            g.settings
+                .general
+                .language
+                .unwrap_or(g.settings.automation.language)
+        })
+        .unwrap_or_default()
+}
+
+/// Updates the active backend locale (`pt_BR` | `en_US`) in the unified `SettingsStore` without disk I/O.
+pub fn set_active_locale(locale: AppLocale) {
+    if let Ok(mut guard) = settings_lock().write() {
+        guard.settings.automation.language = locale;
+        if guard.settings.general.language.is_some() {
+            guard.settings.general.language = Some(locale);
+        }
+    }
+}
+
+/// Retrieves a clone of the current user automation/injector preferences from the unified `SettingsStore`.
+pub fn get_user_preferences() -> UserPreferences {
+    settings_lock()
+        .read()
+        .map(|g| g.settings.automation.clone())
+        .unwrap_or_default()
+}
+
+/// Updates user preferences in the unified `SettingsStore` without disk I/O.
+pub fn set_user_preferences(prefs: UserPreferences) {
+    if let Ok(mut guard) = settings_lock().write() {
+        if guard.settings.general.language.is_some() {
+            guard.settings.general.language = Some(prefs.language);
+        }
+        guard.settings.automation = prefs;
+    }
 }
 
 pub fn update_global_settings<F>(mutator: F) -> Result<AppSettings, String>

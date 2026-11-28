@@ -10,7 +10,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
-struct RestAramChampionResponse {
+pub(super) struct RestAramChampionResponse {
     data: Vec<RestAramChampionItem>,
 }
 
@@ -159,13 +159,10 @@ pub(crate) fn merge_mcp_with_top_tier_supplement(
     merged
 }
 
-pub fn parse_classic_aram_champions(
-    json: &serde_json::Value,
+pub(super) fn parse_classic_aram_champions_from_resp(
+    parsed: RestAramChampionResponse,
     ddragon: &DataDragonCache,
-) -> Result<Vec<AramChampionRank>, String> {
-    let parsed: RestAramChampionResponse = serde_json::from_value(json.clone())
-        .map_err(|e| format!("Failed to parse classic ARAM response: {}", e))?;
-
+) -> Vec<AramChampionRank> {
     let mut champions: Vec<AramChampionRank> = parsed
         .data
         .into_iter()
@@ -217,7 +214,16 @@ pub fn parse_classic_aram_champions(
             .then_with(|| a.name.cmp(&b.name))
     });
 
-    Ok(champions)
+    champions
+}
+
+pub fn parse_classic_aram_champions(
+    json: &serde_json::Value,
+    ddragon: &DataDragonCache,
+) -> Result<Vec<AramChampionRank>, String> {
+    let parsed = RestAramChampionResponse::deserialize(json)
+        .map_err(|e| format!("Failed to parse classic ARAM response: {}", e))?;
+    Ok(parse_classic_aram_champions_from_resp(parsed, ddragon))
 }
 
 pub fn parse_aram_mayhem_champions_html(

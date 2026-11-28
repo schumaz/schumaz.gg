@@ -22,7 +22,10 @@ function isValidLocalCacheInfo(value: unknown): value is LocalCacheInfo {
   );
 }
 
-export function useLocalCache(enabled: boolean) {
+export function useLocalCache(
+  enabled: boolean,
+  onCacheCleared?: (scope: CacheClearScope) => void
+) {
   const [cacheInfo, setCacheInfo] = useState<LocalCacheInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -71,6 +74,7 @@ export function useLocalCache(enabled: boolean) {
       setStatus("idle");
       try {
         const info = await settingsIpc.clearLocalCache(scope);
+        onCacheCleared?.(scope);
         if (!isMountedRef.current) return;
         setCacheInfo(isValidLocalCacheInfo(info) ? info : EMPTY_CACHE_INFO);
         setStatus("cleared");
@@ -84,7 +88,7 @@ export function useLocalCache(enabled: boolean) {
         }
       }
     },
-    [clearing]
+    [clearing, onCacheCleared]
   );
 
   return {

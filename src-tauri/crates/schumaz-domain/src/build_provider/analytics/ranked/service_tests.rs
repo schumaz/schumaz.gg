@@ -1,5 +1,5 @@
-use super::cache::get_ranked_cache;
 use super::*;
+use crate::build_provider::cache::build_provider_caches;
 use crate::build_provider::patch::parse_iso8601_to_unix;
 use crate::models::ChampionMetadata;
 use std::collections::HashMap;
@@ -94,15 +94,19 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
     let ddragon = test_ddragon();
     let base_uri = format!("{}/ranked_48h", mock_server.uri());
 
-    let protected = fetch_ranked_tier_list_with_base(
+    let protected = fetch_ranked_tier_list_with_query(
         &client,
-        &base_uri,
-        Some("global"),
-        Some("emerald_plus"),
-        None,
+        &RankedTierQuery {
+            rest_base: &base_uri,
+            region: Some("global"),
+            tier: Some("emerald_plus"),
+            patch: None,
+            patch_48h_protection: true,
+            now_unix,
+            locale: AppLocale::EnUs,
+            ranked_dir: None,
+        },
         &ddragon,
-        true,
-        now_unix,
     )
     .await
     .unwrap();
@@ -112,15 +116,19 @@ async fn test_fetch_ranked_tier_list_applies_48h_patch_protection_and_manual_ove
     assert_eq!(protected.patch_protection_remaining_hours, Some(38));
     assert_eq!(protected.champions[0].tier, 0);
 
-    let manual = fetch_ranked_tier_list_with_base(
+    let manual = fetch_ranked_tier_list_with_query(
         &client,
-        &base_uri,
-        Some("global"),
-        Some("emerald_plus"),
-        Some("16.22"),
+        &RankedTierQuery {
+            rest_base: &base_uri,
+            region: Some("global"),
+            tier: Some("emerald_plus"),
+            patch: Some("16.22"),
+            patch_48h_protection: true,
+            now_unix,
+            locale: AppLocale::EnUs,
+            ranked_dir: None,
+        },
         &ddragon,
-        true,
-        now_unix,
     )
     .await
     .unwrap();
@@ -164,17 +172,19 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
     let now = crate::storage::now_unix_secs();
     let disk_base = format!("{}/ranked_disk", mock_server.uri());
 
-    let first = fetch_ranked_tier_list_with_base_and_dir(
+    let first = fetch_ranked_tier_list_with_query(
         &client,
-        &disk_base,
-        Some("global"),
-        Some("emerald_plus"),
-        None,
+        &RankedTierQuery {
+            rest_base: &disk_base,
+            region: Some("global"),
+            tier: Some("emerald_plus"),
+            patch: None,
+            patch_48h_protection: false,
+            now_unix: now,
+            locale: AppLocale::PtBr,
+            ranked_dir: Some(&dir),
+        },
         &dd,
-        false,
-        now,
-        AppLocale::PtBr,
-        Some(&dir),
     )
     .await
     .unwrap();
@@ -182,29 +192,27 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
     assert_eq!(first.active_patch, "16.25");
 
     // Clear RAM and verify disk hit with 0 network calls within 48h
-    if let Ok(mut g) = get_ranked_cache().write() {
-        g.clear();
-    }
-    let disk_hit = fetch_ranked_tier_list_with_base_and_dir(
+    build_provider_caches().ranked_tiers.clear_ram();
+    let disk_hit = fetch_ranked_tier_list_with_query(
         &client,
-        &disk_base,
-        Some("global"),
-        Some("emerald_plus"),
-        None,
+        &RankedTierQuery {
+            rest_base: &disk_base,
+            region: Some("global"),
+            tier: Some("emerald_plus"),
+            patch: None,
+            patch_48h_protection: false,
+            now_unix: now + 26 * 3600,
+            locale: AppLocale::PtBr,
+            ranked_dir: Some(&dir),
+        },
         &dd,
-        false,
-        now + 26 * 3600,
-        AppLocale::PtBr,
-        Some(&dir),
     )
     .await
     .unwrap();
     assert_eq!(disk_hit.champions[0].id, 103);
 
     // Now test Stale-While-Error when >48h expired and network returns 503
-    if let Ok(mut g) = get_ranked_cache().write() {
-        g.clear();
-    }
+    build_provider_caches().ranked_tiers.clear_ram();
     let offline = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/ranked_offline/global/champions/ranked"))
@@ -213,17 +221,19 @@ async fn test_ranked_tier_list_disk_cache_ttl_and_stale_while_error() {
         .await;
 
     let offline_base = format!("{}/ranked_offline", offline.uri());
-    let rescued = fetch_ranked_tier_list_with_base_and_dir(
+    let rescued = fetch_ranked_tier_list_with_query(
         &client,
-        &offline_base,
-        Some("global"),
-        Some("emerald_plus"),
-        None,
+        &RankedTierQuery {
+            rest_base: &offline_base,
+            region: Some("global"),
+            tier: Some("emerald_plus"),
+            patch: None,
+            patch_48h_protection: false,
+            now_unix: now + 49 * 3600,
+            locale: AppLocale::PtBr,
+            ranked_dir: Some(&dir),
+        },
         &dd,
-        false,
-        now + 49 * 3600,
-        AppLocale::PtBr,
-        Some(&dir),
     )
     .await
     .unwrap();

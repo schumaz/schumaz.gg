@@ -1,136 +1,111 @@
+use super::analytics::ChampionPositionsMap;
 use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_locale;
 use super::models::{ChampionBuild, DataDragonCache};
 use super::peek_latest_cached_opgg_version;
-use crate::models::{AppLocale, FlashKeyPreference};
-use std::collections::HashMap;
+use super::query::BuildQuery;
+use crate::models::{
+    AramAugmentEntry, AramChampionRank, ArenaTierListResponse, RankedTierListResponse,
+};
+use crate::storage::{CacheEnvelope, TieredCache};
 use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use std::sync::OnceLock;
+use std::time::Duration;
 
 pub(crate) const BUILD_CACHE_TTL: Duration = Duration::from_secs(600);
 
-type BuildCacheMap = HashMap<String, (Instant, ChampionBuild)>;
-
-static BUILD_CACHE: OnceLock<RwLock<BuildCacheMap>> = OnceLock::new();
-
-pub(crate) fn get_build_cache() -> &'static RwLock<BuildCacheMap> {
-    BUILD_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+/// Consolidated L1 RAM + L2 `.lz4` tiered caches + `Singleflight` coordinators for all build/tier-list data.
+#[derive(Default)]
+pub struct BuildProviderCaches {
+    pub builds: TieredCache<String, ChampionBuild>,
+    pub ranked_tiers: TieredCache<String, RankedTierListResponse>,
+    pub arena_versions: TieredCache<String, Vec<String>>,
+    pub arena_tiers: TieredCache<String, ArenaTierListResponse>,
+    pub arena_builds: TieredCache<String, ChampionBuild>,
+    pub aram_tiers: TieredCache<String, Vec<AramChampionRank>>,
+    pub aram_augments: TieredCache<String, Vec<AramAugmentEntry>>,
+    pub positions: TieredCache<String, ChampionPositionsMap>,
+    pub opgg_versions: TieredCache<String, Vec<String>>,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn build_cache_file_path(
-    dir: &Path,
-    champion_id: i32,
-    queue_id: i32,
-    pos: &str,
-    tier: &str,
-    region: &str,
-    manual_patch: &str,
-    patch_48h_protection: bool,
-    locale: AppLocale,
-) -> PathBuf {
+impl BuildProviderCaches {
+    /// Evicts every L1 RAM cache across builds, tier lists, augments, positions, and versions.
+    pub fn clear_all(&self) {
+        self.builds.clear_ram();
+        self.ranked_tiers.clear_ram();
+        self.arena_versions.clear_ram();
+        self.arena_tiers.clear_ram();
+        self.arena_builds.clear_ram();
+        self.aram_tiers.clear_ram();
+        self.aram_augments.clear_ram();
+        self.positions.clear_ram();
+        self.opgg_versions.clear_ram();
+    }
+}
+
+static BUILD_PROVIDER_CACHES: OnceLock<BuildProviderCaches> = OnceLock::new();
+
+/// Returns the single global registry of tiered caches for `build_provider`.
+pub fn build_provider_caches() -> &'static BuildProviderCaches {
+    BUILD_PROVIDER_CACHES.get_or_init(BuildProviderCaches::default)
+}
+
+pub fn build_cache_file_path_for(dir: &Path, query: &BuildQuery<'_>) -> PathBuf {
+    let pos = query.pos_cache_key();
+    let manual_patch = query.manual_patch_trimmed();
     let p_pos = crate::storage::sanitize_key_component(if pos.is_empty() { "auto" } else { pos });
-    let p_tier = crate::storage::sanitize_key_component(tier);
-    let p_reg = crate::storage::sanitize_key_component(region);
+    let p_tier = crate::storage::sanitize_key_component(query.target_tier());
+    let p_reg = crate::storage::sanitize_key_component(query.target_region());
     let p_pat = crate::storage::sanitize_key_component(if manual_patch.is_empty() {
         "auto"
     } else {
         manual_patch
     });
-    let prot = if patch_48h_protection { "p1" } else { "p0" };
+    let prot = if query.patch_48h_protection {
+        "p1"
+    } else {
+        "p0"
+    };
     dir.join(format!(
-        "build_{champion_id}_{queue_id}_{p_pos}_{p_tier}_{p_reg}_{p_pat}_{prot}_{}.lz4",
-        locale.as_str()
+        "build_{}_{}_{p_pos}_{p_tier}_{p_reg}_{p_pat}_{prot}_{}.lz4",
+        query.champion_id,
+        query.canonical_queue_id(),
+        query.locale.as_str()
     ))
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn make_build_cache_key(
-    locale: AppLocale,
-    rest_base: &str,
-    mcp_endpoint: &str,
-    champion_id: i32,
-    queue_id: i32,
-    pos_cache_key: &str,
-    target_tier: &str,
-    target_region: &str,
-    manual_patch: &str,
-    patch_48h_protection: bool,
-) -> String {
-    format!(
-        "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
-        locale.as_str(),
-        rest_base,
-        mcp_endpoint,
-        champion_id,
-        queue_id,
-        pos_cache_key,
-        target_tier,
-        target_region,
-        manual_patch,
-        patch_48h_protection
-    )
 }
 
 pub(crate) fn try_get_ram_cached_build(
     cache_key: &str,
-    queue_id: i32,
+    query: &BuildQuery<'_>,
     ddragon_cache: &DataDragonCache,
-    flash_key: FlashKeyPreference,
-    locale: AppLocale,
 ) -> Option<ChampionBuild> {
-    let guard = get_build_cache().read().ok()?;
-    let (ts, cached) = guard.get(cache_key)?;
-    if ts.elapsed() >= BUILD_CACHE_TTL {
-        return None;
-    }
-    let mut build = cached.clone();
+    let key = cache_key.to_string();
+    let entry = build_provider_caches()
+        .builds
+        .get_ram(&key, Some(BUILD_CACHE_TTL))?;
+    let mut build = entry.payload;
     enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
         &mut build,
         ddragon_cache,
-        flash_key,
-        locale,
-        Some(queue_id),
+        query.flash_key,
+        query.locale,
+        Some(query.canonical_queue_id()),
     );
     Some(build)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn load_disk_build_envelope(
-    builds_dir: Option<&Path>,
-    champion_id: i32,
-    queue_id: i32,
-    pos_cache_key: &str,
-    target_tier: &str,
-    target_region: &str,
-    manual_patch: &str,
-    patch_48h_protection: bool,
-    locale: AppLocale,
-) -> Option<crate::storage::CacheEnvelope<ChampionBuild>> {
-    builds_dir.and_then(|dir| {
-        let path = build_cache_file_path(
-            dir,
-            champion_id,
-            queue_id,
-            pos_cache_key,
-            target_tier,
-            target_region,
-            manual_patch,
-            patch_48h_protection,
-            locale,
-        );
-        crate::storage::read_lz4_envelope::<ChampionBuild>(&path)
+    query: &BuildQuery<'_>,
+) -> Option<CacheEnvelope<ChampionBuild>> {
+    query.builds_dir.and_then(|dir| {
+        let path = build_cache_file_path_for(dir, query);
+        build_provider_caches().builds.read_disk(&path)
     })
 }
 
 pub(crate) fn try_get_fresh_disk_build(
-    env: &crate::storage::CacheEnvelope<ChampionBuild>,
-    queue_id: i32,
-    target_region: &str,
-    manual_patch: &str,
+    env: &CacheEnvelope<ChampionBuild>,
+    query: &BuildQuery<'_>,
     ddragon_cache: &DataDragonCache,
-    flash_key: FlashKeyPreference,
-    locale: AppLocale,
 ) -> Option<ChampionBuild> {
     if !crate::storage::is_envelope_fresh(
         env.created_at_unix,
@@ -140,7 +115,8 @@ pub(crate) fn try_get_fresh_disk_build(
         return None;
     }
 
-    let known_latest = peek_latest_cached_opgg_version(target_region);
+    let manual_patch = query.manual_patch_trimmed();
+    let known_latest = peek_latest_cached_opgg_version(query.target_region());
     let patch_valid = if !manual_patch.is_empty() {
         env.patch == manual_patch
     } else if let Some(ref latest) = known_latest {
@@ -156,45 +132,29 @@ pub(crate) fn try_get_fresh_disk_build(
     enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
         &mut build,
         ddragon_cache,
-        flash_key,
-        locale,
-        Some(queue_id),
+        query.flash_key,
+        query.locale,
+        Some(query.canonical_queue_id()),
     );
     Some(build)
 }
 
-pub(crate) fn store_ram_cached_build(cache_key: String, build: &ChampionBuild) {
-    if let Ok(mut guard) = get_build_cache().write() {
-        guard.insert(cache_key, (Instant::now(), build.clone()));
-    }
+pub(crate) fn store_ram_cached_build(cache_key: String, patch: &str, build: &ChampionBuild) {
+    build_provider_caches()
+        .builds
+        .insert_ram(cache_key, patch, build.clone());
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn store_disk_build(
-    builds_dir: &Path,
-    champion_id: i32,
-    queue_id: i32,
-    pos_cache_key: &str,
-    target_tier: &str,
-    target_region: &str,
-    manual_patch: &str,
-    patch_48h_protection: bool,
-    locale: AppLocale,
+    dir: &Path,
+    query: &BuildQuery<'_>,
     effective_patch: &str,
     build: &ChampionBuild,
 ) {
-    let cache_file_path = build_cache_file_path(
-        builds_dir,
-        champion_id,
-        queue_id,
-        pos_cache_key,
-        target_tier,
-        target_region,
-        manual_patch,
-        patch_48h_protection,
-        locale,
-    );
-    let _ = crate::storage::write_lz4_envelope(&cache_file_path, effective_patch, build);
+    let cache_file_path = build_cache_file_path_for(dir, query);
+    let _ = build_provider_caches()
+        .builds
+        .write_disk(&cache_file_path, effective_patch, build);
 }
 
 #[cfg(test)]

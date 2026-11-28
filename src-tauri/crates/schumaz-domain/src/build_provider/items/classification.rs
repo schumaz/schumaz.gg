@@ -45,6 +45,13 @@ pub fn set_dynamic_item_classifications(cache: ItemClassificationCache) {
     }
 }
 
+/// Clears dynamic item classifications from L1 RAM.
+pub fn clear_dynamic_item_classifications() {
+    if let Ok(mut guard) = classification_store().write() {
+        *guard = None;
+    }
+}
+
 pub fn get_dynamic_item_classifications() -> Option<ItemClassificationCache> {
     classification_store()
         .read()

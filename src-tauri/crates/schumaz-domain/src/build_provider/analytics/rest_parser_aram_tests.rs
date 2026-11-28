@@ -1,7 +1,7 @@
 use super::*;
 use super::super::rest_extractors::infer_rest_damage_type;
 use crate::build_provider::items::{TEST_CLASSIFICATION_MUTEX, set_dynamic_item_classifications};
-use crate::build_provider::models::ItemClassificationCache;
+use crate::build_provider::models::{ItemClassificationCache, ItemStatEntry};
 
 #[test]
 fn test_real_opgg_aram_tristana_payload_blocks_options_and_spells() {

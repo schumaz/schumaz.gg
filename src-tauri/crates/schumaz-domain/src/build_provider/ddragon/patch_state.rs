@@ -9,55 +9,58 @@ use std::time::{Duration, Instant};
 pub(super) const DDRAGON_PATCH_RECHECK_INTERVAL: Duration =
     Duration::from_secs(crate::storage::VERSIONS_DISK_TTL_SECS);
 
-static LATEST_KNOWN_DDRAGON_VERSION: OnceLock<RwLock<Option<String>>> = OnceLock::new();
-static LAST_VERSION_CHECK_AT: OnceLock<RwLock<Option<Instant>>> = OnceLock::new();
-static DDRAGON_BG_IN_FLIGHT: OnceLock<RwLock<HashSet<AppLocale>>> = OnceLock::new();
-
-fn latest_known_version_store() -> &'static RwLock<Option<String>> {
-    LATEST_KNOWN_DDRAGON_VERSION.get_or_init(|| RwLock::new(None))
+#[derive(Default)]
+struct DdragonPatchState {
+    latest_known_version: Option<String>,
+    last_version_check_at: Option<Instant>,
+    bg_in_flight_locales: HashSet<AppLocale>,
 }
 
-fn last_version_check_store() -> &'static RwLock<Option<Instant>> {
-    LAST_VERSION_CHECK_AT.get_or_init(|| RwLock::new(None))
+static DDRAGON_PATCH_STATE: OnceLock<RwLock<DdragonPatchState>> = OnceLock::new();
+
+fn patch_state_store() -> &'static RwLock<DdragonPatchState> {
+    DDRAGON_PATCH_STATE.get_or_init(|| RwLock::new(DdragonPatchState::default()))
 }
 
-fn bg_in_flight_locales() -> &'static RwLock<HashSet<AppLocale>> {
-    DDRAGON_BG_IN_FLIGHT.get_or_init(|| RwLock::new(HashSet::new()))
+pub(super) fn clear_patch_state() {
+    if let Ok(mut guard) = patch_state_store().write() {
+        guard.latest_known_version = None;
+        guard.last_version_check_at = None;
+        guard.bg_in_flight_locales.clear();
+    }
 }
 
 pub(super) fn latest_known_ddragon_version() -> Option<String> {
-    latest_known_version_store()
+    patch_state_store()
         .read()
         .ok()
-        .and_then(|g| g.clone())
+        .and_then(|g| g.latest_known_version.clone())
 }
 
 pub(super) fn last_version_check_elapsed() -> Option<Duration> {
-    last_version_check_store()
+    patch_state_store()
         .read()
         .ok()
-        .and_then(|g| g.map(|ts| ts.elapsed()))
+        .and_then(|g| g.last_version_check_at.map(|ts| ts.elapsed()))
 }
 
 pub(super) fn record_latest_known_version(version: &str) {
-    if let Ok(mut guard) = latest_known_version_store().write() {
-        *guard = Some(version.to_string());
-    }
-    if let Ok(mut guard) = last_version_check_store().write() {
-        *guard = Some(Instant::now());
+    if let Ok(mut guard) = patch_state_store().write() {
+        guard.latest_known_version = Some(version.to_string());
+        guard.last_version_check_at = Some(Instant::now());
     }
 }
 
 pub(super) fn claim_bg_patch_check(locale: AppLocale) -> bool {
-    bg_in_flight_locales()
+    patch_state_store()
         .write()
-        .map(|mut set| set.insert(locale))
+        .map(|mut g| g.bg_in_flight_locales.insert(locale))
         .unwrap_or(false)
 }
 
 pub(super) fn release_bg_patch_check(locale: AppLocale) {
-    if let Ok(mut set) = bg_in_flight_locales().write() {
-        set.remove(&locale);
+    if let Ok(mut g) = patch_state_store().write() {
+        g.bg_in_flight_locales.remove(&locale);
     }
 }
 

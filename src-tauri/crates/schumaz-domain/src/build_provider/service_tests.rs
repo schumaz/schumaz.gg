@@ -138,20 +138,12 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
     let base_uri = format!("{}/aram_service_test", mock_server.uri());
     let mcp_url = format!("{}/mcp", mock_server.uri());
 
-    let mayhem_build = get_recommended_build_with_filters_and_endpoints(
-        &client,
-        18,
-        crate::models::QUEUE_ARAM_MAYHEM,
-        Some("top"),
-        None,
-        None,
-        Some("16.22"),
-        &cache,
-        &base_uri,
-        &mcp_url,
-    )
-    .await
-    .expect("ARAM Mayhem build should succeed");
+    let mayhem_query = BuildQuery::new(18, crate::models::QUEUE_ARAM_MAYHEM)
+        .with_filters(Some("top"), None, None, Some("16.22"))
+        .with_endpoints(&base_uri, &mcp_url);
+    let mayhem_build = resolve_recommended_build(&client, &mayhem_query, &cache, None)
+        .await
+        .expect("ARAM Mayhem build should succeed");
 
     assert_eq!(mayhem_build.active_position, "");
     assert!(!mayhem_build.supports_runes);
@@ -166,20 +158,12 @@ async fn test_aram_and_aram_mayhem_ignore_position_and_return_empty_active_posit
         vec![(4, 7), (4, 21)]
     );
 
-    let aram_build = get_recommended_build_with_filters_and_endpoints(
-        &client,
-        103,
-        crate::models::QUEUE_ARAM,
-        Some("mid"),
-        None,
-        None,
-        Some("16.22"),
-        &cache,
-        &base_uri,
-        &mcp_url,
-    )
-    .await
-    .expect("Classic ARAM build should succeed");
+    let aram_query = BuildQuery::new(103, crate::models::QUEUE_ARAM)
+        .with_filters(Some("mid"), None, None, Some("16.22"))
+        .with_endpoints(&base_uri, &mcp_url);
+    let aram_build = resolve_recommended_build(&client, &aram_query, &cache, None)
+        .await
+        .expect("Classic ARAM build should succeed");
 
     assert_eq!(aram_build.active_position, "");
     assert!(aram_build.supports_runes);
@@ -257,20 +241,9 @@ async fn test_fast_spells_channel_resolves_without_waiting_for_slow_mcp_and_avoi
 
     let started = Instant::now();
     let build_handle = tokio::spawn(async move {
-        get_recommended_build_with_filters_and_endpoints_internal(
-            &client,
-            18,
-            crate::models::QUEUE_ARAM,
-            None,
-            None,
-            None,
-            None,
-            &cache,
-            &base_uri,
-            &mcp_url,
-            Some(fast_tx),
-        )
-        .await
+        let query = BuildQuery::new(18, crate::models::QUEUE_ARAM)
+            .with_endpoints(&base_uri, &mcp_url);
+        resolve_recommended_build(&client, &query, &cache, Some(fast_tx)).await
     });
 
     let fast_spells = fast_rx

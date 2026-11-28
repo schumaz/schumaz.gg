@@ -17,15 +17,15 @@ fn round_pct(val: f64) -> f64 {
 }
 
 #[derive(Debug, Deserialize)]
-struct RestArenaTierListResponse {
+pub(super) struct RestArenaTierListResponse {
     #[serde(default)]
-    data: Vec<RestArenaChampionItem>,
+    pub(super) data: Vec<RestArenaChampionItem>,
     #[serde(default)]
-    meta: Option<RestArenaMeta>,
+    pub(super) meta: Option<RestArenaMeta>,
 }
 
 #[derive(Debug, Deserialize)]
-struct RestArenaMeta {
+pub(super) struct RestArenaMeta {
     #[serde(default)]
     version: Option<String>,
     #[serde(default)]
@@ -33,7 +33,7 @@ struct RestArenaMeta {
 }
 
 #[derive(Debug, Deserialize)]
-struct RestArenaChampionItem {
+pub(super) struct RestArenaChampionItem {
     id: i32,
     #[serde(default)]
     is_rip: bool,
@@ -76,22 +76,17 @@ struct ParsedArenaEntry {
     raw_win_rate: f64,
 }
 
-/// Parses OP.GG's `GET /api/global/champions/arena` response into a sorted Arena tier list.
-/// Skips disabled/RIP entries (`is_rip == true`), missing `average_stats`, and zero-play rows.
-pub fn parse_arena_tier_list(
-    json: &serde_json::Value,
+pub(super) fn parse_arena_tier_list_from_resp(
+    parsed: &RestArenaTierListResponse,
     ddragon: &DataDragonCache,
-) -> Result<Vec<ArenaChampionEntry>, String> {
-    let parsed: RestArenaTierListResponse = serde_json::from_value(json.clone())
-        .map_err(|e| format!("Failed to parse Arena tier list response: {}", e))?;
-
+) -> Vec<ArenaChampionEntry> {
     let mut items: Vec<ParsedArenaEntry> = Vec::with_capacity(parsed.data.len());
 
-    for champ in parsed.data {
+    for champ in &parsed.data {
         if champ.id <= 0 || champ.is_rip {
             continue;
         }
-        let Some(stats) = champ.average_stats else {
+        let Some(stats) = &champ.average_stats else {
             continue;
         };
         if stats.play <= 0 {
@@ -162,7 +157,7 @@ pub fn parse_arena_tier_list(
             .then_with(|| a.entry.name.cmp(&b.entry.name))
     });
 
-    Ok(items
+    items
         .into_iter()
         .enumerate()
         .map(|(idx, mut item)| {
@@ -171,28 +166,34 @@ pub fn parse_arena_tier_list(
             }
             item.entry
         })
-        .collect())
+        .collect()
 }
 
-/// Extracts `(meta.version, estimated_match_count)` from an Arena tier list JSON payload.
-pub(crate) fn extract_arena_meta_info(json: &serde_json::Value) -> (Option<String>, Option<u64>) {
-    let parsed: Result<RestArenaTierListResponse, _> = serde_json::from_value(json.clone());
-    match parsed {
-        Ok(resp) => {
-            let version = resp
-                .meta
-                .as_ref()
-                .and_then(|m| m.version.clone())
-                .filter(|v| !v.trim().is_empty());
-            let match_count = resp.meta.as_ref().and_then(|m| m.match_count).or_else(|| {
-                resp.data
-                    .iter()
-                    .filter(|c| !c.is_rip)
-                    .filter_map(|c| c.average_stats.as_ref().map(|s| s.play.max(0) as u64))
-                    .max()
-            });
-            (version, match_count)
-        }
-        Err(_) => (None, None),
-    }
+/// Parses OP.GG's `GET /api/global/champions/arena` response into a sorted Arena tier list without cloning `Value`.
+pub fn parse_arena_tier_list(
+    json: &serde_json::Value,
+    ddragon: &DataDragonCache,
+) -> Result<Vec<ArenaChampionEntry>, String> {
+    let parsed = RestArenaTierListResponse::deserialize(json)
+        .map_err(|e| format!("Failed to parse Arena tier list response: {}", e))?;
+    Ok(parse_arena_tier_list_from_resp(&parsed, ddragon))
+}
+
+/// Extracts `(meta.version, estimated_match_count)` from a typed Arena tier list response.
+pub(super) fn extract_arena_meta_from_resp(
+    resp: &RestArenaTierListResponse,
+) -> (Option<String>, Option<u64>) {
+    let version = resp
+        .meta
+        .as_ref()
+        .and_then(|m| m.version.clone())
+        .filter(|v| !v.trim().is_empty());
+    let match_count = resp.meta.as_ref().and_then(|m| m.match_count).or_else(|| {
+        resp.data
+            .iter()
+            .filter(|c| !c.is_rip)
+            .filter_map(|c| c.average_stats.as_ref().map(|s| s.play.max(0) as u64))
+            .max()
+    });
+    (version, match_count)
 }

@@ -1,9 +1,11 @@
 use super::{
-    arena_versions_file_path, fetch_arena_champion_build_with_base_and_dir,
-    fetch_arena_tier_list_with_base_and_dir, fetch_arena_versions_with_cache_dir,
+    ArenaBuildQuery, ArenaTierQuery, arena_versions_file_path,
+    fetch_arena_champion_build_with_query, fetch_arena_tier_list_with_query,
+    fetch_arena_versions_with_cache_dir,
 };
 use crate::build_provider::models::{ChampionMetadata, DataDragonCache, ItemBlockKind};
-use crate::build_provider::service::get_recommended_build_with_filters_and_endpoints_with_dir;
+use crate::build_provider::query::BuildQuery;
+use crate::build_provider::service::resolve_recommended_build;
 use crate::models::{AppLocale, QUEUE_ARENA};
 use serde_json::json;
 use std::collections::HashMap;
@@ -131,15 +133,18 @@ async fn test_arena_tier_list_fetches_caches_lz4_and_falls_back_stale_while_erro
     let dd = make_test_dd();
     let now = crate::storage::now_unix_secs();
 
-    let resp = fetch_arena_tier_list_with_base_and_dir(
+    let server_uri = server.uri();
+    let resp = fetch_arena_tier_list_with_query(
         &client,
-        &server.uri(),
-        None,
+        &ArenaTierQuery {
+            rest_base: &server_uri,
+            patch: None,
+            patch_48h_protection: true,
+            now_unix: now,
+            locale: AppLocale::PtBr,
+            arena_dir: Some(tmp_dir.as_path()),
+        },
         &dd,
-        true,
-        now,
-        AppLocale::PtBr,
-        Some(tmp_dir.as_path()),
     )
     .await
     .expect("arena tier list fetched");
@@ -150,15 +155,18 @@ async fn test_arena_tier_list_fetches_caches_lz4_and_falls_back_stale_while_erro
 
     // Offline server with expired TTL must still succeed via Stale-While-Error from `.lz4`
     let dead_server = MockServer::start().await;
-    let stale_resp = fetch_arena_tier_list_with_base_and_dir(
+    let dead_uri = dead_server.uri();
+    let stale_resp = fetch_arena_tier_list_with_query(
         &client,
-        &dead_server.uri(),
-        None,
+        &ArenaTierQuery {
+            rest_base: &dead_uri,
+            patch: None,
+            patch_48h_protection: true,
+            now_unix: now + crate::storage::OPGG_CACHE_TTL_SECS + 3600,
+            locale: AppLocale::PtBr,
+            arena_dir: Some(tmp_dir.as_path()),
+        },
         &dd,
-        true,
-        now + crate::storage::OPGG_CACHE_TTL_SECS + 3600,
-        AppLocale::PtBr,
-        Some(tmp_dir.as_path()),
     )
     .await
     .expect("stale-while-error fallback from disk");
@@ -240,23 +248,15 @@ async fn test_service_routes_arena_queue_without_fast_spells_or_runes() {
     let dd = make_test_dd();
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let build = get_recommended_build_with_filters_and_endpoints_with_dir(
-        &client,
-        350,
-        QUEUE_ARENA,
-        Some("mid"),
-        Some("emerald_plus"),
-        Some("global"),
-        None,
-        &dd,
-        &server.uri(),
-        "http://127.0.0.1:9/mcp",
-        Some(tx),
-        true,
-        Some(tmp_dir.as_path()),
-    )
-    .await
-    .expect("arena service build");
+    let server_uri = server.uri();
+    let query = BuildQuery::new(350, QUEUE_ARENA)
+        .with_filters(Some("mid"), Some("emerald_plus"), Some("global"), None)
+        .with_endpoints(&server_uri, "http://127.0.0.1:9/mcp")
+        .with_patch_48h_protection(true)
+        .with_builds_dir(Some(tmp_dir.as_path()));
+    let build = resolve_recommended_build(&client, &query, &dd, Some(tx))
+        .await
+        .expect("arena service build");
 
     assert!(!build.supports_runes);
     assert!(!build.supports_spells);
@@ -269,16 +269,19 @@ async fn test_service_routes_arena_queue_without_fast_spells_or_runes() {
 
     // Verify direct fetcher hits `.lz4` cache even if network fails later
     let dead_server = MockServer::start().await;
-    let cached = fetch_arena_champion_build_with_base_and_dir(
+    let dead_uri = dead_server.uri();
+    let cached = fetch_arena_champion_build_with_query(
         &client,
-        &dead_server.uri(),
-        350,
-        None,
+        &ArenaBuildQuery {
+            rest_base: &dead_uri,
+            champion_id: 350,
+            patch: None,
+            patch_48h_protection: true,
+            now_unix: crate::storage::now_unix_secs() + crate::storage::OPGG_CACHE_TTL_SECS + 3600,
+            locale: crate::storage::get_active_locale(),
+            arena_dir: Some(tmp_dir.as_path()),
+        },
         &dd,
-        true,
-        crate::storage::now_unix_secs() + crate::storage::OPGG_CACHE_TTL_SECS + 3600,
-        crate::lcu_injector::get_active_locale(),
-        Some(tmp_dir.as_path()),
     )
     .await
     .expect("stale-while-error arena champion build");

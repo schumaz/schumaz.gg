@@ -1,6 +1,6 @@
-use super::augments::fetch_aram_mayhem_augments_internal;
+use super::augments::{AramAugmentsQuery, fetch_aram_mayhem_augments_internal};
 use super::cache::aram_augments_file_path;
-use super::fetch_aram_tier_list_internal;
+use super::{AramTierQuery, fetch_aram_tier_list_internal};
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{
     AppLocale, AramAugmentEntry, AramMode, ArenaAugmentMetadata, ChampionMetadata,
@@ -103,16 +103,20 @@ async fn test_augments_mcp_primary_merges_html_top_tiers_and_survives_html_failu
         .mount(&server)
         .await;
 
+    let mcp_merged_url = format!("{}/mcp_merge", server.uri());
+    let html_merged_url = format!("{}/html_merge", server.uri());
     let merged = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &format!("{}/mcp_merge", server.uri()),
-        &format!("{}/html_merge", server.uri()),
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate",
+            mcp_endpoint: &mcp_merged_url,
+            web_base: &html_merged_url,
+            locale: AppLocale::PtBr,
+            aram_dir: None,
+            known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        None,
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
@@ -137,16 +141,20 @@ async fn test_augments_mcp_primary_merges_html_top_tiers_and_survives_html_failu
         .mount(&server)
         .await;
 
+    let mcp_survive_url = format!("{}/mcp_only_survive", server.uri());
+    let html_down_url = format!("{}/html_down", server.uri());
     let mcp_only = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &format!("{}/mcp_only_survive", server.uri()),
-        &format!("{}/html_down", server.uri()),
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate",
+            mcp_endpoint: &mcp_survive_url,
+            web_base: &html_down_url,
+            locale: AppLocale::PtBr,
+            aram_dir: None,
+            known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        None,
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
@@ -173,16 +181,16 @@ async fn test_augments_html_fallback_switch_and_stale_before_html() {
         .mount(&server)
         .await;
 
+    let mcp_no_html = format!("{}/mcp_no_html", server.uri());
+    let html_forbidden = format!("{}/html_forbidden", server.uri());
     let pure_mcp = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &format!("{}/mcp_no_html", server.uri()),
-        &format!("{}/html_forbidden", server.uri()),
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate", mcp_endpoint: &mcp_no_html, web_base: &html_forbidden,
+            locale: AppLocale::PtBr, aram_dir: None, known_latest: Some("16.25"),
+            html_fallback_enabled: false,
+        },
         &dd,
-        None,
-        Some("16.25"),
-        false,
     )
     .await
     .unwrap();
@@ -216,16 +224,15 @@ async fn test_augments_html_fallback_switch_and_stale_before_html() {
         .mount(&server)
         .await;
 
+    let mcp_down_stale = format!("{}/mcp_down_stale", server.uri());
     let rescued = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &format!("{}/mcp_down_stale", server.uri()),
-        &format!("{}/html_forbidden", server.uri()),
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate", mcp_endpoint: &mcp_down_stale, web_base: &html_forbidden,
+            locale: AppLocale::PtBr, aram_dir: Some(&dir), known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        Some(&dir),
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
@@ -255,23 +262,20 @@ async fn test_mayhem_tier_list_uses_rest_primary_and_isolates_html_fallback() {
         .mount(&server)
         .await;
 
+    let rest_primary = format!("{}/aram_rest_primary", server.uri());
+    let html_unused = format!("{}/mayhem_html_unused", server.uri());
     let primary = fetch_aram_tier_list_internal(
         &client,
-        AramMode::AramMayhem,
+        &AramTierQuery {
+            mode: AramMode::AramMayhem, aram_rest_url: &rest_primary, mayhem_web_url: &html_unused,
+            locale: AppLocale::PtBr, aram_dir: None, known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        &format!("{}/aram_rest_primary", server.uri()),
-        &format!("{}/mayhem_html_unused", server.uri()),
-        AppLocale::PtBr,
-        None,
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
-    assert_eq!(
-        (primary.len(), primary[0].id, primary[0].key.as_str()),
-        (1, 4, "twistedfate")
-    );
+    assert_eq!((primary.len(), primary[0].id, primary[0].key.as_str()), (1, 4, "twistedfate"));
 
     Mock::given(method("GET"))
         .and(path("/aram_rest_down_off"))
@@ -279,17 +283,16 @@ async fn test_mayhem_tier_list_uses_rest_primary_and_isolates_html_fallback() {
         .expect(1)
         .mount(&server)
         .await;
+    let rest_down_off = format!("{}/aram_rest_down_off", server.uri());
     assert!(
         fetch_aram_tier_list_internal(
             &client,
-            AramMode::AramMayhem,
+            &AramTierQuery {
+                mode: AramMode::AramMayhem, aram_rest_url: &rest_down_off, mayhem_web_url: &html_unused,
+                locale: AppLocale::PtBr, aram_dir: None, known_latest: Some("16.25"),
+                html_fallback_enabled: false,
+            },
             &dd,
-            &format!("{}/aram_rest_down_off", server.uri()),
-            &format!("{}/mayhem_html_unused", server.uri()),
-            AppLocale::PtBr,
-            None,
-            Some("16.25"),
-            false,
         )
         .await
         .is_err()
@@ -315,21 +318,18 @@ async fn test_mayhem_tier_list_uses_rest_primary_and_isolates_html_fallback() {
         .mount(&server)
         .await;
 
+    let rest_down_on = format!("{}/aram_rest_down_on", server.uri());
+    let html_fb = format!("{}/mayhem_html_fallback", server.uri());
     let fallback = fetch_aram_tier_list_internal(
         &client,
-        AramMode::AramMayhem,
+        &AramTierQuery {
+            mode: AramMode::AramMayhem, aram_rest_url: &rest_down_on, mayhem_web_url: &html_fb,
+            locale: AppLocale::PtBr, aram_dir: None, known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        &format!("{}/aram_rest_down_on", server.uri()),
-        &format!("{}/mayhem_html_fallback", server.uri()),
-        AppLocale::PtBr,
-        None,
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
-    assert_eq!(
-        (fallback.len(), fallback[0].id, fallback[0].tier),
-        (1, 4, 0)
-    );
+    assert_eq!((fallback.len(), fallback[0].id, fallback[0].tier), (1, 4, 0));
 }

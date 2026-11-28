@@ -1,11 +1,11 @@
-use super::augments::fetch_aram_mayhem_augments_internal;
+use super::augments::{AramAugmentsQuery, fetch_aram_mayhem_augments_internal};
 use super::cache::{
-    ARAM_CACHE_TTL, ARAM_MAYHEM_CACHE_TTL, CachedAramEntry, aram_augments_cache_key,
-    aram_augments_file_path, aram_disk_ttl_secs, aram_ram_ttl, aram_tier_cache_key,
-    aram_tier_file_path, get_augments_cache, get_tier_cache, is_aram_patch_compatible,
-    prewarm_aram_tier_lists_from_dir_at,
+    ARAM_CACHE_TTL, ARAM_MAYHEM_CACHE_TTL, aram_augments_cache_key, aram_augments_file_path,
+    aram_disk_ttl_secs, aram_ram_ttl, aram_tier_cache_key, aram_tier_file_path,
+    is_aram_patch_compatible, prewarm_aram_tier_lists_from_dir_at,
 };
-use super::{OPGG_ARAM_MAYHEM_WEB_URL, OPGG_ARAM_REST_URL, fetch_aram_tier_list_internal};
+use super::{AramTierQuery, OPGG_ARAM_MAYHEM_WEB_URL, OPGG_ARAM_REST_URL, fetch_aram_tier_list_internal};
+use crate::build_provider::cache::build_provider_caches;
 use crate::build_provider::models::DataDragonCache;
 use crate::models::{
     AppLocale, AramAugmentEntry, AramChampionRank, AramMode, ArenaAugmentMetadata, ChampionMetadata,
@@ -108,10 +108,8 @@ fn test_prewarm_aram_respects_72h_mayhem_ttl_48h_classic_ttl_and_patch_invalidat
         OPGG_ARAM_REST_URL,
         OPGG_ARAM_MAYHEM_WEB_URL,
     );
-    if let Ok(mut g) = get_tier_cache().write() {
-        g.remove(&classic_key);
-        g.remove(&mayhem_key);
-    }
+    build_provider_caches().aram_tiers.remove_ram(&classic_key);
+    build_provider_caches().aram_tiers.remove_ram(&mayhem_key);
 
     // Same patch (16.25) at 60h age -> only Mayhem is prewarmed (1 of 2)
     let warmed =
@@ -159,14 +157,16 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     let unused_html_url = format!("{}/unused_mayhem_html", mock_server.uri());
     let disk_hit = fetch_aram_tier_list_internal(
         &client,
-        AramMode::AramMayhem,
+        &AramTierQuery {
+            mode: AramMode::AramMayhem,
+            aram_rest_url: &rest_url,
+            mayhem_web_url: &unused_html_url,
+            locale: AppLocale::PtBr,
+            aram_dir: Some(&dir),
+            known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        &rest_url,
-        &unused_html_url,
-        AppLocale::PtBr,
-        Some(&dir),
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
@@ -175,14 +175,16 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     // Patch bumped to 16.26 -> invalidates BOTH RAM (60 min) and disk (72h), triggers REST (.expect(1))
     let refreshed = fetch_aram_tier_list_internal(
         &client,
-        AramMode::AramMayhem,
+        &AramTierQuery {
+            mode: AramMode::AramMayhem,
+            aram_rest_url: &rest_url,
+            mayhem_web_url: &unused_html_url,
+            locale: AppLocale::PtBr,
+            aram_dir: Some(&dir),
+            known_latest: Some("16.26"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        &rest_url,
-        &unused_html_url,
-        AppLocale::PtBr,
-        Some(&dir),
-        Some("16.26"),
-        true,
     )
     .await
     .unwrap();
@@ -224,14 +226,16 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     let aug_base = format!("{}/mayhem_ttl_aug", mock_server.uri());
     let aug_disk_hit = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &mcp_url,
-        &aug_base,
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate",
+            mcp_endpoint: &mcp_url,
+            web_base: &aug_base,
+            locale: AppLocale::PtBr,
+            aram_dir: Some(&dir),
+            known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        Some(&dir),
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
@@ -239,26 +243,24 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
 
     // Verify 40-minute-old RAM entry is still valid within 60-min Mayhem RAM TTL
     let ram_key = aram_augments_cache_key(AppLocale::PtBr, &mcp_url, &aug_base, "twistedfate");
-    if let Ok(mut g) = get_augments_cache().write() {
-        g.insert(
-            ram_key,
-            CachedAramEntry {
-                cached_at: Instant::now() - Duration::from_secs(40 * 60),
-                patch: "16.25".to_string(),
-                payload: cached_augs,
-            },
-        );
-    }
+    build_provider_caches().aram_augments.insert_ram_at(
+        ram_key,
+        Instant::now() - Duration::from_secs(40 * 60),
+        "16.25",
+        cached_augs,
+    );
     let aug_ram_hit = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &mcp_url,
-        &aug_base,
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate",
+            mcp_endpoint: &mcp_url,
+            web_base: &aug_base,
+            locale: AppLocale::PtBr,
+            aram_dir: Some(&dir),
+            known_latest: Some("16.25"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        Some(&dir),
-        Some("16.25"),
-        true,
     )
     .await
     .unwrap();
@@ -267,14 +269,16 @@ async fn test_mayhem_tier_and_augments_72h_disk_hit_and_patch_invalidation() {
     // Patch bump to 16.26 invalidates both RAM and disk -> hits MCP once
     let aug_refreshed = fetch_aram_mayhem_augments_internal(
         &client,
-        "Twisted Fate",
-        &mcp_url,
-        &aug_base,
-        AppLocale::PtBr,
+        &AramAugmentsQuery {
+            champion_key: "Twisted Fate",
+            mcp_endpoint: &mcp_url,
+            web_base: &aug_base,
+            locale: AppLocale::PtBr,
+            aram_dir: Some(&dir),
+            known_latest: Some("16.26"),
+            html_fallback_enabled: true,
+        },
         &dd,
-        Some(&dir),
-        Some("16.26"),
-        true,
     )
     .await
     .unwrap();

@@ -108,7 +108,10 @@ export const commands = {
 	completeFlashOnboarding: (flashKey: FlashKeyPreference) => __TAURI_INVOKE<AppSettings_Serialize>("complete_flash_onboarding", { flashKey }),
 	/**  Returns disk usage statistics for the local cache directory (`Cache/`). */
 	getLocalCacheInfo: () => __TAURI_INVOKE<LocalCacheInfo>("get_local_cache_info"),
-	/**  Deletes cached files under `Cache/` matching `scope` and returns refreshed usage statistics. */
+	/**
+	 *  Deletes cached files under `Cache/` matching `scope`, invalidates matching backend L1 RAM caches,
+	 *  emits `CacheCleared`, and returns refreshed usage statistics.
+	 */
 	clearLocalCache: (scope: CacheClearScope) => __TAURI_INVOKE<LocalCacheInfo>("clear_local_cache", { scope }),
 	/**  Builds a sanitized local diagnostic summary without exposing credentials, paths, or PII. */
 	getDiagnosticSummary: () => __TAURI_INVOKE<DiagnosticSummary_Serialize>("get_diagnostic_summary"),
@@ -125,6 +128,7 @@ export const commands = {
 export const events = {
 	bootstrapProgress: makeEvent<BootstrapProgress, BootstrapProgress>("bootstrap-progress"),
 	buildInjected: makeEvent<BuildInjected, BuildInjected>("build-injected"),
+	cacheCleared: makeEvent<CacheCleared, CacheCleared>("cache-cleared"),
 	champSelectEnded: makeEvent<ChampSelectEnded, ChampSelectEnded>("champ-select-ended"),
 	champSelectReconciled: makeEvent<ChampSelectReconciled_Serialize, ChampSelectReconciled_Deserialize>("champ-select-reconciled"),
 	champSelected: makeEvent<ChampSelected_Serialize, ChampSelected_Deserialize>("champ-selected"),
@@ -451,6 +455,9 @@ export type BuildInjected = InjectionReport;
 
 /**  Target subset when clearing local cache from Settings. */
 export type CacheClearScope = "builds" | "images" | "all";
+
+/**  Emitted after local caches are cleared so frontend hooks invalidate their in-memory caches. */
+export type CacheCleared = CacheClearScope;
 
 /**  Cached profile envelope returned by `get_cached_player_profile` for instant startup & SWR. */
 export type CachedProfileResult = CachedProfileResult_Serialize | CachedProfileResult_Deserialize;

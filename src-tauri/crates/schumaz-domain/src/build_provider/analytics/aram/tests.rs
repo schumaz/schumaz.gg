@@ -1,5 +1,6 @@
-use super::cache::{get_augments_cache, rehydrate_aram_augments, rehydrate_aram_names};
+use super::cache::{rehydrate_aram_augments, rehydrate_aram_names};
 use super::*;
+use crate::build_provider::cache::build_provider_caches;
 use crate::models::{AramAugmentEntry, ArenaAugmentMetadata, ChampionMetadata};
 use std::collections::HashMap;
 use wiremock::matchers::{body_string_contains, method, path};
@@ -254,9 +255,7 @@ async fn test_aram_augments_disk_cache_backfills_blank_desc_and_stale_while_erro
     assert_eq!(res1[0].name, "Coice");
     assert_eq!(res1[0].desc, "Dano extra.");
 
-    if let Ok(mut g) = get_augments_cache().write() {
-        g.clear();
-    }
+    build_provider_caches().aram_augments.clear_ram();
     let mut legacy = res1.clone();
     legacy[0].icon_url = "https://legacy-cdn.example/recoil.png".to_string();
     crate::storage::write_lz4_envelope_at(&file_path, "16.25", &legacy, 1).unwrap();

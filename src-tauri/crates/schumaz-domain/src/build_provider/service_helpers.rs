@@ -1,11 +1,12 @@
 use super::analytics::{
-    fetch_opgg_rest_champion_analysis_from_base, get_recommended_build_with_endpoint,
+    fetch_opgg_rest_champion_analysis_req, get_recommended_build_with_endpoint,
 };
 use super::ddragon::enrich_build_with_ddragon_for_queue_with_flash_key_and_locale;
-use super::models::{ChampionBuild, DataDragonCache, ItemStatEntry};
+use super::models::{ChampionBuild, DataDragonCache};
 use super::patch::{extract_patch_trend_timestamps, resolve_effective_patch};
+use super::query::{BuildQuery, RestAnalysisRequest};
 use super::spells::{ddragon_mode_for_queue, extract_summoner_spell_pairs_for_mode};
-use crate::models::{AppLocale, FlashKeyPreference, queue_supports_spells};
+use crate::models::queue_supports_spells;
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,60 +115,21 @@ pub(super) fn send_build_fast_spells(
     }
 }
 
-pub(super) fn merge_mcp_depth_into_json(
-    json_res: &mut serde_json::Value,
-    target_position: Option<&String>,
-    mcp_depth_opt: Option<(Vec<ItemStatEntry>, Vec<ItemStatEntry>, Vec<ItemStatEntry>)>,
-) {
-    let Some(data_obj) = json_res.get_mut("data").and_then(|d| d.as_object_mut()) else {
-        return;
-    };
-    if let Some(pos) = target_position {
-        data_obj.insert("position".to_string(), serde_json::json!(pos));
-    }
-    let Some((fourth, fifth, sixth)) = mcp_depth_opt else {
-        return;
-    };
-    let to_json_arr = |entries: Vec<ItemStatEntry>| -> serde_json::Value {
-        serde_json::Value::Array(
-            entries
-                .into_iter()
-                .map(|e| {
-                    serde_json::json!({
-                        "ids": e.ids, "play": e.play, "win": e.win, "pick_rate": e.pick_rate
-                    })
-                })
-                .collect(),
-        )
-    };
-    if !fourth.is_empty() {
-        data_obj.insert("fourth_items".to_string(), to_json_arr(fourth));
-    }
-    if !fifth.is_empty() {
-        data_obj.insert("fifth_items".to_string(), to_json_arr(fifth));
-    }
-    if !sixth.is_empty() {
-        data_obj.insert("sixth_items".to_string(), to_json_arr(sixth));
-    }
-}
-
 pub(super) fn spawn_lane_roster_lookup(
     client: &reqwest::Client,
-    rest_base: &str,
+    query: &BuildQuery<'_>,
     target_position: Option<&String>,
-    target_region: &str,
-    target_tier: &str,
     version: Option<&str>,
 ) -> Option<tokio::task::JoinHandle<Option<std::collections::HashSet<i32>>>> {
     let lane = target_position?.clone();
     let (c, base, reg, tier, ver) = (
         client.clone(),
-        rest_base.to_string(),
-        target_region.to_string(),
-        target_tier.to_string(),
+        query.rest_base.to_string(),
+        query.target_region().to_string(),
+        query.target_tier().to_string(),
         version.map(str::to_string),
     );
-    let pos_dir = (rest_base == super::analytics::OPGG_REST_API_BASE)
+    let pos_dir = (query.rest_base == super::analytics::OPGG_REST_API_BASE)
         .then(|| crate::storage::global_paths().map(|p| p.opgg_positions_dir.to_path_buf()))
         .flatten();
     Some(tokio::spawn(async move {
@@ -178,35 +140,33 @@ pub(super) fn spawn_lane_roster_lookup(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn fetch_rest_with_patch_protection(
     client: &reqwest::Client,
-    rest_base: &str,
-    target_region: &str,
+    query: &BuildQuery<'_>,
     mode: &str,
-    champion_id: i32,
     target_position: Option<&str>,
-    target_tier: &str,
-    manual_patch_trimmed: &str,
     available_versions: &[String],
     mut effective_patch: String,
-    patch_48h_protection: bool,
 ) -> RestFetchOutcome {
-    let mut effective_tier = target_tier.to_string();
+    let target_region = query.target_region();
+    let mut effective_tier = query.target_tier().to_string();
+    let manual_patch_trimmed = query.manual_patch_trimmed();
     let mut patch_fallback_applied = false;
     let mut patch_protection_remaining_hours = None;
     let now_unix = crate::storage::now_unix_secs();
 
     let mut result = if manual_patch_trimmed.is_empty() {
-        let probe_res = fetch_opgg_rest_champion_analysis_from_base(
+        let probe_res = fetch_opgg_rest_champion_analysis_req(
             client,
-            rest_base,
-            target_region,
-            mode,
-            champion_id,
-            target_position,
-            &effective_tier,
-            Some(&effective_patch),
+            &RestAnalysisRequest {
+                rest_base: query.rest_base,
+                region: target_region,
+                mode,
+                champion_id: query.champion_id,
+                position: target_position,
+                tier: &effective_tier,
+                version: Some(&effective_patch),
+            },
         )
         .await;
         match probe_res {
@@ -226,21 +186,23 @@ pub(super) async fn fetch_rest_with_patch_protection(
                     play_count,
                     now_unix,
                     None,
-                    patch_48h_protection,
+                    query.patch_48h_protection,
                 );
                 effective_patch = selection.effective_patch;
                 patch_fallback_applied = selection.fallback_applied;
                 patch_protection_remaining_hours = selection.remaining_hours;
                 if patch_fallback_applied {
-                    fetch_opgg_rest_champion_analysis_from_base(
+                    fetch_opgg_rest_champion_analysis_req(
                         client,
-                        rest_base,
-                        target_region,
-                        mode,
-                        champion_id,
-                        target_position,
-                        &effective_tier,
-                        Some(&effective_patch),
+                        &RestAnalysisRequest {
+                            rest_base: query.rest_base,
+                            region: target_region,
+                            mode,
+                            champion_id: query.champion_id,
+                            position: target_position,
+                            tier: &effective_tier,
+                            version: Some(&effective_patch),
+                        },
                     )
                     .await
                 } else {
@@ -250,15 +212,17 @@ pub(super) async fn fetch_rest_with_patch_protection(
             Err(e) => Err(e),
         }
     } else {
-        fetch_opgg_rest_champion_analysis_from_base(
+        fetch_opgg_rest_champion_analysis_req(
             client,
-            rest_base,
-            target_region,
-            mode,
-            champion_id,
-            target_position,
-            &effective_tier,
-            Some(&effective_patch),
+            &RestAnalysisRequest {
+                rest_base: query.rest_base,
+                region: target_region,
+                mode,
+                champion_id: query.champion_id,
+                position: target_position,
+                tier: &effective_tier,
+                version: Some(&effective_patch),
+            },
         )
         .await
     };
@@ -275,15 +239,17 @@ pub(super) async fn fetch_rest_with_patch_protection(
         };
 
         if needs_broader_sample
-            && let Ok(all_json) = fetch_opgg_rest_champion_analysis_from_base(
+            && let Ok(all_json) = fetch_opgg_rest_champion_analysis_req(
                 client,
-                rest_base,
-                target_region,
-                mode,
-                champion_id,
-                target_position,
-                "all",
-                Some(&effective_patch),
+                &RestAnalysisRequest {
+                    rest_base: query.rest_base,
+                    region: target_region,
+                    mode,
+                    champion_id: query.champion_id,
+                    position: target_position,
+                    tier: "all",
+                    version: Some(&effective_patch),
+                },
             )
             .await
         {
@@ -305,35 +271,31 @@ pub(super) async fn fetch_rest_with_patch_protection(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn resolve_build_fallback(
     client: &reqwest::Client,
-    mcp_endpoint: &str,
-    champion_id: i32,
-    queue_id: i32,
+    query: &BuildQuery<'_>,
     ddragon_cache: &DataDragonCache,
-    flash_key: FlashKeyPreference,
-    active_locale: AppLocale,
     disk_env: Option<crate::storage::CacheEnvelope<ChampionBuild>>,
     fast_spells_tx: &mut Option<tokio::sync::oneshot::Sender<FastSpellRecommendation>>,
 ) -> FallbackBuild {
+    let queue_id = query.canonical_queue_id();
     if let Some(env) = disk_env {
         let mut stale = env.payload;
         enrich_build_with_ddragon_for_queue_with_flash_key_and_locale(
             &mut stale,
             ddragon_cache,
-            flash_key,
-            active_locale,
+            query.flash_key,
+            query.locale,
             Some(queue_id),
         );
-        send_build_fast_spells(fast_spells_tx, champion_id, &stale);
+        send_build_fast_spells(fast_spells_tx, query.champion_id, &stale);
         return FallbackBuild::Stale(stale);
     }
     FallbackBuild::Mcp(
         get_recommended_build_with_endpoint(
             client,
-            mcp_endpoint,
-            champion_id,
+            query.mcp_endpoint,
+            query.champion_id,
             queue_id,
             ddragon_cache,
         )

@@ -12,6 +12,7 @@ import {
   buildArenaCacheKey,
   loadSavedArenaFilters,
   saveArenaFilters,
+  synergyToArenaChampionEntry,
 } from "./arenaStorage";
 
 export * from "./arenaStorage";
@@ -38,6 +39,7 @@ export function useArena(
   const tierSeqRef = useRef(0);
   const buildSeqRef = useRef(0);
   const loadedCacheKeyRef = useRef<string | null>(null);
+  const staleBuildRef = useRef(false);
   const prevLocaleRef = useRef<AppLocale>(locale);
   const selectedChampionRef = useRef<ArenaChampionEntry | null>(selectedChampion);
   selectedChampionRef.current = selectedChampion;
@@ -84,6 +86,7 @@ export function useArena(
 
   const fetchChampionBuild = useCallback(
     async (champion: ArenaChampionEntry, targetFilters: ArenaFilters) => {
+      staleBuildRef.current = false;
       const seq = ++buildSeqRef.current;
       setBuildLoading(true);
       setBuildError(null);
@@ -119,7 +122,11 @@ export function useArena(
     if (loadedCacheKeyRef.current !== key && !tierError) {
       void fetchTierList(filters);
     }
-  }, [isActive, filters, patch48hProtection, locale, tierError, fetchTierList]);
+    if (staleBuildRef.current && selectedChampionRef.current) {
+      staleBuildRef.current = false;
+      void fetchChampionBuild(selectedChampionRef.current, filters);
+    }
+  }, [isActive, filters, patch48hProtection, locale, tierError, fetchTierList, fetchChampionBuild]);
 
   const handlePatchChange = useCallback((value: string) => {
     const normalized = value.trim();
@@ -151,22 +158,9 @@ export function useArena(
       const fromSynergy = championBuildRef.current?.arena_synergies?.find(
         (syn) => syn.champion_id === championId
       );
-      if (!fromSynergy) return;
-
-      selectChampion({
-        id: fromSynergy.champion_id,
-        key: fromSynergy.key,
-        name: fromSynergy.name,
-        icon_url: fromSynergy.icon_url,
-        tier: 0,
-        rank: 0,
-        win_rate: fromSynergy.win_rate ?? null,
-        first_place_rate: fromSynergy.first_place_rate ?? null,
-        avg_placement: fromSynergy.avg_placement ?? null,
-        pick_rate: fromSynergy.pick_rate ?? null,
-        ban_rate: null,
-        play: fromSynergy.play ?? null,
-      });
+      if (fromSynergy) {
+        selectChampion(synergyToArenaChampionEntry(fromSynergy));
+      }
     },
     [selectChampion]
   );
@@ -189,10 +183,23 @@ export function useArena(
 
   const clearSelectedChampion = useCallback(() => {
     buildSeqRef.current += 1;
+    staleBuildRef.current = false;
     setSelectedChampion(null);
     setChampionBuild(null);
     setBuildError(null);
     setBuildLoading(false);
+  }, []);
+
+  const invalidateCache = useCallback(() => {
+    tierCacheRef.current = {};
+    loadedCacheKeyRef.current = null;
+    tierSeqRef.current += 1;
+    buildSeqRef.current += 1;
+    staleBuildRef.current = Boolean(selectedChampionRef.current);
+    setTierData(null);
+    setTierError(null);
+    setChampionBuild(null);
+    setBuildError(null);
   }, []);
 
   const retryTierList = useCallback(
@@ -221,23 +228,9 @@ export function useArena(
   }, [isActive, fetchTierList, fetchChampionBuild]);
 
   return {
-    filters,
-    tierData,
-    tierLoading,
-    tierError,
-    selectedChampion,
-    championBuild,
-    buildLoading,
-    buildError,
-    selectedBuildIndex,
-    setSelectedBuildIndex,
-    handlePatchChange,
-    handleDetailFilterChange,
-    selectChampion,
-    selectChampionById,
-    clearSelectedChampion,
-    retryTierList,
-    retryChampionBuild,
-    handlePatchProtectionChange,
+    filters, tierData, tierLoading, tierError, selectedChampion, championBuild, buildLoading, buildError,
+    selectedBuildIndex, setSelectedBuildIndex, handlePatchChange, handleDetailFilterChange, selectChampion,
+    selectChampionById, clearSelectedChampion, retryTierList, retryChampionBuild, handlePatchProtectionChange,
+    invalidateCache,
   };
 }

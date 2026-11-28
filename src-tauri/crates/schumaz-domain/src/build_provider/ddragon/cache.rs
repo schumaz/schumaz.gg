@@ -26,6 +26,14 @@ pub fn get_ddragon_cache_store() -> &'static RwLock<HashMap<AppLocale, Arc<DataD
     DDRAGON_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
+/// Clears all DataDragon entries and patch metadata from L1 RAM.
+pub fn clear_ddragon_ram_cache() {
+    if let Ok(mut guard) = get_ddragon_cache_store().write() {
+        guard.clear();
+    }
+    super::patch_state::clear_patch_state();
+}
+
 fn get_ddragon_fetch_mutex() -> &'static tokio::sync::Mutex<()> {
     DDRAGON_FETCH_MUTEX.get_or_init(|| tokio::sync::Mutex::new(()))
 }

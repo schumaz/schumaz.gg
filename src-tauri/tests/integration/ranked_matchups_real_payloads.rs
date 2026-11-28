@@ -1,8 +1,8 @@
 use schumazgg_lib::build_provider::{
-    ChampionBuild, ChampionMetadata, DataDragonCache,
+    BuildQuery, ChampionBuild, ChampionMetadata, DataDragonCache,
     enrich_build_with_ddragon_for_queue_with_flash_key_and_locale, extract_lane_champion_roster,
-    get_recommended_build_with_filters_and_endpoints, parse_opgg_analysis_payload_for_mode_and_roster,
-    parse_opgg_champion_positions_ranking,
+    parse_opgg_analysis_payload_for_mode_and_roster, parse_opgg_champion_positions_ranking,
+    resolve_recommended_build,
 };
 use schumazgg_lib::lcu_injector::FlashKeyPreference;
 use schumazgg_lib::models::{AppLocale, QUEUE_ARAM, QUEUE_SOLO_DUO};
@@ -185,22 +185,22 @@ async fn test_end_to_end_service_filters_ahri_mid_and_top_matchups_via_wiremock(
     let rest_base = format!("{}/e2e", mock_server.uri());
     let mcp_url = format!("{}/mcp", mock_server.uri());
 
-    let mid_build = get_recommended_build_with_filters_and_endpoints(
-        &client, 103, QUEUE_SOLO_DUO, Some("mid"), Some("emerald_plus"), Some("global"), Some("16.23"),
-        &dd, &rest_base, &mcp_url,
-    )
-    .await
-    .expect("Ahri Mid e2e build");
+    let mid_query = BuildQuery::new(103, QUEUE_SOLO_DUO)
+        .with_filters(Some("mid"), Some("emerald_plus"), Some("global"), Some("16.23"))
+        .with_endpoints(&rest_base, &mcp_url);
+    let mid_build = resolve_recommended_build(&client, &mid_query, &dd, None)
+        .await
+        .expect("Ahri Mid e2e build");
     let mid_m = mid_build.lane_matchups.expect("Ahri Mid matchups");
     assert_eq!(mid_m.hard.iter().map(|m| m.champion_id).collect::<Vec<_>>(), vec![1, 800, 105, 142, 893]);
     assert_eq!(mid_m.favorable.iter().map(|m| m.champion_id).collect::<Vec<_>>(), vec![268, 3, 777, 39, 34]);
 
-    let top_build = get_recommended_build_with_filters_and_endpoints(
-        &client, 103, QUEUE_SOLO_DUO, Some("top"), Some("emerald_plus"), Some("global"), Some("16.23"),
-        &dd, &rest_base, &mcp_url,
-    )
-    .await
-    .expect("Ahri Top e2e build");
+    let top_query = BuildQuery::new(103, QUEUE_SOLO_DUO)
+        .with_filters(Some("top"), Some("emerald_plus"), Some("global"), Some("16.23"))
+        .with_endpoints(&rest_base, &mcp_url);
+    let top_build = resolve_recommended_build(&client, &top_query, &dd, None)
+        .await
+        .expect("Ahri Top e2e build");
     let top_m = top_build.lane_matchups.expect("Ahri Top matchups");
     assert_eq!(top_m.hard.iter().map(|m| m.champion_id).collect::<Vec<_>>(), vec![6, 904, 86, 36, 516]);
     assert_eq!(top_m.favorable.iter().map(|m| m.champion_id).collect::<Vec<_>>(), vec![106, 420, 897, 85, 82]);

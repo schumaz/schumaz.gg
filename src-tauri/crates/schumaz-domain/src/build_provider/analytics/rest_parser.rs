@@ -1,30 +1,10 @@
-use super::super::items::{
-    build_5_item_blocks_with_cls, build_unified_build_options_with_cls,
-    resolve_classifications_for_ddragon, resolve_tear_item_ids_in,
-    resolve_tear_to_completed_item_in,
-};
-use super::super::models::{ChampionBuild, DataDragonCache, ItemStatEntry, SpellMetadata};
+use super::super::models::{ChampionBuild, SpellMetadata};
 use super::super::spells::extract_summoner_spell_pairs_for_mode;
-use super::mcp_extractors::parse_json_item_entries;
 use super::mcp_parser::parse_opgg_mcp_text_for_mode_with_ddragon;
-use super::rest_extractors::{
-    extract_primary_champion_role, extract_rest_runes_and_pages, extract_rest_tier,
-    extract_rest_win_and_pick_rates, infer_damage_type_with_cls,
-};
+use super::rest_extractors::{extract_rest_runes_and_pages, extract_rest_tier, extract_rest_win_and_pick_rates};
+pub use super::rest_parser_items::{McpDepthItems, RestAnalysisParseOptions};
+use super::rest_parser_items::assemble_analysis_items;
 use std::collections::{HashMap, HashSet};
-
-fn json_has_explicit_play_stats(val: Option<&serde_json::Value>) -> bool {
-    match val {
-        Some(serde_json::Value::Array(arr)) => arr.iter().any(|elem| {
-            elem.as_object()
-                .and_then(|obj| obj.get("play"))
-                .and_then(|p| p.as_i64())
-                .is_some()
-        }),
-        Some(serde_json::Value::Object(obj)) => obj.get("play").and_then(|p| p.as_i64()).is_some(),
-        _ => false,
-    }
-}
 
 pub fn parse_opgg_analysis_payload(
     opgg_json: &serde_json::Value,
@@ -40,7 +20,14 @@ pub fn parse_opgg_analysis_payload_with_options(
     champion_name: &str,
     supports_runes: bool,
 ) -> Result<ChampionBuild, String> {
-    parse_opgg_analysis_payload_for_mode(opgg_json, champion_id, champion_name, supports_runes, None, None)
+    parse_opgg_analysis_payload_for_mode(
+        opgg_json,
+        champion_id,
+        champion_name,
+        supports_runes,
+        None,
+        None,
+    )
 }
 
 /// Parses an OP.GG REST or wrapped MCP payload into a `ChampionBuild`, filtering summoner spells
@@ -54,7 +41,13 @@ pub fn parse_opgg_analysis_payload_for_mode(
     spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
 ) -> Result<ChampionBuild, String> {
     parse_opgg_analysis_payload_for_mode_and_roster(
-        opgg_json, champion_id, champion_name, supports_runes, spell_mode, spells_catalog, None,
+        opgg_json,
+        champion_id,
+        champion_name,
+        supports_runes,
+        spell_mode,
+        spells_catalog,
+        None,
     )
 }
 
@@ -69,29 +62,48 @@ pub fn parse_opgg_analysis_payload_for_mode_and_roster(
     spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
     allowed_lane_champions: Option<&HashSet<i32>>,
 ) -> Result<ChampionBuild, String> {
-    parse_opgg_analysis_payload_with_ddragon(
-        opgg_json, champion_id, champion_name, supports_runes, spell_mode, None, spells_catalog, allowed_lane_champions,
+    parse_opgg_analysis_with_options(
+        opgg_json,
+        RestAnalysisParseOptions {
+            champion_id,
+            champion_name,
+            supports_runes,
+            spell_mode,
+            ddragon: None,
+            spells_catalog,
+            allowed_lane_champions,
+            position_override: None,
+            mcp_depth_override: None,
+        },
     )
 }
 
-/// Parses an OP.GG REST or wrapped MCP payload using `ddragon` catalogs without global lock spam.
-#[allow(clippy::too_many_arguments)]
-pub fn parse_opgg_analysis_payload_with_ddragon(
+/// Parses an OP.GG REST or wrapped MCP payload using typed `RestAnalysisParseOptions` without
+/// mutating or cloning `serde_json::Value`.
+pub fn parse_opgg_analysis_with_options(
     opgg_json: &serde_json::Value,
-    champion_id: i32,
-    champion_name: &str,
-    supports_runes: bool,
-    spell_mode: Option<&str>,
-    ddragon: Option<&DataDragonCache>,
-    spells_catalog: Option<&HashMap<i32, SpellMetadata>>,
-    allowed_lane_champions: Option<&HashSet<i32>>,
+    opts: RestAnalysisParseOptions<'_>,
 ) -> Result<ChampionBuild, String> {
-    let json_supports_runes = opgg_json.get("supports_runes").and_then(|v| v.as_bool()).unwrap_or(true);
-    let effective_spells_catalog = spells_catalog.or_else(|| ddragon.map(|d| &d.spells));
+    let json_supports_runes = opgg_json
+        .get("supports_runes")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let effective_spells_catalog = opts
+        .spells_catalog
+        .or_else(|| opts.ddragon.map(|d| &d.spells));
 
-    if let Some(text) = opgg_json.pointer("/result/content/0/text").and_then(|v| v.as_str()) {
+    if let Some(text) = opgg_json
+        .pointer("/result/content/0/text")
+        .and_then(|v| v.as_str())
+    {
         return parse_opgg_mcp_text_for_mode_with_ddragon(
-            text, champion_id, champion_name, supports_runes && json_supports_runes, spell_mode, ddragon, effective_spells_catalog,
+            text,
+            opts.champion_id,
+            opts.champion_name,
+            opts.supports_runes && json_supports_runes,
+            opts.spell_mode,
+            opts.ddragon,
+            effective_spells_catalog,
         );
     }
 
@@ -100,7 +112,7 @@ pub fn parse_opgg_analysis_payload_with_ddragon(
         .or_else(|| opgg_json.pointer("/result/data"))
         .unwrap_or(opgg_json);
 
-    let effective_supports_runes = supports_runes
+    let effective_supports_runes = opts.supports_runes
         && json_supports_runes
         && analysis
             .get("supports_runes")
@@ -111,184 +123,38 @@ pub fn parse_opgg_analysis_payload_with_ddragon(
     let (primary_style_id, sub_style_id, selected_perk_ids, top_rune_pages) =
         extract_rest_runes_and_pages(analysis, effective_supports_runes)?;
 
-    let position = analysis
-        .get("position")
-        .or_else(|| analysis.pointer("/meta/position"))
-        .or_else(|| analysis.pointer("/summary/position"))
-        .and_then(|v| v.as_str())
+    let position = opts
+        .position_override
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            analysis
+                .get("position")
+                .or_else(|| analysis.pointer("/meta/position"))
+                .or_else(|| analysis.pointer("/summary/position"))
+                .and_then(|v| v.as_str())
+        })
         .unwrap_or("");
     let tier = extract_rest_tier(analysis, position);
     let is_jungle = position.eq_ignore_ascii_case("jungle");
 
-    // Extract summoner spell pairs filtered by active mode and DataDragon spell catalog
-    let ((spell1_id, spell2_id), spell_options) =
-        extract_summoner_spell_pairs_for_mode(analysis, is_jungle, spell_mode, effective_spells_catalog);
-
-    // Extract item entries from JSON
-    let starter_val = analysis
-        .pointer("/items/starters")
-        .or_else(|| analysis.pointer("/starter_items"));
-    let starter_entries = if let Some(arr) = starter_val.and_then(|v| v.as_array())
-        && !arr.is_empty()
-        && arr.iter().all(|x| x.is_i64())
-    {
-        vec![ItemStatEntry {
-            ids: arr
-                .iter()
-                .filter_map(|x| x.as_i64().map(|n| n as i32))
-                .collect(),
-            play: 1,
-            win: 0,
-            pick_rate: 0.0,
-        }]
-    } else {
-        parse_json_item_entries(starter_val)
-    };
-
-    let boot_entries = parse_json_item_entries(
-        analysis
-            .pointer("/items/boots")
-            .or_else(|| analysis.pointer("/boots")),
+    let ((spell1_id, spell2_id), spell_options) = extract_summoner_spell_pairs_for_mode(
+        analysis,
+        is_jungle,
+        opts.spell_mode,
+        effective_spells_catalog,
     );
 
-    let core_val = analysis
-        .pointer("/items/core")
-        .or_else(|| analysis.pointer("/core_items"));
-    let mut core_entries = parse_json_item_entries(core_val);
-    let other_entries = parse_json_item_entries(
-        analysis
-            .pointer("/items/situational")
-            .or_else(|| analysis.pointer("/last_items")),
-    );
-
-    // Reject empty payloads (even when supports_runes == false) so resilient fallback triggers
-    // instead of fabricating default items.
-    if core_entries.is_empty() && other_entries.is_empty() {
-        return Err("Missing core_items and last_items in OP.GG payload".to_string());
-    }
-
-    let has_real_play_stats =
-        json_has_explicit_play_stats(core_val) || core_entries.iter().any(|e| e.play > 1);
-    if !has_real_play_stats {
-        // Apply descending synthetic weights only when the entire array lacks real `play` stats.
-        for (idx, entry) in core_entries.iter_mut().enumerate() {
-            entry.play = 10000 - (idx as i64);
-        }
-    } else {
-        // Preserve real `play == 1` as `1` and drop single-game outliers when consolidated
-        // combinations (`play >= 2`) exist.
-        core_entries.sort_by(|a, b| b.play.cmp(&a.play).then_with(|| b.win.cmp(&a.win)));
-        if core_entries.iter().any(|e| e.play >= 2) {
-            core_entries.retain(|e| e.play >= 2);
-        }
-    }
-
-    let core_ids = core_entries
-        .first()
-        .map(|entry| entry.ids.clone())
-        .unwrap_or_default();
-    let mut candidate_entries = core_entries.clone();
-
-    let cls = resolve_classifications_for_ddragon(ddragon);
-    let explicit_dt = analysis.get("damage_type").and_then(|v| v.as_str());
-    let explicit_role = extract_primary_champion_role(analysis);
-    let damage_type_owned = infer_damage_type_with_cls(
-        explicit_dt,
-        &core_entries,
-        &other_entries,
-        explicit_role,
-        champion_id,
-        ddragon,
-        &cls,
-    );
-    let damage_type = damage_type_owned.as_str();
-
-    let mut fourth_entries = parse_json_item_entries(
-        analysis
-            .pointer("/fourth_items")
-            .or_else(|| analysis.pointer("/items/fourth_items"))
-            .or_else(|| analysis.pointer("/items/final_build")),
-    );
-    let mut fifth_entries = parse_json_item_entries(
-        analysis
-            .pointer("/fifth_items")
-            .or_else(|| analysis.pointer("/items/fifth_items")),
-    );
-    let mut sixth_entries = parse_json_item_entries(
-        analysis
-            .pointer("/sixth_items")
-            .or_else(|| analysis.pointer("/items/sixth_items")),
-    );
-
-    for entry in other_entries {
-        let filtered_ids: Vec<i32> = entry
-            .ids
-            .iter()
-            .filter(|id| !core_ids.contains(id))
-            .copied()
-            .collect();
-        if !filtered_ids.is_empty() {
-            candidate_entries.push(ItemStatEntry {
-                ids: filtered_ids,
-                play: entry.play,
-                win: entry.win,
-                pick_rate: entry.pick_rate,
-            });
-        }
-    }
-
-    let all_for_tear: Vec<ItemStatEntry> = candidate_entries
-        .iter()
-        .chain(fourth_entries.iter())
-        .chain(fifth_entries.iter())
-        .chain(sixth_entries.iter())
-        .cloned()
-        .collect();
-    let tear_upgrade = resolve_tear_to_completed_item_in(&cls, &all_for_tear);
-
-    let normalize_entries = |entries: &mut Vec<ItemStatEntry>| {
-        for entry in entries.iter_mut() {
-            entry.ids = resolve_tear_item_ids_in(&cls, &entry.ids, tear_upgrade);
-        }
-        entries.retain(|e| !e.ids.is_empty());
-    };
-    normalize_entries(&mut core_entries);
-    normalize_entries(&mut candidate_entries);
-    normalize_entries(&mut fourth_entries);
-    normalize_entries(&mut fifth_entries);
-    normalize_entries(&mut sixth_entries);
-
-    let item_blocks = build_5_item_blocks_with_cls(
-        &cls,
-        starter_entries,
-        boot_entries,
-        candidate_entries.clone(),
-        fourth_entries.clone(),
-        fifth_entries.clone(),
-        sixth_entries.clone(),
-        damage_type,
+    let (item_blocks, build_options) = assemble_analysis_items(
+        analysis,
+        opts.champion_id,
         position,
-    );
-    let general_situational = item_blocks
-        .get(4)
-        .map(|b| b.item_ids.clone())
-        .unwrap_or_default();
-
-    let build_options = build_unified_build_options_with_cls(
-        &cls,
-        &core_entries,
-        &fourth_entries,
-        &fifth_entries,
-        &sixth_entries,
-        &candidate_entries,
-        &[],
-        &general_situational,
-        damage_type,
-        position,
-    );
+        opts.ddragon,
+        opts.mcp_depth_override,
+    )?;
 
     let skill_order = super::super::skills::extract_rest_skill_order(analysis);
-    let is_non_sr_mode = spell_mode.is_some_and(|m| {
+    let is_non_sr_mode = opts.spell_mode.is_some_and(|m| {
         m.eq_ignore_ascii_case("ARAM")
             || m.eq_ignore_ascii_case("KIWI")
             || m.eq_ignore_ascii_case("CHERRY")
@@ -298,15 +164,15 @@ pub fn parse_opgg_analysis_payload_with_ddragon(
     } else {
         super::matchups::extract_rest_lane_matchups_for_roster(
             analysis,
-            champion_id,
+            opts.champion_id,
             position,
-            allowed_lane_champions,
+            opts.allowed_lane_champions,
         )
     };
 
     Ok(ChampionBuild {
-        champion_id,
-        champion_name: champion_name.to_string(),
+        champion_id: opts.champion_id,
+        champion_name: opts.champion_name.to_string(),
         win_rate,
         pick_rate,
         tier,

@@ -6,6 +6,7 @@ import { injectorIpc } from "./services/ipc";
 import { I18nProvider } from "./i18n";
 import { useAppBootstrap } from "./hooks/useAppBootstrap";
 import { useAppUpdater } from "./hooks/useAppUpdater";
+import { useCacheClearInvalidation } from "./hooks/useCacheClearInvalidation";
 import { useWindowGraphicsMode } from "./hooks/useWindowMinimized";
 import { resolveCachedAssetUrl } from "./utils/assets";
 import { computeOrderedSpells } from "./utils/spells";
@@ -107,6 +108,14 @@ function App({ forceStartupLoading }: AppProps = {}) {
   useEffect(() => {
     patchChangeHandlersRef.current = [ranked.handlePatchProtectionChange, arena.handlePatchProtectionChange, aram.handlePatchProtectionChange];
   }, [ranked.handlePatchProtectionChange, arena.handlePatchProtectionChange, aram.handlePatchProtectionChange]);
+
+  const handleInvalidateBuildsCache = useCallback(() => {
+    ranked.invalidateCache();
+    arena.invalidateCache();
+    aram.invalidateCache();
+  }, [ranked.invalidateCache, arena.invalidateCache, aram.invalidateCache]);
+
+  useCacheClearInvalidation({ onInvalidateBuilds: handleInvalidateBuildsCache });
 
   const playerProfile = usePlayerProfile(lcu.summoner, locale);
 

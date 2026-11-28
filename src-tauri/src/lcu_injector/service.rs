@@ -3,8 +3,8 @@ use super::live_lobby::{
     inject_multi_item_sets, patch_single_lobby_slot_runes, patch_single_lobby_slot_spells,
 };
 use super::{
-    build_spells_payload, get_user_preferences, normalize_item_build_queue_id, set_active_locale,
-    set_selected_build, set_selected_rune_page, set_selected_spell_pair, set_user_preferences,
+    build_spells_payload, get_user_preferences, normalize_item_build_queue_id,
+    set_selected_build, set_selected_rune_page, set_selected_spell_pair,
 };
 use crate::models::{AppLocale, UserPreferences};
 use crate::storage::AppSettings;
@@ -134,14 +134,16 @@ pub async fn apply_manual_item_build(
     inject_item_sets(&conn, summoner.summoner_id, &build).await
 }
 
-/// Syncs user preferences to memory + `UserSettings.ini`, warms DataDragon on locale change,
+/// Syncs user preferences to the unified `SettingsStore` + `UserSettings.ini`, warms DataDragon on locale change,
 /// and runs daily mission auto-mark if enabled.
 pub fn sync_user_preferences_service(preferences: UserPreferences) {
     let prev = get_user_preferences();
     let should_auto_mark = preferences.auto_mark_daily_missions_read;
     let target_locale = preferences.language;
-    set_user_preferences(preferences.clone());
     let _ = storage::update_global_settings(|s| {
+        if s.general.language.is_some() {
+            s.general.language = Some(target_locale);
+        }
         s.automation = preferences;
     });
 
@@ -162,7 +164,6 @@ pub fn sync_user_preferences_service(preferences: UserPreferences) {
 
 /// Updates the active backend locale, persists it to `UserSettings.ini`, and pre-warms DataDragon.
 pub fn set_locale_service(locale: AppLocale) {
-    set_active_locale(locale);
     let _ = storage::update_global_settings(|s| {
         s.general.language = Some(locale);
         s.automation.language = locale;
@@ -175,7 +176,6 @@ pub fn set_locale_service(locale: AppLocale) {
 
 /// Marks language onboarding completed, persists locale to `UserSettings.ini`, and pre-warms DataDragon.
 pub fn complete_language_onboarding_service(locale: AppLocale) -> Result<AppSettings, String> {
-    set_active_locale(locale);
     let updated = storage::update_global_settings(|s| {
         s.general.language = Some(locale);
         s.general.language_onboarding_completed = true;
